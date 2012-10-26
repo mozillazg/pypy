@@ -195,17 +195,17 @@ class OptIntBounds(Optimization):
         self.emit_operation(op)
 
     def optimize_INT_ADD_OVF(self, op):
-        v1 = self.getvalue(op.getarg(0))
-        v2 = self.getvalue(op.getarg(1))
+        op = self.getforwarded(op)
+        v1 = self.getforwarded(op.getarg(0))
+        v2 = self.getforwarded(op.getarg(1))
         resbound = v1.getintbound().add_bound(v2.getintbound())
         if resbound.bounded():
             # Transform into INT_ADD.  The following guard will be killed
             # by optimize_GUARD_NO_OVERFLOW; if we see instead an
             # optimize_GUARD_OVERFLOW, then InvalidLoop.
-            op = self.optimizer.copy_and_change(op, rop.INT_ADD)
-        self.emit_operation(op) # emit the op
-        r = self.getvalue(op)
-        r.getintbound().intersect(resbound)
+            op = op.make_forwarded_copy(rop.INT_ADD)
+            op.getintbound().intersect(resbound)
+        return op
 
     def optimize_INT_SUB_OVF(self, op):
         v1 = self.getvalue(op.getarg(0))

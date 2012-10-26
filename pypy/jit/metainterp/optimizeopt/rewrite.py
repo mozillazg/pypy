@@ -210,7 +210,10 @@ class OptRewrite(Optimization):
         self.postprocess_guard(op, CONST_1)
 
     def postprocess_GUARD_FALSE(self, op):
-        self.postprocess_guard(op, CONST_0)        
+        self.postprocess_guard(op, CONST_0)
+
+    def postprocess_GUARD_NO_OVERFLOW(self, op):
+        pass # to be killed
 
     def postprocess_default(self, op):
         if op.is_guard():
@@ -237,7 +240,7 @@ class OptRewrite(Optimization):
 
     def optimize_GUARD_VALUE(self, op):
         value = self.getforwarded(op.getarg(0))
-        if value.getlastguard():
+        if value.getlastguardpos() != -1:
             xxx
             # there already has been a guard_nonnull or guard_class or
             # guard_nonnull_class on this value, which is rather silly.
@@ -286,7 +289,7 @@ class OptRewrite(Optimization):
         value = self.getvalue(op.getarg(0))
         expectedclassbox = op.getarg(1)
         assert isinstance(expectedclassbox, Const)
-        realclassbox = value.get_constant_class(self.optimizer.cpu)
+        realclassbox = self.optimizer.get_constant_class(value)
         if realclassbox is not None:
             assert realclassbox.same_constant(expectedclassbox)
             return
@@ -294,16 +297,16 @@ class OptRewrite(Optimization):
                                   self.optimizer.get_pos())
 
     def optimize_GUARD_CLASS(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
         expectedclassbox = op.getarg(1)
         assert isinstance(expectedclassbox, Const)
-        realclassbox = value.get_constant_class(self.optimizer.cpu)
+        realclassbox = self.optimizer.get_constant_class(value)
         if realclassbox is not None:
             if realclassbox.same_constant(expectedclassbox):
                 return
             raise InvalidLoop('A GUARD_CLASS was proven to always fail')
-        emit_operation = True
-        if value.last_guard:
+        if value.getlastguardpos() != -1:
+            xxx
             # there already has been a guard_nonnull or guard_class or
             # guard_nonnull_class on this value.
             old_guard_op = value.last_guard
@@ -320,14 +323,17 @@ class OptRewrite(Optimization):
                 new_op.set_extra("failargs", old_guard_op.get_extra("failargs"))
                 self.optimizer.replace_op(value, new_op)
                 op = new_op
-                emit_operation = False
+                return
             value.last_guard = None
-            pos = value.last_guard_pos
         else:
-            pos = self.optimizer.get_pos()
-        if emit_operation:
-            self.emit_operation(op)
-        value.make_constant_class(expectedclassbox, op, pos)
+            value.setlastguardpos(self.optimizer.get_pos())
+        return op
+
+    def postprocess_GUARD_CLASS(self, op):
+        value = self.getforwarded(op.getarg(0))
+        expectedclassbox = op.getarg(1)
+        assert isinstance(expectedclassbox, Const)
+        value.setknownclass(expectedclassbox)
 
     def optimize_GUARD_NONNULL_CLASS(self, op):
         value = self.getvalue(op.getarg(0))

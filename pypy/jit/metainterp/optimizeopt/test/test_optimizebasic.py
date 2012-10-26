@@ -167,19 +167,19 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_constant_propagate_ovf(self):
         ops = """
         [i]
-        guard_value(i, 2) []
+        guard_value(i, 2)
         i0 = int_add_ovf(i, 3)
-        guard_no_overflow() []
+        guard_no_overflow()
         i1 = int_is_true(i0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_is_zero(i1)
-        guard_false(i2) []
-        guard_value(i0, 5) []
+        guard_false(i2)
+        guard_value(i0, 5)
         jump(i)
         """
         expected = """
         [i]
-        guard_value(i, 2) []
+        guard_value(i, 2)
         jump(2)
         """
         self.optimize_loop(ops, expected)
@@ -224,13 +224,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_remove_guard_class_1(self):
         ops = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
+        guard_class(p0, ConstClass(node_vtable))
         jump(p0)
         """
         expected = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
         jump(p0)
         """
         self.optimize_loop(ops, expected)

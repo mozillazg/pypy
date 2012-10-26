@@ -1043,9 +1043,6 @@ class BinaryOp(object):
                              arg1 or self._arg1,
                              descr or self.getdescr(),
                              mutable=True)
-        if self.is_guard():
-            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
-            res.set_rd_snapshot(self.get_rd_snapshot())
         assert not self._forwarded
         self._forwarded = res
         self._copy_extra_attrs(res)

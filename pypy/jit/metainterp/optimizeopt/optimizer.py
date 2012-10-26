@@ -165,16 +165,6 @@ class OptValue(object):
             return self.box.same_constant(other.box)
         return self is other
 
-    def get_constant_class(self, cpu):
-        xxx
-        level = self.level
-        if level == LEVEL_KNOWNCLASS:
-            return self.known_class
-        elif level == LEVEL_CONSTANT:
-            return cpu.ts.cls_of_box(self.op)
-        else:
-            return None
-
     def make_constant_class(self, classbox, guardop, index):
         assert self.level < LEVEL_KNOWNCLASS
         self.known_class = classbox
@@ -463,6 +453,11 @@ class Optimizer(Optimization):
         op = self.getforwarded(op)
         if isinstance(op, Const):
             return op
+
+    def get_constant_class(self, op):
+        if op.is_constant():
+            xxx
+        return op.getknownclass()
 
     def get_newoperations(self):
         self.flush()

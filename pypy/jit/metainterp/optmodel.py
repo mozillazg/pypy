@@ -4,7 +4,7 @@
 
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable, rop,\
-     INT, ConstInt, Const
+     INT, REF, ConstInt, Const
 from pypy.jit.metainterp.optimizeopt.intutils import ImmutableIntUnbounded,\
      ConstantIntBound
 
@@ -16,8 +16,8 @@ class __extend__(ConstInt):
         return False # for optimization
 
 class __extend__(Const):
-    def getlastguard(self):
-        return None
+    def getlastguardpos(self):
+        return -1
 
 def create_mutable_subclasses():
     def addattr(cls, attr, default_value=None):
@@ -34,7 +34,7 @@ def create_mutable_subclasses():
         def _copy_extra_attrs(self, new):
             paren_cls._copy_extra_attrs(self, new)
             for attr in cls.attributes_to_copy:
-                setattr(new, getattr(self, attr))
+                setattr(new, attr, getattr(self, attr))
         cls._copy_extra_attrs = _copy_extra_attrs
 
     imm_int_unbound = ImmutableIntUnbounded()
@@ -53,9 +53,10 @@ def create_mutable_subclasses():
                 # all the integers have bounds
                 addattr(Mutable, 'intbound', imm_int_unbound)
                 addattr(Mutable, 'boolbox', False)
+            elif cls.type == REF:
+                addattr(Mutable, 'knownclass', None)
             # for tracking last guard and merging GUARD_VALUE with
             # GUARD_NONNULL etc
-            addattr(Mutable, 'lastguard', None)
             addattr(Mutable, 'lastguardpos', -1)
             Mutable.__name__ = cls.__name__ + '_mutable'
             if Mutable.attributes_to_copy:
