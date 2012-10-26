@@ -358,11 +358,6 @@ class OptVirtualize(optimizer.Optimization):
     def new(self):
         return OptVirtualize()
 
-    def make_virtual(self, known_class, op):
-        vvalue = VirtualValue(self.optimizer.cpu, known_class, op)
-        self.setvalue(op, vvalue)
-        return vvalue
-
     def make_varray(self, arraydescr, size, op):
         if arraydescr.is_array_of_structs():
             vvalue = VArrayStructValue(arraydescr, size, op)
@@ -468,7 +463,8 @@ class OptVirtualize(optimizer.Optimization):
             self.emit_operation(op)
 
     def optimize_NEW_WITH_VTABLE(self, op):
-        self.make_virtual(op.getarg(0), op)
+        value = self.getforwarded(op)
+        value.setknownclass(op.getarg(0))
 
     def optimize_NEW(self, op):
         self.make_vstruct(op.getdescr(), op)

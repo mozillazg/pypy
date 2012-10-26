@@ -331,6 +331,8 @@ class OptRewrite(Optimization):
 
     def postprocess_GUARD_CLASS(self, op):
         value = self.getforwarded(op.getarg(0))
+        if value.is_constant():
+            return
         expectedclassbox = op.getarg(1)
         assert isinstance(expectedclassbox, Const)
         value.setknownclass(expectedclassbox)
@@ -538,7 +540,7 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
 
     def optimize_SAME_AS_i(self, op):
-        self.replace(op, op.getarg(0))
+        self.optimizer.replace(op, op.getarg(0))
     optimize_SAME_AS_r = optimize_SAME_AS_i
     optimize_SAME_AS_f = optimize_SAME_AS_i
 

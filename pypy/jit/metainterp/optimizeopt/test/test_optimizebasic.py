@@ -240,7 +240,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i0]
         p0 = new_with_vtable(ConstClass(node_vtable))
         escape(p0)
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
         jump(i0)
         """
         expected = """
@@ -255,7 +255,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         p0 = same_as_r(ConstPtr(myptr))
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
         jump(i0)
         """
         expected = """

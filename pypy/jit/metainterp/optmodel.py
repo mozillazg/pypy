@@ -19,6 +19,9 @@ class __extend__(Const):
     def getlastguardpos(self):
         return -1
 
+    def force(self, _):
+        return self
+
 def create_mutable_subclasses():
     def addattr(cls, attr, default_value=None):
         cls.attributes_to_copy.append('_' + attr)
@@ -45,6 +48,14 @@ def create_mutable_subclasses():
             class Mutable(cls):
                 is_mutable = True
                 attributes_to_copy = []
+
+                if cls.getopnum() in (rop.NEW_WITH_VTABLE, rop.NEW):
+                    def force(self, optimizer):
+                        optimizer.emit_operation(self)
+                        return self
+                else:
+                    def force(self, _):
+                        return self
             if cls.is_guard() or cls.getopnum() == rop.FINISH:
                 addattr(Mutable, 'failargs')
             if cls.is_guard():

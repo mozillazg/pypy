@@ -300,9 +300,6 @@ class Optimization(object):
     def make_constant_int(self, box, intconst):
         return self.optimizer.make_constant_int(box, intconst)
 
-    def replace(self, box, value):
-        return self.optimizer.replace(box, value)
-
     def get_constant_op(self, op):
         return self.optimizer.get_constant_op(op)
 
@@ -357,7 +354,7 @@ class Optimization(object):
         self.optimizer.forget_numberings(box)
 
 
-class Optimizer(Optimization):
+class Optimizer(object):
 
     def __init__(self, jitdriver_sd, metainterp_sd, loop, optimizations=None):
         self.jitdriver_sd = jitdriver_sd
@@ -379,7 +376,6 @@ class Optimizer(Optimization):
         self.optimizations = optimizations
         for opt in optimizations:
             opt.optimizer = self
-        self.setup()
 
     def force_at_end_of_preamble(self):
         for o in self.optimizations:
@@ -424,11 +420,8 @@ class Optimizer(Optimization):
             return op
         return op.getforwarded()
 
-    def setvalue(self, box, value):
-        xxx
-        assert not box.is_constant()
-        assert not box.has_extra("optimize_value")
-        box.set_extra("optimize_value", value)
+    def replace(self, op, with_):
+        self.getforwarded(op)._forwarded = with_
 
     def copy_op_if_modified_by_optimization(self, op):
         xxxx
@@ -456,7 +449,7 @@ class Optimizer(Optimization):
 
     def get_constant_class(self, op):
         if op.is_constant():
-            xxx
+            return self.cpu.ts.cls_of_box(op)
         return op.getknownclass()
 
     def get_newoperations(self):
@@ -564,7 +557,7 @@ class Optimizer(Optimization):
             op = self.store_final_boxes_in_guard(op)
         assert op is not None
         for i in range(op.numargs()):
-            op.setarg(i, self.getforwarded(op.getarg(i)))
+            op.setarg(i, self.getforwarded(op.getarg(i)).force(self))
         self._newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
