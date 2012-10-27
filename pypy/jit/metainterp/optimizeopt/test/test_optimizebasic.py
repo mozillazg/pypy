@@ -366,13 +366,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_ooisnull_oononnull_1(self):
         ops = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
-        guard_nonnull(p0) []
+        guard_class(p0, ConstClass(node_vtable))
+        guard_nonnull(p0)
         jump(p0)
         """
         expected = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
         jump(p0)
         """
         self.optimize_loop(ops, expected)

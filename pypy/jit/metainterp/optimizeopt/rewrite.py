@@ -52,7 +52,7 @@ class OptRewrite(Optimization):
                                         arg1=op.getarg(0))
             oldop = self.get_pure_result(key_op)
             if oldop is not None and oldop.getdescr() is op.getdescr():
-                self.replace(op, oldop)
+                self.optimizer.replace(op, oldop)
                 return True
 
         oldopnum = opboolinvers[opboolreflex[op.getopnum()]]
@@ -76,16 +76,16 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         if v1.is_null():
-            self.replace(op, op.getarg(1))
+            self.optimizer.replace(op, op.getarg(1))
         elif v2.is_null():
-            self.replace(op, op.getarg(0))
+            self.optimizer.replace(op, op.getarg(0))
         else:
             self.emit_operation(op)
 
     def optimize_INT_SUB(self, op):
         v2 = self.getforwarded(op.getarg(1))
         if v2.is_constant() and v2.getint() == 0:
-            self.replace(op, op.getarg(0))
+            self.optimizer.replace(op, op.getarg(0))
         else:
             # Synthesize the reverse ops for optimize_default to reuse
             self.pure(op.getarg(0), rop.INT_ADD, op.getarg(1), op)
@@ -101,9 +101,9 @@ class OptRewrite(Optimization):
 
         # If one side of the op is 0 the result is the other side.
         if v1.is_constant() and v1.getint() == 0:
-            self.replace(op, arg2)
+            self.optimizer.replace(op, arg2)
         elif v2.is_constant() and v2.getint() == 0:
-            self.replace(op, arg1)
+            self.optimizer.replace(op, arg1)
         else:
             # Synthesize the reverse op for optimize_default to reuse
             self.pure(op.getarg(0), rop.INT_SUB, op, op.getarg(1))
@@ -172,11 +172,11 @@ class OptRewrite(Optimization):
 
             if v1.is_constant():
                 if v1.op.getfloat() == 1.0:
-                    self.replace(op, rhs)
+                    self.optimizer.replace(op, rhs)
                     return
                 elif v1.op.getfloat() == -1.0:
                     new_op = create_resop_1(rop.FLOAT_NEG, 0.0, rhs)
-                    self.replace(op, new_op)
+                    self.optimizer.replace(op, new_op)
                     self.emit_operation(new_op)
                     return
         self.emit_operation(op)
@@ -354,7 +354,7 @@ class OptRewrite(Optimization):
 
             resop = self.loop_invariant_results.get(key, None)
             if resop is not None:
-                self.replace(op, resop)
+                self.optimizer.replace(op, resop)
                 self.last_emitted_operation = REMOVED
                 return
             # change the op to be a normal call, from the backend's point of view
@@ -380,7 +380,7 @@ class OptRewrite(Optimization):
 
     def optimize_INT_IS_TRUE(self, op):
         if op.getarg(0).returns_bool_result():
-            self.replace(op, op.getarg(0))
+            self.optimizer.replace(op, op.getarg(0))
             return
         return self._optimize_nullness(op, op.getarg(0), True)
 
