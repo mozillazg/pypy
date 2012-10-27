@@ -36,7 +36,8 @@ class OptIntBounds(Optimization):
         dispatch_bounds_ops(self, op)
 
     def postprocess_GUARD_TRUE(self, op):
-        self.propagate_bounds_backward(op.getarg(0))
+        if op.getarg(0).type == INT:
+            self.propagate_bounds_backward(op.getarg(0))
 
     postprocess_GUARD_FALSE = postprocess_GUARD_TRUE
     postprocess_GUARD_VALUE = postprocess_GUARD_TRUE
