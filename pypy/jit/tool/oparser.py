@@ -20,9 +20,11 @@ class OpParser(object):
     use_mock_model = False
 
     def __init__(self, input, cpu, namespace, type_system,
-                 invent_fail_descr=True, results=None, mutable=False, vars={}):
+                 invent_fail_descr=True, results=None, mutable=False,
+                 oldvars={}):
         self.input = input
-        self.vars = vars.copy()
+        self.oldvars = oldvars
+        self.vars = {}
         self.cpu = cpu
         self._consts = namespace
         self.type_system = type_system
@@ -75,17 +77,20 @@ class OpParser(object):
 
     def newvar(self, elem):
         if elem not in self.vars:
-            if elem[0] in 'ifp':
-                if elem[0] == 'p':
-                    p = 'r'
+            if elem not in self.oldvars:
+                if elem[0] in 'ifp':
+                    if elem[0] == 'p':
+                        p = 'r'
+                    else:
+                        p = elem[0]
+                    opnum = getattr(rop, 'INPUT_' + p)
+                    box = create_resop_0(opnum, example_for_opnum(opnum),
+                                         mutable=self.mutable)
                 else:
-                    p = elem[0]
-                opnum = getattr(rop, 'INPUT_' + p)
-                box = create_resop_0(opnum, example_for_opnum(opnum),
-                                     mutable=self.mutable)
+                    raise ParseError("Unknown variable type: %s" % elem)
+                self.setstr(box, elem)
             else:
-                raise ParseError("Unknown variable type: %s" % elem)
-            self.setstr(box, elem)
+                box = self.oldvars[elem]
             self.vars[elem] = box
         return self.vars[elem]
 
@@ -307,11 +312,11 @@ DEFAULT = object()
 
 def parse(input, cpu=None, namespace=DEFAULT, type_system='lltype',
           invent_fail_descr=True, OpParser=OpParser,
-          results=None, mutable=False, vars={}):
+          results=None, mutable=False, oldvars={}):
     if namespace is DEFAULT:
         namespace = {}
     return OpParser(input, cpu, namespace, type_system,
-                    invent_fail_descr, results, mutable, vars).parse()
+                    invent_fail_descr, results, mutable, oldvars).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = False

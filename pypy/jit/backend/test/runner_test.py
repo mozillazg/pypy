@@ -130,7 +130,7 @@ class BaseBackendTest(Runner):
         if 'faildescr4' not in namespace:
             namespace['faildescr4'] = BasicFailDescr(4)
         loop = oparser.parse(s, namespace=namespace, mutable=True,
-                             vars=getattr(self, 'original_vars', {}))
+                             oldvars=getattr(self, 'original_vars', {}))
         self.original_vars = loop.original_vars
         return loop.inputargs, loop.operations, JitCellToken()
 
@@ -393,16 +393,16 @@ class BaseBackendTest(Runner):
             if not reversed:
                 inputargs, operations, looptoken = self.parse("""
                 [i1, i2]
-                ires = %s(i1, i2)
-                guard_no_overflow(descr=faildescr1) []
-                finish(ires, descr=faildescr2)
+                i3 = %s(i1, i2)
+                guard_no_overflow(descr=faildescr1)
+                finish(i3, descr=faildescr2)
                 """ % op, namespace={'faildescr1': BasicFailDescr(1),
                                      'faildescr2': BasicFailDescr(2)})
             else:
                 inputargs, operations, looptoken = self.parse("""
                 [i1, i2]
-                ires = %s(i1, i2)
-                guard_overflow(descr=faildescr1) [ires]
+                i3 = %s(i1, i2)
+                guard_overflow(descr=faildescr1)
                 finish(descr=faildescr2)
                 """ % op, namespace={'faildescr1': BasicFailDescr(1),
                                      'faildescr2': BasicFailDescr(2)})
@@ -418,7 +418,7 @@ class BaseBackendTest(Runner):
                     if not reversed:
                         assert self.cpu.get_finish_value_int(frame) == z
                     else:
-                        assert self.cpu.get_latest_value_int(frame, 0) == z
+                        assert self.get_frame_value(frame, 'i3') == z
 
     def test_ovf_operations_reversed(self):
         self.test_ovf_operations(reversed=True)
