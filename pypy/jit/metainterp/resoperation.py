@@ -1404,6 +1404,8 @@ class opgroups(object):
     pass
 
 def setup(debug_print=False):
+    global opclasses_mutable
+    
     i = 0
     for basename in _oplist:
         if '/' in basename:
@@ -1446,6 +1448,7 @@ def setup(debug_print=False):
         if k.startswith('CALL'):
             ALLCALLS.append(v)
     opgroups.ALLCALLS = tuple(ALLCALLS)
+    opclasses_mutable = [None] * len(opclasses)
 
 def get_base_class(mixin, tpmixin, base):
     try:

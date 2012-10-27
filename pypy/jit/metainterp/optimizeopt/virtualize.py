@@ -435,11 +435,10 @@ class OptVirtualize(optimizer.Optimization):
                 self.replace(op, fieldvalue.op)
                 return
         if value.is_virtual():
-            assert isinstance(value, AbstractVirtualValue)
             fieldvalue = value.getfield(op.getdescr(), None)
             if fieldvalue is None:
                 fieldvalue = self.optimizer.new_const(op.getdescr())
-            self.replace(op, fieldvalue.op)
+            self.optimizer.replace(op, fieldvalue)
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
@@ -457,7 +456,6 @@ class OptVirtualize(optimizer.Optimization):
 
         if value.is_virtual():
             fieldvalue = self.getforwarded(op.getarg(1))
-            xxx
             value.setfield(op.getdescr(), fieldvalue)
         else:
             xxx
@@ -465,8 +463,7 @@ class OptVirtualize(optimizer.Optimization):
             return op
 
     def optimize_NEW_WITH_VTABLE(self, op):
-        value = self.getforwarded(op)
-        value.setknownclass(op.getarg(0))
+        pass
 
     def optimize_NEW(self, op):
         self.make_vstruct(op.getdescr(), op)

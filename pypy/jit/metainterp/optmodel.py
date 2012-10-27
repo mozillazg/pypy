@@ -4,10 +4,10 @@
 
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable, rop,\
-     INT, REF, ConstInt, Const
+     INT, REF, ConstInt, Const, ConstPtr
 from pypy.jit.metainterp.optimizeopt.intutils import ImmutableIntUnbounded,\
      ConstantIntBound, IntBound
-from pypy.jit.metainterp.virtualmodel import declare_virtual
+from pypy.jit.metainterp.virtualmodel import Virtual
 
 class __extend__(ConstInt):
     def getintbound(self):
@@ -15,6 +15,13 @@ class __extend__(ConstInt):
 
     def getboolres(self):
         return False # for optimization
+
+class __extend__(ConstPtr):
+    def is_virtual(self):
+        return False
+
+    def is_forced_virtual(self):
+        return False
 
 class __extend__(Const):
     def getlastguardpos(self):
@@ -29,9 +36,12 @@ class __extend__(Const):
     def is_null(self):
         return not self.nonnull()
 
+opclasses_mutable[rop.NEW_WITH_VTABLE] = Virtual
+
 def create_mutable_subclasses():
     def addattr(cls, attr, default_value=None):
-        cls.attributes_to_copy.append('_' + attr)
+        if hasattr(cls, 'attributes_to_copy'):
+            cls.attributes_to_copy.append('_' + attr)
         def getter(self):
             return getattr(self, '_' + attr)
         def setter(self, value):
@@ -68,7 +78,10 @@ def create_mutable_subclasses():
     imm_int_unbound = ImmutableIntUnbounded()
     for i, cls in enumerate(opclasses):
         if cls is None:
-            Mutable = None
+            continue
+        elif opclasses_mutable[cls.getopnum()] is not None:
+            addattr(opclasses_mutable[cls.getopnum()], 'lastguardpos')
+            continue
         else:
             class Mutable(cls):
                 is_mutable = True
@@ -78,8 +91,9 @@ def create_mutable_subclasses():
                     return self
                 def is_virtual(self):
                     return False
-            if op.getopnum() == rop.NEW_WITH_VTABLE:
-                Mutable = declare_virtual(Mutable)
+                def is_forced_virtual(self):
+                    return False
+
             if cls.is_guard() or cls.getopnum() == rop.FINISH:
                 addattr(Mutable, 'failargs')
             if cls.is_guard():
@@ -95,16 +109,12 @@ def create_mutable_subclasses():
                 addattr(Mutable, 'knownnonnull', False)
                 Mutable.is_nonnull = ref_is_nonnull
                 Mutable.is_null = ref_is_null
-            if cls.getopnum() in (rop.NEW_WITH_VTABLE, rop.NEW):
-                addattr(Mutable, 'isforced', False)
             # for tracking last guard and merging GUARD_VALUE with
             # GUARD_NONNULL etc
             addattr(Mutable, 'lastguardpos', -1)
             Mutable.__name__ = cls.__name__ + '_mutable'
             if Mutable.attributes_to_copy:
                 make_new_copy_function(Mutable, cls)
-        assert len(opclasses_mutable) == i
-        opclasses_mutable.append(Mutable)
-    assert len(opclasses) == len(opclasses_mutable)
+            opclasses_mutable[i] = Mutable
 
 create_mutable_subclasses()
