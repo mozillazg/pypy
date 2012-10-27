@@ -378,7 +378,7 @@ class OptRewrite(Optimization):
         return self._optimize_nullness(op, op.getarg(0), True)
 
     def optimize_INT_IS_ZERO(self, op):
-        self._optimize_nullness(op, op.getarg(0), False)
+        return self._optimize_nullness(op, op.getarg(0), False)
 
     def _optimize_oois_ooisnot(self, op, expect_isnot, instance):
         value0 = self.getvalue(op.getarg(0))

@@ -403,15 +403,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         i1 = int_is_zero(i0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_is_true(i0)
-        guard_false(i2) []
+        guard_false(i2)
         jump(i0)
         """
         expected = """
         [i0]
         i1 = int_is_zero(i0)
-        guard_true(i1) []
+        guard_true(i1)
         jump(0)
         """
         self.optimize_loop(ops, expected)
@@ -419,13 +419,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_ooisnull_oononnull_2(self):
         ops = """
         [p0]
-        guard_nonnull(p0) []
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
+        guard_nonnull(p0)
         jump(p0)
         """
         expected = """
         [p0]
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
         jump(p0)
         """
         self.optimize_loop(ops, expected)
