@@ -22,6 +22,12 @@ class __extend__(Const):
     def force(self, _):
         return self
 
+    def is_nonnull(self):
+        return self.nonnull()
+
+    def is_null(self):
+        return not self.nonnull()
+
 def create_mutable_subclasses():
     def addattr(cls, attr, default_value=None):
         cls.attributes_to_copy.append('_' + attr)
@@ -39,6 +45,18 @@ def create_mutable_subclasses():
             for attr in cls.attributes_to_copy:
                 setattr(new, attr, getattr(self, attr))
         cls._copy_extra_attrs = _copy_extra_attrs
+
+    def int_is_null(self):
+        return False
+
+    def int_is_nonnull(self):
+        xxx
+
+    def ref_is_null(self):
+        return False
+
+    def ref_is_nonnull(self):
+        return self.getknownclass() is not None or self.getknownnonnull()
 
     imm_int_unbound = ImmutableIntUnbounded()
     for i, cls in enumerate(opclasses):
@@ -64,8 +82,13 @@ def create_mutable_subclasses():
                 # all the integers have bounds
                 addattr(Mutable, 'intbound', imm_int_unbound)
                 addattr(Mutable, 'boolres', False)
+                Mutable.is_nonnull = int_is_nonnull
+                Mutable.is_null = int_is_null
             elif cls.type == REF:
                 addattr(Mutable, 'knownclass', None)
+                addattr(Mutable, 'knownnonnull', False)
+                Mutable.is_nonnull = ref_is_nonnull
+                Mutable.is_null = ref_is_null
             # for tracking last guard and merging GUARD_VALUE with
             # GUARD_NONNULL etc
             addattr(Mutable, 'lastguardpos', -1)
