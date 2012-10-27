@@ -453,14 +453,16 @@ class OptVirtualize(optimizer.Optimization):
     optimize_GETFIELD_GC_PURE_f = optimize_GETFIELD_GC_i
 
     def optimize_SETFIELD_GC(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
 
         if value.is_virtual():
-            fieldvalue = self.getvalue(op.getarg(1))
+            fieldvalue = self.getforwarded(op.getarg(1))
+            xxx
             value.setfield(op.getdescr(), fieldvalue)
         else:
+            xxx
             value.ensure_nonnull()
-            self.emit_operation(op)
+            return op
 
     def optimize_NEW_WITH_VTABLE(self, op):
         value = self.getforwarded(op)

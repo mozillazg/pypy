@@ -75,11 +75,17 @@ def create_mutable_subclasses():
 
                 if cls.getopnum() in (rop.NEW_WITH_VTABLE, rop.NEW):
                     def force(self, optimizer):
-                        optimizer.emit_operation(self)
+                        if not self._isforced:
+                            optimizer.emit_operation(self)
+                            self._isforced = True
                         return self
+                    def is_virtual(self):
+                        return not self._isforced
                 else:
                     def force(self, _):
                         return self
+                    def is_virtual(self):
+                        return False
             if cls.is_guard() or cls.getopnum() == rop.FINISH:
                 addattr(Mutable, 'failargs')
             if cls.is_guard():
@@ -95,6 +101,8 @@ def create_mutable_subclasses():
                 addattr(Mutable, 'knownnonnull', False)
                 Mutable.is_nonnull = ref_is_nonnull
                 Mutable.is_null = ref_is_null
+            if cls.getopnum() in (rop.NEW_WITH_VTABLE, rop.NEW):
+                addattr(Mutable, 'isforced', False)
             # for tracking last guard and merging GUARD_VALUE with
             # GUARD_NONNULL etc
             addattr(Mutable, 'lastguardpos', -1)

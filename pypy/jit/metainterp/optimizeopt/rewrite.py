@@ -213,13 +213,16 @@ class OptRewrite(Optimization):
         self.postprocess_guard(op, CONST_0)
 
     def optimize_GUARD_ISNULL(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
         if value.is_null():
             return
         elif value.is_nonnull():
             raise InvalidLoop('A GUARD_ISNULL was proven to always fail')
-        self.emit_operation(op)
-        value.make_constant(self.optimizer.cpu.ts.CONST_NULL)
+        return op
+
+    def postprocess_GUARD_ISNULL(self, op):
+        self.optimizer.make_constant(op.getarg(0),
+                                     self.optimizer.cpu.ts.CONST_NULL)
 
     def optimize_GUARD_NONNULL(self, op):
         value = self.getforwarded(op.getarg(0))
@@ -228,7 +231,7 @@ class OptRewrite(Optimization):
         elif value.is_null():
             raise InvalidLoop('A GUARD_NONNULL was proven to always fail')
         value.setknownnonnull(True)
-        value.setlastguardpos(self.optimizer.getpos())
+        value.setlastguardpos(self.optimizer.get_pos())
         return op
 
     def optimize_GUARD_VALUE(self, op):

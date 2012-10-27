@@ -433,13 +433,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_ooisnull_on_null_ptr_1(self):
         ops = """
         [p0, p1]
-        guard_isnull(p0) []
-        guard_isnull(p0) []
+        guard_isnull(p0)
+        guard_isnull(p0)
         jump(p1, p1)
         """
         expected = """
         [p0, p1]
-        guard_isnull(p0) []
+        guard_isnull(p0)
         jump(p1, p1)
         """
         self.optimize_loop(ops, expected)
@@ -449,14 +449,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p0]
         pv = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(pv, p0, descr=valuedescr)
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
         p1 = getfield_gc_r(pv, descr=valuedescr)
-        guard_nonnull(p1) []
+        guard_nonnull(p1)
         jump(p0)
         """
         expected = """
         [p0]
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
         jump(p0)
         """
         self.optimize_loop(ops, expected)
