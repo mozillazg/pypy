@@ -280,10 +280,10 @@ class OptRewrite(Optimization):
         return self.optimize_guard(op, constbox, emit_operation=emit_operation)
 
     def optimize_GUARD_TRUE(self, op):
-        self.optimize_guard(op, CONST_1)
+        return self.optimize_guard(op, CONST_1)
 
     def optimize_GUARD_FALSE(self, op):
-        self.optimize_guard(op, CONST_0)
+        return self.optimize_guard(op, CONST_0)
 
     def optimize_RECORD_KNOWN_CLASS(self, op):
         value = self.getvalue(op.getarg(0))
@@ -380,8 +380,7 @@ class OptRewrite(Optimization):
             self.emit_operation(op)
 
     def optimize_INT_IS_TRUE(self, op):
-        value = self.getforwarded(op.getarg(0))
-        if value.getboolbox():
+        if op.getarg(0).returns_bool_result():
             self.replace(op, op.getarg(0))
             return
         return self._optimize_nullness(op, op.getarg(0), True)

@@ -460,11 +460,14 @@ class Optimizer(object):
         self._newoperations = []
 
     def make_constant(self, op, constbox):
+        op = self.getforwarded(op)
         if not op.is_constant():
-            self.getforwarded(op)._forwarded = constbox
+            op._forwarded = constbox
 
-    def make_constant_int(self, box, intvalue):
-        self.getvalue(box).make_constant(ConstInt(intvalue))
+    def make_constant_int(self, op, intvalue):
+        op = self.getforwarded(op)
+        if not op.is_constant():
+            op._forwarded = ConstInt(intvalue)
 
     def new_ptr_box(self):
         return self.cpu.ts.BoxRef()
@@ -536,13 +539,6 @@ class Optimizer(object):
         dispatch_opt(self, op)
 
     def emit_operation(self, op):
-        if op.returns_bool_result():
-            xxxx
-            self.getvalue(op).is_bool_box = True
-        self._emit_operation(op)
-
-    @specialize.argtype(0)
-    def _emit_operation(self, op):
         assert op.getopnum() not in opgroups.CALL_PURE
         assert not op._forwarded
         if isinstance(op, Const):

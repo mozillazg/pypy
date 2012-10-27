@@ -12,7 +12,7 @@ class __extend__(ConstInt):
     def getintbound(self):
         return ConstantIntBound(self.getint())
 
-    def getboolbox(self):
+    def getboolres(self):
         return False # for optimization
 
 class __extend__(Const):
@@ -63,7 +63,7 @@ def create_mutable_subclasses():
             if cls.type == INT:
                 # all the integers have bounds
                 addattr(Mutable, 'intbound', imm_int_unbound)
-                addattr(Mutable, 'boolbox', False)
+                addattr(Mutable, 'boolres', False)
             elif cls.type == REF:
                 addattr(Mutable, 'knownclass', None)
             # for tracking last guard and merging GUARD_VALUE with

@@ -650,8 +650,6 @@ class AbstractResOp(AbstractValue):
         opnum = cls.getopnum()
         if we_are_translated():
             assert opnum >= 0
-        elif opnum < 0:
-            return False     # for tests
         return opboolresult[opnum]
 
     def _copy_extra_attrs(self, new):
