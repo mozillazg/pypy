@@ -25,6 +25,8 @@ class CachedField(object):
         #      value pending in the ResOperation is *not* visible in
         #      'cached_fields'.
         #
+
+        # XXXX kill dicts here
         self._cached_fields = {}
         self._cached_fields_getfield_op = {}
         self._lazy_setfield = None
@@ -32,8 +34,8 @@ class CachedField(object):
 
     def do_setfield(self, optheap, op):
         # Update the state with the SETFIELD_GC/SETARRAYITEM_GC operation 'op'.
-        structvalue = optheap.getvalue(op.getarg(0))
-        fieldvalue  = optheap.getvalue(op.getarglist()[-1])
+        structvalue = optheap.getforwarded(op.getarg(0))
+        fieldvalue  = optheap.getforwarded(op.getarglist()[-1])
         if self.possible_aliasing(optheap, structvalue):
             self.force_lazy_setfield(optheap)
             assert not self.possible_aliasing(optheap, structvalue)
@@ -44,7 +46,7 @@ class CachedField(object):
             optheap.optimizer.ensure_imported(cached_fieldvalue)
             cached_fieldvalue = self._cached_fields.get(structvalue, None)
 
-        if not fieldvalue.same_value(cached_fieldvalue):
+        if not optheap.optimizer.same_value(fieldvalue, cached_fieldvalue):
             # common case: store the 'op' as lazy_setfield, and register
             # myself in the optheap's _lazy_setfields_and_arrayitems list
             self._lazy_setfield = op
@@ -94,14 +96,15 @@ class CachedField(object):
             # possible aliasing).
             self.clear()
             self._lazy_setfield = None
-            optheap.next_optimization.propagate_forward(op)
+            # XXX should we push it through the optimizer chain?
+            optheap.optimizer.emit_operation(op)
             if not can_cache:
                 return
             # Once it is done, we can put at least one piece of information
             # back in the cache: the value of this particular structure's
             # field.
-            structvalue = optheap.getvalue(op.getarg(0))
-            fieldvalue  = optheap.getvalue(op.getarglist()[-1])
+            structvalue = optheap.getforwarded(op.getarg(0))
+            fieldvalue  = optheap.getforwarded(op.getarglist()[-1])
             self.remember_field_value(structvalue, fieldvalue, op)
         elif not can_cache:
             self.clear()
@@ -294,7 +297,7 @@ class OptHeap(Optimization):
             # of virtualref_info and virtualizable_info are not gcptrs.
 
     def turned_constant(self, value):
-        value = self.getforwarded(value)
+        newvalue = self.getforwarded(value)
         for cf in self.cached_fields.itervalues():
             cf.turned_constant(newvalue, value)
         for submap in self.cached_arrayitems.itervalues():
@@ -394,6 +397,7 @@ class OptHeap(Optimization):
     optimize_GETFIELD_GC_PURE_r = optimize_GETFIELD_GC_PURE_i
 
     def optimize_SETFIELD_GC(self, op):
+        # XXX this is just debugging, should we comment it out somehow?
         if op.type == INT:
             op_key = create_resop_1(rop.GETFIELD_GC_PURE_i, 0, op.getarg(0),
                                     op.getdescr())

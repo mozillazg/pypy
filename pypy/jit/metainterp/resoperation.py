@@ -478,9 +478,9 @@ class AbstractResOp(AbstractValue):
         # XXX this is a hack kill me
         import sys
         co_fname = sys._getframe(1).f_code.co_filename
-        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname or 'backend/test' in co_fname or 'test/test_util' in co_fname:
+        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname or 'backend/test' in co_fname or 'test/test_util' in co_fname or co_fname.endswith('heap.py'):
             return object.__hash__(self)
-        raise Exception("Should not hash resops, use get/set extra instead")
+        raise Exception("Should not hash resops")
 
     def _get_hash_(self):
         """ rpython level implementation of hash, cache it because computations

@@ -458,8 +458,7 @@ class OptVirtualize(optimizer.Optimization):
             fieldvalue = self.getforwarded(op.getarg(1))
             value.setfield(op.getdescr(), fieldvalue)
         else:
-            xxx
-            value.ensure_nonnull()
+            value.setknownnonnull(True)
             return op
 
     def optimize_NEW_WITH_VTABLE(self, op):

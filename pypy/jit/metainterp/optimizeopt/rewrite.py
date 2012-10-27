@@ -538,6 +538,14 @@ class OptRewrite(Optimization):
     optimize_SAME_AS_r = optimize_SAME_AS_i
     optimize_SAME_AS_f = optimize_SAME_AS_i
 
+    def optimize_JUMP(self, op):
+        self.optimizer.flush()
+        return op
+
+    def optimize_FINISH(self, op):
+        self.optimizer.flush()
+        return op
+
 #dispatch_opt = make_dispatcher_method(OptRewrite, 'optimize_',
 #        default=OptRewrite.emit_operation)
 #optimize_guards = _findall(OptRewrite, 'optimize_', 'GUARD')

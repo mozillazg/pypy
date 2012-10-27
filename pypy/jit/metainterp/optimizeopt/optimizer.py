@@ -158,13 +158,6 @@ class OptValue(object):
             return not op.nonnull()
         return False
 
-    def same_value(self, other):
-        if not other:
-            return False
-        if self.is_constant() and other.is_constant():
-            return self.box.same_constant(other.box)
-        return self is other
-
     def make_constant_class(self, classbox, guardop, index):
         assert self.level < LEVEL_KNOWNCLASS
         self.known_class = classbox
@@ -469,6 +462,15 @@ class Optimizer(object):
         if not op.is_constant():
             op._forwarded = ConstInt(intvalue)
 
+    def same_value(self, op1, op2):
+        if op1 is op2:
+            return True
+        if op2 is None:
+            return False
+        if op1.is_constant() and op2.is_constant():
+            return op1.same_constant(op2)
+        return False
+
     def new_ptr_box(self):
         return self.cpu.ts.BoxRef()
 
@@ -539,6 +541,7 @@ class Optimizer(object):
         dispatch_opt(self, op)
 
     def emit_operation(self, op):
+        op = self.getforwarded(op)
         assert op.getopnum() not in opgroups.CALL_PURE
         assert not op._forwarded
         if isinstance(op, Const):
@@ -616,9 +619,6 @@ class Optimizer(object):
     #    # in this case
     #    self.emit_operation(op)
     # FIXME: Is this still needed?
-
-    def optimize_DEBUG_MERGE_POINT(self, op):
-        self.emit_operation(op)
 
     def optimize_GETARRAYITEM_GC_PURE_i(self, op):
         indexvalue = self.getvalue(op.getarg(1))
