@@ -350,19 +350,6 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
-    def test_remove_guard_value_if_constant(self):
-        ops = """
-        [p1]
-        guard_value(p1, ConstPtr(myptr))
-        jump(ConstPtr(myptr))
-        """
-        expected = """
-        []
-        jump()
-        """
-        py.test.skip("XXX")
-        self.optimize_loop(ops, 'Constant(myptr)', expected)
-
     def test_ooisnull_oononnull_1(self):
         ops = """
         [p0]
