@@ -7,6 +7,7 @@ from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable, rop,\
      INT, REF, ConstInt, Const
 from pypy.jit.metainterp.optimizeopt.intutils import ImmutableIntUnbounded,\
      ConstantIntBound, IntBound
+from pypy.jit.metainterp.virtualmodel import declare_virtual
 
 class __extend__(ConstInt):
     def getintbound(self):
@@ -73,19 +74,12 @@ def create_mutable_subclasses():
                 is_mutable = True
                 attributes_to_copy = []
 
-                if cls.getopnum() in (rop.NEW_WITH_VTABLE, rop.NEW):
-                    def force(self, optimizer):
-                        if not self._isforced:
-                            optimizer.emit_operation(self)
-                            self._isforced = True
-                        return self
-                    def is_virtual(self):
-                        return not self._isforced
-                else:
-                    def force(self, _):
-                        return self
-                    def is_virtual(self):
-                        return False
+                def force(self, _):
+                    return self
+                def is_virtual(self):
+                    return False
+            if op.getopnum() == rop.NEW_WITH_VTABLE:
+                Mutable = declare_virtual(Mutable)
             if cls.is_guard() or cls.getopnum() == rop.FINISH:
                 addattr(Mutable, 'failargs')
             if cls.is_guard():
