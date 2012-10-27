@@ -185,7 +185,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         self.optimize_loop(ops, expected)
 
     def test_constfold_all(self):
-        from pypy.jit.backend.llgraph.llimpl import TYPES     # xxx fish
+        from pypy.jit.metainterp.optimizeopt.test.types import TYPES     # xxx fish
         from pypy.jit.metainterp.executor import execute_nonspec
         import random
         for opnum in [rop._ALWAYS_PURE_FIRST, rop._ALWAYS_PURE_NO_PTR_LAST]:
