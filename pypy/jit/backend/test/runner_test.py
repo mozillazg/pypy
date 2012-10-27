@@ -5,7 +5,8 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          JitCellToken, TargetToken)
 from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
      create_resop, ConstInt, ConstPtr, ConstFloat, create_resop_2,\
-     create_resop_1, create_resop_0, INT, REF, FLOAT, example_for_opnum
+     create_resop_1, create_resop_0, INT, REF, FLOAT, example_for_opnum,\
+     AbstractResOp
 from pypy.jit.metainterp.test.support import boxint, boxfloat,\
      boxlonglong_on_32bit, boxptr, constfloat
 from pypy.jit.metainterp.typesystem import deref
@@ -23,8 +24,24 @@ class Runner(object):
 
     add_loop_instruction = ['overload for a specific cpu']
     bridge_loop_instruction = ['overload for a specific cpu']
+    _nextvarindex = 0
+
+    def _prepare_valuebox(self, box):
+        if isinstance(box, AbstractResOp):
+            box = box.getforwarded()
+            if getattr(box, '_varindex', 42) < 0:
+                while self._nextvarindex in self._seen_varindex:
+                    self._nextvarindex += 1
+                box.setvarindex(self._nextvarindex)
+                self._nextvarindex += 1
+        return box
+
+    def _fetch_varindex(self, box):
+        return getattr(box, '_varindex', -1)
 
     def execute_operation(self, opname, valueboxes, result_type, descr=None):
+        self._seen_varindex = set(map(self._fetch_varindex, valueboxes))
+        valueboxes = map(self._prepare_valuebox, valueboxes)
         inputargs, operations = self._get_single_operation_list(opname,
                                                                 result_type,
                                                                 valueboxes,
@@ -79,11 +96,11 @@ class Runner(object):
         if result is None:
             results = []
         else:
+            op0 = self._prepare_valuebox(op0)
             results = [op0]
         op1 = create_resop(rop.FINISH, None, results, descr=BasicFailDescr(0),
                            mutable=True)
         if op0.is_guard():
-            op0.setfailargs([])
             if not descr:
                 descr = BasicFailDescr(1)
         if descr is not None:
@@ -241,47 +258,19 @@ class BaseBackendTest(Runner):
 
         frame = self.cpu.execute_token(looptoken, 2)
         assert self.cpu.get_latest_descr(frame).identifier == 5
-        res = self.cpu.get_latest_value_int(frame, 0)
+        res = self.get_frame_value(frame, 'i1')
         assert res == 20
 
         assert self.cpu.total_compiled_loops == 1
         assert self.cpu.total_compiled_bridges == 1
         return looptoken
 
-    def test_compile_bridge_with_holes(self):
-        faildescr1 = BasicFailDescr(1)
-        faildescr2 = BasicFailDescr(2)
-        targettoken = TargetToken()
-        inputargs, operations, looptoken = self.parse("""
-        [i3]
-        i0 = int_sub(i3, 42)
-        label(i0, descr=targettoken)
-        i1 = int_add(i0, 1)
-        i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr1) [None, i1, None]
-        jump(i1, descr=targettoken)
-        """, namespace=locals())
-        self.cpu.compile_loop(inputargs, operations, looptoken)
-
-        inputargs, bridge_ops, _ = self.parse("""
-        [i1b]
-        i3 = int_le(i1b, 19)
-        guard_true(i3, descr=faildescr2) [i1b]
-        jump(i1b, descr=targettoken)
-        """, namespace=locals())
-        self.cpu.compile_bridge(faildescr1, inputargs, bridge_ops, looptoken)
-
-        frame = self.cpu.execute_token(looptoken, 2)
-        assert self.cpu.get_latest_descr(frame).identifier == 2
-        res = self.cpu.get_latest_value_int(frame, 0)
-        assert res == 20
-
     def test_compile_big_bridge_out_of_small_loop(self):
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
         inputargs, operations, looptoken = self.parse("""
         [i0]
-        guard_false(i0, descr=faildescr1) [i0]
+        guard_false(i0, descr=faildescr1)
         finish(descr=faildescr3)
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
@@ -289,8 +278,7 @@ class BaseBackendTest(Runner):
         bridge_source = ["[i0]"]
         for i in range(1000):
             bridge_source.append("i%d = int_add(i%d, 1)" % (i + 1, i))
-        failargs = ",".join(["i%d" % i for i in range(1000)])
-        bridge_source.append("guard_false(i0, descr=faildescr2) [%s]" % failargs)
+        bridge_source.append("guard_false(i0, descr=faildescr2)")
         bridge_source.append("finish(descr=faildescr4)")
         inputargs, bridge, _ = self.parse("\n".join(bridge_source),
                                           namespace=locals())
@@ -298,30 +286,9 @@ class BaseBackendTest(Runner):
 
         frame = self.cpu.execute_token(looptoken, 1)
         assert self.cpu.get_latest_descr(frame).identifier == 2
-        for i in range(1000):
-            res = self.cpu.get_latest_value_int(frame, i)
-            assert res == 1 + i
-
-    def test_get_latest_value_count(self):
-        faildescr1 = BasicFailDescr(1)
-        targettoken = TargetToken()
-        inputargs, operations, looptoken = self.parse("""
-        [i0]
-        label(i0, descr=targettoken)
-        i1 = int_add(i0, 1)
-        i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr1) [None, i1, None]
-        jump(i1, descr=targettoken)
-        """, namespace=locals())
-        self.cpu.compile_loop(inputargs, operations, looptoken)
-
-        frame = self.cpu.execute_token(looptoken, 2)
-        assert self.cpu.get_latest_descr(frame) is faildescr1
-
-        count = self.cpu.get_latest_value_count(frame)
-        assert count == 3
-        assert self.cpu.get_latest_value_int(frame, 1) == 10
-        assert self.cpu.get_latest_value_int(frame, 1) == 10   # multiple reads ok
+        for i in range(1001):
+            res = self.get_frame_value(frame, 'i%d' % i)
+            assert res == i or 1
 
     def test_finish(self):
         class UntouchableFailDescr(AbstractFailDescr):
@@ -384,18 +351,18 @@ class BaseBackendTest(Runner):
     def test_execute_operations_in_env(self):
         cpu = self.cpu
         inputargs, operations, looptoken = self.parse("""
-        [ix, iy]
-        label(iy, ix, descr=targettoken)
-        iz = int_add(ix, iy)
-        it = int_sub(iy, 1)
-        iu = int_eq(it, 0)
-        guard_false(iu, descr=faildescr) [it, iz]
-        jump(it, iz, descr=targettoken)
+        [i0, i2]
+        label(i2, i0, descr=targettoken)
+        i5 = int_add(i0, i2)
+        i1 = int_sub(i2, 1)
+        i4 = int_eq(i1, 0)
+        guard_false(i4, descr=faildescr)
+        jump(i1, i5, descr=targettoken)
         """, None)
         cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 0, 10)
-        assert self.cpu.get_latest_value_int(frame, 0) == 0
-        assert self.cpu.get_latest_value_int(frame, 1) == 55
+        assert self.get_frame_value(frame, 'i1') == 0
+        assert self.get_frame_value(frame, 'i5') == 55
 
     def test_int_operations(self):
         from pypy.jit.metainterp.test.test_executor import get_int_tests

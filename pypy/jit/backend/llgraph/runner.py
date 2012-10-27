@@ -635,6 +635,7 @@ class LLFrame(object):
         self.last_exception = None
 
     def setenv(self, box, arg):
+        assert box.getvarindex() >= 0
         self.env[box] = arg
         self.framecontent[box.getvarindex()] = arg
         if box.type == FLOAT and FLOAT_SIZE > 1:
@@ -644,7 +645,7 @@ class LLFrame(object):
         if isinstance(arg, Const):
             return arg.value
         result = self.env[arg]
-        assert result is self.framecontent[arg.getvarindex()]
+        assert result == self.framecontent[arg.getvarindex()]
         return result
 
     def execute(self, lltrace):

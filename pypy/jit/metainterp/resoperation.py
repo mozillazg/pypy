@@ -566,7 +566,7 @@ class AbstractResOp(AbstractValue):
                 t = 'p'
             else:
                 t = '?'
-            if not hasattr(self, '_varindex'):
+            if getattr(self, '_varindex', -1) < 0:
                 self._str = '%s%d' % (t, AbstractResOp._counter)
                 AbstractResOp._counter += 1
             else:
