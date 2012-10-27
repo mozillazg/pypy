@@ -88,17 +88,11 @@ class OpParser(object):
                                          mutable=self.mutable)
                 else:
                     raise ParseError("Unknown variable type: %s" % elem)
-                self.setstr(box, elem)
+                box._str = elem
             else:
                 box = self.oldvars[elem]
             self.vars[elem] = box
         return self.vars[elem]
-
-    def setstr(self, op, text):
-        if hasattr(op, 'setvarindex') and text[1:].isdigit():
-            op.setvarindex(int(text[1:]))
-        else:
-            op._res = text
 
     def is_float(self, arg):
         try:
@@ -209,7 +203,7 @@ class OpParser(object):
         else:
             result = self.results[num]
         opres = self.create_op(opnum, result, args, descr)
-        self.setstr(opres, res)
+        opres._str = res
         self.vars[res] = opres
         return opres
 
@@ -254,7 +248,7 @@ class OpParser(object):
         loop.operations = ops
         loop.inputargs = inpargs
         loop.last_offset = last_offset
-        loop.original_vars = self.vars
+        loop.text2op = self.vars
         return loop
 
     def parse_ops(self, indent, lines, start):

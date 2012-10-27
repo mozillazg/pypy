@@ -5,7 +5,7 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          JitCellToken, TargetToken)
 from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
      create_resop, ConstInt, ConstPtr, ConstFloat, create_resop_2,\
-     create_resop_1, create_resop_0, INT, REF, FLOAT, example_for_opnum,\
+     create_resop_1, create_resop_0, INT, REF, FLOAT, VOID, example_for_opnum,\
      AbstractResOp
 from pypy.jit.metainterp.test.support import boxint, boxfloat,\
      boxlonglong_on_32bit, boxptr, constfloat
@@ -26,26 +26,49 @@ class Runner(object):
     bridge_loop_instruction = ['overload for a specific cpu']
     _nextvarindex = 0
 
-    def _prepare_valuebox(self, box):
-        if isinstance(box, AbstractResOp):
-            box = box.getforwarded()
-            if getattr(box, '_varindex', 42) < 0:
-                while self._nextvarindex in self._seen_varindex:
-                    self._nextvarindex += 1
-                box.setvarindex(self._nextvarindex)
-                self._nextvarindex += 1
-        return box
+    def update_varindexes(self, newtext2op):
+        # 'self.text2op' is a dict mapping variable names (as present in
+        # the oparser source) to the corresponding ResOp.  This function
+        # updates it with 'newtext2op', then assigns '_varindex' to all
+        # the new ResOps.  The choice of '_varindex' is done automatically
+        # to avoid conflicts, but existing '_varindex' are not changed.
+        # If 'newtext2op' is not a dict but a list, comes up with names
+        # as per str(op).
+        if isinstance(newtext2op, list):
+            newtext2op = dict([(str(op), op) for op in newtext2op])
+        try:
+            text2op = self.text2op
+        except AttributeError:
+            text2op = self.text2op = {}
+        text2op.update(newtext2op)
+        if newtext2op:
+            # update 'self._nextvarindex' to a value higher than any seen
+            # in newtext2op.  Pick two more rather than one more just in
+            # case the highest so far was a FLOAT.
+            newops = newtext2op.values()
+            random.shuffle(newops)
+            maximum = max([getattr(op, '_varindex', -2) for op in newops])
+            self._nextvarindex = max(self._nextvarindex, maximum + 2)
+            for op in newops:
+                self.assign_varindex(op)
 
-    def _fetch_varindex(self, box):
-        return getattr(box, '_varindex', -1)
+    def assign_varindex(self, op):
+        if (isinstance(op, AbstractResOp) and op.type != VOID and
+                getattr(op, '_varindex', -1) == -1):
+            op._varindex = self._nextvarindex
+            if hasattr(op, '_str'):
+                del op._str     # recompute it
+            # this op consumes either one or two numbers, depending on its
+            # type as a non-FLOAT or FLOAT.  We don't care too much about
+            # being on 32-bit vs 64-bit here.
+            self._nextvarindex += 1 + (op.type == FLOAT)
 
     def execute_operation(self, opname, valueboxes, result_type, descr=None):
-        self._seen_varindex = set(map(self._fetch_varindex, valueboxes))
-        valueboxes = map(self._prepare_valuebox, valueboxes)
         inputargs, operations = self._get_single_operation_list(opname,
                                                                 result_type,
                                                                 valueboxes,
                                                                 descr)
+        self.update_varindexes(inputargs + operations)
         looptoken = JitCellToken()
         self.cpu.compile_loop(inputargs, operations, looptoken)
         args = []
@@ -96,7 +119,6 @@ class Runner(object):
         if result is None:
             results = []
         else:
-            op0 = self._prepare_valuebox(op0)
             results = [op0]
         op1 = create_resop(rop.FINISH, None, results, descr=BasicFailDescr(0),
                            mutable=True)
@@ -130,12 +152,12 @@ class BaseBackendTest(Runner):
         if 'faildescr4' not in namespace:
             namespace['faildescr4'] = BasicFailDescr(4)
         loop = oparser.parse(s, namespace=namespace, mutable=True,
-                             oldvars=getattr(self, 'original_vars', {}))
-        self.original_vars = loop.original_vars
+                             oldvars=getattr(self, 'text2op', {}))
+        self.update_varindexes(loop.text2op)
         return loop.inputargs, loop.operations, JitCellToken()
 
     def get_frame_value(self, frame, varname):
-        op = self.original_vars[varname]
+        op = self.text2op[varname]
         index = op.getvarindex()
         if varname.startswith('i'):
             return self.cpu.get_frame_value_int(frame, index)
@@ -1082,6 +1104,7 @@ class BaseBackendTest(Runner):
         for nb_args in range(50):
             print 'Passing %d arguments to execute_token...' % nb_args
             #
+            text2op = {}
             inputargs = []
             values = []
             for k in range(nb_args):
@@ -1089,18 +1112,19 @@ class BaseBackendTest(Runner):
                 if kind == 0:
                     inputargs.append(boxint())
                     values.append(r.randrange(-100000, 100000))
+                    text2op['ii%d' % k] = inputargs[-1]
                 else:
                     inputargs.append(boxfloat())
                     values.append(longlong.getfloatstorage(r.random()))
+                    text2op['fi%d' % k] = inputargs[-1]
             #
             looptoken = JitCellToken()
             faildescr = BasicFailDescr(42)
             operations = []
-            retboxes = []
-            retvalues = []
             #
             ks = range(nb_args)
             random.shuffle(ks)
+            retvalues = []
             for k in ks:
                 if inputargs[k].type == INT:
                     x = r.randrange(-100000, 100000)
@@ -1108,6 +1132,7 @@ class BaseBackendTest(Runner):
                         create_resop_2(rop.INT_ADD, 0, inputargs[k],
                                        ConstInt(x))
                         )
+                    text2op['io%d' % k] = operations[-1]
                     y = values[k] + x
                 else:
                     x = r.random()
@@ -1115,17 +1140,16 @@ class BaseBackendTest(Runner):
                         create_resop_2(rop.FLOAT_ADD, 0.0, inputargs[k],
                                        constfloat(x))
                         )
+                    text2op['fo%d' % k] = operations[-1]
                     y = longlong.getrealfloat(values[k]) + x
                     y = longlong.getfloatstorage(y)
-                kk = r.randrange(0, len(retboxes)+1)
-                retboxes.insert(kk, operations[-1])
-                retvalues.insert(kk, y)
+                retvalues.append(y)
             #
             operations.append(
                 create_resop(rop.FINISH, None, [], descr=faildescr,
                              mutable=True)
                 )
-            operations[-1].setfailargs(retboxes)
+            self.update_varindexes(text2op)
             print inputargs
             for op in operations:
                 print op
@@ -1134,12 +1158,12 @@ class BaseBackendTest(Runner):
             frame = self.cpu.execute_token(looptoken, *values)
             assert self.cpu.get_latest_descr(frame).identifier == 42
             #
-            for k in range(len(retvalues)):
-                if retboxes[k].type == 'i':
-                    got = self.cpu.get_latest_value_int(frame, k)
+            for k, expected in zip(ks, retvalues):
+                if 'io%d' % k in text2op:
+                    got = self.get_frame_value(frame, 'io%d' % k)
                 else:
-                    got = self.cpu.get_latest_value_float(frame, k)
-                assert got == retvalues[k]
+                    got = self.get_frame_value(frame, 'fo%d' % k)
+                assert got == expected
 
     def test_jump(self):
         # this test generates small loops where the JUMP passes many

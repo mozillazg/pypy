@@ -645,7 +645,9 @@ class LLFrame(object):
         if isinstance(arg, Const):
             return arg.value
         result = self.env[arg]
-        assert result == self.framecontent[arg.getvarindex()]
+        assert result is self.framecontent[arg.getvarindex()]
+        if arg.type == FLOAT and FLOAT_SIZE > 1:
+            assert self.framecontent[arg.getvarindex() + 1] == '2nd float word'
         return result
 
     def execute(self, lltrace):

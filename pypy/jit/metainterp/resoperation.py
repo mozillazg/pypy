@@ -660,13 +660,22 @@ class AbstractResOp(AbstractValue):
     @classmethod
     def returns_bool_result(cls):
         opnum = cls.getopnum()
-        if we_are_translated():
-            assert opnum >= 0
+        if opnum < 0:
+            return False
         return opboolresult[opnum]
 
     def _copy_extra_attrs(self, new):
         pass
-    
+
+    def getvarindex(self):
+        # for testing only: even non-mutable ResOperations have a
+        # getvarindex() that works by reading '_varindex'.  This
+        # is convenient for runner_test.py.
+        if we_are_translated():
+            raise NotImplementedError
+        assert self._varindex >= 0    # and hasattr(self, '_varindex')
+        return self._varindex
+
     # some debugging help
 
     def __setattr__(self, attr, val):
