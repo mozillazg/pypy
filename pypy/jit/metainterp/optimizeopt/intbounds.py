@@ -238,18 +238,18 @@ class OptIntBounds(Optimization):
             return op
 
     def optimize_INT_GT(self, op):
-        v1 = self.getvalue(op.getarg(0))
-        v2 = self.getvalue(op.getarg(1))
+        v1 = self.getforwarded(op.getarg(0))
+        v2 = self.getforwarded(op.getarg(1))
         if v1.getintbound().known_gt(v2.getintbound()):
             self.make_constant_int(op, 1)
         elif v1.getintbound().known_le(v2.getintbound()) or v1 is v2:
             self.make_constant_int(op, 0)
         else:
-            self.emit_operation(op)
+            return op
 
     def optimize_INT_LE(self, op):
-        v1 = self.getvalue(op.getarg(0))
-        v2 = self.getvalue(op.getarg(1))
+        v1 = self.getforwarded(op.getarg(0))
+        v2 = self.getforwarded(op.getarg(1))
         if v1.getintbound().known_le(v2.getintbound()) or v1 is v2:
             self.make_constant_int(op, 1)
         elif v1.getintbound().known_gt(v2.getintbound()):
@@ -365,9 +365,9 @@ class OptIntBounds(Optimization):
                 self.make_int_le(op.getarg(0), op.getarg(1))
 
     def propagate_bounds_INT_LE(self, op):
-        r = self.getvalue(op)
+        r = self.getforwarded(op)
         if r.is_constant():
-            if r.op.same_constant(CONST_1):
+            if r.same_constant(CONST_1):
                 self.make_int_le(op.getarg(0), op.getarg(1))
             else:
                 self.make_int_gt(op.getarg(0), op.getarg(1))

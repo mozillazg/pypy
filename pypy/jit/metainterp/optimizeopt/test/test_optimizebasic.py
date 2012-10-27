@@ -285,15 +285,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         i1 = int_gt(i0, 0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_le(i0, 0)
-        guard_false(i2) []
+        guard_false(i2)
         jump(i0)
         """
         expected = """
         [i0]
         i1 = int_gt(i0, 0)
-        guard_true(i1) []
+        guard_true(i1)
         jump(i0)
         """
         self.optimize_loop(ops, expected)
@@ -302,15 +302,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         i1 = int_gt(i0, 0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_lt(0, i0)
-        guard_true(i2) []
+        guard_true(i2)
         jump(i0)
         """
         expected = """
         [i0]
         i1 = int_gt(i0, 0)
-        guard_true(i1) []
+        guard_true(i1)
         jump(i0)
         """
         self.optimize_loop(ops, expected)
@@ -319,15 +319,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         i1 = int_gt(i0, 0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_ge(0, i0)
-        guard_false(i2) []
+        guard_false(i2)
         jump(i0)
         """
         expected = """
         [i0]
         i1 = int_gt(i0, 0)
-        guard_true(i1) []
+        guard_true(i1)
         jump(i0)
         """
         self.optimize_loop(ops, expected)
@@ -335,16 +335,16 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_remove_consecutive_guard_value_constfold(self):
         ops = """
         [i0]
-        guard_value(i0, 0) []
+        guard_value(i0, 0)
         i1 = int_add(i0, 1)
-        guard_value(i1, 1) []
+        guard_value(i1, 1)
         i2 = int_add(i1, 2)
         escape(i2)
         jump(i0)
         """
         expected = """
         [i0]
-        guard_value(i0, 0) []
+        guard_value(i0, 0)
         escape(3)
         jump(0)
         """
@@ -353,7 +353,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_remove_guard_value_if_constant(self):
         ops = """
         [p1]
-        guard_value(p1, ConstPtr(myptr)) []
+        guard_value(p1, ConstPtr(myptr))
         jump(ConstPtr(myptr))
         """
         expected = """
