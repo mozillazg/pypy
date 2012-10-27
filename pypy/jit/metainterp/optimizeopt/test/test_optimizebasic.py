@@ -368,15 +368,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         i1 = int_is_true(i0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_is_true(i0)
-        guard_true(i2) []
+        guard_true(i2)
         jump(i0)
         """
         expected = """
         [i0]
         i1 = int_is_true(i0)
-        guard_true(i1) []
+        guard_true(i1)
         jump(i0)
         """
         self.optimize_loop(ops, expected)

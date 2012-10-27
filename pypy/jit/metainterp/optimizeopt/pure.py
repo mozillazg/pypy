@@ -12,6 +12,7 @@ class OptPure(Optimization):
         self.emitted_pure_operations = []
 
     def optimize_default(self, op):
+        orig_op = op
         op = self.getforwarded(op)
         canfold = op.is_always_pure()
         if op.is_ovf():
@@ -38,12 +39,12 @@ class OptPure(Optimization):
                 return
 
             # did we do the exact same operation already?
-            oldop = self.pure_operations.get(op)
+            oldop = self.pure_operations.get(orig_op)
             if oldop is not None:
-                self.replace(op, oldop)
+                self.optimizer.replace(op, oldop)
                 return
             else:
-                self.pure_operations.set(op, op)
+                self.pure_operations.set(orig_op, op)
                 self.remember_emitting_pure(op)
 
         # otherwise, the operation remains

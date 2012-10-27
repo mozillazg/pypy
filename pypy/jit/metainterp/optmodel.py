@@ -6,7 +6,7 @@ from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable, rop,\
      INT, REF, ConstInt, Const
 from pypy.jit.metainterp.optimizeopt.intutils import ImmutableIntUnbounded,\
-     ConstantIntBound
+     ConstantIntBound, IntBound
 
 class __extend__(ConstInt):
     def getintbound(self):
@@ -50,7 +50,13 @@ def create_mutable_subclasses():
         return False
 
     def int_is_nonnull(self):
-        xxx
+        intbound = self.getintbound()
+        if intbound is not None:
+            if intbound.known_gt(IntBound(0, 0)) or \
+               intbound.known_lt(IntBound(0, 0)):
+                return True
+            return False
+        return False
 
     def ref_is_null(self):
         return False
