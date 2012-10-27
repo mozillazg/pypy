@@ -1,4 +1,7 @@
+import random
+
 import py
+
 from pypy.rlib.objectmodel import instantiate
 from pypy.jit.metainterp.optimizeopt.test.test_util import (
     LLtypeMixin, BaseTest, FakeMetaInterpStaticData, convert_old_style_to_targets)
@@ -12,6 +15,7 @@ from pypy.jit.metainterp.resoperation import rop, opname, ConstInt,\
      create_resop_1, create_resop
 from pypy.jit.metainterp.test.support import boxint
 from pypy.rlib.rarithmetic import LONG_BIT
+
 
 def test_store_final_boxes_in_guard():
     from pypy.jit.metainterp.resume import tag, TAGBOX
@@ -185,17 +189,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         self.optimize_loop(ops, expected)
 
     def test_constfold_all(self):
-        from pypy.jit.metainterp.optimizeopt.test.types import TYPES     # xxx fish
+        from pypy.jit.metainterp.optimizeopt.test.types import TYPES
         from pypy.jit.metainterp.executor import execute_nonspec
-        import random
+
         for opnum in [rop._ALWAYS_PURE_FIRST, rop._ALWAYS_PURE_NO_PTR_LAST]:
             try:
                 op = opname[opnum]
             except KeyError:
                 continue
             if op.startswith('_'):
-                continue
-            if 'FLOAT' in op:
                 continue
             argtypes, restype = TYPES[op.lower()]
             args = []
