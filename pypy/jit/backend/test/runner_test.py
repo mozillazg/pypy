@@ -95,7 +95,7 @@ class BaseBackendTest(Runner):
 
     avoid_instances = False
 
-    def parse(self, s, namespace):
+    def parse(self, s, namespace, invent_varindex=True):
         if namespace is None:
             namespace = {}
         else:
@@ -112,15 +112,28 @@ class BaseBackendTest(Runner):
             namespace['faildescr3'] = BasicFailDescr(3)
         if 'faildescr4' not in namespace:
             namespace['faildescr4'] = BasicFailDescr(4)
-        loop = oparser.parse(s, namespace=namespace, guards_with_failargs=True)
+        loop = oparser.parse(s, namespace=namespace, mutable=True,
+                             vars=getattr(self, 'original_vars', {}))
+        self.original_vars = loop.original_vars
         return loop.inputargs, loop.operations, JitCellToken()
+
+    def get_frame_value(self, frame, varname):
+        op = self.original_vars[varname]
+        index = op.getvarindex()
+        if varname.startswith('i'):
+            return self.cpu.get_frame_value_int(frame, index)
+        if varname.startswith('p'):
+            return self.cpu.get_frame_value_ref(frame, index)
+        if varname.startswith('f'):
+            return self.cpu.get_frame_value_float(frame, index)
+        raise ValueError(varname)
 
     def test_compile_linear_loop(self):
         faildescr = BasicFailDescr(1)
         inputargs, ops, token = self.parse("""
         [i0]
         i1 = int_add(i0, 1)
-        finish(i1, descr=faildescr) []
+        finish(i1, descr=faildescr)
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, ops, token)
         frame = self.cpu.execute_token(token, 2)
@@ -133,7 +146,7 @@ class BaseBackendTest(Runner):
         inputargs, ops, token = self.parse("""
         [f0]
         f1 = float_add(f0, 1.)
-        finish(f1, descr=faildescr) []
+        finish(f1, descr=faildescr)
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, ops, token)
         frame = self.cpu.execute_token(token, longlong.getfloatstorage(2.8))
@@ -149,16 +162,16 @@ class BaseBackendTest(Runner):
         label(i0, descr=targettoken)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr) [i1]
+        guard_true(i2, descr=faildescr)
         jump(i1, descr=targettoken)
         ''', namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 2)
         assert self.cpu.get_latest_descr(frame).identifier == 2
-        res = self.cpu.get_latest_value_int(frame, 0)
+        res = self.get_frame_value(frame, 'i1')
         assert res == 10
 
-    def test_compile_with_holes_in_fail_args(self):
+    def test_compile_loop_2(self):
         faildescr3 = BasicFailDescr(3)
         targettoken = TargetToken()
         inputargs, operations, looptoken = self.parse("""
@@ -167,14 +180,14 @@ class BaseBackendTest(Runner):
         label(i0, descr=targettoken)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr3) [None, None, i1, None]
+        guard_true(i2, descr=faildescr3)
         jump(i1, descr=targettoken)
         """, namespace=locals())
 
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 44)
         assert self.cpu.get_latest_descr(frame).identifier == 3
-        res = self.cpu.get_latest_value_int(frame, 2)
+        res = self.get_frame_value(frame, 'i1')
         assert res == 10
 
     def test_backends_dont_keep_loops_alive(self):
@@ -185,7 +198,7 @@ class BaseBackendTest(Runner):
         label(i0, descr=targettoken)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr) [i1]
+        guard_true(i2, descr=faildescr)
         jump(i1, descr=targettoken)
         """, namespace={'targettoken': TargetToken()})
         i1 = inputargs[0]
@@ -210,17 +223,17 @@ class BaseBackendTest(Runner):
         label(i0, descr=targettoken)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr) [i1]
+        guard_true(i2, descr=faildescr)
         jump(i1, descr=targettoken)
         """, namespace={'faildescr': faildescr4,
                         'targettoken': targettoken})
         self.cpu.compile_loop(inputargs, operations, looptoken)
 
         inputargs, bridge_ops, _ = self.parse("""
-        [i1b]
-        i3 = int_le(i1b, 19)
-        guard_true(i3, descr=faildescr5) [i1b]
-        jump(i1b, descr=targettoken)
+        [i1]
+        i3 = int_le(i1, 19)
+        guard_true(i3, descr=faildescr5)
+        jump(i1, descr=targettoken)
         """, namespace={'faildescr5': BasicFailDescr(5),
                         'targettoken': targettoken})
         self.cpu.compile_bridge(faildescr4,

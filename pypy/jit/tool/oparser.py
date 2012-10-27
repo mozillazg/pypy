@@ -20,22 +20,17 @@ class OpParser(object):
     use_mock_model = False
 
     def __init__(self, input, cpu, namespace, type_system,
-                 invent_fail_descr=True, results=None,
-                 guards_with_failargs=False):
+                 invent_fail_descr=True, results=None, mutable=False, vars={}):
         self.input = input
-        self.vars = {}
+        self.vars = vars.copy()
         self.cpu = cpu
         self._consts = namespace
         self.type_system = type_system
-        self.guards_with_failargs = guards_with_failargs
-        if namespace is not None:
-            self._cache = namespace.setdefault('_CACHE_', {})
-        else:
-            self._cache = {}
         self.invent_fail_descr = invent_fail_descr
         self.model = get_model(self.use_mock_model)
         self.original_jitcell_token = self.model.JitCellToken()
         self.results = results
+        self.mutable = mutable
 
     def get_const(self, name, typ):
         if self._consts is None:
@@ -70,24 +65,6 @@ class OpParser(object):
                 return tt
             raise
 
-    def box_for_var(self, elem):
-        try:
-            return self._cache[self.type_system, elem]
-        except KeyError:
-            pass
-        if elem[0] in 'ifp':
-            if elem[0] == 'p':
-                p = 'r'
-            else:
-                p = elem[0]
-            opnum = getattr(rop, 'INPUT_' + p)
-            box = create_resop_0(opnum, example_for_opnum(opnum))
-        else:
-            raise ParseError("Unknown variable type: %s" % elem)
-        self._cache[self.type_system, elem] = box
-        box._str = elem
-        return box
-
     def parse_header_line(self, line):
         elements = line.split(",")
         vars = []
@@ -97,9 +74,26 @@ class OpParser(object):
         return vars
 
     def newvar(self, elem):
-        box = self.box_for_var(elem)
-        self.vars[elem] = box
-        return box
+        if elem not in self.vars:
+            if elem[0] in 'ifp':
+                if elem[0] == 'p':
+                    p = 'r'
+                else:
+                    p = elem[0]
+                opnum = getattr(rop, 'INPUT_' + p)
+                box = create_resop_0(opnum, example_for_opnum(opnum),
+                                     mutable=self.mutable)
+            else:
+                raise ParseError("Unknown variable type: %s" % elem)
+            self.setstr(box, elem)
+            self.vars[elem] = box
+        return self.vars[elem]
+
+    def setstr(self, op, text):
+        if hasattr(op, 'setvarindex') and text[1:].isdigit():
+            op.setvarindex(int(text[1:]))
+        else:
+            op._res = text
 
     def is_float(self, arg):
         try:
@@ -185,44 +179,15 @@ class OpParser(object):
         endnum = line.rfind(')')
         if endnum == -1:
             raise ParseError("invalid line: %s" % line)
+        if line.find('[', endnum) >= 0:
+            raise ParseError("fail_args should be removed: %s" % line)
         args, descr = self.parse_args(opname, line[num + 1:endnum])
-        fail_args = None
-        if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST or opnum == rop.FINISH:
-            i = line.find('[', endnum) + 1
-            j = line.find(']', i)
-            if i <= 0 or j <= 0:
-                if self.guards_with_failargs and opnum != rop.FINISH:
-                    raise ParseError("missing fail_args for guard operation")
-                fail_args = None
-            else:
-                if not self.guards_with_failargs:
-                    raise ParseError("fail_args should be NULL")
-                fail_args = []
-                if i < j:
-                    for arg in line[i:j].split(','):
-                        arg = arg.strip()
-                        if arg == 'None':
-                            fail_arg = None
-                        else:
-                            try:
-                                fail_arg = self.vars[arg]
-                            except KeyError:
-                                raise ParseError(
-                                    "Unknown var in fail_args: %s" % arg)
-                        fail_args.append(fail_arg)
-        else:
-            if opnum == rop.FINISH:
-                if descr is None and self.invent_fail_descr:
-                    descr = self.invent_fail_descr(self.model, fail_args)
-            elif opnum == rop.JUMP:
-                if descr is None and self.invent_fail_descr:
-                    descr = self.original_jitcell_token
-
-        return opnum, args, descr, fail_args
+        if descr is None and opnum == rop.JUMP:
+            descr = self.original_jitcell_token
+        return opnum, args, descr
 
     def create_op(self, opnum, result, args, descr):
-        r = create_resop_dispatch(opnum, result, args,
-                                  mutable=self.guards_with_failargs)
+        r = create_resop_dispatch(opnum, result, args, mutable=self.mutable)
         if descr is not None:
             r.setdescr(descr)
         return r
@@ -231,7 +196,7 @@ class OpParser(object):
         res, op = line.split("=", 1)
         res = res.strip()
         op = op.strip()
-        opnum, args, descr, fail_args = self.parse_op(op)
+        opnum, args, descr = self.parse_op(op)
         if res in self.vars:
             raise ParseError("Double assign to var %s in line: %s" % (res, line))
         if self.results is None:
@@ -239,16 +204,13 @@ class OpParser(object):
         else:
             result = self.results[num]
         opres = self.create_op(opnum, result, args, descr)
+        self.setstr(opres, res)
         self.vars[res] = opres
-        if fail_args is not None:
-            opres.setfailargs(fail_args)
         return opres
 
     def parse_op_no_result(self, line):
-        opnum, args, descr, fail_args = self.parse_op(line)
+        opnum, args, descr = self.parse_op(line)
         res = self.create_op(opnum, None, args, descr)
-        if fail_args is not None:
-            res.setfailargs(fail_args)
         return res
 
     def parse_next_op(self, line, num):
@@ -287,6 +249,7 @@ class OpParser(object):
         loop.operations = ops
         loop.inputargs = inpargs
         loop.last_offset = last_offset
+        loop.original_vars = self.vars
         return loop
 
     def parse_ops(self, indent, lines, start):
@@ -344,11 +307,11 @@ DEFAULT = object()
 
 def parse(input, cpu=None, namespace=DEFAULT, type_system='lltype',
           invent_fail_descr=True, OpParser=OpParser,
-          results=None, guards_with_failargs=False):
+          results=None, mutable=False, vars={}):
     if namespace is DEFAULT:
         namespace = {}
     return OpParser(input, cpu, namespace, type_system,
-                    invent_fail_descr, results, guards_with_failargs).parse()
+                    invent_fail_descr, results, mutable, vars).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = False

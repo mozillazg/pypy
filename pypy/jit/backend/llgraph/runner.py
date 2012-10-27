@@ -3,7 +3,7 @@ from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import support
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.jit.metainterp.resoperation import Const, getkind
-from pypy.jit.metainterp.resoperation import INT, REF, FLOAT, VOID
+from pypy.jit.metainterp.resoperation import INT, REF, FLOAT, VOID, FLOAT_SIZE
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.codewriter import longlong, heaptracker
 from pypy.jit.codewriter.effectinfo import EffectInfo
@@ -47,8 +47,6 @@ class LLTrace(object):
                                        map(mapping, op.getarglist()),
                                        mapping(op.result),
                                        newdescr)
-            if op.getfailargs() is not None:
-                newop.setfailargs(map(mapping, op.getfailargs()))
             self.operations.append(newop)
 
 class WeakrefDescr(AbstractDescr):
@@ -56,15 +54,13 @@ class WeakrefDescr(AbstractDescr):
         self.realdescrref = weakref.ref(realdescr)
 
 class GuardFailed(Exception):
-    def __init__(self, failargs, descr):
-        self.failargs = failargs
+    def __init__(self, descr):
         self.descr = descr
 
 class ExecutionFinished(Exception):
-    def __init__(self, descr, arg, failargs):
+    def __init__(self, descr, arg):
         self.descr = descr
         self.arg = arg
-        self.failargs = failargs
 
 class Jump(Exception):
     def __init__(self, descr, args):
@@ -261,22 +257,17 @@ class LLGraphCPU(model.AbstractCPU):
             assert False
         except ExecutionFinished, e:
             frame.finish_value = e.arg
-            frame.latest_values = e.failargs
             frame.latest_descr = e.descr
             frame._execution_finished_normally = e.descr.fast_path_done
             return frame
         except GuardFailed, e:
-            frame.latest_values = e.failargs
             frame.latest_descr = e.descr
             return frame
 
-    def get_latest_value_int(self, frame, index):
-        return frame.latest_values[index]
-    get_latest_value_float = get_latest_value_int
-    get_latest_value_ref   = get_latest_value_int
-
-    def get_latest_value_count(self, frame):
-        return len(frame.latest_values)
+    def get_frame_value_int(self, frame, index):
+        return frame.framecontent[index]
+    get_frame_value_float = get_frame_value_int
+    get_frame_value_ref   = get_frame_value_int
 
     def get_latest_descr(self, frame):
         return frame.latest_descr
@@ -635,17 +626,26 @@ class LLFrame(object):
     
     def __init__(self, cpu, argboxes, args):
         self.env = {}
+        self.framecontent = {}
         self.cpu = cpu
         assert len(argboxes) == len(args)
         for box, arg in zip(argboxes, args):
-            self.env[box] = arg
+            self.setenv(box, arg)
         self.overflow_flag = False
         self.last_exception = None
+
+    def setenv(self, box, arg):
+        self.env[box] = arg
+        self.framecontent[box.getvarindex()] = arg
+        if box.type == FLOAT and FLOAT_SIZE > 1:
+            self.framecontent[box.getvarindex() + 1] = '2nd float word'
 
     def lookup(self, arg):
         if isinstance(arg, Const):
             return arg.value
-        return self.env[arg]
+        result = self.env[arg]
+        assert result is self.framecontent[arg.getvarindex()]
+        return result
 
     def execute(self, lltrace):
         self.lltrace = lltrace
@@ -670,9 +670,8 @@ class LLFrame(object):
                 if hasattr(gf.descr, '_llgraph_bridge'):
                     i = 0
                     self.lltrace = gf.descr._llgraph_bridge
-                    newargs = [self.env[arg] for arg in
-                              self.current_op.getfailargs() if arg is not None]
-                    self.do_renaming(self.lltrace.inputargs, newargs)
+                    newvals = [self.env[arg] for arg in self.lltrace.inputargs]
+                    self.do_renaming(self.lltrace.inputargs, newvals)
                     continue
                 raise
             if op.type == INT:
@@ -687,43 +686,27 @@ class LLFrame(object):
             else:
                 assert op.type == VOID
                 assert resval is None
-            self.env[op] = resval
+            if op.type != VOID:
+                self.setenv(op, resval)
             i += 1
 
-    def _getfailargs(self, op=None, skip=None):
-        if op is None:
-            op = self.current_op
-        r = []
-        for arg in op.getfailargs():
-            if arg is None:
-                r.append(None)
-            elif arg is skip:
-                r.append(_example_res[skip.type])
-            else:
-                r.append(self.env[arg])
-        return r
-
-    def do_renaming(self, newargs, oldargs):
-        assert len(newargs) == len(oldargs)
-        newenv = {}
-        for new, old in zip(newargs, oldargs):
-            newenv[new] = old
-        self.env = newenv
+    def do_renaming(self, newargs, newvalues):
+        assert len(newargs) == len(newvalues)
+        self.env = {}
+        self.framecontent = {}
+        for new, newvalue in zip(newargs, newvalues):
+            self.setenv(new, newvalue)
 
     # -----------------------------------------------------
 
     def fail_guard(self, descr):
-        raise GuardFailed(self._getfailargs(), descr)
+        raise GuardFailed(descr)
 
     def execute_force_spill(self, _, arg):
         pass
 
     def execute_finish(self, descr, arg=None):
-        if self.current_op.getfailargs() is not None:
-            failargs = self._getfailargs()
-        else:
-            failargs = None   # compatibility
-        raise ExecutionFinished(descr, arg, failargs)
+        raise ExecutionFinished(descr, arg)
 
     def execute_label(self, descr, *args):
         argboxes = self.current_op.getarglist()
@@ -864,6 +847,7 @@ class LLFrame(object):
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
+        XXX
         self.latest_values = self._getfailargs(guard_op, skip=call_op)
         self.latest_descr = _getdescr(guard_op)
         res = self.execute_call(calldescr, func, *args)
@@ -890,6 +874,7 @@ class LLFrame(object):
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
+        XXX
         self.latest_values = self._getfailargs(guard_op, skip=call_op)
         self.latest_descr = _getdescr(guard_op)
         #

@@ -4,7 +4,7 @@
 
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable, rop,\
-     INT, REF, ConstInt, Const
+     VOID, INT, REF, ConstInt, Const
 from pypy.jit.metainterp.optimizeopt.intutils import ImmutableIntUnbounded,\
      ConstantIntBound
 
@@ -56,8 +56,10 @@ def create_mutable_subclasses():
                 else:
                     def force(self, _):
                         return self
-            if cls.is_guard() or cls.getopnum() == rop.FINISH:
-                addattr(Mutable, 'failargs')
+            if cls.type != VOID:
+                addattr(Mutable, 'varindex', -1)
+                #if cls.type == REF:
+                #    addattr(Mutable, 'varrange', sys.maxint // 2)
             if cls.is_guard():
                 addattr(Mutable, 'descr') # mutable guards have descrs
             if cls.type == INT:

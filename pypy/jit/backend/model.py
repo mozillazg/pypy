@@ -106,7 +106,7 @@ class AbstractCPU(object):
         Execute the generated code referenced by the looptoken.
         It runs it until either a guard fails, or until we reach
         the FINISH operation.  It returns the "jit frame" object
-        which should be inspected with the get_latest_xyz() methods.
+        which should be inspected with the get_frame_value_xyz() methods.
         """
         argtypes = [lltype.typeOf(x) for x in args]
         execute = self.make_execute_token(*argtypes)
@@ -123,24 +123,19 @@ class AbstractCPU(object):
         jitframe."""
         raise NotImplementedError
 
-    def get_latest_value_int(self, jitframe, index):
-        """Returns the value for the index'th 'fail_args' of the
-        last executed operation.  Returns an int."""
+    def get_frame_value_int(self, jitframe, index):
+        """Returns the value for the index'th value in the frame.
+        Returns an int."""
         raise NotImplementedError
 
-    def get_latest_value_float(self, jitframe, index):
-        """Returns the value for the index'th 'fail_args' of the
-        last executed operation.  Returns a FLOATSTORAGE."""
+    def get_frame_value_float(self, jitframe, index):
+        """Returns the value for the index'th value in the frame.
+        Returns a FLOATSTORAGE."""
         raise NotImplementedError
 
-    def get_latest_value_ref(self, jitframe, index):
-        """Returns the value for the index'th 'fail_args' of the
-        last executed operation.  Returns a GCREF."""
-        raise NotImplementedError
-
-    def get_latest_value_count(self, jitframe):
-        """Return how many values are ready to be returned by
-        get_latest_value_xxx()."""
+    def get_frame_value_ref(self, jitframe, index):
+        """Returns the value for the index'th value in the frame.
+        Returns a GCREF."""
         raise NotImplementedError
 
     def get_finish_value_int(self, jitframe):

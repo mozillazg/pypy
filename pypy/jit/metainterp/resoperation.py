@@ -12,6 +12,7 @@ forwarding. Public interface:
 
 """
 
+import sys
 from pypy.jit.codewriter import longlong
 from pypy.jit.codewriter import heaptracker
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
@@ -27,6 +28,12 @@ FLOAT = 'f'
 STRUCT = 's'
 VOID  = 'v'
 HOLE = '_'
+
+if sys.maxint == 2**31 - 1:
+    FLOAT_SIZE = 2         # a FLOAT variable uses two INT or REF positions
+else:
+    FLOAT_SIZE = 1         # FLOAT is the same size as INT and REF
+
 
 def create_resop_dispatch(opnum, result, args, descr=None, mutable=False):
     """ NOT_RPYTHON this is for tests only!
@@ -555,10 +562,15 @@ class AbstractResOp(AbstractValue):
                 t = 'i'
             elif self.type == FLOAT:
                 t = 'f'
-            else:
+            elif self.type == REF:
                 t = 'p'
-            self._str = '%s%d' % (t, AbstractResOp._counter)
-            AbstractResOp._counter += 1
+            else:
+                t = '?'
+            if not hasattr(self, '_varindex'):
+                self._str = '%s%d' % (t, AbstractResOp._counter)
+                AbstractResOp._counter += 1
+            else:
+                self._str = '%s%s' % (t.upper(), self._varindex)
         return self._str
 
     def repr(self, graytext=False):
