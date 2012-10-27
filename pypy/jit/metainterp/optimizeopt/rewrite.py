@@ -369,15 +369,14 @@ class OptRewrite(Optimization):
     optimize_CALL_LOOPINVARIANT_f = _new_optimize_call_loopinvariant(rop.CALL_f)
     optimize_CALL_LOOPINVARIANT_v = _new_optimize_call_loopinvariant(rop.CALL_v)
 
-    def _optimize_nullness(self, op, box, expect_nonnull):
-        return op
-        value = self.getvalue(box)
-        if value.is_nonnull():
+    def _optimize_nullness(self, op, arg, expect_nonnull):
+        value = self.getforwarded(arg)
+        if value.nonnull():
             self.make_constant_int(op, expect_nonnull)
-        elif value.is_null():
+        elif not value.nonnull():
             self.make_constant_int(op, not expect_nonnull)
         else:
-            self.emit_operation(op)
+            return op
 
     def optimize_INT_IS_TRUE(self, op):
         if op.getarg(0).returns_bool_result():
