@@ -425,7 +425,7 @@ class OptVirtualize(optimizer.Optimization):
         # was already forced).
 
     def optimize_GETFIELD_GC_i(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
         # If this is an immutable field (as indicated by op.is_always_pure())
         # then it's safe to reuse the virtual's field, even if it has been
         # forced, because it should never be written to again.
@@ -472,7 +472,7 @@ class OptVirtualize(optimizer.Optimization):
         self.make_vstruct(op.getdescr(), op)
 
     def optimize_NEW_ARRAY(self, op):
-        sizebox = self.get_constant_box(op.getarg(0))
+        sizebox = self.get_constant_op(op.getarg(0))
         if sizebox is not None:
             # if the original 'op' did not have a ConstInt as argument,
             # build a new one with the ConstInt argument

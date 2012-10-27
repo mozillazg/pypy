@@ -384,8 +384,8 @@ class OptRewrite(Optimization):
         return self._optimize_nullness(op, op.getarg(0), False)
 
     def _optimize_oois_ooisnot(self, op, expect_isnot, instance):
-        value0 = self.getvalue(op.getarg(0))
-        value1 = self.getvalue(op.getarg(1))
+        value0 = self.getforwarded(op.getarg(0))
+        value1 = self.getforwarded(op.getarg(1))
         if value0.is_virtual():
             if value1.is_virtual():
                 intres = (value0 is value1) ^ expect_isnot
@@ -445,7 +445,7 @@ class OptRewrite(Optimization):
         if oopspecindex == EffectInfo.OS_ARRAYCOPY:
             if self._optimize_CALL_ARRAYCOPY(op):
                 return
-        self.emit_operation(op)
+        return op
     optimize_CALL_p = optimize_CALL_i
     optimize_CALL_f = optimize_CALL_i
     optimize_CALL_v = optimize_CALL_i
@@ -486,14 +486,14 @@ class OptRewrite(Optimization):
         # it's being done by someone else)
         for i in range(op.numargs()):
             arg = op.getarg(i)
-            const = self.get_constant_box(arg)
+            const = self.get_constant_op(arg)
             if const is None or not const.eq_value(arg):
                 break
         else:
             self.make_constant(op, op.constbox())
             self.last_emitted_operation = REMOVED
             return
-        self.emit_operation(op)
+        return op
     optimize_CALL_PURE_f = optimize_CALL_PURE_i
     optimize_CALL_PURE_p = optimize_CALL_PURE_i
     optimize_CALL_PURE_v = optimize_CALL_PURE_i
