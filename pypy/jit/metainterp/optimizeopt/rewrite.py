@@ -5,7 +5,8 @@ from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1,\
      CONST_0
 from pypy.jit.metainterp.resoperation import (opboolinvers, opboolreflex, rop,
                                               ConstInt, make_hashable_int,
-                                              create_resop_2, Const)
+                                              create_resop_2, Const,
+                                              create_resop_1)
 from pypy.rlib.rarithmetic import highest_bit
 
 
@@ -194,7 +195,7 @@ class OptRewrite(Optimization):
                                   'always fail')
             return
         if emit_operation:
-            return self.getforwarded(op)
+            return op
 
     def postprocess_guard(self, op, constbox):
         value = self.getforwarded(op.getarg(0))
@@ -270,6 +271,17 @@ class OptRewrite(Optimization):
             value.last_guard = None
             emit_operation = False
         else:
+            if not value.is_constant() and value.returns_bool_result():
+                constvalue = op.getarg(1).getint()
+                if constvalue == 0:
+                    newop = create_resop_1(rop.GUARD_FALSE, None,
+                                           op.getarg(0))
+                elif constvalue == 1: 
+                    newop = create_resop_1(rop.GUARD_TRUE, None,
+                                           op.getarg(0))
+                else:
+                    raise AssertionError("uh?")
+                return newop
             emit_operation = True
         constbox = op.getarg(1)
         assert isinstance(constbox, Const)

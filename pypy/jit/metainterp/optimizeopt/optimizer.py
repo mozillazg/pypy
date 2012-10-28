@@ -573,6 +573,7 @@ class Optimizer(object):
             raise compile.giveup()
         descr.store_final_boxes(op, newboxes)
         #
+        xxx
         if op.getopnum() == rop.GUARD_VALUE:
             xxx
             if self.getvalue(op.getarg(0)).is_bool_box:
