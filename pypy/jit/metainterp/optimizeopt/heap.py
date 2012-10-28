@@ -368,20 +368,28 @@ class OptHeap(Optimization):
         return pendingfields
 
     def optimize_GETFIELD_GC_i(self, op):
-        structvalue = self.getvalue(op.getarg(0))
+        structvalue = self.getforwarded(op.getarg(0))
         cf = self.field_cache(op.getdescr())
         fieldvalue = cf.getfield_from_cache(self, structvalue)
         if fieldvalue is not None:
             self.replace(op, fieldvalue.op)
             return
         # default case: produce the operation
-        structvalue.ensure_nonnull()
-        self.emit_operation(op)
-        # then remember the result of reading the field
-        fieldvalue = self.getvalue(op)
-        cf.remember_field_value(structvalue, fieldvalue, op)
+        structvalue.setknownnonnull(True)
+        return op
+
     optimize_GETFIELD_GC_r = optimize_GETFIELD_GC_i
     optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
+
+    def postprocess_GETFIELD_GC_i(self, op):
+        # then remember the result of reading the field
+        structvalue = self.getforwarded(op.getarg(0))
+        fieldvalue = self.getforwarded(op)
+        cf = self.field_cache(op.getdescr())
+        cf.remember_field_value(structvalue, fieldvalue, op)
+
+    postprocess_GETFIELD_GC_r = postprocess_GETFIELD_GC_i
+    postprocess_GETFIELD_GC_f = postprocess_GETFIELD_GC_i
 
     def optimize_GETFIELD_GC_PURE_i(self, op):
         structvalue = self.getvalue(op.getarg(0))

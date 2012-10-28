@@ -561,6 +561,7 @@ class Optimizer(object):
 
     def store_final_boxes_in_guard(self, op):
         return op # XXX we disable it for tests
+        xxxx
         assert op.getdescr() is None
         descr = op.invent_descr(self.jitdriver_sd, self.metainterp_sd)
         op.setdescr(descr)
@@ -573,29 +574,6 @@ class Optimizer(object):
             raise compile.giveup()
         descr.store_final_boxes(op, newboxes)
         #
-        xxx
-        if op.getopnum() == rop.GUARD_VALUE:
-            xxx
-            if self.getvalue(op.getarg(0)).is_bool_box:
-                # Hack: turn guard_value(bool) into guard_true/guard_false.
-                # This is done after the operation is emitted to let
-                # store_final_boxes_in_guard set the guard_opnum field of the
-                # descr to the original rop.GUARD_VALUE.
-                constvalue = op.getarg(1).getint()
-                if constvalue == 0:
-                    newop = create_resop_1(rop.GUARD_FALSE, None,
-                                           op.getarg(0))
-                elif constvalue == 1: 
-                    newop = create_resop_1(rop.GUARD_TRUE, None,
-                                           op.getarg(0))
-                else:
-                    raise AssertionError("uh?")
-                newop.set_extra("failargs", op.get_extra("failargs"))
-                self.replace(op, newop)
-                return newop
-            else:
-                # a real GUARD_VALUE.  Make it use one counter per value.
-                descr.make_a_counter_per_value(op)
         return op
 
     def optimize_default(self, op):

@@ -440,8 +440,8 @@ class OptVirtualize(optimizer.Optimization):
                 fieldvalue = self.optimizer.new_const(op.getdescr())
             self.optimizer.replace(op, fieldvalue)
         else:
-            value.ensure_nonnull()
-            self.emit_operation(op)
+            value.setknownnonnull(True)
+            return op
     optimize_GETFIELD_GC_r = optimize_GETFIELD_GC_i
     optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
 
