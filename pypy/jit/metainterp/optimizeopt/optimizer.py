@@ -250,13 +250,6 @@ class Optimization(object):
     def __init__(self):
         pass # make rpython happy
 
-    #def propagate_forward(self, op):
-    #    raise NotImplementedError
-
-    #def emit_operation(self, op):
-    #    self.last_emitted_operation = op
-    #    self.next_optimization.propagate_forward(op)
-
     def process_inputargs(self, args):
         pass
 
@@ -416,21 +409,6 @@ class Optimizer(object):
     def replace(self, op, with_):
         self.getforwarded(op)._forwarded = with_
 
-    def copy_op_if_modified_by_optimization(self, op):
-        xxxx
-        new_op = op.copy_if_modified_by_optimization(self)
-        if new_op is not op:
-            self.replace(op, new_op)
-        return new_op
-
-    # XXX some RPython magic needed
-    def copy_and_change(self, op, *args, **kwds):
-        xxx
-        new_op = op.copy_and_change(*args, **kwds)
-        if new_op is not op:
-            self.replace(op, new_op)
-        return new_op
-
     def ensure_imported(self, value):
         pass
 
@@ -513,10 +491,11 @@ class Optimizer(object):
         for opt in self.optimizations:
             opt.process_inputargs(self.loop.inputargs)
         while i < len(self.loop.operations):
-            op = self.loop.operations[i]
-            orig_op = op
+            orig_op = self.loop.operations[i]
+            op = orig_op
             for opt in self.optimizations:
                 op = opt.optimize_operation(op)
+                # result can be either None, the same thing or a new operation
                 if op is None:
                     break
             else:

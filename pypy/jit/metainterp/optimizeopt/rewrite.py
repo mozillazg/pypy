@@ -81,7 +81,7 @@ class OptRewrite(Optimization):
         elif v2.is_null():
             self.optimizer.replace(op, op.getarg(0))
         else:
-            self.emit_operation(op)
+            return op
 
     def optimize_INT_SUB(self, op):
         v2 = self.getforwarded(op.getarg(1))
