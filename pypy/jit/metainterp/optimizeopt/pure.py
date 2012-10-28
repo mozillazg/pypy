@@ -63,11 +63,12 @@ class OptPure(Optimization):
                 self.last_emitted_operation = REMOVED
                 return
             else:
-                new_op = op.copy_if_modified_by_optimization(self.optimizer)
+                new_op = self.optimizer.getforwarded(op)
                 self.pure_operations.set(new_op, op)
                 self.remember_emitting_pure(op)
 
             # replace CALL_PURE with just CALL
+            xxx
             self.emit_operation(self.optimizer.copy_and_change(op, opnum))
         return optimize_CALL_PURE
     optimize_CALL_PURE_i = _new_optimize_call_pure(rop.CALL_i)
@@ -80,7 +81,7 @@ class OptPure(Optimization):
             # it was a CALL_PURE that was killed; so we also kill the
             # following GUARD_NO_EXCEPTION
             return
-        self.emit_operation(op)
+        return op
 
     def flush(self):
         assert self.posponedop is None

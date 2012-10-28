@@ -2,7 +2,7 @@ from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1,\
-     CONST_0
+     CONST_0, REMOVED
 from pypy.jit.metainterp.resoperation import (opboolinvers, opboolreflex, rop,
                                               ConstInt, make_hashable_int,
                                               create_resop_2, Const,
@@ -515,7 +515,7 @@ class OptRewrite(Optimization):
             # it was a CALL_PURE or a CALL_LOOPINVARIANT that was killed;
             # so we also kill the following GUARD_NO_EXCEPTION
             return
-        self.emit_operation(op)
+        return op
 
     def optimize_INT_FLOORDIV(self, op):
         v1 = self.getvalue(op.getarg(0))

@@ -551,7 +551,7 @@ class OptString(optimizer.Optimization):
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:
             return
-        self.emit_operation(op)
+        return op
 
     def opt_call_str_STR2UNICODE(self, op):
         # Constant-fold unicode("constant string").
