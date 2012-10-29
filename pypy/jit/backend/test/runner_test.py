@@ -2107,8 +2107,8 @@ class LLtypeBackendTest(BaseBackendTest):
                 values.append(descr)
                 x = self.cpu.force(token)
                 assert x is None
-                values.append(self.cpu.get_latest_value_int(token, 0))
-                values.append(self.cpu.get_latest_value_int(token, 1))
+                values.append(self.get_frame_value(token, "i1"))
+                values.append(self.get_frame_value(token, "i0"))
                 values.append(token)
 
         FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed], lltype.Void)
@@ -2143,8 +2143,8 @@ class LLtypeBackendTest(BaseBackendTest):
         def maybe_force(token, flag):
             if flag:
                self.cpu.force(token)
-               values.append(self.cpu.get_latest_value_int(token, 0))
-               values.append(self.cpu.get_latest_value_int(token, 2))
+               values.append(self.get_frame_value(token, "i1"))
+               values.append(self.get_frame_value(token, "i0"))
                values.append(token)
             return 42
 
@@ -2159,7 +2159,7 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0, i1]
         ptok = jit_frame()
         i2 = call_may_force_i(ConstClass(func_ptr), ptok, i1, descr=calldescr)
-        guard_not_forced(descr=faildescr) [i1, i2, i0]
+        guard_not_forced(descr=faildescr)
         finish(i2, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, ops, looptoken)
@@ -2170,9 +2170,9 @@ class LLtypeBackendTest(BaseBackendTest):
 
         frame = self.cpu.execute_token(looptoken, 10, 1)
         assert self.cpu.get_latest_descr(frame).identifier == 1
-        assert self.cpu.get_latest_value_int(frame, 0) == 1
-        assert self.cpu.get_latest_value_int(frame, 1) == 42
-        assert self.cpu.get_latest_value_int(frame, 2) == 10
+        assert self.get_frame_value(frame, "i1") == 1
+        assert self.get_frame_value(frame, "i2") == 42
+        assert self.get_frame_value(frame, "i0") == 10
         assert values == [1, 10, frame]
 
     def test_force_operations_returning_float(self):
@@ -2182,8 +2182,8 @@ class LLtypeBackendTest(BaseBackendTest):
         def maybe_force(token, flag):
             if flag:
                self.cpu.force(token)
-               values.append(self.cpu.get_latest_value_int(token, 0))
-               values.append(self.cpu.get_latest_value_int(token, 2))
+               values.append(self.get_frame_value(token, "i1"))
+               values.append(self.get_frame_value(token, "i0"))
                values.append(token)
             return 42.5
 
@@ -2197,9 +2197,9 @@ class LLtypeBackendTest(BaseBackendTest):
         inputargs, ops, looptoken = self.parse("""
         [i0, i1]
         ptok = jit_frame()
-        f0 = call_may_force_f(ConstClass(func_ptr), ptok, i1, descr=calldescr)
-        guard_not_forced(descr=faildescr) [i1, f0, i0]
-        finish(f0, descr=faildescr0) []
+        f2 = call_may_force_f(ConstClass(func_ptr), ptok, i1, descr=calldescr)
+        guard_not_forced(descr=faildescr)
+        finish(f2, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, ops, looptoken)
         frame = self.cpu.execute_token(looptoken, 20, 0)
@@ -2210,10 +2210,9 @@ class LLtypeBackendTest(BaseBackendTest):
 
         frame = self.cpu.execute_token(looptoken, 10, 1)
         assert self.cpu.get_latest_descr(frame).identifier == 1
-        assert self.cpu.get_latest_value_int(frame, 0) == 1
-        x = self.cpu.get_latest_value_float(frame, 1)
-        assert longlong.getrealfloat(x) == 42.5
-        assert self.cpu.get_latest_value_int(frame, 2) == 10
+        assert self.get_frame_value(frame, "i1") == 1
+        assert longlong.getrealfloat(self.get_frame_value(frame, "f2")) == 42.5
+        assert self.get_frame_value(frame, "i0") == 10
         assert values == [1, 10, frame]
 
     def test_force_from_finish(self):

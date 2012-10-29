@@ -855,12 +855,9 @@ class LLFrame(object):
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
-        XXX
-        self.latest_values = self._getfailargs(guard_op, skip=call_op)
         self.latest_descr = _getdescr(guard_op)
         res = self.execute_call(calldescr, func, *args)
         del self.latest_descr
-        del self.latest_values
         return res
     execute_call_may_force_i = execute_call_may_force
     execute_call_may_force_r = execute_call_may_force
