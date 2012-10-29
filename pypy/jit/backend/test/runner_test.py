@@ -3315,35 +3315,35 @@ class LLtypeBackendTest(BaseBackendTest):
         label(i0, descr=targettoken1)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr) [i1]
+        guard_true(i2, descr=faildescr)
         label(i1, descr=targettoken2)
         i3 = int_ge(i1, 0)
-        guard_true(i3, descr=faildescr3) [i1]
+        guard_true(i3, descr=faildescr3)
         jump(i1, descr=targettoken1)
         """, locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 2)
         assert self.cpu.get_latest_descr(frame).identifier == 2
-        res = self.cpu.get_latest_value_int(frame, 0)
+        res = self.get_frame_value(frame, "i1")
         assert res == 10
 
         inputargs, operations, _ = self.parse("""
-        [i0]
-        i2 = int_sub(i0, 20)
+        [i1]
+        i2 = int_sub(i1, 20)
         jump(i2, descr=targettoken2)
         """, locals())
         self.cpu.compile_bridge(faildescr, inputargs, operations, looptoken)
 
         frame = self.cpu.execute_token(looptoken, 2)
         assert self.cpu.get_latest_descr(frame).identifier == 3
-        res = self.cpu.get_latest_value_int(frame, 0)
+        res = self.get_frame_value(frame, "i1")
         assert res == -10
 
     def test_int_force_ge_zero(self):
         ops = """
         [i0]
         i1 = int_force_ge_zero(i0)    # but forced to be in a register
-        finish(i1, descr=faildescr1) []
+        finish(i1, descr=faildescr1)
         """
         faildescr1 = BasicFailDescr(1)
         inputargs, operations, looptoken = self.parse(
@@ -3365,7 +3365,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = same_as(i2)    # but forced to be in a register
         label(i0, descr=1)
         i1 = int_add(i0, i0)
-        guard_true(i1, descr=faildesr) [i1]
+        guard_true(i1, descr=faildesr)
         jump(i1, descr=1)
         """
         faildescr = BasicFailDescr(2)
@@ -3373,8 +3373,8 @@ class LLtypeBackendTest(BaseBackendTest):
         faildescr = loop.operations[-2].getdescr()
         jumpdescr = loop.operations[-1].getdescr()
         bridge_ops = """
-        [i0]
-        jump(i0, descr=jumpdescr)
+        [i1]
+        jump(i1, descr=jumpdescr)
         """
         bridge = parse(bridge_ops, self.cpu, namespace=locals())
         looptoken = JitCellToken()
@@ -3417,7 +3417,7 @@ class LLtypeBackendTest(BaseBackendTest):
         inputargs, operations, looptoken = self.parse("""
         [i0]
         i1 = int_le(i0, 1)
-        guard_true(i1, descr=faildescr1) [i0]
+        guard_true(i1, descr=faildescr1)
         finish(i0, descr=faildescr2)
         """, locals())
         self.cpu.compile_loop(inputargs, operations, looptoken1)
@@ -3462,7 +3462,7 @@ class LLtypeBackendTest(BaseBackendTest):
         call_v(ConstClass(func_ptr), i2, i4, i6, i8, i10, i12, i14, i16, i18, descr=calldescr)
         call_v(ConstClass(func_ptr), i2, i4, i6, i8, i10, i12, i14, i16, i18, descr=calldescr)
         i20 = int_lt(i19, 100)
-        guard_true(i20, descr=faildescr42) []
+        guard_true(i20, descr=faildescr42)
         jump(i19, descr=targettoken1)
         """, locals())
         self.cpu.compile_bridge(faildescr1, inputargs, operations, looptoken1)
@@ -3482,13 +3482,13 @@ class LLtypeBackendTest(BaseBackendTest):
         faildescr99 = BasicFailDescr(99)
         inputargs, operations, looptoken = self.parse("""
         [p0]
-        guard_nonnull_class(p0, ConstClass(the_class), descr=faildescr) []
-        finish(descr=faildescr1) []
+        guard_nonnull_class(p0, ConstClass(the_class), descr=faildescr)
+        finish(descr=faildescr1)
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         _, operations, _ = self.parse("""
         []
-        finish(descr=faildescr99) []
+        finish(descr=faildescr99)
         """, namespace=locals())
         self.cpu.compile_bridge(faildescr, [], operations, looptoken)
         frame = self.cpu.execute_token(looptoken,
@@ -3504,7 +3504,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1]
             i2 = raw_load_i(i0, i1, descr=arraydescr)
-            finish(i2, descr=faildescr1) []
+            finish(i2, descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3530,7 +3530,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1]
             f2 = raw_load_f(i0, i1, descr=arraydescr)
-            finish(f2, descr=faildescr1) []
+            finish(f2, descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3558,7 +3558,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, i2]
             raw_store(i0, i1, i2, descr=arraydescr)
-            finish(descr=faildescr1) []
+            finish(descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3583,7 +3583,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, f2]
             raw_store(i0, i1, f2, descr=arraydescr)
-            finish(descr=faildescr1) []
+            finish(descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3605,7 +3605,7 @@ class LLtypeBackendTest(BaseBackendTest):
         values = []
         def maybe_force(token, flag):
             self.cpu.force(token)
-            values.append(self.cpu.get_latest_value_int(token, 0))
+            values.append(self.get_frame_value(token, "i1"))
             values.append(token)
             return 42
 
@@ -3618,13 +3618,13 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0, i1]
         ptok = jit_frame()
         i2 = call_may_force_i(ConstClass(func_ptr), ptok, i1, descr=calldescr)
-        guard_not_forced(descr=faildescr) [i2]
-        finish(i2, descr=faildescr2) []
+        guard_not_forced(descr=faildescr)
+        finish(i2, descr=faildescr2)
         ''', namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 20, 0)
         assert self.cpu.get_latest_descr(frame).identifier == 23
-        assert self.cpu.get_latest_value_int(frame, 0) == 42
+        assert self.get_frame_value(frame, "i2") == 42
         # make sure that force reads the registers from a zeroed piece of
         # memory
         assert values[0] == 0
