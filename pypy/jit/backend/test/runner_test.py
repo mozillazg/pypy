@@ -24,6 +24,7 @@ class Runner(object):
 
     add_loop_instruction = ['overload for a specific cpu']
     bridge_loop_instruction = ['overload for a specific cpu']
+    _autoindex = 0
 
     def execute_operation(self, opname, valueboxes, result_type, descr=None):
         inputargs, operations = self._get_single_operation_list(opname,
@@ -1063,7 +1064,6 @@ class BaseBackendTest(Runner):
         for nb_args in range(50):
             print 'Passing %d arguments to execute_token...' % nb_args
             #
-            text2op = {}
             inputargs = []
             values = []
             for k in range(nb_args):
@@ -1071,11 +1071,9 @@ class BaseBackendTest(Runner):
                 if kind == 0:
                     inputargs.append(boxint())
                     values.append(r.randrange(-100000, 100000))
-                    text2op['ii%d' % k] = inputargs[-1]
                 else:
                     inputargs.append(boxfloat())
                     values.append(longlong.getfloatstorage(r.random()))
-                    text2op['fi%d' % k] = inputargs[-1]
             #
             looptoken = JitCellToken()
             faildescr = BasicFailDescr(42)
@@ -1091,7 +1089,6 @@ class BaseBackendTest(Runner):
                         create_resop_2(rop.INT_ADD, 0, inputargs[k],
                                        ConstInt(x))
                         )
-                    text2op['io%d' % k] = operations[-1]
                     y = values[k] + x
                 else:
                     x = r.random()
@@ -1099,16 +1096,16 @@ class BaseBackendTest(Runner):
                         create_resop_2(rop.FLOAT_ADD, 0.0, inputargs[k],
                                        constfloat(x))
                         )
-                    text2op['fo%d' % k] = operations[-1]
                     y = longlong.getrealfloat(values[k]) + x
                     y = longlong.getfloatstorage(y)
                 retvalues.append(y)
+                operations[-1]._varindex = 2 * k
             #
             operations.append(
                 create_resop(rop.FINISH, None, [], descr=faildescr,
                              mutable=True)
                 )
-            self.update_varindexes(text2op)
+            oparser.assign_all_varindices(inputargs + operations)
             print inputargs
             for op in operations:
                 print op
@@ -1118,10 +1115,10 @@ class BaseBackendTest(Runner):
             assert self.cpu.get_latest_descr(frame).identifier == 42
             #
             for k, expected in zip(ks, retvalues):
-                if 'io%d' % k in text2op:
-                    got = self.get_frame_value(frame, 'io%d' % k)
+                if isinstance(expected, float):
+                    got = self.get_frame_value(frame, 'f%d' % (2 * k))
                 else:
-                    got = self.get_frame_value(frame, 'fo%d' % k)
+                    got = self.get_frame_value(frame, 'i%d' % (2 * k))
                 assert got == expected
 
     def test_jump(self):
@@ -1141,12 +1138,13 @@ class BaseBackendTest(Runner):
             inputargs = []
             for k in range(nb_args):
                 kind = r.randrange(0, numkinds)
+                num = 2 * k + 4
                 if kind == 0:
-                    inputargs.append("i%d" % (k + 10))
+                    inputargs.append("i%d" % num)
                 elif kind == 1:
-                    inputargs.append("p%d" % k)
+                    inputargs.append("p%d" % num)
                 else:
-                    inputargs.append("f%d" % k)
+                    inputargs.append("f%d" % num)
             jumpargs = []
             remixing = []
             for srcbox in inputargs:
@@ -1209,42 +1207,43 @@ class BaseBackendTest(Runner):
     def test_compile_bridge_float(self):
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
-        fboxes = "f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11"
+        fboxes = ["f%d" % (k * 2) for k in range(12)]
+        fboxesstr = ', '.join(fboxes)
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
         targettoken = TargetToken()
         inputargs, operations, looptoken = self.parse("""
-        [%(fboxes)s]
-        label(%(fboxes)s, descr=targettoken)
-        i2 = float_le(f0, 9.2)
-        guard_true(i2, descr=faildescr1)
+        [%(fboxesstr)s]
+        label(%(fboxesstr)s, descr=targettoken)
+        i27 = float_le(f0, 9.2)
+        guard_true(i27, descr=faildescr1)
         finish(descr=faildescr2)
-        """ % {'fboxes': fboxes}, {'faildescr1': faildescr1,
-                                   'faildescr2': faildescr2,
-                                   'targettoken': targettoken})
+        """ % {'fboxesstr': fboxesstr}, {'faildescr1': faildescr1,
+                                         'faildescr2': faildescr2,
+                                         'targettoken': targettoken})
         self.cpu.compile_loop(inputargs, operations, looptoken)
 
         inputargs, operations, _  = self.parse("""
         [%s]
-        f15 = float_sub(f0, 1.0)
-        jump(f15, %s, descr=targettoken)
-        """ % (fboxes, fboxes[4:]), {'targettoken': targettoken})
+        f28 = float_sub(f0, 1.0)
+        jump(f28, %s, descr=targettoken)
+        """ % (fboxesstr, ', '.join(fboxes[1:])), {'targettoken': targettoken})
 
         self.cpu.compile_bridge(faildescr1, inputargs, operations, looptoken)
 
         args = []
-        for i in range(len(fboxes.split(","))):
+        for i in range(len(fboxes)):
             x = 13.5 + 6.73 * i
             args.append(longlong.getfloatstorage(x))
         frame = self.cpu.execute_token(looptoken, *args)
         assert self.cpu.get_latest_descr(frame).identifier == 2
-        res = self.get_frame_value(frame, "f0")
-        assert longlong.getrealfloat(res) == 8.5
-        fboxeslist = map(str.strip, fboxes.split(","))
-        for i in range(1, len(fboxeslist)):
-            res = self.get_frame_value(frame, fboxeslist[i])
-            got = longlong.getrealfloat(res)
-            assert got == 13.5 + 6.73 * i
+
+        got = []
+        for name in fboxes:
+            res = self.get_frame_value(frame, name)
+            got.append(longlong.getrealfloat(res))
+        expected = [8.5] + [(13.5 + 6.73 * i) for i in range(1, len(fboxes))]
+        assert got == expected
 
     def test_compile_bridge_spilled_float(self):
         if not self.cpu.supports_floats:
@@ -1704,15 +1703,22 @@ class LLtypeBackendTest(BaseBackendTest):
             t.parent.parent.parent.typeptr = vtable_for_T
         t_box = boxptr(lltype.cast_opaque_ptr(llmemory.GCREF, t))
         T_box = ConstInt(heaptracker.adr2int(vtable_for_T_addr))
+        t_box._varindex = self._autoindex
+        self._autoindex += 1
         return t_box, T_box
 
     def null_instance(self):
-        return boxptr(lltype.nullptr(llmemory.GCREF.TO))
+        box = boxptr(lltype.nullptr(llmemory.GCREF.TO))
+        box._varindex = self._autoindex
+        self._autoindex += 1
+        return box
 
     def alloc_array_of(self, ITEM, length):
         A = lltype.GcArray(ITEM)
         a = lltype.malloc(A, length)
         a_box = boxptr(lltype.cast_opaque_ptr(llmemory.GCREF, a))
+        a_box._varindex = self._autoindex
+        self._autoindex += 1
         return a_box, A
 
     def alloc_string(self, string):
@@ -1720,6 +1726,8 @@ class LLtypeBackendTest(BaseBackendTest):
         for i in range(len(string)):
             s.chars[i] = string[i]
         s_box = boxptr(lltype.cast_opaque_ptr(llmemory.GCREF, s))
+        s_box._varindex = self._autoindex
+        self._autoindex += 1
         return s_box
 
     def look_string(self, string_box):
@@ -1731,6 +1739,8 @@ class LLtypeBackendTest(BaseBackendTest):
         for i in range(len(unicode)):
             u.chars[i] = unicode[i]
         u_box = boxptr(lltype.cast_opaque_ptr(llmemory.GCREF, u))
+        u_box._varindex = self._autoindex
+        self._autoindex += 1
         return u_box
 
     def look_unicode(self, unicode_box):
