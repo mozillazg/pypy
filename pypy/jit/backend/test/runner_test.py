@@ -1248,12 +1248,11 @@ class BaseBackendTest(Runner):
     def test_compile_bridge_spilled_float(self):
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
-        fboxes = [boxfloat() for i in range(3)]
         loopops = """
-        [i0, f1, f2]
-        f3 = float_add(f1, f2)
-        force_spill(f3)
-        force_spill(f1)
+        [i0, f4, f2]
+        f6 = float_add(f4, f2)
+        force_spill(f6)
+        force_spill(f4)
         force_spill(f2)
         guard_false(i0, descr=faildescr0)
         finish()"""
@@ -1265,28 +1264,27 @@ class BaseBackendTest(Runner):
         args.append(longlong.getfloatstorage(0.75))
         frame = self.cpu.execute_token(looptoken, *args)
         assert operations[-2].getdescr()== self.cpu.get_latest_descr(frame)
-        f1 = self.get_frame_value(frame, "f1")
+        f4 = self.get_frame_value(frame, "f4")
         f2 = self.get_frame_value(frame, "f2")
-        f3 = self.get_frame_value(frame, "f3")
-        assert longlong.getrealfloat(f1) == 132.25
+        f6 = self.get_frame_value(frame, "f6")
+        assert longlong.getrealfloat(f4) == 132.25
         assert longlong.getrealfloat(f2) == 0.75
-        assert longlong.getrealfloat(f3) == 133.0
+        assert longlong.getrealfloat(f6) == 133.0
 
-        faildescr1 = BasicFailDescr(100)
-        bridgeops = [
-            create_resop(rop.FINISH, None, [], descr=faildescr1,
-                         mutable=True),
-            ]
+        fboxes, bridgeops, _ = self.parse("""
+            [f4, f2, f6]
+            finish(descr=faildescr1)
+            """, namespace={'faildescr1': BasicFailDescr(100)})
         self.cpu.compile_bridge(operations[-2].getdescr(), fboxes,
                                 bridgeops, looptoken)
         frame = self.cpu.execute_token(looptoken, *args)
         assert self.cpu.get_latest_descr(frame).identifier == 100
-        f1 = self.get_frame_value(frame, "f1")
+        f4 = self.get_frame_value(frame, "f4")
         f2 = self.get_frame_value(frame, "f2")
-        f3 = self.get_frame_value(frame, "f3")
-        assert longlong.getrealfloat(f1) == 132.25
+        f6 = self.get_frame_value(frame, "f6")
+        assert longlong.getrealfloat(f4) == 132.25
         assert longlong.getrealfloat(f2) == 0.75
-        assert longlong.getrealfloat(f3) == 133.0
+        assert longlong.getrealfloat(f6) == 133.0
 
     def test_integers_and_guards2(self):
         for opname, compare in [

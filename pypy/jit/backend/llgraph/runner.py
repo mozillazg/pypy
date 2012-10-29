@@ -24,6 +24,8 @@ class LLTrace(object):
         # need to make sure things get freed.
 
         # XXX for now
+        for op in inputargs + operations:
+            assert op.type == VOID or op._varindex >= 0
         self.operations = operations
         self.inputargs = inputargs
         return
