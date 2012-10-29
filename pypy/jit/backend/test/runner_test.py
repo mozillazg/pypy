@@ -1883,8 +1883,8 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0]
         i1 = same_as_i(1)
         call_v(ConstClass(fptr), i0, descr=calldescr)
-        p0 = guard_exception(ConstClass(xtp), descr=faildescr2) [i1]
-        finish(p0, descr=faildescr1) []
+        p2 = guard_exception(ConstClass(xtp), descr=faildescr2)
+        finish(p2, descr=faildescr1)
         '''
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Void))
         fptr = llhelper(FPTR, func)
@@ -1908,7 +1908,7 @@ class LLtypeBackendTest(BaseBackendTest):
         frame = self.cpu.execute_token(looptoken, 1)
         assert self.cpu.get_finish_value_ref(frame) == xptr
         frame = self.cpu.execute_token(looptoken, 0)
-        assert self.cpu.get_latest_value_int(frame, 0) == 1
+        assert self.get_frame_value(frame, "i1") == 1
         excvalue = self.cpu.grab_exc_value(frame)
         assert not excvalue
 
@@ -1926,7 +1926,7 @@ class LLtypeBackendTest(BaseBackendTest):
         inputargs, operations, looptoken = self.parse(ops, namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 1)
-        assert self.cpu.get_latest_value_int(frame, 0) == 1
+        assert self.get_frame_value(frame, "i1") == 1
         excvalue = self.cpu.grab_exc_value(frame)
         assert excvalue == yptr
 
@@ -1936,13 +1936,13 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0]
         i1 = same_as_i(1)
         call_v(ConstClass(fptr), i0, descr=calldescr)
-        guard_no_exception(descr=faildescr1) [i1]
-        finish(-100, descr=faildescr2) []
+        guard_no_exception(descr=faildescr1)
+        finish(-100, descr=faildescr2)
         '''
         inputargs, operations, looptoken = self.parse(ops, namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 1)
-        assert self.cpu.get_latest_value_int(frame, 0) == 1
+        assert self.get_frame_value(frame, "i1") == 1
         excvalue = self.cpu.grab_exc_value(frame)
         assert excvalue == xptr
         frame = self.cpu.execute_token(looptoken, 0)
@@ -2123,7 +2123,7 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0, i1]
         ptok = jit_frame()
         call_may_force_v(ConstClass(func_ptr), ptok, i1, descr=calldescr)
-        guard_not_forced(descr=faildescr) [i1, i0]
+        guard_not_forced(descr=faildescr)
         finish(i0, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
@@ -2134,8 +2134,8 @@ class LLtypeBackendTest(BaseBackendTest):
 
         frame = self.cpu.execute_token(looptoken, 10, 1)
         assert self.cpu.get_latest_descr(frame).identifier == 1
-        assert self.cpu.get_latest_value_int(frame, 0) == 1
-        assert self.cpu.get_latest_value_int(frame, 1) == 10
+        assert self.get_frame_value(frame, "i1") == 1
+        assert self.get_frame_value(frame, "i0") == 10
         assert values == [faildescr, 1, 10, frame]
 
     def test_force_operations_returning_int(self):
