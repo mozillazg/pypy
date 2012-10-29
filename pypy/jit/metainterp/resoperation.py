@@ -774,8 +774,7 @@ class ResOpFloat(object):
     type = FLOAT
 
     def __init__(self, floatval):
-        #assert isinstance(floatval, float)
-        # XXX not sure between float or float storage
+        assert lltype.typeOf(floatval) is longlong.FLOATSTORAGE
         self._floatval = floatval
 
     def getresultrepr(self):
@@ -1584,7 +1583,7 @@ def example_for_opnum(opnum):
     if opclasses[opnum].type == INT:
         return 0
     elif opclasses[opnum].type == FLOAT:
-        return 0.0
+        return longlong.ZEROF
     else:
         return lltype.nullptr(llmemory.GCREF.TO)
 

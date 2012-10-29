@@ -131,17 +131,6 @@ class OpParser(object):
                 raise Exception("unexpected var %s" % (arg,))
             return self.vars[arg]
 
-    def _example_for(self, opnum):
-        kind = opclasses[opnum].type
-        if kind == 'i':
-            return 0
-        elif kind == 'f':
-            return 0.0
-        elif kind == 'r':
-            return lltype.nullptr(llmemory.GCREF.TO)
-        else:
-            return None
-
     def parse_args(self, opname, argspec):
         args = []
         descr = None
@@ -195,7 +184,7 @@ class OpParser(object):
         if res in self.vars:
             raise ParseError("Double assign to var %s in line: %s" % (res, line))
         if self.results is None:
-            result = self._example_for(opnum)
+            result = example_for_opnum(opnum)
         else:
             result = self.results[num]
         opres = self.create_op(opnum, result, args, descr)

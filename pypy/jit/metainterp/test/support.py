@@ -12,9 +12,7 @@ from pypy.jit.codewriter.policy import JitPolicy
 from pypy.jit.codewriter import codewriter, longlong
 from pypy.rlib.rfloat import isnan
 
-def boxfloat(x=None):
-    if x is None:
-        x = example_for_opnum(rop.INPUT_f)
+def boxfloat(x=0.0):
     return create_resop_0(rop.INPUT_f, longlong.getfloatstorage(x))
 
 def boxlonglong_on_32bit(x):

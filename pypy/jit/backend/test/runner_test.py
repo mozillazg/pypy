@@ -74,7 +74,7 @@ class Runner(object):
         elif result_type == 'ref':
             result = lltype.nullptr(llmemory.GCREF.TO)
         elif result_type == 'float' or result_type == 'longlong':
-            result = 0.0
+            result = longlong.ZEROF
         else:
             raise ValueError(result_type)
         op0 = create_resop_dispatch(opnum, result, valueboxes,
@@ -91,7 +91,16 @@ class Runner(object):
         if descr is not None:
             op0.setdescr(descr)
         inputargs = [box for box in valueboxes if not box.is_constant()]
+        inputargs = list(set(inputargs))
         return inputargs, [op0, op1]
+
+    def _duplicate_boxes(self, inputargs):
+        seen = {}
+        for box in inputargs:
+            if box not in seen:
+                seen[box] = create_resop_0(box.opnum, box.constbox().value,
+                                           mutable=True)
+        return [seen[box] for box in inputargs]
 
 class BaseBackendTest(Runner):
 
@@ -1093,7 +1102,8 @@ class BaseBackendTest(Runner):
                 else:
                     x = r.random()
                     operations.append(
-                        create_resop_2(rop.FLOAT_ADD, 0.0, inputargs[k],
+                        create_resop_2(rop.FLOAT_ADD,
+                                       longlong.ZEROF, inputargs[k],
                                        constfloat(x))
                         )
                     y = longlong.getrealfloat(values[k]) + x
@@ -1301,11 +1311,12 @@ class BaseBackendTest(Runner):
                 op0 = create_resop_1(opname, 0, box)
                 op1 = create_resop_1(opguard, None, op0, mutable=True)
                 op1.setdescr(faildescr1)
-                op1.setfailargs([])
                 op2 = create_resop(rop.FINISH, None, [], descr=faildescr2,
                                    mutable=True)
+                operations = [op0, op1, op2]
                 looptoken = JitCellToken()
-                self.cpu.compile_loop(inputargs, [op0, op1, op2], looptoken)
+                oparser.assign_all_varindices(inputargs + operations)
+                self.cpu.compile_loop(inputargs, operations, looptoken)
                 #
                 cpu = self.cpu
                 for value in [-42, 0, 1, 10]:
@@ -1346,10 +1357,10 @@ class BaseBackendTest(Runner):
                     op0 = create_resop_2(opname, 0, ibox1, ibox2)
                     op1 = create_resop_1(opguard, None, op0, mutable=True)
                     op1.setdescr(faildescr1)
-                    op1.setfailargs([])
                     op2 = create_resop(rop.FINISH, None, [], descr=faildescr2,
                                        mutable=True)
                     operations = [op0, op1, op2]
+                    oparser.assign_all_varindices(inputargs + operations)
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(inputargs, operations, looptoken)
                     #
@@ -1398,11 +1409,12 @@ class BaseBackendTest(Runner):
                     op0 = create_resop_2(opname, 0, ibox1, ibox2)
                     op1 = create_resop_1(opguard, None, op0, descr=faildescr1,
                                          mutable=True)
-                    op1.setfailargs([])
                     op2 = create_resop(rop.FINISH, None, [], descr=faildescr2,
                                        mutable=True)
+                    operations = [op0, op1, op2]
                     looptoken = JitCellToken()
-                    self.cpu.compile_loop(inputargs, [op0, op1, op2], looptoken)
+                    oparser.assign_all_varindices(inputargs + operations)
+                    self.cpu.compile_loop(inputargs, operations, looptoken)
                     #
                     cpu = self.cpu
                     for test1 in [65, 42, 11, 0, 1]:
@@ -1453,11 +1465,11 @@ class BaseBackendTest(Runner):
                     op0 = create_resop_2(opname, 0, fbox1, fbox2)
                     op1 = create_resop_1(opguard, None, op0, mutable=True)
                     op1.setdescr(faildescr1)
-                    op1.setfailargs([])
                     op2 = create_resop(rop.FINISH, None, [], descr=faildescr2,
                                        mutable=True)
                     operations = [op0, op1, op2]
                     looptoken = JitCellToken()
+                    oparser.assign_all_varindices(inputargs + operations)
                     self.cpu.compile_loop(inputargs, operations, looptoken)
                     #
                     cpu = self.cpu
@@ -1506,7 +1518,7 @@ class BaseBackendTest(Runner):
             if rettype == 'int':
                 res = 0
             elif rettype == 'float':
-                res = 0.0
+                res = longlong.ZEROF
             else:
                 assert 0
             operations.append(create_resop_dispatch(opnum, res, boxargs,
@@ -1517,6 +1529,7 @@ class BaseBackendTest(Runner):
         operations.append(create_resop(rop.FINISH, None, [],
                                        descr=faildescr, mutable=True))
         looptoken = JitCellToken()
+        oparser.assign_all_varindices(inputargs + operations)
         #
         self.cpu.compile_loop(inputargs, operations, looptoken)
         #
@@ -1554,14 +1567,14 @@ class BaseBackendTest(Runner):
 
         def nan_and_infinity(opnum, realoperation, testcases):
             for testcase in testcases:
-                realvalues = [b.getfloat() for b in testcase]
+                testcase = self._duplicate_boxes(testcase)
+                realvalues = [x.getfloat() for x in testcase]
                 expected = realoperation(*realvalues)
                 if isinstance(expected, float):
                     expectedtype = 'float'
                 else:
                     expectedtype = 'int'
-                got = self.execute_operation(opnum, list(testcase),
-                                             expectedtype)
+                got = self.execute_operation(opnum, testcase, expectedtype)
                 if isnan(expected):
                     ok = isnan(got)
                 elif isinf(expected):
@@ -1571,7 +1584,7 @@ class BaseBackendTest(Runner):
                 if not ok:
                     raise AssertionError("%s(%s): got %r, expected %r" % (
                         opname[opnum], ', '.join(map(repr, realvalues)),
-                        got.getfloat(), expected))
+                        got, expected))
                 # if we expect a boolean, also check the combination with
                 # a GUARD_TRUE or GUARD_FALSE
                 if isinstance(expected, bool):
@@ -1580,7 +1593,6 @@ class BaseBackendTest(Runner):
                         op0 = create_resop_2(opnum, 0, *testcase)
                         op1 = create_resop_1(guard_opnum, None, op0,
                                              mutable=True)
-                        op1.setfailargs([])
                         op1.setdescr(BasicFailDescr(4))
                         op2 = create_resop(rop.FINISH, None, [],
                                            descr=BasicFailDescr(5),
@@ -1589,6 +1601,8 @@ class BaseBackendTest(Runner):
                         looptoken = JitCellToken()
                         # Use "set" to unique-ify inputargs
                         unique_testcase_list = list(set(testcase))
+                        oparser.assign_all_varindices(unique_testcase_list +
+                                                      operations)
                         self.cpu.compile_loop(unique_testcase_list, operations,
                                               looptoken)
                         args = [box.getfloatstorage()
