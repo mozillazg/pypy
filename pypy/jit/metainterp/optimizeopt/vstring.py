@@ -538,7 +538,7 @@ class OptString(optimizer.Optimization):
             if oopspecindex == EffectInfo.OS_STR2UNICODE:
                 if self.opt_call_str_STR2UNICODE(op):
                     return
-        self.emit_operation(op)
+        return op
     optimize_CALL_f = optimize_CALL_i
     optimize_CALL_r = optimize_CALL_i
     optimize_CALL_v = optimize_CALL_i
@@ -551,7 +551,7 @@ class OptString(optimizer.Optimization):
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:
             return
-        self.emit_operation(op)
+        return op
 
     def opt_call_str_STR2UNICODE(self, op):
         # Constant-fold unicode("constant string").

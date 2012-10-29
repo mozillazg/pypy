@@ -158,13 +158,6 @@ class OptValue(object):
             return not op.nonnull()
         return False
 
-    def same_value(self, other):
-        if not other:
-            return False
-        if self.is_constant() and other.is_constant():
-            return self.box.same_constant(other.box)
-        return self is other
-
     def make_constant_class(self, classbox, guardop, index):
         assert self.level < LEVEL_KNOWNCLASS
         self.known_class = classbox
@@ -256,13 +249,6 @@ class Optimization(object):
 
     def __init__(self):
         pass # make rpython happy
-
-    #def propagate_forward(self, op):
-    #    raise NotImplementedError
-
-    #def emit_operation(self, op):
-    #    self.last_emitted_operation = op
-    #    self.next_optimization.propagate_forward(op)
 
     def process_inputargs(self, args):
         pass
@@ -423,21 +409,6 @@ class Optimizer(object):
     def replace(self, op, with_):
         self.getforwarded(op)._forwarded = with_
 
-    def copy_op_if_modified_by_optimization(self, op):
-        xxxx
-        new_op = op.copy_if_modified_by_optimization(self)
-        if new_op is not op:
-            self.replace(op, new_op)
-        return new_op
-
-    # XXX some RPython magic needed
-    def copy_and_change(self, op, *args, **kwds):
-        xxx
-        new_op = op.copy_and_change(*args, **kwds)
-        if new_op is not op:
-            self.replace(op, new_op)
-        return new_op
-
     def ensure_imported(self, value):
         pass
 
@@ -468,6 +439,15 @@ class Optimizer(object):
         op = self.getforwarded(op)
         if not op.is_constant():
             op._forwarded = ConstInt(intvalue)
+
+    def same_value(self, op1, op2):
+        if op1 is op2:
+            return True
+        if op2 is None:
+            return False
+        if op1.is_constant() and op2.is_constant():
+            return op1.same_constant(op2)
+        return False
 
     def new_ptr_box(self):
         return self.cpu.ts.BoxRef()
@@ -511,10 +491,11 @@ class Optimizer(object):
         for opt in self.optimizations:
             opt.process_inputargs(self.loop.inputargs)
         while i < len(self.loop.operations):
-            op = self.loop.operations[i]
-            orig_op = op
+            orig_op = self.loop.operations[i]
+            op = orig_op
             for opt in self.optimizations:
                 op = opt.optimize_operation(op)
+                # result can be either None, the same thing or a new operation
                 if op is None:
                     break
             else:
@@ -539,6 +520,7 @@ class Optimizer(object):
         dispatch_opt(self, op)
 
     def emit_operation(self, op):
+        op = self.getforwarded(op)
         assert op.getopnum() not in opgroups.CALL_PURE
         assert not op._forwarded
         if isinstance(op, Const):
@@ -558,6 +540,7 @@ class Optimizer(object):
 
     def store_final_boxes_in_guard(self, op):
         return op # XXX we disable it for tests
+        xxxx
         assert op.getdescr() is None
         descr = op.invent_descr(self.jitdriver_sd, self.metainterp_sd)
         op.setdescr(descr)
@@ -570,28 +553,6 @@ class Optimizer(object):
             raise compile.giveup()
         descr.store_final_boxes(op, newboxes)
         #
-        if op.getopnum() == rop.GUARD_VALUE:
-            xxx
-            if self.getvalue(op.getarg(0)).is_bool_box:
-                # Hack: turn guard_value(bool) into guard_true/guard_false.
-                # This is done after the operation is emitted to let
-                # store_final_boxes_in_guard set the guard_opnum field of the
-                # descr to the original rop.GUARD_VALUE.
-                constvalue = op.getarg(1).getint()
-                if constvalue == 0:
-                    newop = create_resop_1(rop.GUARD_FALSE, None,
-                                           op.getarg(0))
-                elif constvalue == 1: 
-                    newop = create_resop_1(rop.GUARD_TRUE, None,
-                                           op.getarg(0))
-                else:
-                    raise AssertionError("uh?")
-                newop.set_extra("failargs", op.get_extra("failargs"))
-                self.replace(op, newop)
-                return newop
-            else:
-                # a real GUARD_VALUE.  Make it use one counter per value.
-                descr.make_a_counter_per_value(op)
         return op
 
     def optimize_default(self, op):
@@ -616,9 +577,6 @@ class Optimizer(object):
     #    # in this case
     #    self.emit_operation(op)
     # FIXME: Is this still needed?
-
-    def optimize_DEBUG_MERGE_POINT(self, op):
-        self.emit_operation(op)
 
     def optimize_GETARRAYITEM_GC_PURE_i(self, op):
         indexvalue = self.getvalue(op.getarg(1))

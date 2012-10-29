@@ -485,9 +485,9 @@ class AbstractResOp(AbstractValue):
         # XXX this is a hack kill me
         import sys
         co_fname = sys._getframe(1).f_code.co_filename
-        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname or 'backend/test' in co_fname or 'test/test_util' in co_fname:
+        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname or 'backend/test' in co_fname or 'test/test_util' in co_fname or co_fname.endswith('heap.py'):
             return object.__hash__(self)
-        raise Exception("Should not hash resops, use get/set extra instead")
+        raise Exception("Should not hash resops")
 
     def _get_hash_(self):
         """ rpython level implementation of hash, cache it because computations
@@ -1424,6 +1424,8 @@ class opgroups(object):
     pass
 
 def setup(debug_print=False):
+    global opclasses_mutable
+    
     i = 0
     for basename in _oplist:
         if '/' in basename:
@@ -1466,6 +1468,7 @@ def setup(debug_print=False):
         if k.startswith('CALL'):
             ALLCALLS.append(v)
     opgroups.ALLCALLS = tuple(ALLCALLS)
+    opclasses_mutable = [None] * len(opclasses)
 
 def get_base_class(mixin, tpmixin, base):
     try:

@@ -1,4 +1,7 @@
+import random
+
 import py
+
 from pypy.rlib.objectmodel import instantiate
 from pypy.jit.metainterp.optimizeopt.test.test_util import (
     LLtypeMixin, BaseTest, FakeMetaInterpStaticData, convert_old_style_to_targets)
@@ -12,6 +15,7 @@ from pypy.jit.metainterp.resoperation import rop, opname, ConstInt,\
      create_resop_1, create_resop
 from pypy.jit.metainterp.test.support import boxint
 from pypy.rlib.rarithmetic import LONG_BIT
+
 
 def test_store_final_boxes_in_guard():
     from pypy.jit.metainterp.resume import tag, TAGBOX
@@ -185,17 +189,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         self.optimize_loop(ops, expected)
 
     def test_constfold_all(self):
-        from pypy.jit.backend.llgraph.llimpl import TYPES     # xxx fish
+        from pypy.jit.metainterp.optimizeopt.test.types import TYPES
         from pypy.jit.metainterp.executor import execute_nonspec
-        import random
+
         for opnum in [rop._ALWAYS_PURE_FIRST, rop._ALWAYS_PURE_NO_PTR_LAST]:
             try:
                 op = opname[opnum]
             except KeyError:
                 continue
             if op.startswith('_'):
-                continue
-            if 'FLOAT' in op:
                 continue
             argtypes, restype = TYPES[op.lower()]
             args = []
@@ -350,29 +352,16 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
-    def test_remove_guard_value_if_constant(self):
-        ops = """
-        [p1]
-        guard_value(p1, ConstPtr(myptr))
-        jump(ConstPtr(myptr))
-        """
-        expected = """
-        []
-        jump()
-        """
-        py.test.skip("XXX")
-        self.optimize_loop(ops, 'Constant(myptr)', expected)
-
     def test_ooisnull_oononnull_1(self):
         ops = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
-        guard_nonnull(p0) []
+        guard_class(p0, ConstClass(node_vtable))
+        guard_nonnull(p0)
         jump(p0)
         """
         expected = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
         jump(p0)
         """
         self.optimize_loop(ops, expected)
@@ -381,15 +370,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         i1 = int_is_true(i0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_is_true(i0)
-        guard_true(i2) []
+        guard_true(i2)
         jump(i0)
         """
         expected = """
         [i0]
         i1 = int_is_true(i0)
-        guard_true(i1) []
+        guard_true(i1)
         jump(i0)
         """
         self.optimize_loop(ops, expected)
@@ -416,15 +405,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i0]
         i1 = int_is_zero(i0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_is_true(i0)
-        guard_false(i2) []
+        guard_false(i2)
         jump(i0)
         """
         expected = """
         [i0]
         i1 = int_is_zero(i0)
-        guard_true(i1) []
+        guard_true(i1)
         jump(0)
         """
         self.optimize_loop(ops, expected)
@@ -432,13 +421,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_ooisnull_oononnull_2(self):
         ops = """
         [p0]
-        guard_nonnull(p0) []
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
+        guard_nonnull(p0)
         jump(p0)
         """
         expected = """
         [p0]
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
         jump(p0)
         """
         self.optimize_loop(ops, expected)
@@ -446,13 +435,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_ooisnull_on_null_ptr_1(self):
         ops = """
         [p0, p1]
-        guard_isnull(p0) []
-        guard_isnull(p0) []
+        guard_isnull(p0)
+        guard_isnull(p0)
         jump(p1, p1)
         """
         expected = """
         [p0, p1]
-        guard_isnull(p0) []
+        guard_isnull(p0)
         jump(p1, p1)
         """
         self.optimize_loop(ops, expected)
@@ -462,14 +451,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p0]
         pv = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(pv, p0, descr=valuedescr)
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
         p1 = getfield_gc_r(pv, descr=valuedescr)
-        guard_nonnull(p1) []
+        guard_nonnull(p1)
         jump(p0)
         """
         expected = """
         [p0]
-        guard_nonnull(p0) []
+        guard_nonnull(p0)
         jump(p0)
         """
         self.optimize_loop(ops, expected)
@@ -477,20 +466,20 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_oois_1(self):
         ops = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
         i0 = instance_ptr_ne(p0, NULL)
-        guard_true(i0) []
+        guard_true(i0)
         i1 = instance_ptr_eq(p0, NULL)
-        guard_false(i1) []
+        guard_false(i1)
         i2 = instance_ptr_ne(NULL, p0)
-        guard_true(i0) []
+        guard_true(i0)
         i3 = instance_ptr_eq(NULL, p0)
-        guard_false(i1) []
+        guard_false(i1)
         jump(p0)
         """
         expected = """
         [p0]
-        guard_class(p0, ConstClass(node_vtable)) []
+        guard_class(p0, ConstClass(node_vtable))
         jump(p0)
         """
         self.optimize_loop(ops, expected)
@@ -500,14 +489,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p0]
         setfield_gc(p0, 5, descr=valuedescr)     # forces p0 != NULL
         i0 = ptr_ne(p0, NULL)
-        guard_true(i0) []
+        guard_true(i0)
         i1 = ptr_eq(p0, NULL)
-        guard_false(i1) []
+        guard_false(i1)
         i2 = ptr_ne(NULL, p0)
-        guard_true(i0) []
+        guard_true(i0)
         i3 = ptr_eq(NULL, p0)
-        guard_false(i1) []
-        guard_nonnull(p0) []
+        guard_false(i1)
+        guard_nonnull(p0)
         jump(p0)
         """
         expected = """
@@ -520,14 +509,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_const_guard_value(self):
         ops = """
         [i0]
-        guard_value(i0, 2) []
+        guard_value(i0, 2)
         i = int_add(5, i0)
-        guard_value(i, 7) []
+        guard_value(i, 7)
         jump(i0)
         """
         expected = """
         [i0]
-        guard_value(i0, 2) []
+        guard_value(i0, 2)
         jump(2)
         """
         self.optimize_loop(ops, expected)
@@ -535,12 +524,12 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_constptr_guard_value(self):
         ops = """
         [p1]
-        guard_value(p1, ConstPtr(myptr)) []
+        guard_value(p1, ConstPtr(myptr))
         jump(p1)
         """
         expected = """
         [p1]
-        guard_value(p1, ConstPtr(myptr)) []
+        guard_value(p1, ConstPtr(myptr))
         jump(ConstPtr(myptr))
         """
         self.optimize_loop(ops, expected)
@@ -549,13 +538,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i]
         i1 = int_lt(i, 3)
-        guard_value(i1, 1) [i]
+        guard_value(i1, 1)
         jump(i)
         """
         expected = """
         [i]
         i1 = int_lt(i, 3)
-        guard_true(i1) [i]
+        guard_true(i1)
         jump(i)
         """
         self.optimize_loop(ops, expected)
@@ -564,13 +553,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i]
         i1 = int_is_true(i)
-        guard_value(i1, 0) [i]
+        guard_value(i1, 0)
         jump(i)
         """
         expected = """
         [i]
         i1 = int_is_true(i)
-        guard_false(i1) [i]
+        guard_false(i1)
         jump(i)
         """
         self.optimize_loop(ops, expected)
@@ -579,13 +568,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i]
         i1 = int_add(i, 3)
-        guard_value(i1, 0) [i]
+        guard_value(i1, 0)
         jump(i)
         """
         expected = """
         [i]
         i1 = int_add(i, 3)
-        guard_value(i1, 0) [i]
+        guard_value(i1, 0)
         jump(-3)
         """
         self.optimize_loop(ops, expected)
@@ -596,19 +585,16 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         i2 = int_gt(i0, i1)
         i3 = int_is_true(i2)
         i4 = int_is_true(i3)
-        guard_value(i4, 0) [i0, i1]
+        guard_value(i4, 0)
         jump(i0, i1)
         """
         expected = """
         [i0, i1]
         i2 = int_gt(i0, i1)
-        guard_false(i2) [i0, i1]
+        guard_false(i2)
         jump(i0, i1)
         """
         self.optimize_loop(ops, expected)
-
-
-
 
     def test_p123_simple(self):
         ops = """
@@ -629,9 +615,9 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         escape(i3)
         p1 = new_with_vtable(ConstClass(node_vtable))
         p1sub = new_with_vtable(ConstClass(node_vtable2))
-        setfield_gc(p1, i1, descr=valuedescr)
         setfield_gc(p1sub, i1, descr=valuedescr)
         setfield_gc(p1, p1sub, descr=nextdescr)
+        setfield_gc(p1, i1, descr=valuedescr)
         jump(i1, p1, p2)
         """
         # The same as test_p123_simple, but with a virtual containing another
@@ -644,10 +630,10 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p3sub = getfield_gc_r(p3, descr=nextdescr)
         i3 = getfield_gc_i(p3sub, descr=valuedescr)
         escape(i3)
-        p1 = new_with_vtable(ConstClass(node_vtable))
         p2sub = new_with_vtable(ConstClass(node_vtable2))
         setfield_gc(p2sub, i1, descr=valuedescr)
         setfield_gc(p2, p2sub, descr=nextdescr)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         jump(i1, p1, p2)
         """
         # The same as test_p123_simple, but in the end the "old" p2 contains
@@ -660,7 +646,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i1]
         i2 = call_i(i1, descr=nonwritedescr)
-        guard_no_exception() [i1, i2]
+        guard_no_exception()
         jump(i2)
         """
         self.optimize_loop(ops, ops)
@@ -669,13 +655,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i1]
         i2 = call_pure_i(123456, i1, descr=nonwritedescr)
-        guard_no_exception() [i1, i2]
+        guard_no_exception()
         jump(i2)
         """
         expected = """
         [i1]
         i2 = call_i(123456, i1, descr=nonwritedescr)
-        guard_no_exception() [i1, i2]
+        guard_no_exception()
         jump(i2)
         """
         self.optimize_loop(ops, expected)
@@ -685,7 +671,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i1]
         i3 = same_as_i(81)
         i2 = call_pure_i(123456, i3, descr=nonwritedescr)
-        guard_no_exception() [i1, i2]
+        guard_no_exception()
         jump(i2)
         """
         expected = """
@@ -698,15 +684,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i1]
         i2 = call_pure_i(123456, i1, descr=nonwritedescr)
-        guard_no_exception() [i1, i2]
+        guard_no_exception()
         i3 = call_pure_i(123456, i1, descr=nonwritedescr)
-        guard_no_exception() [i1, i2, i3]
+        guard_no_exception()
         jump(i3)
         """
         expected = """
         [i1]
         i2 = call_i(123456, i1, descr=nonwritedescr)
-        guard_no_exception() [i1, i2]
+        guard_no_exception()
         jump(i2)
         """
         self.optimize_loop(ops, expected)
@@ -717,25 +703,24 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i1]
         i2 = call_loopinvariant_i(1, i1, descr=nonwritedescr)
-        guard_no_exception() []
-        guard_value(i2, 1) []
+        guard_no_exception()
+        guard_value(i2, 1)
         i3 = call_loopinvariant_i(1, i1, descr=nonwritedescr)
-        guard_no_exception() []
-        guard_value(i3, 1) []
+        guard_no_exception()
+        guard_value(i3, 1)
         i4 = call_loopinvariant_i(1, i1, descr=nonwritedescr)
-        guard_no_exception() []
-        guard_value(i4, 1) []
+        guard_no_exception()
+        guard_value(i4, 1)
         jump(i1)
         """
         expected = """
         [i1]
         i2 = call_i(1, i1, descr=nonwritedescr)
-        guard_no_exception() []
-        guard_value(i2, 1) []
+        guard_no_exception()
+        guard_value(i2, 1)
         jump(i1)
         """
         self.optimize_loop(ops, expected)
-
 
     # ----------
 
@@ -1102,13 +1087,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_getfield_gc_pure_2(self):
         ops = """
         [p0, i]
-        guard_value(p0, ConstPtr(myptr)) []
+        guard_value(p0, ConstPtr(myptr))
         i1 = getfield_gc_pure_i(p0, descr=valuedescr)
         jump(p0, i1)
         """
         expected = """
         [p0, i]
-        guard_value(p0, ConstPtr(myptr)) []
+        guard_value(p0, ConstPtr(myptr))
         jump(ConstPtr(myptr), 5)
         """
         self.node.value = 5
@@ -1128,7 +1113,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i1]
         p1 = new_array(3, descr=arraydescr)
         i3 = arraylen_gc(p1, descr=arraydescr)
-        guard_value(i3, 3) []
+        guard_value(i3, 3)
         setarrayitem_gc(p1, 1, i1, descr=arraydescr)
         setarrayitem_gc(p1, 0, 25, descr=arraydescr)
         i2 = getarrayitem_gc_i(p1, 1, descr=arraydescr)
@@ -1159,7 +1144,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [f1]
         p1 = new_array(3, descr=floatarraydescr)
         i3 = arraylen_gc(p1, descr=floatarraydescr)
-        guard_value(i3, 3) []
+        guard_value(i3, 3)
         setarrayitem_gc(p1, 1, f1, descr=floatarraydescr)
         setarrayitem_gc(p1, 0, 3.5, descr=floatarraydescr)
         f2 = getarrayitem_gc_f(p1, 1, descr=floatarraydescr)

@@ -2,10 +2,11 @@ from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1,\
-     CONST_0
+     CONST_0, REMOVED
 from pypy.jit.metainterp.resoperation import (opboolinvers, opboolreflex, rop,
                                               ConstInt, make_hashable_int,
-                                              create_resop_2, Const)
+                                              create_resop_2, Const,
+                                              create_resop_1)
 from pypy.rlib.rarithmetic import highest_bit
 
 
@@ -52,7 +53,7 @@ class OptRewrite(Optimization):
                                         arg1=op.getarg(0))
             oldop = self.get_pure_result(key_op)
             if oldop is not None and oldop.getdescr() is op.getdescr():
-                self.replace(op, oldop)
+                self.optimizer.replace(op, oldop)
                 return True
 
         oldopnum = opboolinvers[opboolreflex[op.getopnum()]]
@@ -76,16 +77,16 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         if v1.is_null():
-            self.replace(op, op.getarg(1))
+            self.optimizer.replace(op, op.getarg(1))
         elif v2.is_null():
-            self.replace(op, op.getarg(0))
+            self.optimizer.replace(op, op.getarg(0))
         else:
-            self.emit_operation(op)
+            return op
 
     def optimize_INT_SUB(self, op):
         v2 = self.getforwarded(op.getarg(1))
         if v2.is_constant() and v2.getint() == 0:
-            self.replace(op, op.getarg(0))
+            self.optimizer.replace(op, op.getarg(0))
         else:
             # Synthesize the reverse ops for optimize_default to reuse
             self.pure(op.getarg(0), rop.INT_ADD, op.getarg(1), op)
@@ -101,9 +102,9 @@ class OptRewrite(Optimization):
 
         # If one side of the op is 0 the result is the other side.
         if v1.is_constant() and v1.getint() == 0:
-            self.replace(op, arg2)
+            self.optimizer.replace(op, arg2)
         elif v2.is_constant() and v2.getint() == 0:
-            self.replace(op, arg1)
+            self.optimizer.replace(op, arg1)
         else:
             # Synthesize the reverse op for optimize_default to reuse
             self.pure(op.getarg(0), rop.INT_SUB, op, op.getarg(1))
@@ -172,11 +173,11 @@ class OptRewrite(Optimization):
 
             if v1.is_constant():
                 if v1.op.getfloat() == 1.0:
-                    self.replace(op, rhs)
+                    self.optimizer.replace(op, rhs)
                     return
                 elif v1.op.getfloat() == -1.0:
                     new_op = create_resop_1(rop.FLOAT_NEG, 0.0, rhs)
-                    self.replace(op, new_op)
+                    self.optimizer.replace(op, new_op)
                     self.emit_operation(new_op)
                     return
         self.emit_operation(op)
@@ -194,7 +195,7 @@ class OptRewrite(Optimization):
                                   'always fail')
             return
         if emit_operation:
-            return self.getforwarded(op)
+            return op
 
     def postprocess_guard(self, op, constbox):
         value = self.getforwarded(op.getarg(0))
@@ -212,31 +213,27 @@ class OptRewrite(Optimization):
     def postprocess_GUARD_FALSE(self, op):
         self.postprocess_guard(op, CONST_0)
 
-    def postprocess_GUARD_NO_OVERFLOW(self, op):
-        pass # to be killed
-
-    def postprocess_default(self, op):
-        if op.is_guard():
-            xxx
-
     def optimize_GUARD_ISNULL(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
         if value.is_null():
             return
         elif value.is_nonnull():
             raise InvalidLoop('A GUARD_ISNULL was proven to always fail')
-        self.emit_operation(op)
-        value.make_constant(self.optimizer.cpu.ts.CONST_NULL)
+        return op
+
+    def postprocess_GUARD_ISNULL(self, op):
+        self.optimizer.make_constant(op.getarg(0),
+                                     self.optimizer.cpu.ts.CONST_NULL)
 
     def optimize_GUARD_NONNULL(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
         if value.is_nonnull():
             return
         elif value.is_null():
             raise InvalidLoop('A GUARD_NONNULL was proven to always fail')
-        pos = self.optimizer.get_pos()
-        self.emit_operation(op)
-        value.make_nonnull(op, pos)
+        value.setknownnonnull(True)
+        value.setlastguardpos(self.optimizer.get_pos())
+        return op
 
     def optimize_GUARD_VALUE(self, op):
         value = self.getforwarded(op.getarg(0))
@@ -274,6 +271,17 @@ class OptRewrite(Optimization):
             value.last_guard = None
             emit_operation = False
         else:
+            if not value.is_constant() and value.returns_bool_result():
+                constvalue = op.getarg(1).getint()
+                if constvalue == 0:
+                    newop = create_resop_1(rop.GUARD_FALSE, None,
+                                           op.getarg(0))
+                elif constvalue == 1: 
+                    newop = create_resop_1(rop.GUARD_TRUE, None,
+                                           op.getarg(0))
+                else:
+                    raise AssertionError("uh?")
+                return newop
             emit_operation = True
         constbox = op.getarg(1)
         assert isinstance(constbox, Const)
@@ -354,7 +362,7 @@ class OptRewrite(Optimization):
 
             resop = self.loop_invariant_results.get(key, None)
             if resop is not None:
-                self.replace(op, resop)
+                self.optimizer.replace(op, resop)
                 self.last_emitted_operation = REMOVED
                 return
             # change the op to be a normal call, from the backend's point of view
@@ -371,25 +379,25 @@ class OptRewrite(Optimization):
 
     def _optimize_nullness(self, op, arg, expect_nonnull):
         value = self.getforwarded(arg)
-        if value.nonnull():
+        if value.is_nonnull():
             self.make_constant_int(op, expect_nonnull)
-        elif not value.nonnull():
+        elif value.is_null():
             self.make_constant_int(op, not expect_nonnull)
         else:
             return op
 
     def optimize_INT_IS_TRUE(self, op):
         if op.getarg(0).returns_bool_result():
-            self.replace(op, op.getarg(0))
+            self.optimizer.replace(op, op.getarg(0))
             return
         return self._optimize_nullness(op, op.getarg(0), True)
 
     def optimize_INT_IS_ZERO(self, op):
-        self._optimize_nullness(op, op.getarg(0), False)
+        return self._optimize_nullness(op, op.getarg(0), False)
 
     def _optimize_oois_ooisnot(self, op, expect_isnot, instance):
-        value0 = self.getvalue(op.getarg(0))
-        value1 = self.getvalue(op.getarg(1))
+        value0 = self.getforwarded(op.getarg(0))
+        value1 = self.getforwarded(op.getarg(1))
         if value0.is_virtual():
             if value1.is_virtual():
                 intres = (value0 is value1) ^ expect_isnot
@@ -449,7 +457,7 @@ class OptRewrite(Optimization):
         if oopspecindex == EffectInfo.OS_ARRAYCOPY:
             if self._optimize_CALL_ARRAYCOPY(op):
                 return
-        self.emit_operation(op)
+        return op
     optimize_CALL_p = optimize_CALL_i
     optimize_CALL_f = optimize_CALL_i
     optimize_CALL_v = optimize_CALL_i
@@ -490,14 +498,14 @@ class OptRewrite(Optimization):
         # it's being done by someone else)
         for i in range(op.numargs()):
             arg = op.getarg(i)
-            const = self.get_constant_box(arg)
+            const = self.get_constant_op(arg)
             if const is None or not const.eq_value(arg):
                 break
         else:
             self.make_constant(op, op.constbox())
             self.last_emitted_operation = REMOVED
             return
-        self.emit_operation(op)
+        return op
     optimize_CALL_PURE_f = optimize_CALL_PURE_i
     optimize_CALL_PURE_p = optimize_CALL_PURE_i
     optimize_CALL_PURE_v = optimize_CALL_PURE_i
@@ -507,7 +515,7 @@ class OptRewrite(Optimization):
             # it was a CALL_PURE or a CALL_LOOPINVARIANT that was killed;
             # so we also kill the following GUARD_NO_EXCEPTION
             return
-        self.emit_operation(op)
+        return op
 
     def optimize_INT_FLOORDIV(self, op):
         v1 = self.getvalue(op.getarg(0))
@@ -541,6 +549,14 @@ class OptRewrite(Optimization):
         self.optimizer.replace(op, op.getarg(0))
     optimize_SAME_AS_r = optimize_SAME_AS_i
     optimize_SAME_AS_f = optimize_SAME_AS_i
+
+    def optimize_JUMP(self, op):
+        self.optimizer.flush()
+        return op
+
+    def optimize_FINISH(self, op):
+        self.optimizer.flush()
+        return op
 
 #dispatch_opt = make_dispatcher_method(OptRewrite, 'optimize_',
 #        default=OptRewrite.emit_operation)

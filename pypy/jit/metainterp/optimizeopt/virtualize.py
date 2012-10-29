@@ -425,7 +425,7 @@ class OptVirtualize(optimizer.Optimization):
         # was already forced).
 
     def optimize_GETFIELD_GC_i(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
         # If this is an immutable field (as indicated by op.is_always_pure())
         # then it's safe to reuse the virtual's field, even if it has been
         # forced, because it should never be written to again.
@@ -435,14 +435,13 @@ class OptVirtualize(optimizer.Optimization):
                 self.replace(op, fieldvalue.op)
                 return
         if value.is_virtual():
-            assert isinstance(value, AbstractVirtualValue)
             fieldvalue = value.getfield(op.getdescr(), None)
             if fieldvalue is None:
                 fieldvalue = self.optimizer.new_const(op.getdescr())
-            self.replace(op, fieldvalue.op)
+            self.optimizer.replace(op, fieldvalue)
         else:
-            value.ensure_nonnull()
-            self.emit_operation(op)
+            value.setknownnonnull(True)
+            return op
     optimize_GETFIELD_GC_r = optimize_GETFIELD_GC_i
     optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
 
@@ -453,24 +452,23 @@ class OptVirtualize(optimizer.Optimization):
     optimize_GETFIELD_GC_PURE_f = optimize_GETFIELD_GC_i
 
     def optimize_SETFIELD_GC(self, op):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
 
         if value.is_virtual():
-            fieldvalue = self.getvalue(op.getarg(1))
+            fieldvalue = self.getforwarded(op.getarg(1))
             value.setfield(op.getdescr(), fieldvalue)
         else:
-            value.ensure_nonnull()
-            self.emit_operation(op)
+            value.setknownnonnull(True)
+            return op
 
     def optimize_NEW_WITH_VTABLE(self, op):
-        value = self.getforwarded(op)
-        value.setknownclass(op.getarg(0))
+        pass
 
     def optimize_NEW(self, op):
         self.make_vstruct(op.getdescr(), op)
 
     def optimize_NEW_ARRAY(self, op):
-        sizebox = self.get_constant_box(op.getarg(0))
+        sizebox = self.get_constant_op(op.getarg(0))
         if sizebox is not None:
             # if the original 'op' did not have a ConstInt as argument,
             # build a new one with the ConstInt argument

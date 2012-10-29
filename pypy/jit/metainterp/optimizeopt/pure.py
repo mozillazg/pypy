@@ -12,6 +12,7 @@ class OptPure(Optimization):
         self.emitted_pure_operations = []
 
     def optimize_default(self, op):
+        orig_op = op
         op = self.getforwarded(op)
         canfold = op.is_always_pure()
         if op.is_ovf():
@@ -38,14 +39,13 @@ class OptPure(Optimization):
                 return
 
             # did we do the exact same operation already?
-            oldop = self.pure_operations.get(op)
+            oldop = self.pure_operations.get(orig_op)
             if oldop is not None:
-                self.replace(op, oldop)
+                self.optimizer.replace(op, oldop)
                 return
             else:
-                self.pure_operations.set(op, op)
+                self.pure_operations.set(orig_op, op)
                 self.remember_emitting_pure(op)
-
         # otherwise, the operation remains
         if nextop:
             return nextop
@@ -61,13 +61,11 @@ class OptPure(Optimization):
                 self.replace(op, oldop)
                 self.last_emitted_operation = REMOVED
                 return
-            else:
-                new_op = op.copy_if_modified_by_optimization(self.optimizer)
-                self.pure_operations.set(new_op, op)
-                self.remember_emitting_pure(op)
-
+            new_op = self.optimizer.getforwarded(op)
+            self.pure_operations.set(op, new_op)
+            self.remember_emitting_pure(new_op)
             # replace CALL_PURE with just CALL
-            self.emit_operation(self.optimizer.copy_and_change(op, opnum))
+            return new_op.make_forwarded_copy(opnum)
         return optimize_CALL_PURE
     optimize_CALL_PURE_i = _new_optimize_call_pure(rop.CALL_i)
     optimize_CALL_PURE_f = _new_optimize_call_pure(rop.CALL_f)
@@ -79,7 +77,7 @@ class OptPure(Optimization):
             # it was a CALL_PURE that was killed; so we also kill the
             # following GUARD_NO_EXCEPTION
             return
-        self.emit_operation(op)
+        return op
 
     def flush(self):
         assert self.posponedop is None
