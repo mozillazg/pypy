@@ -2,8 +2,8 @@ import py
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory
 
-from pypy.jit.tool.oparser import parse, OpParser
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.tool.oparser import parse, OpParser, assign_all_varindices
+from pypy.jit.metainterp.resoperation import rop, INT, FLOAT
 from pypy.jit.metainterp.history import AbstractDescr, JitCellToken,\
      TargetToken
 
@@ -250,3 +250,45 @@ class TestOpParserWithMock(BaseTestOparser):
         for modname, mod in sys.modules.iteritems():
             if isinstance(mod, ForbiddenModule):
                 sys.modules[modname] = mod.old_mod
+
+
+def test_assign_all_varindices():
+    class FakeOp:
+        def __init__(self, varindex=-1, type=INT):
+            self._varindex = varindex
+            self.type = type
+    def indices(lst):
+        return [op._varindex for op in lst]
+
+    ops = [FakeOp(5), FakeOp(6)]
+    assign_all_varindices(ops)
+    assert indices(ops) == [5, 6]
+
+    ops = [FakeOp(5), FakeOp(6, FLOAT)]
+    assign_all_varindices(ops)
+    assert indices(ops) == [5, 6]
+
+    ops = [FakeOp(5), FakeOp(5)]
+    py.test.raises(AssertionError, assign_all_varindices, ops)
+    ops = [FakeOp(5), FakeOp(5, FLOAT)]
+    py.test.raises(AssertionError, assign_all_varindices, ops)
+    ops = [FakeOp(5), FakeOp(4, FLOAT)]
+    py.test.raises(AssertionError, assign_all_varindices, ops)
+    ops = [FakeOp(4, FLOAT), FakeOp(5)]
+    py.test.raises(AssertionError, assign_all_varindices, ops)
+
+    ops = [FakeOp(), FakeOp(type=FLOAT), FakeOp(1)]
+    assign_all_varindices(ops)
+    assert indices(ops) == [0, 2, 1]
+
+    ops = [FakeOp(), FakeOp(type=FLOAT), FakeOp(2)]
+    assign_all_varindices(ops)
+    assert indices(ops) == [0, 3, 2]
+
+    ops = [FakeOp(), FakeOp(type=FLOAT), FakeOp(3)]
+    assign_all_varindices(ops)
+    assert indices(ops) == [0, 1, 3]
+
+    ops = [FakeOp(), FakeOp(type=FLOAT), FakeOp(2, FLOAT)]
+    assign_all_varindices(ops)
+    assert indices(ops) == [0, 4, 2]

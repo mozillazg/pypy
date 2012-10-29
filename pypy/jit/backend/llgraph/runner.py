@@ -635,6 +635,18 @@ class LLFrame(object):
         self.last_exception = None
 
     def setenv(self, box, arg):
+        if box.type == INT:
+            # typecheck the result
+            if isinstance(arg, bool):
+                arg = int(arg)
+            assert lltype.typeOf(arg) == lltype.Signed
+        elif box.type == REF:
+            assert lltype.typeOf(arg) == llmemory.GCREF
+        elif box.type == FLOAT:
+            assert lltype.typeOf(arg) == longlong.FLOATSTORAGE
+        else:
+            raise AssertionError(box)
+        #
         assert box.getvarindex() >= 0
         self.env[box] = arg
         self.framecontent[box.getvarindex()] = arg
@@ -673,24 +685,15 @@ class LLFrame(object):
                 if hasattr(gf.descr, '_llgraph_bridge'):
                     i = 0
                     self.lltrace = gf.descr._llgraph_bridge
-                    newvals = [self.env[arg] for arg in self.lltrace.inputargs]
+                    newvals = [self.framecontent[arg._varindex]
+                               for arg in self.lltrace.inputargs]
                     self.do_renaming(self.lltrace.inputargs, newvals)
                     continue
                 raise
-            if op.type == INT:
-                # typecheck the result
-                if isinstance(resval, bool):
-                    resval = int(resval)
-                assert lltype.typeOf(resval) == lltype.Signed
-            elif op.type == REF:
-                assert lltype.typeOf(resval) == llmemory.GCREF
-            elif op.type == FLOAT:
-                assert lltype.typeOf(resval) == longlong.FLOATSTORAGE
-            else:
-                assert op.type == VOID
-                assert resval is None
             if op.type != VOID:
                 self.setenv(op, resval)
+            else:
+                assert resval is None
             i += 1
 
     def do_renaming(self, newargs, newvalues):

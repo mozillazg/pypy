@@ -557,21 +557,21 @@ class AbstractResOp(AbstractValue):
             return object.__repr__(self)
 
     def __str__(self):
-        if not hasattr(self, '_str'):
-            if self.type == INT:
-                t = 'i'
-            elif self.type == FLOAT:
-                t = 'f'
-            elif self.type == REF:
-                t = 'p'
-            else:
-                t = '?'
-            if getattr(self, '_varindex', -1) < 0:
-                self._str = '%s%d' % (t, AbstractResOp._counter)
+        if self.type == INT:
+            t = 'i'
+        elif self.type == FLOAT:
+            t = 'f'
+        elif self.type == REF:
+            t = 'p'
+        else:
+            t = '?'
+        if getattr(self, '_varindex', -1) < 0:
+            if not hasattr(self, '_str'):
                 AbstractResOp._counter += 1
-            else:
-                self._str = '%s%s' % (t.upper(), self._varindex)
-        return self._str
+                self._str = '%s-%d' % (t, AbstractResOp._counter)
+            return self._str
+        else:
+            return '%s%d' % (t, self._varindex)
 
     def repr(self, graytext=False):
         # RPython-friendly version

@@ -24,51 +24,13 @@ class Runner(object):
 
     add_loop_instruction = ['overload for a specific cpu']
     bridge_loop_instruction = ['overload for a specific cpu']
-    _nextvarindex = 0
-
-    def update_varindexes(self, newtext2op):
-        # 'self.text2op' is a dict mapping variable names (as present in
-        # the oparser source) to the corresponding ResOp.  This function
-        # updates it with 'newtext2op', then assigns '_varindex' to all
-        # the new ResOps.  The choice of '_varindex' is done automatically
-        # to avoid conflicts, but existing '_varindex' are not changed.
-        # If 'newtext2op' is not a dict but a list, comes up with names
-        # as per str(op).
-        if isinstance(newtext2op, list):
-            newtext2op = dict([(str(op), op) for op in newtext2op])
-        try:
-            text2op = self.text2op
-        except AttributeError:
-            text2op = self.text2op = {}
-        text2op.update(newtext2op)
-        if newtext2op:
-            # update 'self._nextvarindex' to a value higher than any seen
-            # in newtext2op.  Pick two more rather than one more just in
-            # case the highest so far was a FLOAT.
-            newops = newtext2op.values()
-            random.shuffle(newops)
-            maximum = max([getattr(op, '_varindex', -2) for op in newops])
-            self._nextvarindex = max(self._nextvarindex, maximum + 2)
-            for op in newops:
-                self.assign_varindex(op)
-
-    def assign_varindex(self, op):
-        if (isinstance(op, AbstractResOp) and op.type != VOID and
-                getattr(op, '_varindex', -1) == -1):
-            op._varindex = self._nextvarindex
-            if hasattr(op, '_str'):
-                del op._str     # recompute it
-            # this op consumes either one or two numbers, depending on its
-            # type as a non-FLOAT or FLOAT.  We don't care too much about
-            # being on 32-bit vs 64-bit here.
-            self._nextvarindex += 1 + (op.type == FLOAT)
 
     def execute_operation(self, opname, valueboxes, result_type, descr=None):
         inputargs, operations = self._get_single_operation_list(opname,
                                                                 result_type,
                                                                 valueboxes,
                                                                 descr)
-        self.update_varindexes(inputargs + operations)
+        oparser.assign_all_varindices(inputargs + operations)
         looptoken = JitCellToken()
         self.cpu.compile_loop(inputargs, operations, looptoken)
         args = []
@@ -151,14 +113,11 @@ class BaseBackendTest(Runner):
             namespace['faildescr3'] = BasicFailDescr(3)
         if 'faildescr4' not in namespace:
             namespace['faildescr4'] = BasicFailDescr(4)
-        loop = oparser.parse(s, namespace=namespace, mutable=True,
-                             oldvars=getattr(self, 'text2op', {}))
-        self.update_varindexes(loop.text2op)
+        loop = oparser.parse(s, namespace=namespace, mutable=True)
         return loop.inputargs, loop.operations, JitCellToken()
 
     def get_frame_value(self, frame, varname):
-        op = self.text2op[varname]
-        index = op.getvarindex()
+        index = int(varname[1:])
         if varname.startswith('i'):
             return self.cpu.get_frame_value_int(frame, index)
         if varname.startswith('p'):
@@ -184,8 +143,8 @@ class BaseBackendTest(Runner):
         faildescr = BasicFailDescr(1)
         inputargs, ops, token = self.parse("""
         [f0]
-        f1 = float_add(f0, 1.)
-        finish(f1, descr=faildescr)
+        f2 = float_add(f0, 1.)
+        finish(f2, descr=faildescr)
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, ops, token)
         frame = self.cpu.execute_token(token, longlong.getfloatstorage(2.8))
@@ -1208,9 +1167,9 @@ class BaseBackendTest(Runner):
             label(%s, descr=targettoken)
             i1 = int_sub(i0, 1)
             i2 = int_ge(i1, 0)
-            guard_true(i2, descr=faildescr) [%s]
+            guard_true(i2, descr=faildescr)
             jump(%s, descr=targettoken)
-            """ % (inp, inp, inp, ", ".join(jumpargs)), None)
+            """ % (inp, inp, ", ".join(jumpargs)), None)
             #
             self.cpu.compile_loop(inpargs, operations, looptoken)
             #
@@ -1241,15 +1200,9 @@ class BaseBackendTest(Runner):
             #
             assert dstvalues[index_counter] == 11
             dstvalues[index_counter] = 0
-            for i, (box, val) in enumerate(zip(inpargs, dstvalues)):
-                if box.type == 'i':
-                    got = self.cpu.get_latest_value_int(frame, i)
-                elif box.type == 'r':
-                    got = self.cpu.get_latest_value_ref(frame, i)
-                elif box.type == 'f':
-                    got = self.cpu.get_latest_value_float(frame, i)
-                else:
-                    assert 0
+            assert len(inputargs) == len(inpargs) == len(dstvalues)
+            for (name, val) in zip(inputargs, dstvalues):
+                got = self.get_frame_value(frame, name)
                 assert type(got) == type(val)
                 assert got == val
 
@@ -1264,8 +1217,8 @@ class BaseBackendTest(Runner):
         [%(fboxes)s]
         label(%(fboxes)s, descr=targettoken)
         i2 = float_le(f0, 9.2)
-        guard_true(i2, descr=faildescr1) [%(fboxes)s]
-        finish(descr=faildescr2) [%(fboxes)s]
+        guard_true(i2, descr=faildescr1)
+        finish(descr=faildescr2)
         """ % {'fboxes': fboxes}, {'faildescr1': faildescr1,
                                    'faildescr2': faildescr2,
                                    'targettoken': targettoken})
@@ -1285,55 +1238,53 @@ class BaseBackendTest(Runner):
             args.append(longlong.getfloatstorage(x))
         frame = self.cpu.execute_token(looptoken, *args)
         assert self.cpu.get_latest_descr(frame).identifier == 2
-        res = self.cpu.get_latest_value_float(frame, 0)
+        res = self.get_frame_value(frame, "f0")
         assert longlong.getrealfloat(res) == 8.5
-        for i in range(1, len(fboxes.split(","))):
-            got = longlong.getrealfloat(self.cpu.get_latest_value_float(frame, i))
+        fboxeslist = map(str.strip, fboxes.split(","))
+        for i in range(1, len(fboxeslist)):
+            res = self.get_frame_value(frame, fboxeslist[i])
+            got = longlong.getrealfloat(res)
             assert got == 13.5 + 6.73 * i
 
     def test_compile_bridge_spilled_float(self):
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         fboxes = [boxfloat() for i in range(3)]
-        faildescr1 = BasicFailDescr(100)
         loopops = """
-        [i0,f1, f2]
+        [i0, f1, f2]
         f3 = float_add(f1, f2)
         force_spill(f3)
         force_spill(f1)
         force_spill(f2)
-        guard_false(i0, descr=faildescr0) [f1, f2, f3]
-        finish() []"""
+        guard_false(i0, descr=faildescr0)
+        finish()"""
         inputargs, operations, looptoken = self.parse(
             loopops, namespace={'faildescr0': BasicFailDescr(1)})
         self.cpu.compile_loop(inputargs, operations, looptoken)
         args = [1]
         args.append(longlong.getfloatstorage(132.25))
         args.append(longlong.getfloatstorage(0.75))
-        frame = self.cpu.execute_token(looptoken, *args)  #xxx check
+        frame = self.cpu.execute_token(looptoken, *args)
         assert operations[-2].getdescr()== self.cpu.get_latest_descr(frame)
-        f1 = self.cpu.get_latest_value_float(frame, 0)
-        f2 = self.cpu.get_latest_value_float(frame, 1)
-        f3 = self.cpu.get_latest_value_float(frame, 2)
+        f1 = self.get_frame_value(frame, "f1")
+        f2 = self.get_frame_value(frame, "f2")
+        f3 = self.get_frame_value(frame, "f3")
         assert longlong.getrealfloat(f1) == 132.25
         assert longlong.getrealfloat(f2) == 0.75
         assert longlong.getrealfloat(f3) == 133.0
 
+        faildescr1 = BasicFailDescr(100)
         bridgeops = [
             create_resop(rop.FINISH, None, [], descr=faildescr1,
                          mutable=True),
             ]
-        bridgeops[-1].setfailargs(fboxes)
         self.cpu.compile_bridge(operations[-2].getdescr(), fboxes,
                                 bridgeops, looptoken)
-        args = [1,
-                longlong.getfloatstorage(132.25),
-                longlong.getfloatstorage(0.75)]
         frame = self.cpu.execute_token(looptoken, *args)
         assert self.cpu.get_latest_descr(frame).identifier == 100
-        f1 = self.cpu.get_latest_value_float(frame, 0)
-        f2 = self.cpu.get_latest_value_float(frame, 1)
-        f3 = self.cpu.get_latest_value_float(frame, 2)
+        f1 = self.get_frame_value(frame, "f1")
+        f2 = self.get_frame_value(frame, "f2")
+        f3 = self.get_frame_value(frame, "f3")
         assert longlong.getrealfloat(f1) == 132.25
         assert longlong.getrealfloat(f2) == 0.75
         assert longlong.getrealfloat(f3) == 133.0

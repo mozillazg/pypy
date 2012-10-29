@@ -7,7 +7,7 @@ from pypy.jit.tool.oparser_model import get_model
 
 from pypy.jit.metainterp.resoperation import rop, opclasses, rop_lowercase,\
      ResOpWithDescr, N_aryOp, UnaryOp, PlainResOp, create_resop_dispatch,\
-     ResOpNone, create_resop_0, example_for_opnum
+     ResOpNone, create_resop_0, example_for_opnum, FLOAT
 from pypy.jit.metainterp import optmodel
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.objectmodel import Symbolic
@@ -20,10 +20,8 @@ class OpParser(object):
     use_mock_model = False
 
     def __init__(self, input, cpu, namespace, type_system,
-                 invent_fail_descr=True, results=None, mutable=False,
-                 oldvars={}):
+                 invent_fail_descr=True, results=None, mutable=False):
         self.input = input
-        self.oldvars = oldvars
         self.vars = {}
         self.cpu = cpu
         self._consts = namespace
@@ -33,6 +31,7 @@ class OpParser(object):
         self.original_jitcell_token = self.model.JitCellToken()
         self.results = results
         self.mutable = mutable
+        self.allops = []
 
     def get_const(self, name, typ):
         if self._consts is None:
@@ -77,20 +76,17 @@ class OpParser(object):
 
     def newvar(self, elem):
         if elem not in self.vars:
-            if elem not in self.oldvars:
-                if elem[0] in 'ifp':
-                    if elem[0] == 'p':
-                        p = 'r'
-                    else:
-                        p = elem[0]
-                    opnum = getattr(rop, 'INPUT_' + p)
-                    box = create_resop_0(opnum, example_for_opnum(opnum),
-                                         mutable=self.mutable)
+            if elem[0] in 'ifp':
+                if elem[0] == 'p':
+                    p = 'r'
                 else:
-                    raise ParseError("Unknown variable type: %s" % elem)
-                box._str = elem
+                    p = elem[0]
+                opnum = getattr(rop, 'INPUT_' + p)
+                box = create_resop_0(opnum, example_for_opnum(opnum),
+                                     mutable=self.mutable)
             else:
-                box = self.oldvars[elem]
+                raise ParseError("Unknown variable type: %s" % elem)
+            self.setstr(box, elem)
             self.vars[elem] = box
         return self.vars[elem]
 
@@ -203,9 +199,19 @@ class OpParser(object):
         else:
             result = self.results[num]
         opres = self.create_op(opnum, result, args, descr)
-        opres._str = res
+        self.setstr(opres, res)
         self.vars[res] = opres
         return opres
+
+    def setstr(self, op, text):
+        op._str = text
+        try:
+            num = int(text[1:])
+        except ValueError:
+            num = -1
+        if num >= 0:
+            op._varindex = num
+        self.allops.append(op)
 
     def parse_op_no_result(self, line):
         opnum, args, descr = self.parse_op(line)
@@ -242,13 +248,13 @@ class OpParser(object):
         num, ops, last_offset = self.parse_ops(base_indent, newlines, 0)
         if num < len(newlines):
             raise ParseError("unexpected dedent at line: %s" % newlines[num])
+        assign_all_varindices(self.allops)
         loop = self.model.ExtendedTreeLoop("loop")
         loop.comment = first_comment
         loop.original_jitcell_token = self.original_jitcell_token
         loop.operations = ops
         loop.inputargs = inpargs
         loop.last_offset = last_offset
-        loop.text2op = self.vars
         return loop
 
     def parse_ops(self, indent, lines, start):
@@ -306,12 +312,42 @@ DEFAULT = object()
 
 def parse(input, cpu=None, namespace=DEFAULT, type_system='lltype',
           invent_fail_descr=True, OpParser=OpParser,
-          results=None, mutable=False, oldvars={}):
+          results=None, mutable=False):
     if namespace is DEFAULT:
         namespace = {}
     return OpParser(input, cpu, namespace, type_system,
-                    invent_fail_descr, results, mutable, oldvars).parse()
+                    invent_fail_descr, results, mutable).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = False
     return parse(*args, **kwds)
+
+
+def assign_all_varindices(allops):
+    assigned_varindices = {}
+    unassigned_varindices = []
+    #
+    for op in allops:
+        if getattr(op, '_varindex', -1) >= 0:
+            num = op._varindex
+            assert num not in assigned_varindices, (
+                "duplicate or overlapping var: %s and %s" % (
+                op, assigned_varindices[num]))
+            assigned_varindices[num] = op
+            if op.type == FLOAT:
+                assert (num + 1) not in assigned_varindices, (
+                    "duplicate or overlapping var: %s and %s" % (
+                    op, assigned_varindices[num + 1]))
+                assigned_varindices[num + 1] = op
+        else:
+            unassigned_varindices.append(op)
+    #
+    nextindex = 0
+    for op in unassigned_varindices:
+        while (nextindex in assigned_varindices or
+               (op.type == FLOAT and (nextindex + 1) in assigned_varindices)):
+            nextindex += 1
+        op._varindex = nextindex
+        nextindex += 1
+        if op.type == FLOAT:
+            nextindex += 1
