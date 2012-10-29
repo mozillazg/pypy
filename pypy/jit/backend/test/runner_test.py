@@ -2630,7 +2630,7 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
         i10 = int_add_ovf(i0, i1)
-        guard_no_overflow(descr=faildescr2) []
+        guard_no_overflow(descr=faildescr2)
         i11 = int_add(i10, i2)
         i12 = int_add(i11, i3)
         i13 = int_add(i12, i4)
@@ -2639,7 +2639,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i16 = int_add(i15, i7)
         i17 = int_add(i16, i8)
         i18 = int_add(i17, i9)
-        finish(i18, descr=faildescr1) []'''
+        finish(i18, descr=faildescr1)'''
         inputargs, operations, looptoken = self.parse(
             ops, namespace={'faildescr1': BasicFailDescr(1)})
         operations[-1].getdescr().fast_path_done = True
@@ -2659,8 +2659,8 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
         i10 = int_add(i0, 42)
         i11 = call_assembler_i(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=looptoken)
-        guard_not_forced(descr=faildescr1)[]
-        finish(i11, descr=faildescr2) []
+        guard_not_forced(descr=faildescr1)
+        finish(i11, descr=faildescr2)
         '''
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
@@ -2706,11 +2706,11 @@ class LLtypeBackendTest(BaseBackendTest):
         for _ in range(10):
             self.cpu.reserve_some_free_fail_descr_number()
         ops = '''
-        [f0, f1]
-        i0 = float_eq(f0, -1.0)
-        guard_false(i0, descr=faildescr3) []
-        f2 = float_add(f0, f1)
-        finish(f2, descr=faildescr) []'''
+        [f0, f4]
+        i6 = float_eq(f0, -1.0)
+        guard_false(i6, descr=faildescr3)
+        f2 = float_add(f0, f4)
+        finish(f2, descr=faildescr)'''
         inputargs, operations, looptoken = self.parse(
             ops, namespace={'faildescr': BasicFailDescr(1)})
         operations[-1].getdescr().fast_path_done = True
@@ -2724,10 +2724,10 @@ class LLtypeBackendTest(BaseBackendTest):
         x = self.cpu.get_finish_value_float(frame)
         assert longlong.getrealfloat(x) == 1.2 + 2.3
         ops = '''
-        [f4, f5]
-        f3 = call_assembler_f(f4, f5, descr=looptoken)
-        guard_not_forced(descr=faildescr1)[]
-        finish(f3, descr=faildescr2) []
+        [f4, f6]
+        f2 = call_assembler_f(f4, f6, descr=looptoken)
+        guard_not_forced(descr=faildescr1)
+        finish(f2, descr=faildescr2)
         '''
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
@@ -2775,7 +2775,7 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [p0]
         call_v(ConstClass(fptr2), p0, descr=calldescr2)
-        finish(p0, descr=faildescr1) []'''
+        finish(p0, descr=faildescr1)'''
         inputargs, operations, looptoken = self.parse(ops, namespace=locals())
         # not a fast_path finish!
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
@@ -2791,8 +2791,8 @@ class LLtypeBackendTest(BaseBackendTest):
         []
         p0 = jit_frame()
         p1 = call_assembler_r(p0, descr=looptoken)
-        guard_not_forced(descr=foodescr) []
-        finish(descr=faildescr2) []
+        guard_not_forced(descr=foodescr)
+        finish(descr=faildescr2)
         '''
         inputargs, operations, othertoken = self.parse(ops, namespace=locals())
         self.cpu.compile_loop(inputargs, operations, othertoken)
@@ -2830,7 +2830,7 @@ class LLtypeBackendTest(BaseBackendTest):
             py.test.skip("requires floats")
         called = []
         def assembler_helper(jitframe):
-            faildescr =self.cpu.get_latest_descr(jitframe)
+            faildescr = self.cpu.get_latest_descr(jitframe)
             failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
             return 13.5
@@ -2850,11 +2850,11 @@ class LLtypeBackendTest(BaseBackendTest):
         for _ in range(10):
             self.cpu.reserve_some_free_fail_descr_number()
         ops = '''
-        [f0, f1]
-        i0 = float_eq(f0, -1.0)
-        guard_false(i0, descr=faildescr2) []
-        f2 = float_add(f0, f1)
-        finish(f2, descr=faildescr1) []'''
+        [f0, f4]
+        i6 = float_eq(f0, -1.0)
+        guard_false(i6, descr=faildescr2)
+        f2 = float_add(f0, f4)
+        finish(f2, descr=faildescr1)'''
         inputargs, operations, looptoken = self.parse(
             ops, namespace={'faildescr1': BasicFailDescr(1)})
         operations[-1].getdescr().fast_path_done = True
@@ -2870,10 +2870,10 @@ class LLtypeBackendTest(BaseBackendTest):
         assert not called
 
         ops = '''
-        [f4, f5]
-        f3 = call_assembler_f(f4, f5, descr=looptoken)
-        guard_not_forced(descr=faildescr1)[]
-        finish(f3, descr=faildescr2) []
+        [f4, f6]
+        f2 = call_assembler_f(f4, f6, descr=looptoken)
+        guard_not_forced(descr=faildescr1)
+        finish(f2, descr=faildescr2)
         '''
         faildescr2 = BasicFailDescr(2)
         faildescr1 = BasicFailDescr(1)
@@ -2897,11 +2897,11 @@ class LLtypeBackendTest(BaseBackendTest):
 
         # compile a replacement
         ops2 = '''
-        [f0, f1]
-        i0 = float_eq(f0, -2.0)
-        guard_false(i0, descr=faildescr3) []
-        f2 = float_sub(f0, f1)
-        finish(f2, descr=faildescr) []'''
+        [f0, f2]
+        ieq = float_eq(f0, -2.0)
+        guard_false(ieq, descr=faildescr3)
+        f4 = float_sub(f0, f2)
+        finish(f4, descr=faildescr)'''
         inputargs2, operations2, looptoken2 = self.parse(
             ops2, namespace={'faildescr': BasicFailDescr(1)})
         operations2[-1].getdescr().fast_path_done = True

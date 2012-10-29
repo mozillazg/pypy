@@ -879,8 +879,6 @@ class LLFrame(object):
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
-        XXX
-        self.latest_values = self._getfailargs(guard_op, skip=call_op)
         self.latest_descr = _getdescr(guard_op)
         #
         frame = self.cpu._execute_token(descr, *args)
@@ -899,7 +897,6 @@ class LLFrame(object):
                 return None
         #
         del self.latest_descr
-        del self.latest_values
         return support.cast_result(lltype.typeOf(result), result)
     execute_call_assembler_i = execute_call_assembler
     execute_call_assembler_r = execute_call_assembler
