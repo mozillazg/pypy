@@ -2220,14 +2220,14 @@ class LLtypeBackendTest(BaseBackendTest):
         inputargs, operations, looptoken = self.parse('''
         [i1, i2]
         p0 = jit_frame()
-        finish(p0, descr=faildescr1) [i1, i2]
+        finish(p0, descr=faildescr1)
         ''', namespace={'faildescr1': finishdescr})
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 20, 0)
         self.cpu.force(frame)
         assert self.cpu.get_latest_descr(frame) is finishdescr
-        assert self.cpu.get_latest_value_int(frame, 0) == 20
-        assert self.cpu.get_latest_value_int(frame, 1) == 0
+        assert self.get_frame_value(frame, "i1") == 20
+        assert self.get_frame_value(frame, "i2") == 0
 
     def test_call_to_c_function(self):
         from pypy.rlib.libffi import CDLL, types, ArgChain, FUNCFLAG_CDECL
@@ -2245,8 +2245,8 @@ class LLtypeBackendTest(BaseBackendTest):
         inputargs, operations, looptoken = self.parse("""
         [i1]
         i2 = call_release_gil_i(ConstClass(func_adr), i1, descr=calldescr)
-        guard_not_forced(descr=faildescr) [i1, i2]
-        finish(i2, descr=faildescr0) []
+        guard_not_forced(descr=faildescr)
+        finish(i2, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, ord('G'))
@@ -2295,7 +2295,7 @@ class LLtypeBackendTest(BaseBackendTest):
         inputargs, ops, looptoken = self.parse("""
         [i0, i1, i2, i3]
         call_release_gil_v(ConstClass(func_ptr), i0, i1, i2, i3, descr=calldescr)
-        guard_not_forced(descr=faildescr) []
+        guard_not_forced(descr=faildescr)
         finish(descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, ops, looptoken)
@@ -2370,7 +2370,7 @@ class LLtypeBackendTest(BaseBackendTest):
         faildescr0 = BasicFailDescr(0)
         inputargs, ops, looptoken = self.parse("""
         [i0, i1]
-        guard_not_invalidated(descr=faildescr) [i1]
+        guard_not_invalidated(descr=faildescr)
         finish(i0, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, ops, looptoken)
@@ -2386,7 +2386,8 @@ class LLtypeBackendTest(BaseBackendTest):
 
         frame = self.cpu.execute_token(looptoken, -42, 9)
         assert self.cpu.get_latest_descr(frame) is faildescr
-        assert self.cpu.get_latest_value_int(frame, 0) == 9
+        assert self.get_frame_value(frame, "i0") == -42
+        assert self.get_frame_value(frame, "i1") == 9
         print 'step 2 ok'
         print '-'*79
 
@@ -2394,9 +2395,9 @@ class LLtypeBackendTest(BaseBackendTest):
         faildescr2 = BasicFailDescr(2)
         faildescr3 = BasicFailDescr(3)
         inputargs, ops, _ = self.parse("""
-        [i2]
-        guard_not_invalidated(descr=faildescr2) []
-        finish(i2, descr=faildescr3)
+        [i1]
+        guard_not_invalidated(descr=faildescr2)
+        finish(i1, descr=faildescr3)
         """, locals())
         self.cpu.compile_bridge(faildescr, inputargs, ops, looptoken)
 
@@ -2423,7 +2424,7 @@ class LLtypeBackendTest(BaseBackendTest):
         faildescr3 = BasicFailDescr(3)
         inputargs, ops, looptoken = self.parse("""
         [i0]
-        guard_not_invalidated(descr=faildescr) []
+        guard_not_invalidated(descr=faildescr)
         label(i0, descr=labeldescr)
         finish(i0, descr=faildescr3)
         """, locals())
@@ -2431,9 +2432,10 @@ class LLtypeBackendTest(BaseBackendTest):
         # mark as failing
         self.cpu.invalidate_loop(looptoken)
         # attach a bridge
-        ops = [
-            create_resop(rop.JUMP, None, [ConstInt(333)], descr=labeldescr),
-        ]
+        _, ops, _ = self.parse("""
+        []
+        jump(333, descr=labeldescr)
+        """, locals())
         self.cpu.compile_bridge(faildescr, [], ops, looptoken)
         # run: must not be caught in an infinite loop
         frame = self.cpu.execute_token(looptoken, 16)
