@@ -39,6 +39,8 @@ def create_resop_dispatch(opnum, result, args, descr=None, mutable=False):
     """ NOT_RPYTHON this is for tests only!
     """
     cls = opclasses[opnum]
+    if 0 <= cls.NUMARGS <= 3:
+        assert len(args) == cls.NUMARGS
     if cls.NUMARGS == 0:
         return create_resop_0(opnum, result, descr, mutable=mutable)
     elif cls.NUMARGS == 1:

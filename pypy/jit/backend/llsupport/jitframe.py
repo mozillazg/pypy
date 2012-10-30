@@ -12,6 +12,7 @@ JITFRAME = lltype.GcStruct(
     # For the front-end: a GCREF for the savedata
     ('jf_savedata', llmemory.GCREF),
 
-    # XXX
+    # All values are stored in the following array.
     ('jf_values', lltype.Array(llmemory.Address)))
+
 JITFRAMEPTR = lltype.Ptr(JITFRAME)
