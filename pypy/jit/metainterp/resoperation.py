@@ -1232,7 +1232,7 @@ _oplist = [
     
     '_FINAL_FIRST',
     'JUMP/*d/v',
-    'FINISH/*d/v',
+    'FINISH/0d/v',
     '_FINAL_LAST',
 
     'LABEL/*d/v',
@@ -1385,7 +1385,7 @@ _oplist = [
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     '_CALL_FIRST',
     'CALL/*d/*',
-    'CALL_ASSEMBLER/*d/*',  # call already compiled assembler
+    'CALL_ASSEMBLER/*d/r',  # call already compiled assembler
     'CALL_MAY_FORCE/*d/*',
     'CALL_LOOPINVARIANT/*d/*',
     'CALL_RELEASE_GIL/*d/*',  # release the GIL and "close the stack" for asmgcc

@@ -320,10 +320,7 @@ def _make_execute_list():
                     execute[value] = func
                     continue
             if value in (rop.JIT_FRAME,
-                         rop.CALL_ASSEMBLER_i,
-                         rop.CALL_ASSEMBLER_r,
-                         rop.CALL_ASSEMBLER_f,
-                         rop.CALL_ASSEMBLER_v,
+                         rop.CALL_ASSEMBLER,
                          rop.COND_CALL_GC_WB,
                          rop.COND_CALL_GC_WB_ARRAY,
                          rop.DEBUG_MERGE_POINT,

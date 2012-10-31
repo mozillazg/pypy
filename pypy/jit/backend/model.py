@@ -138,18 +138,10 @@ class AbstractCPU(object):
         Returns a GCREF."""
         raise NotImplementedError
 
-    def get_finish_value_int(self, jitframe):
-        """Return the result passed to FINISH, which was an int."""
-        raise NotImplementedError
-
-    def get_finish_value_float(self, jitframe):
-        """Return the result passed to FINISH, which was a FLOATSTORAGE."""
-        raise NotImplementedError
-
-    def get_finish_value_ref(self, jitframe):
-        """Return and clear the result passed to FINISH, which was a GCREF.
-        Also used when it exits due to a failure of a GUARD_EXCEPTION or
-        GUARD_NO_EXCEPTION, to return the exception."""
+    def grab_exc_value(self, jitframe):
+        """Return and clear the exception set by the latest execute_token(),
+        when it exits due to a failure of a GUARD_EXCEPTION or
+        GUARD_NO_EXCEPTION.  (Returns a GCREF)"""
         raise NotImplementedError
 
     def get_savedata_ref(self, jitframe):

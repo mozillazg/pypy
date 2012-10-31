@@ -260,7 +260,7 @@ class LLGraphCPU(model.AbstractCPU):
         except ExecutionFinished, e:
             frame.finish_value = e.arg
             frame.latest_descr = e.descr
-            frame._execution_finished_normally = e.descr.fast_path_done
+            frame._fast_path_done = e.descr.fast_path_done
             return frame
         except GuardFailed, e:
             frame.latest_descr = e.descr
@@ -273,13 +273,6 @@ class LLGraphCPU(model.AbstractCPU):
 
     def get_latest_descr(self, frame):
         return frame.latest_descr
-
-    def get_finish_value_int(self, frame):
-        res = frame.finish_value
-        del frame.finish_value
-        return res
-    get_finish_value_float = get_finish_value_int
-    get_finish_value_ref   = get_finish_value_int
 
     def grab_exc_value(self, frame):
         if frame.last_exception is not None:
@@ -484,7 +477,7 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_getinteriorfield_gc(self, a, index, descr):
         if isinstance(descr, JFValueDescr):
             assert isinstance(a, LLFrame)
-            return a.latest_values[index]
+            return a.framecontent[index]
         array = a._obj.container
         return support.cast_result(descr.FIELD,
                           getattr(array.getitem(index), descr.fieldname))
@@ -623,7 +616,7 @@ class LLFrame(object):
         return isinstance(other, LLFrame) and self is other
     
     _forced = False
-    _execution_finished_normally = False
+    _fast_path_done = False
     finish_value = None
     
     def __init__(self, cpu, argboxes, args):
@@ -674,9 +667,9 @@ class LLFrame(object):
             args = [self.lookup(arg) for arg in op.getarglist()]
             self.current_op = op # for label
             self.current_index = i
+            execute = getattr(self, 'execute_' + op.getopname())
             try:
-                resval = getattr(self, 'execute_' + op.getopname())(
-                    _getdescr(op), *args)
+                resval = execute(_getdescr(op), *args)
             except Jump, j:
                 self.lltrace, i = j.descr._llgraph_target
                 label_op = self.lltrace.operations[i]
@@ -876,32 +869,35 @@ class LLFrame(object):
     execute_call_release_gil_v = execute_call_release_gil
 
     def execute_call_assembler(self, descr, *args):
+        # pframe = CALL_ASSEMBLER(args..., descr=looptoken)
+        # ==>
+        #     pframe = CALL looptoken.loopaddr(*args)
+        #     JUMP_IF_NOT_CARRY @forward
+        #     pframe = CALL assembler_call_helper(pframe)
+        #     @forward:
+        #
+        # CARRY is set before most returns, and cleared only
+        # on FINISH with descr.fast_path_done.
+        #
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
         self.latest_descr = _getdescr(guard_op)
         #
-        frame = self.cpu._execute_token(descr, *args)
-        if frame._execution_finished_normally:    # fast path
-            result = frame.finish_value
-        else:
+        pframe = self.cpu._execute_token(descr, *args)
+        if not pframe._fast_path_done:
             jd = descr.outermost_jitdriver_sd
             assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
             try:
-                result = assembler_helper_ptr(frame)
+                result = assembler_helper_ptr(pframe)
             except LLException, lle:
                 assert self.last_exception is None, "exception left behind"
                 self.last_exception = lle
-                if self.current_op.result is not None:
-                    return _example_res[self.current_op.result.type]
-                return None
+                return lltype.nullptr(llmemory.GCREF.TO)
+            assert result is pframe
         #
         del self.latest_descr
-        return support.cast_result(lltype.typeOf(result), result)
-    execute_call_assembler_i = execute_call_assembler
-    execute_call_assembler_r = execute_call_assembler
-    execute_call_assembler_f = execute_call_assembler
-    execute_call_assembler_v = execute_call_assembler
+        return pframe
 
     def execute_same_as(self, _, x):
         return x
