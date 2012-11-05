@@ -152,10 +152,15 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def get_finish_value_ref(self, jitframe):
-        """Return and clear the result passed to FINISH, which was a GCREF.
-        Also used when it exits due to a failure of a GUARD_EXCEPTION or
-        GUARD_NO_EXCEPTION, to return the exception."""
+        """Return and clear the result passed to FINISH, which was a GCREF."""
         raise NotImplementedError
+
+    def grab_exc_value(self, jitframe):
+        """Return and clear the last exception, after the frame exits due
+        to a failure of a GUARD_EXCEPTION or GUARD_NO_EXCEPTION or
+        GUARD_NOT_FORCED.  (This is usually stored at the same place as
+        get_finish_value_ref().)"""
+        return self.get_finish_value_ref(jitframe)
 
     def get_savedata_ref(self, jitframe):
         """Return and clear the last value stored by the frontend with
