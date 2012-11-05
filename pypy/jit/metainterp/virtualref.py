@@ -9,7 +9,6 @@ class VirtualRefInfo:
     def __init__(self, warmrunnerdesc):
         self.warmrunnerdesc = warmrunnerdesc
         self.cpu = warmrunnerdesc.cpu
-        self.TOKEN_TRACING_RESCALL = self.cpu.TOKEN_TRACING_RESCALL
         # we make the low-level type of an RPython class directly
         self.JIT_VIRTUAL_REF = lltype.GcStruct('JitVirtualRef',
             ('super', rclass.OBJECT),
@@ -87,7 +86,7 @@ class VirtualRefInfo:
             return
         vref = lltype.cast_opaque_ptr(lltype.Ptr(self.JIT_VIRTUAL_REF), gcref)
         assert vref.jit_frame == jitframe.TOKEN_NONE
-        vref.jit_frame = self.TOKEN_TRACING_RESCALL
+        vref.jit_frame = jitframe.TOKEN_TRACING_RESCALL
 
     def tracing_after_residual_call(self, gcref):
         if not self.is_virtual_ref(gcref):
@@ -97,7 +96,7 @@ class VirtualRefInfo:
         if vref.jit_frame != jitframe.TOKEN_NONE:
             # not modified by the residual call; assert that it is still
             # set to TOKEN_TRACING_RESCALL and clear it.
-            assert vref.jit_frame == self.TOKEN_TRACING_RESCALL
+            assert vref.jit_frame == jitframe.TOKEN_TRACING_RESCALL
             vref.jit_frame = jitframe.TOKEN_NONE
             return False
         else:
@@ -109,7 +108,7 @@ class VirtualRefInfo:
             return
         assert real_object
         vref = lltype.cast_opaque_ptr(lltype.Ptr(self.JIT_VIRTUAL_REF), gcref)
-        assert vref.jit_frame != self.TOKEN_TRACING_RESCALL
+        assert vref.jit_frame != jitframe.TOKEN_TRACING_RESCALL
         vref.jit_frame = jitframe.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
 
@@ -143,7 +142,7 @@ class VirtualRefInfo:
         vref = lltype.cast_pointer(lltype.Ptr(self.JIT_VIRTUAL_REF), inst)
         token = vref.jit_frame
         if token != jitframe.TOKEN_NONE:
-            if token == self.TOKEN_TRACING_RESCALL:
+            if token == jitframe.TOKEN_TRACING_RESCALL:
                 # The "virtual" is not a virtual at all during tracing.
                 # We only need to reset jit_frame to TOKEN_NONE
                 # as a marker for the tracing, to tell it that this

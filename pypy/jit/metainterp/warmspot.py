@@ -553,7 +553,7 @@ class WarmRunnerDesc(object):
         else:
             assert False
         (_, jd._PTR_ASSEMBLER_HELPER_FUNCTYPE) = self.cpu.ts.get_FuncType(
-            [llmemory.GCREF], ASMRESTYPE)
+            [self.cpu.JITFRAMEPTR], ASMRESTYPE)
 
     def rewrite_can_enter_jits(self):
         sublists = {}
