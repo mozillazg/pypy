@@ -100,7 +100,7 @@ class TestLogger(object):
         [i0]
         i1 = int_add(i0, 1)
         guard_true(i0) [i0, i1]
-        finish(i1)
+        finish(i1) []
         '''
         self.reparse(inp)
 
@@ -109,7 +109,7 @@ class TestLogger(object):
         [i0]
         i1 = int_add(i0, 1)
         guard_true(i0) [i0, None, i1]
-        finish(i1)
+        finish(i1) []
         '''
         self.reparse(inp)
 

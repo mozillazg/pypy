@@ -230,7 +230,7 @@ class OpParser(object):
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if (i <= 0 or j <= 0) and not self.nonstrict:
-                raise ParseError("missing fail_args for guard operation")
+                raise ParseError("missing fail_args for %r" % line)
             fail_args = []
             if i < j:
                 for arg in line[i:j].split(','):
