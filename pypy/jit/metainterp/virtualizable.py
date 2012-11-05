@@ -16,7 +16,6 @@ class VirtualizableInfo(object):
     def __init__(self, warmrunnerdesc, VTYPEPTR):
         self.warmrunnerdesc = warmrunnerdesc
         cpu = warmrunnerdesc.cpu
-        self.TOKEN_TRACING_RESCALL = cpu.TOKEN_TRACING_RESCALL
         if cpu.ts.name == 'ootype':
             import py
             py.test.skip("ootype: fix virtualizables")
@@ -231,7 +230,7 @@ class VirtualizableInfo(object):
         def tracing_before_residual_call(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
             assert virtualizable.jit_frame == jitframe.TOKEN_NONE
-            virtualizable.jit_frame = self.TOKEN_TRACING_RESCALL
+            virtualizable.jit_frame = jitframe.TOKEN_TRACING_RESCALL
         self.tracing_before_residual_call = tracing_before_residual_call
 
         def tracing_after_residual_call(virtualizable):
@@ -239,7 +238,7 @@ class VirtualizableInfo(object):
             if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 # not modified by the residual call; assert that it is still
                 # set to TOKEN_TRACING_RESCALL and clear it.
-                assert virtualizable.jit_frame == self.TOKEN_TRACING_RESCALL
+                assert virtualizable.jit_frame== jitframe.TOKEN_TRACING_RESCALL
                 virtualizable.jit_frame = jitframe.TOKEN_NONE
                 return False
             else:
@@ -249,7 +248,7 @@ class VirtualizableInfo(object):
 
         def force_now(virtualizable):
             token = virtualizable.jit_frame
-            if token == self.TOKEN_TRACING_RESCALL:
+            if token == jitframe.TOKEN_TRACING_RESCALL:
                 # The values in the virtualizable are always correct during
                 # tracing.  We only need to reset jit_frame to TOKEN_NONE
                 # as a marker for the tracing, to tell it that this

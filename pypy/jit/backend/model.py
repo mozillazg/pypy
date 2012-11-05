@@ -238,8 +238,8 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def jitframe_get_jfdescr_descr(self):
-        """ Return a descr that can be used to read the XXX field
-        """
+        """Return a descr that can be used to read the field normally
+        returned by get_latest_descr(jitframe)."""
         raise NotImplementedError
 
     # ---------- the backend-dependent operations ----------

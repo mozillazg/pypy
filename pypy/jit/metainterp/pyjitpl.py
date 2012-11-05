@@ -10,7 +10,7 @@ from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
 from pypy.jit.metainterp.history import Box, TargetToken
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp import executor
+from pypy.jit.metainterp import executor, jitframe
 from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.rlib.jit import Counters
@@ -748,17 +748,23 @@ class MIFrame(object):
         if not self._establish_nullity(jfbox, orgpc):
             return      # jfbox is NULL
         cpu = self.metainterp.cpu
-        if jfbox.getref_base() == cpu.TOKEN_TRACING_RESCALL:
+        if jfbox.getref_base() == jitframe.TOKEN_TRACING_RESCALL:
             # we're trying to force a virtualizable that is being traced,
             # abort as bad loop
             raise SwitchToBlackhole(Counters.ABORT_BAD_LOOP)
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
         descr = cpu.jitframe_get_jfdescr_descr()
         jfdescrbox = self._opimpl_getfield_gc_any(jfbox, descr)
         jfdescrbox = self.implement_guard_value(orgpc, jfdescrbox)
         jfdescr = jfdescrbox.getref_base()
-        descr = cpu.jitframe_cast_jfdescr_to_descr(jfdescr)
-        if not descr:
+        if not jfdescr:
             raise Exception("descr should not be none while inside a recursive call")
+        if we_are_translated():
+            jfdescr = lltype.cast_opaque_ptr(rclass.OBJECTPTR, jfdescr)
+            descr = cast_base_ptr_to_instance(compile.ResumeDescr, jfdescr)
+        else:
+            assert isinstance(jfdescr, compile.ResumeDescr)
+            descr = jfdescr
         resume.rebuild_virtualizable_from_resumedata(self.metainterp, descr,
                                                      vinfo, box, jfbox)
         self._opimpl_setfield_gc_any(box, vinfo.jit_frame_descr,

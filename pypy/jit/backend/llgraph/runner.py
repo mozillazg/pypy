@@ -201,7 +201,6 @@ class LLGraphCPU(model.AbstractCPU):
         class MiniStats:
             pass
         self.stats = stats or MiniStats()
-        self.TOKEN_TRACING_RESCALL = NotAFrame()
 
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
@@ -420,9 +419,11 @@ class LLGraphCPU(model.AbstractCPU):
 
     def bh_getfield_gc(self, p, descr):
         if isinstance(descr, JFDescrDescr):
-            result = p.latest_descr
+            frame = p._obj.llframe
+            result = frame.latest_descr
             if result is None:
-                return lltype.nullptr(llmemory.GCREF.TO)
+                #return lltype.nullptr(llmemory.GCREF.TO)
+                raise AssertionError("latest_descr is None")
             # <XXX> HACK
             result._TYPE = llmemory.GCREF
             result._identityhash = lambda: hash(result)   # for rd_hash()
@@ -491,8 +492,8 @@ class LLGraphCPU(model.AbstractCPU):
 
     def bh_getinteriorfield_gc(self, a, index, descr):
         if isinstance(descr, JFValueDescr):
-            assert isinstance(a, LLFrame)
-            return a.latest_values[index]
+            frame = a._obj.llframe
+            return frame.latest_values[index]
         array = a._obj.container
         return support.cast_result(descr.FIELD,
                           getattr(array.getitem(index), descr.fieldname))
@@ -610,16 +611,6 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_read_timestamp(self):
         return read_timestamp()
 
-class NotAFrame(object):
-    _TYPE = llmemory.GCREF
-
-    class latest_descr:
-        pass
-
-    def __eq__(self, other):
-        return isinstance(other, NotAFrame)
-    def __ne__(self, other):
-        return not (self == other)
 
 class LLFrame(object):
     _forced = False
