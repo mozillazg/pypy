@@ -127,7 +127,7 @@ class LogOperations(object):
             res = self.repr_of_arg(op.result) + " = "
         else:
             res = ""
-        is_guard = op.is_guard()
+        is_guard = op.is_guard() or op.getopnum() == rop.FINISH
         if op.getdescr() is not None:
             descr = op.getdescr()
             if is_guard and self.guard_number:
