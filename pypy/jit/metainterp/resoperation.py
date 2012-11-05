@@ -483,7 +483,7 @@ _oplist = [
     'NEWSTR/1',
     'NEWUNICODE/1',
     '_MALLOC_LAST',
-    'JIT_FRAME/0',
+    'FORCE_TOKEN/0',
     'VIRTUAL_REF/2',         # removed before it's passed to the backend
     'READ_TIMESTAMP/0',
     'MARK_OPAQUE_PTR/1b',

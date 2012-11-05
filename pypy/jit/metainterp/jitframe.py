@@ -14,7 +14,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 #
 #   4. when running the machine code with a virtualizable, it is set
 #      to the actual CPU frame allocated by the generated assembler,
-#      as fetched with the 'JIT_FRAME' resoperation.
+#      as fetched with the 'FORCE_TOKEN' resoperation.
 #
 TOKEN_NONE = lltype.nullptr(llmemory.GCREF.TO)
 

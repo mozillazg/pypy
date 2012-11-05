@@ -2344,10 +2344,10 @@ class MetaInterp(object):
         vinfo = self.jitdriver_sd.virtualizable_info
         if vinfo is not None:
             virtualizable_box = self.virtualizable_boxes[-1]
-            jit_frame_box = history.BoxPtr()
-            self.history.record(rop.JIT_FRAME, [], jit_frame_box)
+            token_box = history.BoxPtr()
+            self.history.record(rop.FORCE_TOKEN, [], token_box)
             self.history.record(rop.SETFIELD_GC, [virtualizable_box,
-                                                  jit_frame_box],
+                                                  token_box],
                                 None, descr=vinfo.jit_frame_descr)
 
     def vrefs_after_residual_call(self):

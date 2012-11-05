@@ -400,7 +400,7 @@ class OptVirtualize(optimizer.Optimization):
         op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
         vrefvalue = self.make_virtual(c_cls, op.result, op)
         tokenbox = BoxPtr()
-        self.emit_operation(ResOperation(rop.JIT_FRAME, [], tokenbox))
+        self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
         vrefvalue.setfield(descr_jit_frame, self.getvalue(tokenbox))
 
     def optimize_VIRTUAL_REF_FINISH(self, op):
