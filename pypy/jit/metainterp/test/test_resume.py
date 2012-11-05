@@ -994,7 +994,7 @@ def test_virtual_adder_memo_const_sharing():
 class ResumeDataFakeReader(ResumeDataBoxReader):
     """Another subclass of AbstractResumeDataReader meant for tests."""
     def __init__(self, storage, newboxes, metainterp):
-        self._init(metainterp.cpu, fakeframe, storage)
+        self._init(metainterp.cpu, storage)
         self.liveboxes = newboxes
         self.metainterp = metainterp
         self._prepare(storage)
