@@ -2198,17 +2198,16 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_force_operations_returning_void(self):
         values = []
         def maybe_force(token, flag):
-            assert lltype.typeOf(token) == cpu.JITFRAMEPTR
+            assert lltype.typeOf(token) == llmemory.GCREF
             if flag:
-                descr = self.cpu.get_latest_descr(token)
+                frame = self.cpu.force(token)
+                descr = self.cpu.get_latest_descr(frame)
                 values.append(descr)
-                x = self.cpu.force(token)
-                assert x is None
-                values.append(self.cpu.get_latest_value_int(token, 0))
-                values.append(self.cpu.get_latest_value_int(token, 1))
-                values.append(token)
+                values.append(self.cpu.get_latest_value_int(frame, 0))
+                values.append(self.cpu.get_latest_value_int(frame, 1))
+                values.append(frame)
 
-        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed], lltype.Void)
+        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2219,7 +2218,7 @@ class LLtypeBackendTest(BaseBackendTest):
         tok = BoxPtr()
         faildescr = BasicFailDescr(1)
         ops = [
-        ResOperation(rop.JIT_FRAME, [], tok),
+        ResOperation(rop.FORCE_TOKEN, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], None,
                      descr=calldescr),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
@@ -2234,22 +2233,22 @@ class LLtypeBackendTest(BaseBackendTest):
         assert values == []
 
         frame = self.cpu.execute_token(looptoken, 10, 1)
+        assert values == [faildescr, 1, 10, frame]
         assert self.cpu.get_latest_descr(frame).identifier == 1
         assert self.cpu.get_latest_value_int(frame, 0) == 1
         assert self.cpu.get_latest_value_int(frame, 1) == 10
-        assert values == [faildescr, 1, 10, frame]
 
     def test_force_operations_returning_int(self):
         values = []
         def maybe_force(token, flag):
             if flag:
-               self.cpu.force(token)
-               values.append(self.cpu.get_latest_value_int(token, 0))
-               values.append(self.cpu.get_latest_value_int(token, 2))
-               values.append(token)
+                frame = self.cpu.force(token)
+                values.append(self.cpu.get_latest_value_int(frame, 0))
+                values.append(self.cpu.get_latest_value_int(frame, 2))
+                values.append(frame)
             return 42
 
-        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed],
+        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed],
                              lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
@@ -2262,7 +2261,7 @@ class LLtypeBackendTest(BaseBackendTest):
         tok = BoxPtr()
         faildescr = BasicFailDescr(1)
         ops = [
-        ResOperation(rop.JIT_FRAME, [], tok),
+        ResOperation(rop.FORCE_TOKEN, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], i2,
                      descr=calldescr),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
@@ -2289,13 +2288,13 @@ class LLtypeBackendTest(BaseBackendTest):
         values = []
         def maybe_force(token, flag):
             if flag:
-               self.cpu.force(token)
-               values.append(self.cpu.get_latest_value_int(token, 0))
-               values.append(self.cpu.get_latest_value_int(token, 2))
-               values.append(token)
+                frame = self.cpu.force(token)
+                values.append(self.cpu.get_latest_value_int(frame, 0))
+                values.append(self.cpu.get_latest_value_int(frame, 2))
+                values.append(frame)
             return 42.5
 
-        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed], lltype.Float)
+        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Float)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2307,7 +2306,7 @@ class LLtypeBackendTest(BaseBackendTest):
         tok = BoxPtr()
         faildescr = BasicFailDescr(1)
         ops = [
-        ResOperation(rop.JIT_FRAME, [], tok),
+        ResOperation(rop.FORCE_TOKEN, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], f2,
                      descr=calldescr),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
@@ -2331,6 +2330,7 @@ class LLtypeBackendTest(BaseBackendTest):
         assert values == [1, 10, frame]
 
     def test_force_from_finish(self):
+        py.test.skip("can't force from finish in this version")
         finishdescr = BasicFailDescr(1)
         loop = parse('''
         [i1, i2]
@@ -2747,7 +2747,7 @@ class LLtypeBackendTest(BaseBackendTest):
             called.append(failindex)
             return 4 + 9
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR],
                                              lltype.Signed))
         class FakeJitDriverSD:
             _assembler_helper_ptr = llhelper(FUNCPTR, assembler_helper)
@@ -2819,7 +2819,7 @@ class LLtypeBackendTest(BaseBackendTest):
             called.append(failindex)
             return 13.5
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR],
                                              lltype.Float))
         class FakeJitDriverSD:
             _assembler_helper_ptr = llhelper(FUNCPTR, assembler_helper)
@@ -2879,14 +2879,16 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_assembler_call_get_latest_descr(self):
         called = []
         def assembler_helper(jitframe):
-            jitframe1 = self.cpu.get_finish_value_ref(jitframe)
-            called.append(self.cpu.get_latest_descr(jitframe1))
+            token = self.cpu.get_finish_value_ref(jitframe)
+            assert token == called[0]
             return lltype.nullptr(llmemory.GCREF.TO)
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR],
                                              llmemory.GCREF))
 
-        def func2(jitframe1):
+        def func2(token):
+            called.append(token)
+            jitframe1 = self.cpu.force(token)
             called.append(self.cpu.get_latest_descr(jitframe1))
         FPTR2 = lltype.Ptr(lltype.FuncType([llmemory.GCREF], lltype.Void))
         fptr2 = llhelper(FPTR2, func2)
@@ -2917,7 +2919,7 @@ class LLtypeBackendTest(BaseBackendTest):
         foodescr = BasicFailDescr(66)
         ops = '''
         []
-        p0 = jit_frame()
+        p0 = force_token()
         p1 = call_assembler(p0, descr=looptoken)
         guard_not_forced(descr=foodescr) []
         finish() []
@@ -2927,8 +2929,9 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(loop2.inputargs, loop2.operations, othertoken)
 
         frame = self.cpu.execute_token(othertoken)
-        assert not self.cpu.get_finish_value_ref(frame)
-        assert called == [foodescr] * 2
+        assert self.cpu.get_latest_descr(frame) is foodescr
+        assert len(called) == 2
+        assert called[1] == foodescr
 
     def test_raw_malloced_getarrayitem(self):
         ARRAY = rffi.CArray(lltype.Signed)
@@ -2964,7 +2967,7 @@ class LLtypeBackendTest(BaseBackendTest):
             called.append(failindex)
             return 13.5
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR],
                                              lltype.Float))
         class FakeJitDriverSD:
             _assembler_helper_ptr = llhelper(FUNCPTR, assembler_helper)
@@ -3745,12 +3748,12 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_forcing_op_with_fail_arg_in_reg(self):
         values = []
         def maybe_force(token, flag):
-            self.cpu.force(token)
-            values.append(self.cpu.get_latest_value_int(token, 0))
-            values.append(token)
+            frame = self.cpu.force(token)
+            values.append(self.cpu.get_latest_value_int(frame, 0))
+            values.append(frame)
             return 42
 
-        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed], lltype.Signed)
+        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -3761,7 +3764,7 @@ class LLtypeBackendTest(BaseBackendTest):
         tok = BoxPtr()
         faildescr = BasicFailDescr(23)
         ops = [
-        ResOperation(rop.JIT_FRAME, [], tok),
+        ResOperation(rop.FORCE_TOKEN, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], i2,
                      descr=calldescr),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),

@@ -13,6 +13,9 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, r_ulonglong
 from pypy.rlib.rtimer import read_timestamp
 
+from pypy.tool.uid import uid
+
+
 class LLTrace(object):
     has_been_freed = False
     invalid = False
@@ -176,6 +179,7 @@ _example_res = {'v': None,
                 'i': 0,
                 'f': 0.0}
 
+
 class LLGraphCPU(model.AbstractCPU):
     from pypy.jit.metainterp.typesystem import llhelper as ts
     supports_floats = True
@@ -183,7 +187,7 @@ class LLGraphCPU(model.AbstractCPU):
     supports_singlefloats = True
     translate_support_code = False
 
-    JITFRAMEPTR = llmemory.GCREF
+    JITFRAMEPTR = lltype.Ptr(lltype.GcStruct('JITFRAME'))
 
     jfdescr_for_int   = JFValueDescr('int')
     jfdescr_for_ref   = JFValueDescr('ref')
@@ -291,9 +295,12 @@ class LLGraphCPU(model.AbstractCPU):
         frame.last_exception = None
         return gcref
 
-    def force(self, frame):
+    def force(self, token):
+        assert lltype.typeOf(token) == llmemory.GCREF
+        frame = token._obj.llframe
         assert not frame._forced
         frame._forced = True
+        return frame
 
     def force_vable_if_necessary(self, vable):
         if vable.jitframe:
@@ -615,18 +622,10 @@ class NotAFrame(object):
         return not (self == other)
 
 class LLFrame(object):
-    _TYPE = llmemory.GCREF
-
-    # some obscure hacks to support comparison with llmemory.GCREF
-    def __ne__(self, other):
-        return not self == other
-    def __eq__(self, other):
-        return isinstance(other, LLFrame) and self is other
-    
     _forced = False
     _execution_finished_normally = False
     finish_value = None
-    
+
     def __init__(self, cpu, argboxes, args):
         self.env = {}
         self.cpu = cpu
@@ -884,6 +883,7 @@ class LLFrame(object):
         else:
             jd = descr.outermost_jitdriver_sd
             assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
+            frame._TYPE = LLGraphCPU.JITFRAMEPTR    # hack
             try:
                 result = assembler_helper_ptr(frame)
             except LLException, lle:
@@ -913,8 +913,11 @@ class LLFrame(object):
         descr = heaptracker.vtable2descr(self.cpu, vtable)
         return self.cpu.bh_new_with_vtable(vtable, descr)
 
-    def execute_jit_frame(self, _):
-        return self
+    def execute_force_token(self, _):
+        p = lltype.malloc(llmemory.GCREF.TO)
+        p._obj.llframe = self
+        p._obj._name = 'force_token to LLFrame at 0x%x' % (uid(self,))
+        return p
 
 def _getdescr(op):
     d = op.getdescr()
