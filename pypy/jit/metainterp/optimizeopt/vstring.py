@@ -264,7 +264,6 @@ class VStringConcatValue(VAbstractStringValue):
     def _make_virtual(self, modifier):
         return modifier.make_vstrconcat(self.mode is mode_unicode)
 
-
 class VStringSliceValue(VAbstractStringValue):
     """A slice."""
     _attrs_ = ('vstr', 'vstart', 'vlength')

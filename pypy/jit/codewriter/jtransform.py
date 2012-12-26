@@ -1651,6 +1651,7 @@ class Transformer(object):
         SoU = args[0].concretetype     # Ptr(STR) or Ptr(UNICODE)
         if SoU.TO == rstr.STR:
             dict = {"stroruni.concat": EffectInfo.OS_STR_CONCAT,
+                    "stroruni.concatchar": EffectInfo.OS_STR_CONCAT_CHAR,
                     "stroruni.slice":  EffectInfo.OS_STR_SLICE,
                     "stroruni.equal":  EffectInfo.OS_STR_EQUAL,
                     }

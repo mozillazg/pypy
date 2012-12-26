@@ -23,26 +23,28 @@ class EffectInfo(object):
     OS_STR2UNICODE              = 2    # "str.str2unicode"
     #
     OS_STR_CONCAT               = 22   # "stroruni.concat"
-    OS_STR_SLICE                = 23   # "stroruni.slice"
-    OS_STR_EQUAL                = 24   # "stroruni.equal"
-    OS_STREQ_SLICE_CHECKNULL    = 25   # s2!=NULL and s1[x:x+length]==s2
-    OS_STREQ_SLICE_NONNULL      = 26   # s1[x:x+length]==s2   (assert s2!=NULL)
-    OS_STREQ_SLICE_CHAR         = 27   # s1[x:x+length]==char
-    OS_STREQ_NONNULL            = 28   # s1 == s2    (assert s1!=NULL,s2!=NULL)
-    OS_STREQ_NONNULL_CHAR       = 29   # s1 == char  (assert s1!=NULL)
-    OS_STREQ_CHECKNULL_CHAR     = 30   # s1!=NULL and s1==char
-    OS_STREQ_LENGTHOK           = 31   # s1 == s2    (assert len(s1)==len(s2))
+    OS_STR_CONCAT_CHAR          = 23   # "stroruni.concatchar"
+    OS_STR_SLICE                = 24   # "stroruni.slice"
+    OS_STR_EQUAL                = 25   # "stroruni.equal"
+    OS_STREQ_SLICE_CHECKNULL    = 26   # s2!=NULL and s1[x:x+length]==s2
+    OS_STREQ_SLICE_NONNULL      = 27   # s1[x:x+length]==s2   (assert s2!=NULL)
+    OS_STREQ_SLICE_CHAR         = 28   # s1[x:x+length]==char
+    OS_STREQ_NONNULL            = 29   # s1 == s2    (assert s1!=NULL,s2!=NULL)
+    OS_STREQ_NONNULL_CHAR       = 30   # s1 == char  (assert s1!=NULL)
+    OS_STREQ_CHECKNULL_CHAR     = 31   # s1!=NULL and s1==char
+    OS_STREQ_LENGTHOK           = 32   # s1 == s2    (assert len(s1)==len(s2))
     #
     OS_UNI_CONCAT               = 42   #
-    OS_UNI_SLICE                = 43   #
-    OS_UNI_EQUAL                = 44   #
-    OS_UNIEQ_SLICE_CHECKNULL    = 45   #
-    OS_UNIEQ_SLICE_NONNULL      = 46   #
-    OS_UNIEQ_SLICE_CHAR         = 47   #
-    OS_UNIEQ_NONNULL            = 48   #   the same for unicode
-    OS_UNIEQ_NONNULL_CHAR       = 49   #   (must be the same amount as for
-    OS_UNIEQ_CHECKNULL_CHAR     = 50   #   STR, in the same order)
-    OS_UNIEQ_LENGTHOK           = 51   #
+    OS_UNI_CONCAT_CHAR          = 43   #
+    OS_UNI_SLICE                = 44   #
+    OS_UNI_EQUAL                = 45   #
+    OS_UNIEQ_SLICE_CHECKNULL    = 46   #
+    OS_UNIEQ_SLICE_NONNULL      = 47   #
+    OS_UNIEQ_SLICE_CHAR         = 48   #
+    OS_UNIEQ_NONNULL            = 49   #   the same for unicode
+    OS_UNIEQ_NONNULL_CHAR       = 50   #   (must be the same amount as for
+    OS_UNIEQ_CHECKNULL_CHAR     = 51   #   STR, in the same order)
+    OS_UNIEQ_LENGTHOK           = 52   #
     _OS_offset_uni              = OS_UNI_CONCAT - OS_STR_CONCAT
     #
     OS_LIBFFI_CALL              = 62

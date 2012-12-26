@@ -4099,6 +4099,23 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_strunicode_loop(ops, expected)
 
+    def test_str_concat_char(self):
+        ops = """
+        [p1, i2]
+        p3 = call(0, p1, i2, descr=strconcatchardescr)
+        jump(p3, i2)
+        """
+        expected = """
+        [p1, i0]
+        i1 = strlen(p1)
+        i3 = int_add(i1, 1)
+        p3 = newstr(i3)
+        copystrcontent(p1, p3, 0, 0, i1)
+        strsetitem(p1, i1, i0)
+        jump(p3, i0)
+        """
+        self.optimize_strunicode_loop(ops, expected)
+
     def test_str_concat_vstr2_str(self):
         ops = """
         [i0, i1, p2]

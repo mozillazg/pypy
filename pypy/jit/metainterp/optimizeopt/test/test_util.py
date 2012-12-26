@@ -210,6 +210,7 @@ class LLtypeMixin(object):
 
     for _name, _os in [
         ('strconcatdescr',               'OS_STR_CONCAT'),
+        ('strconcatchardescr',           'OS_STR_CONCAT_CHAR'),
         ('strslicedescr',                'OS_STR_SLICE'),
         ('strequaldescr',                'OS_STR_EQUAL'),
         ('streq_slice_checknull_descr',  'OS_STREQ_SLICE_CHECKNULL'),

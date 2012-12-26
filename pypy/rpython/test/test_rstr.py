@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem.rstr import LLHelpers, STR
 from pypy.rpython.rstr import AbstractLLHelpers
 from pypy.rpython.rtyper import TyperError
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
+from pypy.rpython.test.test_llinterp import get_interpreter
 
 
 def test_parse_fmt():
@@ -1098,6 +1099,17 @@ class TestLLtype(BaseTestRstr, LLRtypeMixin):
         res = self.interpret(f, [5])
         assert res == 0
 
+    def test_char_addition_does_not_promote(self):
+        const = self.const
+        constchar = self.constchar
+        
+        def f(n):
+            return const("abc") + constchar(n)
+
+        interp, graph = get_interpreter(f, [ord('a')])
+        opnames = [op.opname for op in graph.iterblocks().next().operations]
+        assert opnames.count('direct_call') == 1
+        assert self.ll_to_string(interp.eval_graph(graph, [ord('a')])) == "abca"
 
 class TestOOtype(BaseTestRstr, OORtypeMixin):
     pass

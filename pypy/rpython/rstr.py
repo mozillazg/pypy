@@ -542,6 +542,13 @@ class __extend__(pairtype(AbstractStringRepr, AbstractCharRepr),
         hop.exception_cannot_occur()
         return hop.gendirectcall(r_str.ll.ll_contains, v_str, v_chr)
 
+    def rtype_add((r_str, r_chr), hop):
+        string_repr = r_str.repr
+        char_repr = r_chr.char_repr
+        v_str, v_chr = hop.inputargs(string_repr, char_repr)
+        hop.exception_is_here()
+        return hop.gendirectcall(r_str.ll.ll_strconcat_char, v_str, v_chr)
+
 class __extend__(pairtype(AbstractStringRepr, AbstractTupleRepr)):
     def rtype_mod((r_str, r_tuple), hop):
         r_tuple = hop.args_r[1]

@@ -316,6 +316,17 @@ class LLHelpers(AbstractLLHelpers):
     ll_strconcat.oopspec = 'stroruni.concat(s1, s2)'
 
     @jit.elidable
+    def ll_strconcat_char(s1, c2):
+        len1 = len(s1.chars)
+        # a single '+' like this is allowed to overflow: it gets
+        # a negative result, and the gc will complain
+        newstr = s1.malloc(len1 + 1)
+        newstr.copy_contents(s1, newstr, 0, 0, len1)
+        newstr.chars[len1] = c2
+        return newstr
+    ll_strconcat_char.oopspec = 'stroruni.concatchar(s1, c2)'
+
+    @jit.elidable
     def ll_strip(s, ch, left, right):
         s_len = len(s.chars)
         if s_len == 0:
