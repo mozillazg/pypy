@@ -9,8 +9,8 @@ FREE = -1
 DUMMY = -2
 
 TP = lltype.GcArray(lltype.Struct('dictentry',
-                                  (lltype.Signed, 'key'),
-                                  (llmemory.GCREF, 'value')))
+                                  ('key', lltype.Signed),
+                                  ('value', llmemory.GCREF)))
 MAIN_TP = lltype.GcArray(lltype.Signed)
 
 class Dict(object):
