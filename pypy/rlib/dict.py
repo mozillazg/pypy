@@ -112,7 +112,10 @@ class Dict(object):
             if index == FREE:
                 self.filled += 1
                 if self.filled * 3 > len(self.indices) * 2:
-                    self._resize(4 * self.__len__())
+                    if self.used < 50000:
+                        self._resize(4 * self.__len__())
+                    else:
+                        self._resize(2 * self.__len__())
         else:
             self.values[index].value = _cast_to_gcref(value)
 
