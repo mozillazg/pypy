@@ -109,7 +109,7 @@ class Dict(object):
                 if self.filled * 3 > len(self.indices) * 2:
                     self._resize(4 * self.__len__())
         else:
-            self.values[index].value = value
+            self.values[index].value = _cast_to_gcref(value)
 
     def __delitem__(self, key):
         hashvalue = hash(key)
