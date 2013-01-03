@@ -1,7 +1,7 @@
 
-from pypy.rlib.objectmodel import compute_identity_hash
 from pypy.rlib.jit_hooks import _cast_to_gcref
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 
 # Placeholder constants
 
@@ -45,7 +45,10 @@ class Dict(object):
         #if n <= 2**7: return array.array('b', [FREE]) * n       # signed char
         #if n <= 2**15: return array.array('h', [FREE]) * n      # signed short
         #if n <= 2**31: return array.array('l', [FREE]) * n      # signed long
-        return lltype.malloc(MAIN_TP, n)
+        v = lltype.malloc(MAIN_TP, n)
+        for i in range(n):
+            v[i] = FREE
+        return v
 
     def _resize(self, n):
         '''Reindex the existing hash/key/value entries.
@@ -75,7 +78,7 @@ class Dict(object):
             self.indices[i] = index
         self.filled = self.used
         old_values = self.values
-        self.values = lltype.malloc(TP, new_size * 2 / 3)
+        self.values = lltype.malloc(TP, new_size * 2 / 3 + 1)
         for i in range(self.used):
             self.values[i].key = old_values[i].key
             self.values[i].value = old_values[i].value
@@ -89,12 +92,14 @@ class Dict(object):
     def __init__(self):
         self.clear()
 
-    def __getitem__(self, key):
-        hashvalue = hash(key)
-        index, i = self._lookup(key, hashvalue)
+    def __getitem__(self, CLS, key):
+        index, i = self._lookup(key, key)
         if index < 0:
             raise KeyError(key)
-        return self.valuelist[index]
+        llref = self.values[index].value
+        ptr = lltype.cast_opaque_ptr(rclass.OBJECTPTR, llref)
+        return cast_base_ptr_to_instance(CLS, ptr)
+
 
     def __setitem__(self, key, value):
         hashvalue = key # hash
@@ -198,6 +203,6 @@ if __name__ == '__main__':
             d = Dict()
         class A(object):
             pass
-        for i in range(10000000):
+        for i in range(100000):
             d[i] = A()
     f()
