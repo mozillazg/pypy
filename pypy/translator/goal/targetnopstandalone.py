@@ -18,13 +18,19 @@ class A(object):
 def entry_point(argv):
     if len(argv) > 2:
         d = {}
+        a = None
         for i in range(int(argv[1])):
-            d[i] = A(i, i, i)
+            if i % 100 == 0:
+                a = A(i, i, i)
+            d[i] = a
     else:
         from pypy.rlib import dict
         d = dict.Dict()
+        a = None
         for i in range(int(argv[1])):
-            d.__setitem__(i, A(i, i, i))
+            if i % 100 == 0:
+                a = A(i, i, i)
+            d.__setitem__(i, a)
     return 0
 
 # _____ Define and setup target ___
