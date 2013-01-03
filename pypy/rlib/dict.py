@@ -59,7 +59,8 @@ class Dict(object):
         n = new_size
         self.indices = self._make_index(n)
         PERTURB_SHIFT = 5
-        for index, hashvalue in enumerate(self.hashlist):
+        for index in range(self.used):
+            hashvalue = self.values[index].key
             if hashvalue < 0:
                 perturb = -hashvalue
             else:
@@ -108,7 +109,7 @@ class Dict(object):
                 if self.filled * 3 > len(self.indices) * 2:
                     self._resize(4 * self.__len__())
         else:
-            self.valuelist[index] = value
+            self.values[index].value = value
 
     def __delitem__(self, key):
         hashvalue = hash(key)
