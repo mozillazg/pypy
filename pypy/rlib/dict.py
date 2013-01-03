@@ -1,10 +1,17 @@
 
 from pypy.rlib.objectmodel import compute_identity_hash
+from pypy.rlib.jit_hooks import _cast_to_gcref
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 # Placeholder constants
 
 FREE = -1
 DUMMY = -2
+
+TP = lltype.GcArray(lltype.Struct('dictentry',
+                                  (lltype.Signed, 'key'),
+                                  (llmemory.GCREF, 'value')))
+MAIN_TP = lltype.GcArray(lltype.Signed)
 
 class Dict(object):
     'Space efficient dictionary with fast iteration and cheap resizes.'
@@ -26,21 +33,19 @@ class Dict(object):
                 return (FREE, i) if freeslot == -1 else (DUMMY, freeslot)
             elif index == DUMMY:
                 freeslot = i
-            elif (self.keylist[index] is key or
-                  self.hashlist[index] == hashvalue
-                  and self.keylist[index] == key):
-                    return (index, i)
+            elif self.values[index].key == key:
+                return (index, i)
             i = 5 * i + perturb + 1
             i = i & (n-1)
             perturb >>= PERTURB_SHIFT
+    _lookup._always_inline_ = True
 
-    @staticmethod
-    def _make_index(n):
+    def _make_index(self, n):
         'New sequence of indices using the smallest possible datatype'
         #if n <= 2**7: return array.array('b', [FREE]) * n       # signed char
         #if n <= 2**15: return array.array('h', [FREE]) * n      # signed short
         #if n <= 2**31: return array.array('l', [FREE]) * n      # signed long
-        return [FREE] * n                                       # python integers
+        return lltype.malloc(MAIN_TP, n)
 
     def _resize(self, n):
         '''Reindex the existing hash/key/value entries.
@@ -68,12 +73,15 @@ class Dict(object):
                 perturb >>= PERTURB_SHIFT
             self.indices[i] = index
         self.filled = self.used
+        old_values = self.values
+        self.values = lltype.malloc(TP, new_size * 2 / 3)
+        for i in range(self.used):
+            self.values[i].key = old_values[i].key
+            self.values[i].value = old_values[i].value
 
     def clear(self):
         self.indices = self._make_index(8)
-        self.hashlist = []
-        self.keylist = []
-        self.valuelist = []
+        self.values = lltype.malloc(TP, 8 * 3 / 2)
         self.used = 0
         self.filled = 0                                         # used + dummies
 
@@ -92,9 +100,8 @@ class Dict(object):
         index, i = self._lookup(key, hashvalue)
         if index < 0:
             self.indices[i] = self.used
-            self.hashlist.append(hashvalue)
-            self.keylist.append(key)
-            self.valuelist.append(value)
+            self.values[self.used].key = key
+            self.values[self.used].value = _cast_to_gcref(value)
             self.used += 1
             if index == FREE:
                 self.filled += 1
