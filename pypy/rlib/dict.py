@@ -148,9 +148,6 @@ class Dict(object):
     def itervalues(self):
         return iter(self.valuelist)
 
-    def values(self):
-        return list(self.valuelist)
-
     def iteritems(self):
         return itertools.izip(self.keylist, self.valuelist)
 
