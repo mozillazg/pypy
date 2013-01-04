@@ -1,5 +1,6 @@
 
 from pypy.rlib.jit_hooks import _cast_to_gcref
+from pypy.rlib import rgc
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 
@@ -79,9 +80,7 @@ class Dict(object):
         self.filled = self.used
         old_values = self.values
         self.values = lltype.malloc(TP, new_size * 2 / 3 + 1)
-        for i in range(self.used):
-            self.values[i].key = old_values[i].key
-            self.values[i].value = old_values[i].value
+        rgc.ll_arraycopy(old_values, self.values, 0, 0, self.used)
 
     def clear(self):
         self.indices = self._make_index(8)
