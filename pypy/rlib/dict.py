@@ -1,4 +1,3 @@
-
 from pypy.rlib.jit_hooks import _cast_to_gcref
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
@@ -13,6 +12,7 @@ TP = lltype.GcArray(lltype.Struct('dictentry',
                                   ('value', llmemory.GCREF)))
 MAIN_TP = lltype.GcArray(lltype.Signed)
 
+
 class Dict(object):
     'Space efficient dictionary with fast iteration and cheap resizes.'
 
@@ -26,7 +26,7 @@ class Dict(object):
         else:
             perturb = hashvalue
         n = len(self.indices)
-        i = perturb & (n-1)
+        i = perturb & (n - 1)
         while True:
             index = self.indices[i]
             if index == FREE:
@@ -36,7 +36,7 @@ class Dict(object):
             elif self.values[index].key == key:
                 return (index, i)
             i = 5 * i + perturb + 1
-            i = i & (n-1)
+            i = i & (n - 1)
             perturb >>= PERTURB_SHIFT
     _lookup._always_inline_ = True
 
@@ -68,12 +68,12 @@ class Dict(object):
                 perturb = -hashvalue
             else:
                 perturb = hashvalue
-            i = hashvalue & (n-1)
+            i = hashvalue & (n - 1)
             while True:
                 if self.indices[i] == FREE:
                     break
                 i = 5 * i + perturb + 1
-                i = i & (n-1)
+                i = i & (n - 1)
                 perturb >>= PERTURB_SHIFT
             self.indices[i] = index
         self.filled = self.used
@@ -99,7 +99,6 @@ class Dict(object):
         llref = self.values[index].value
         ptr = lltype.cast_opaque_ptr(rclass.OBJECTPTR, llref)
         return cast_base_ptr_to_instance(CLS, ptr)
-
 
     def __setitem__(self, key, value):
         hashvalue = key # hash
@@ -180,7 +179,7 @@ class Dict(object):
             key = self.keylist[-1]
             value = self.valuelist[-1]
         except IndexError:
-            raise KeyError( 'popitem(): dictionary is empty')
+            raise KeyError('popitem(): dictionary is empty')
         del self[key]
         return key, value
 
