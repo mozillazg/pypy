@@ -62,6 +62,7 @@ class Dict(object):
         n = new_size
         self.indices = self._make_index(n)
         PERTURB_SHIFT = 5
+        new_values = lltype.malloc(TP, new_size * 2 / 3 + 1)
         for index in range(self.used):
             hashvalue = self.values[index].key
             if hashvalue < 0:
@@ -76,12 +77,10 @@ class Dict(object):
                 i = i & (n - 1)
                 perturb >>= PERTURB_SHIFT
             self.indices[i] = index
+            new_values[index].key = self.values[index].key
+            new_values[index].value = self.values[index].value
         self.filled = self.used
-        old_values = self.values
-        self.values = lltype.malloc(TP, new_size * 2 / 3 + 1)
-        for i in range(self.used):
-            self.values[i].key = old_values[i].key
-            self.values[i].value = old_values[i].value
+        self.values = new_values
 
     def clear(self):
         self.indices = self._make_index(8)
