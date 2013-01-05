@@ -11,8 +11,8 @@ TP = lltype.GcArray(lltype.Struct('dictentry',
                                   ('value', llmemory.GCREF)))
 MAIN_TP = lltype.GcArray(rffi.INT_real)
 
-FREE = rffi.cast(rffi.INT_real, -1)
-DUMMY = rffi.cast(rffi.INT_real, -2)
+FREE = -1
+DUMMY = -2
 
 class Dict(object):
     'Space efficient dictionary with fast iteration and cheap resizes.'
@@ -48,7 +48,7 @@ class Dict(object):
         #if n <= 2**31: return array.array('l', [FREE]) * n      # signed long
         v = lltype.malloc(MAIN_TP, n)
         for i in range(n):
-            v[i] = FREE
+            v[i] = rffi.cast(rffi.INT_real, FREE)
         return v
 
     def _resize(self, n):
@@ -71,7 +71,7 @@ class Dict(object):
                 perturb = hashvalue
             i = hashvalue & (n - 1)
             while True:
-                if self.indices[i] == FREE:
+                if rffi.cast(lltype.Signed, self.indices[i]) == FREE:
                     break
                 i = 5 * i + perturb + 1
                 i = i & (n - 1)
