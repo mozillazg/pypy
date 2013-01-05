@@ -525,11 +525,11 @@ def op_gc_writebarrier_before_copy(source, dest,
     A = lltype.typeOf(source)
     assert A == lltype.typeOf(dest)
     assert isinstance(A.TO, lltype.GcArray)
-    assert isinstance(A.TO.OF, lltype.Ptr)
-    assert A.TO.OF.TO._gckind == 'gc'
-    assert type(source_start) is int
-    assert type(dest_start) is int
-    assert type(length) is int
+    if isinstance(A.TO.OF, lltype.Ptr):
+        assert A.TO.OF.TO._gckind == 'gc'
+        assert type(source_start) is int
+        assert type(dest_start) is int
+        assert type(length) is int
     return True
 
 def op_getfield(p, name):
