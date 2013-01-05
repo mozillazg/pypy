@@ -1,18 +1,18 @@
 from pypy.rlib.jit_hooks import _cast_to_gcref
 from pypy.rlib import rgc
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rffi
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 
 # Placeholder constants
 
-FREE = -1
-DUMMY = -2
 
 TP = lltype.GcArray(lltype.Struct('dictentry',
                                   ('key', lltype.Signed),
                                   ('value', llmemory.GCREF)))
-MAIN_TP = lltype.GcArray(lltype.Signed)
+MAIN_TP = lltype.GcArray(rffi.INT_real)
 
+FREE = rffi.cast(rffi.INT_real, -1)
+DUMMY = rffi.cast(rffi.INT_real, -2)
 
 class Dict(object):
     'Space efficient dictionary with fast iteration and cheap resizes.'
@@ -29,7 +29,7 @@ class Dict(object):
         n = len(self.indices)
         i = perturb & (n - 1)
         while True:
-            index = self.indices[i]
+            index = rffi.cast(lltype.Signed, self.indices[i])
             if index == FREE:
                 return (FREE, i) if freeslot == -1 else (DUMMY, freeslot)
             elif index == DUMMY:
@@ -76,7 +76,7 @@ class Dict(object):
                 i = 5 * i + perturb + 1
                 i = i & (n - 1)
                 perturb >>= PERTURB_SHIFT
-            self.indices[i] = index
+            self.indices[i] = rffi.cast(rffi.INT_real, index)
         self.filled = self.used
         old_values = self.values
         self.values = lltype.malloc(TP, new_size * 2 / 3 + 1)
@@ -103,7 +103,7 @@ class Dict(object):
         hashvalue = key # hash
         index, i = self._lookup(key, hashvalue)
         if index < 0:
-            self.indices[i] = self.used
+            self.indices[i] = rffi.cast(rffi.INT_real, self.used)
             self.values[self.used].key = key
             self.values[self.used].value = _cast_to_gcref(value)
             self.used += 1
