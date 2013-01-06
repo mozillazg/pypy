@@ -69,11 +69,13 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("a"), 1)        
         rdict.ll_dict_setitem(ll_d, llstr("b"), 2)        
         rdict.ll_dict_setitem(ll_d, llstr("c"), 3)        
-        rdict.ll_dict_setitem(ll_d, llstr("d"), 4)        
-        rdict.ll_dict_setitem(ll_d, llstr("e"), 5)
+        rdict.ll_dict_setitem(ll_d, llstr("d"), 4)         
         assert len(ll_d.indexes) == 8
+        rdict.ll_dict_setitem(ll_d, llstr("e"), 5)
         rdict.ll_dict_setitem(ll_d, llstr("f"), 6)
         assert len(ll_d.indexes) == 32
+        for item in ['a', 'b', 'c', 'd', 'e', 'f']:
+            assert rdict.ll_dict_getitem(ll_d, llstr(item)) == ord(item) - ord('a') + 1
 
 class BaseTestRdict(BaseRtypingTest):
 

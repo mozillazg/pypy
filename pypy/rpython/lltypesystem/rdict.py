@@ -185,16 +185,14 @@ class DictRepr(AbstractDictRepr):
                 for dictkeycontainer, dictvalue in dictobj._dict.items():
                     llkey = r_key.convert_const(dictkeycontainer.key)
                     llvalue = r_value.convert_const(dictvalue)
-                    ll_dict_insertclean(l_dict, llkey, llvalue,
-                                        dictkeycontainer.hash)
+                    ll_dict_setitem(l_dict, llkey, llvalue)
                 return l_dict
 
             else:
                 for dictkey, dictvalue in dictobj.items():
                     llkey = r_key.convert_const(dictkey)
                     llvalue = r_value.convert_const(dictvalue)
-                    ll_dict_insertclean(l_dict, llkey, llvalue,
-                                        l_dict.keyhash(llkey))
+                    ll_dict_setitem(l_dict, llkey, llvalue)
                 return l_dict
 
     def rtype_len(self, hop):
@@ -386,13 +384,13 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
         entry = d.entries[index]
         # a new entry that was never used before
         ll_assert(not valid, "valid but not everused")
-        rc = d.resize_counter - 3
+        rc = d.resize_counter - 1
         if rc <= 0:       # if needed, resize the dict -- before the insertion
             ll_dict_resize(d)
             i = ll_dict_lookup_clean(d, hash)
             # then redo the lookup for 'key'
             entry = d.entries[index]
-            rc = d.resize_counter - 3
+            rc = d.resize_counter - 1
             ll_assert(rc > 0, "ll_dict_resize failed?")
         d.resize_counter = rc
         d.indexes[i] = index
@@ -411,22 +409,6 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     entry.key = key
     if hasattr(ENTRY, 'f_hash'):  entry.f_hash = hash
     d.num_items += 1
-
-def ll_dict_insertclean(d, key, value, hash):
-    # Internal routine used by ll_dict_resize() to insert an item which is
-    # known to be absent from the dict.  This routine also assumes that
-    # the dict contains no deleted entries.  This routine has the advantage
-    # of never calling d.keyhash() and d.keyeq(), so it cannot call back
-    # to user code.  ll_dict_insertclean() doesn't resize the dict, either.
-    i = ll_dict_lookup_clean(d, hash)
-    ENTRY = lltype.typeOf(d.entries).TO.OF
-    index = d.indexes[i]
-    entry = d.entries[index]
-    entry.value = value
-    entry.key = key
-    if hasattr(ENTRY, 'f_hash'):     entry.f_hash = hash
-    d.num_items += 1
-    d.resize_counter -= 3
 
 def ll_dict_delitem(d, key):
     i = ll_dict_lookup(d, key, d.keyhash(key))
@@ -489,14 +471,14 @@ def ll_dict_resize(d):
     new_item_size = new_size // 3 * 2 + 1
     d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
     d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(new_size)
-    d.num_items = len(old_entries)
-    d.resize_counter = new_size * 2
+    d.num_items = len(old_entries) - 1
+    d.resize_counter = new_item_size
     i = 0
     indexes = d.indexes
     while i < old_size:
         index = old_indexes[i]
         if index >= 0:
-            indexes[ll_dict_lookup_clean(d, old_entries.hash(i))] = index
+            indexes[ll_dict_lookup_clean(d, old_entries.hash(index))] = index
         i += 1
     rgc.ll_arraycopy(old_entries, d.entries, 0, 0, len(old_entries))
 ll_dict_resize.oopspec = 'dict.resize(d)'
@@ -591,7 +573,7 @@ def ll_dict_lookup_clean(d, hash):
 #  Irregular operations.
 
 DICT_INITSIZE = 8
-DICT_ITEMS_INITSIZE = 6
+DICT_ITEMS_INITSIZE = 5
 
 @jit.unroll_safe # we always unroll the small allocation
 def ll_newdict(DICT):
@@ -603,7 +585,7 @@ def ll_newdict(DICT):
         d.indexes[i] = FREE
     d.entries = DICT.entries.TO.allocate(DICT_ITEMS_INITSIZE)    
     d.num_items = 0
-    d.resize_counter = DICT_INITSIZE * 2
+    d.resize_counter = DICT_ITEMS_INITSIZE
     return d
 
 def ll_newdict_size(DICT, length_estimate):
@@ -616,7 +598,7 @@ def ll_newdict_size(DICT, length_estimate):
     d.entries = DICT.entries.TO.allocate(items_size)
     d.indexes = DICT.indexes.TO.allocate(n)
     d.num_items = 0
-    d.resize_counter = n * 2
+    d.resize_counter = items_size
     return d
 
 # pypy.rpython.memory.lldict uses a dict based on Struct and Array
@@ -755,13 +737,13 @@ ll_copy.oopspec = 'dict.copy(dict)'
 
 def ll_clear(d):
     if (len(d.indexes) == DICT_INITSIZE and
-        d.resize_counter == DICT_INITSIZE * 2):
+        d.resize_counter == DICT_ITEMS_INITSIZE):
         return
     old_entries = d.entries
     d.entries = lltype.typeOf(old_entries).TO.allocate(DICT_ITEMS_INITSIZE)
     d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(DICT_INITSIZE)
     d.num_items = 0
-    d.resize_counter = DICT_INITSIZE * 2
+    d.resize_counter = DICT_ITEMS_INITSIZE
 ll_clear.oopspec = 'dict.clear(d)'
 
 def ll_update(dic1, dic2):
