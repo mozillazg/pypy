@@ -4,7 +4,9 @@ from pypy.rpython import rint
 from pypy.rpython.lltypesystem import rdict, rstr
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rlib.objectmodel import r_dict
-from pypy.rlib.rarithmetic import r_int, r_uint, r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import r_int, r_uint, r_longlong, r_ulonglong,\
+     intmask
+from pypy.rpython.annlowlevel import llstr, hlstr
 
 import py
 py.log.setconsumer("rtyper", py.log.STDOUT)
@@ -21,6 +23,15 @@ def not_really_random():
         assert 0 <= x < 4
         yield x
 
+
+class TestRDictDirect(object):
+    def test_dict_creation(self):
+        DICT = rdict.get_ll_dict(lltype.Ptr(rstr.STR), lltype.Signed,
+                                 ll_fasthash_function=rstr.LLHelpers.ll_strhash,
+                                 ll_hash_function=rstr.LLHelpers.ll_strhash,
+                                 ll_eq_function=rstr.LLHelpers.ll_streq)
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
 
 class BaseTestRdict(BaseRtypingTest):
 
