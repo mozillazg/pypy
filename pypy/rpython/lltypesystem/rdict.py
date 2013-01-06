@@ -339,7 +339,7 @@ def ll_hash_recomputed(entries, i):
     return ENTRIES.fasthashfn(entries[i].key)
 
 def ll_get_value(d, i):
-    return d.entries[i].value
+    return d.entries[d.indexes[i]].value
 
 def ll_keyhash_custom(d, key):
     DICT = lltype.typeOf(d).TO
@@ -384,7 +384,7 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
         rc = d.resize_counter - 3
         if rc <= 0:       # if needed, resize the dict -- before the insertion
             ll_dict_resize(d)
-            index = ll_dict_lookup_clean(d, hash)
+            index = d.indexes[ll_dict_lookup_clean(d, hash)]
             # then redo the lookup for 'key'
             entry = d.entries[index]
             rc = d.resize_counter - 3
@@ -431,13 +431,24 @@ def ll_dict_delitem(d, key):
 
 @jit.look_inside_iff(lambda d, i: jit.isvirtual(d) and jit.isconstant(i))
 def _ll_dict_del(d, i):
-    XXX
-    d.entries.mark_deleted(i)
+    index = d.indexes[i]
+    d.indexes[i] = DELETED
     d.num_items -= 1
-    # clear the key and the value if they are GC pointers
     ENTRIES = lltype.typeOf(d.entries).TO
     ENTRY = ENTRIES.OF
-    entry = d.entries[i]
+    if index != d.num_items:
+        old_entry = d.entries[d.num_items]
+        key = old_entry.key
+        to_insert_i = ll_dict_lookup(d, key, d.keyhash(key))
+        d.indexes[to_insert_i] = index
+        # copy the value
+        new_entry = d.entries[index]
+        new_entry.key = key
+        new_entry.value = old_entry.value
+        if hasattr(ENTRY, 'f_hash'):
+            new_entry.f_hash = old_entry.f_hash
+    # clear the key and the value if they are GC pointers
+    entry = d.entries[d.num_items]
     if ENTRIES.must_clear_key:
         entry.key = lltype.nullptr(ENTRY.key.TO)
     if ENTRIES.must_clear_value:
@@ -499,7 +510,7 @@ def ll_dict_lookup(d, key, hash):
     if index >= 0:
         checkingkey = entries[index].key
         if checkingkey == key:
-            return index   # found the entry
+            return i   # found the entry
         if d.keyeq is not None and entries.hash(index) == hash:
             # correct hash, maybe the key is e.g. a different pointer to
             # an equal object
@@ -510,7 +521,7 @@ def ll_dict_lookup(d, key, hash):
                     # the compare did major nasty stuff to the dict: start over
                     return ll_dict_lookup(d, key, hash)
             if found:
-                return index   # found the entry
+                return i   # found the entry
         freeslot = -1
     elif index == DELETED:
         freeslot = i
@@ -548,7 +559,7 @@ def ll_dict_lookup(d, key, hash):
                         # start over
                         return ll_dict_lookup(d, key, hash)
                 if found:
-                    return index   # found the entry
+                    return i   # found the entry
         elif freeslot == -1:
             freeslot = i
         perturb >>= PERTURB_SHIFT
