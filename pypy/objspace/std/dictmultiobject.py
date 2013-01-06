@@ -9,7 +9,6 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 
 from pypy.rlib.objectmodel import r_dict, we_are_translated, specialize,\
      newlist_hint
-from pypy.rlib.debug import mark_dict_non_null
 from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.rlib import rerased
@@ -559,8 +558,7 @@ class ObjectDictStrategy(AbstractTypedStrategy, DictStrategy):
         return True
 
     def get_empty_storage(self):
-       new_dict = r_dict(self.space.eq_w, self.space.hash_w,
-                         force_non_null=True)
+       new_dict = r_dict(self.space.eq_w, self.space.hash_w)
        return self.erase(new_dict)
 
     def _never_equal_to(self, w_lookup_type):
@@ -589,7 +587,6 @@ class StringDictStrategy(AbstractTypedStrategy, DictStrategy):
 
     def get_empty_storage(self):
         res = {}
-        mark_dict_non_null(res)
         return self.erase(res)
 
     def _never_equal_to(self, w_lookup_type):
@@ -654,7 +651,6 @@ class UnicodeDictStrategy(AbstractTypedStrategy, DictStrategy):
 
     def get_empty_storage(self):
         res = {}
-        mark_dict_non_null(res)
         return self.erase(res)
 
     def _never_equal_to(self, w_lookup_type):
