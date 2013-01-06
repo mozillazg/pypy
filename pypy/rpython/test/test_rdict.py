@@ -63,6 +63,18 @@ class TestRDictDirect(object):
                 rdict.DICT_INITSIZE - 2)
         assert (len([i for i in ll_d.indexes if i == rdict.DELETED]) == 1)
 
+    def test_dict_resize(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT) 
+        rdict.ll_dict_setitem(ll_d, llstr("a"), 1)        
+        rdict.ll_dict_setitem(ll_d, llstr("b"), 2)        
+        rdict.ll_dict_setitem(ll_d, llstr("c"), 3)        
+        rdict.ll_dict_setitem(ll_d, llstr("d"), 4)        
+        rdict.ll_dict_setitem(ll_d, llstr("e"), 5)
+        assert len(ll_d.indexes) == 8
+        rdict.ll_dict_setitem(ll_d, llstr("f"), 6)
+        assert len(ll_d.indexes) == 32
+
 class BaseTestRdict(BaseRtypingTest):
 
     def test_dict_creation(self):

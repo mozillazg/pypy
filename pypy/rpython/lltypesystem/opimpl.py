@@ -525,6 +525,8 @@ def op_gc_writebarrier_before_copy(source, dest,
     A = lltype.typeOf(source)
     assert A == lltype.typeOf(dest)
     assert isinstance(A.TO, lltype.GcArray)
+    if isinstance(A.TO.OF, lltype.Struct):
+        return True
     assert isinstance(A.TO.OF, lltype.Ptr)
     assert A.TO.OF.TO._gckind == 'gc'
     assert type(source_start) is int

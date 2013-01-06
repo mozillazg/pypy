@@ -78,10 +78,12 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     DICTENTRY = lltype.Struct("dictentry", *entryfields)
     DICTENTRYARRAY = lltype.GcArray(DICTENTRY,
                                     adtmeths=entrymeths)
+    array_adtmeths = {'allocate': lltype.typeMethod(_ll_malloc_items)}
     fields = [("num_items", lltype.Signed),
               ("resize_counter", lltype.Signed),
               ("entries", lltype.Ptr(DICTENTRYARRAY)),
-              ("indexes", lltype.Ptr(lltype.GcArray(lltype.Signed)))]
+              ("indexes", lltype.Ptr(lltype.GcArray(lltype.Signed,
+                                     adtmeths=array_adtmeths)))]
     if get_custom_eq_hash is not None:
         r_rdict_eqfn, r_rdict_hashfn = get_custom_eq_hash()
         fields.extend([ ("fnkeyeq", r_rdict_eqfn.lowleveltype),
@@ -368,9 +370,12 @@ def ll_dict_setitem(d, key, value):
     i = ll_dict_lookup(d, key, hash)
     return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
 
+def _look_inside_setitem(d, key, value, hash, i):
+    return jit.isvirtual(d) and jit.isconstant(key)
+
 # It may be safe to look inside always, it has a few branches though, and their
 # frequencies needs to be investigated.
-@jit.look_inside_iff(lambda d, key, value, hash, i: jit.isvirtual(d) and jit.isconstant(key))
+@jit.look_inside_iff(_look_inside_setitem)
 def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     valid = (i & HIGHEST_BIT) == 0
     i = i & MASK
@@ -384,7 +389,7 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
         rc = d.resize_counter - 3
         if rc <= 0:       # if needed, resize the dict -- before the insertion
             ll_dict_resize(d)
-            index = d.indexes[ll_dict_lookup_clean(d, hash)]
+            i = ll_dict_lookup_clean(d, hash)
             # then redo the lookup for 'key'
             entry = d.entries[index]
             rc = d.resize_counter - 3
@@ -483,7 +488,7 @@ def ll_dict_resize(d):
     #
     new_item_size = new_size // 3 * 2 + 1
     d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
-    d.indexes = lltype.malloc(lltype.typeOf(d).TO.indexes.TO, new_size)
+    d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(new_size)
     d.num_items = len(old_entries)
     d.resize_counter = new_size * 2
     i = 0
@@ -499,11 +504,13 @@ ll_dict_resize.oopspec = 'dict.resize(d)'
 # ------- a port of CPython's dictobject.c's lookdict implementation -------
 PERTURB_SHIFT = 5
 
-@jit.look_inside_iff(lambda d, key, hash: jit.isvirtual(d) and jit.isconstant(key))
+_look_inside_lookup = lambda d, key, hash: jit.isvirtual(d) and jit.isconstant(key)
+
+@jit.look_inside_iff(_look_inside_lookup)
 def ll_dict_lookup(d, key, hash):
     entries = d.entries
     indexes = d.indexes
-    mask = len(entries) - 1
+    mask = len(indexes) - 1
     i = hash & mask
     # do the first try before any looping
     index = indexes[i]
@@ -572,7 +579,7 @@ def ll_dict_lookup_clean(d, hash):
     mask = len(indexes) - 1
     i = hash & mask
     perturb = r_uint(hash)
-    while i != FREE:
+    while d.indexes[i] != FREE:
         i = r_uint(i)
         i = (i << 2) + i + perturb + 1
         i = intmask(i) & mask
@@ -584,11 +591,13 @@ def ll_dict_lookup_clean(d, hash):
 #  Irregular operations.
 
 DICT_INITSIZE = 8
-DICT_ITEMS_INITSIZE = 5
+DICT_ITEMS_INITSIZE = 6
 
 @jit.unroll_safe # we always unroll the small allocation
 def ll_newdict(DICT):
     d = DICT.allocate()
+    # XXX don't use _ll_items_allocate because of jit.unroll_safe,
+    #     should be *really* jit_unroll_iff
     d.indexes = lltype.malloc(DICT.indexes.TO, DICT_INITSIZE)
     for i in range(DICT_INITSIZE):
         d.indexes[i] = FREE
@@ -605,7 +614,7 @@ def ll_newdict_size(DICT, length_estimate):
     items_size = n // 3 * 2 + 1
     d = DICT.allocate()
     d.entries = DICT.entries.TO.allocate(items_size)
-    d.indexes = lltype.malloc(DICT.indexes.TO, n)
+    d.indexes = DICT.indexes.TO.allocate(n)
     d.num_items = 0
     d.resize_counter = n * 2
     return d
@@ -617,7 +626,13 @@ def _ll_malloc_dict(DICT):
     return lltype.malloc(DICT)
 def _ll_malloc_entries(ENTRIES, n):
     return lltype.malloc(ENTRIES, n, zero=True)
-
+def _ll_malloc_items(ITEMS, n):
+    res = lltype.malloc(ITEMS, n)
+    i = 0
+    while i < n:
+        res[i] = FREE
+        i += 1
+    return res
 
 def rtype_r_dict(hop):
     r_dict = hop.r_result
@@ -739,12 +754,12 @@ def ll_copy(dict):
 ll_copy.oopspec = 'dict.copy(dict)'
 
 def ll_clear(d):
-    xxx
-    if (len(d.entries) == DICT_INITSIZE and
+    if (len(d.indexes) == DICT_INITSIZE and
         d.resize_counter == DICT_INITSIZE * 2):
         return
     old_entries = d.entries
-    d.entries = lltype.typeOf(old_entries).TO.allocate(DICT_INITSIZE)
+    d.entries = lltype.typeOf(old_entries).TO.allocate(DICT_ITEMS_INITSIZE)
+    d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(DICT_INITSIZE)
     d.num_items = 0
     d.resize_counter = DICT_INITSIZE * 2
 ll_clear.oopspec = 'dict.clear(d)'
