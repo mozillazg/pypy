@@ -249,6 +249,7 @@ W_OutputType.typedef = TypeDef(
 
 # ____________________________________________________________
 
+@unwrap_spec(w_string=W_Root)
 def StringIO(space, w_string=None):
     if space.is_none(w_string):
         return space.wrap(W_OutputType(space))
