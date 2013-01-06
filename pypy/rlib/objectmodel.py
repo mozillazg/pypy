@@ -410,6 +410,8 @@ def compute_identity_hash(x):
     lltypesystem.
     """
     assert x is not None
+    if hasattr(x, '_obj'):
+        return compute_identity_hash(x._obj) # hack hack hack
     result = object.__hash__(x)
     try:
         x.__dict__['__precomputed_identity_hash'] = result
