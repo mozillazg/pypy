@@ -25,17 +25,43 @@ def not_really_random():
 
 
 class TestRDictDirect(object):
-    def test_dict_creation(self):
+    def _get_str_dict(self):
+        # STR -> lltype.Signed
         DICT = rdict.get_ll_dict(lltype.Ptr(rstr.STR), lltype.Signed,
                                  ll_fasthash_function=rstr.LLHelpers.ll_strhash,
                                  ll_hash_function=rstr.LLHelpers.ll_strhash,
                                  ll_eq_function=rstr.LLHelpers.ll_streq)
+        return DICT
+    
+    def test_dict_creation(self):
+        DICT = self._get_str_dict()
         ll_d = rdict.ll_newdict(DICT)
         rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
         assert (len([i for i in ll_d.indexes if i == rdict.FREE]) ==
                 rdict.DICT_INITSIZE - 1)
         assert rdict.ll_dict_getitem(ll_d, llstr("abc")) == 13
 
+    def test_dict_del_lastitem(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        py.test.raises(KeyError, rdict.ll_dict_delitem, ll_d, llstr("abc"))
+        rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
+        py.test.raises(KeyError, rdict.ll_dict_delitem, ll_d, llstr("def"))
+        rdict.ll_dict_delitem(ll_d, llstr("abc"))
+        assert (len([i for i in ll_d.indexes if i == rdict.FREE]) ==
+                rdict.DICT_INITSIZE - 1)
+        assert (len([i for i in ll_d.indexes if i == rdict.DELETED]) == 1)
+        py.test.raises(KeyError, rdict.ll_dict_getitem, ll_d, llstr("abc"))
+
+    def test_dict_del_not_lastitem(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
+        rdict.ll_dict_setitem(ll_d, llstr("def"), 15)
+        rdict.ll_dict_delitem(ll_d, llstr("abc"))
+        assert (len([i for i in ll_d.indexes if i == rdict.FREE]) ==
+                rdict.DICT_INITSIZE - 2)
+        assert (len([i for i in ll_d.indexes if i == rdict.DELETED]) == 1)
 
 class BaseTestRdict(BaseRtypingTest):
 
