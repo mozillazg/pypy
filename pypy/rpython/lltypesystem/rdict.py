@@ -147,7 +147,11 @@ class DictRepr(AbstractDictRepr):
         if isinstance(self.DICT, lltype.GcForwardReference):
             DICTKEY = self.key_repr.lowleveltype
             DICTVALUE = self.value_repr.lowleveltype
-            xxx
+            get_ll_dict(DICTKEY, DICTVALUE, DICT=self.DICT,
+                 ll_fasthash_function=self.key_repr.get_ll_fasthash_function(),
+                 ll_hash_function=self.key_repr.get_ll_hash_function(),
+                 ll_eq_function=self.key_repr.get_ll_eq_function(),
+                 get_custom_eq_hash=self.custom_eq_hash)
 
     def convert_const(self, dictobj):
         from pypy.rpython.lltypesystem import llmemory
@@ -372,8 +376,9 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     i = i & MASK
     ENTRY = lltype.typeOf(d.entries).TO.OF
     index = d.indexes[i]
-    entry = d.entries[index]
     if index == FREE:
+        index = d.num_items
+        entry = d.entries[index]
         # a new entry that was never used before
         ll_assert(not valid, "valid but not everused")
         rc = d.resize_counter - 3
@@ -385,16 +390,21 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
             rc = d.resize_counter - 3
             ll_assert(rc > 0, "ll_dict_resize failed?")
         d.resize_counter = rc
-        if hasattr(ENTRY, 'f_everused'): entry.f_everused = True
+        d.indexes[i] = index
+        entry.value = value
+    elif index == DELETED:
+        index = d.num_items
+        entry = d.entries[index]        
+        d.indexes[i] = index
         entry.value = value
     else:
         # override an existing or deleted entry
+        entry = d.entries[index]
         entry.value = value
         if valid:
             return
     entry.key = key
     if hasattr(ENTRY, 'f_hash'):  entry.f_hash = hash
-    if hasattr(ENTRY, 'f_valid'): entry.f_valid = True
     d.num_items += 1
 
 def ll_dict_insertclean(d, key, value, hash):
@@ -482,15 +492,13 @@ PERTURB_SHIFT = 5
 def ll_dict_lookup(d, key, hash):
     entries = d.entries
     indexes = d.indexes
-    ENTRIES = lltype.typeOf(entries).TO
-    direct_compare = not hasattr(ENTRIES, 'no_direct_compare')
     mask = len(entries) - 1
     i = hash & mask
     # do the first try before any looping
     index = indexes[i]
     if index >= 0:
         checkingkey = entries[index].key
-        if direct_compare and checkingkey == key:
+        if checkingkey == key:
             return index   # found the entry
         if d.keyeq is not None and entries.hash(index) == hash:
             # correct hash, maybe the key is e.g. a different pointer to
@@ -526,7 +534,7 @@ def ll_dict_lookup(d, key, hash):
             return freeslot | HIGHEST_BIT
         elif index >= 0:
             checkingkey = entries[index].key
-            if direct_compare and checkingkey == key:
+            if checkingkey == key:
                 return index
             if d.keyeq is not None and entries.hash(index) == hash:
                 # correct hash, maybe the key is e.g. a different pointer to
@@ -713,8 +721,6 @@ def ll_copy(dict):
         entry = dict.entries[i]
         ENTRY = lltype.typeOf(d.entries).TO.OF
         d_entry.key = entry.key
-        if hasattr(ENTRY, 'f_valid'):    d_entry.f_valid    = entry.f_valid
-        if hasattr(ENTRY, 'f_everused'): d_entry.f_everused = entry.f_everused
         d_entry.value = entry.value
         if hasattr(ENTRY, 'f_hash'):     d_entry.f_hash     = entry.f_hash
         i += 1

@@ -32,6 +32,10 @@ class TestRDictDirect(object):
                                  ll_eq_function=rstr.LLHelpers.ll_streq)
         ll_d = rdict.ll_newdict(DICT)
         rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
+        assert (len([i for i in ll_d.indexes if i == rdict.FREE]) ==
+                rdict.DICT_INITSIZE - 1)
+        assert rdict.ll_dict_getitem(ll_d, llstr("abc")) == 13
+
 
 class BaseTestRdict(BaseRtypingTest):
 
@@ -969,7 +973,7 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
             return 3
 
         def func(i):
-            d = r_dict(eq, rhash, force_non_null=True)
+            d = r_dict(eq, rhash)
             if not i:
                 d[None] = i
             else:
