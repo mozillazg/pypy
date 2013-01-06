@@ -1,9 +1,9 @@
 from pypy.tool.pairtype import pairtype
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.rdict import (AbstractDictRepr, AbstractDictIteratorRepr,
-     rtype_newdict)
+                                rtype_newdict)
 from pypy.rpython.lltypesystem import lltype
-from pypy.rlib import objectmodel, jit
+from pypy.rlib import objectmodel, jit, rgc
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import r_uint, intmask, LONG_BIT
 from pypy.rpython import rmodel
@@ -13,18 +13,17 @@ from pypy.rpython.error import TyperError
 HIGHEST_BIT = intmask(1 << (LONG_BIT - 1))
 MASK = intmask(HIGHEST_BIT - 1)
 
+FREE = -2
+DELETED = -1
+
 # ____________________________________________________________
 #
 #  generic implementation of RPython dictionary, with parametric DICTKEY and
 #  DICTVALUE types.
 #
-#  XXX for immutable dicts, the array should be inlined and
-#      resize_counter and everused are not needed.
 #
 #    struct dictentry {
 #        DICTKEY key;
-#        bool f_valid;      # (optional) the entry is filled
-#        bool f_everused;   # (optional) the entry is or has ever been filled
 #        DICTVALUE value;
 #        int f_hash;        # (optional) key hash, if hard to recompute
 #    }
@@ -32,6 +31,7 @@ MASK = intmask(HIGHEST_BIT - 1)
 #    struct dicttable {
 #        int num_items;
 #        int resize_counter;
+#        int *indexes; # note that this can be different int
 #        Array *entries;
 #        (Function DICTKEY, DICTKEY -> bool) *fnkeyeq;
 #        (Function DICTKEY -> int) *fnkeyhash;
@@ -39,14 +39,87 @@ MASK = intmask(HIGHEST_BIT - 1)
 #
 #
 
+def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
+                ll_fasthash_function=None, ll_hash_function=None,
+                ll_eq_function=None):
+    # get the actual DICT type. if DICT is None, it's created, otherwise
+    # forward reference is becoming DICT
+    if DICT is None:
+        DICT = lltype.GcForwardReference()
+    # compute the shape of the DICTENTRY structure
+    entryfields = []
+    entrymeths = {
+        'allocate': lltype.typeMethod(_ll_malloc_entries),
+        'must_clear_key':   (isinstance(DICTKEY, lltype.Ptr)
+                             and DICTKEY._needsgc()),
+        'must_clear_value': (isinstance(DICTVALUE, lltype.Ptr)
+                             and DICTVALUE._needsgc()),
+        }
+
+    # * the key
+    entryfields.append(("key", DICTKEY))
+
+    # * the value
+    entryfields.append(("value", DICTVALUE))
+
+    # * the hash, if needed
+    if get_custom_eq_hash is not None:
+        fasthashfn = None
+    else:
+        fasthashfn = ll_fasthash_function
+    if fasthashfn is None:
+        entryfields.append(("f_hash", lltype.Signed))
+        entrymeths['hash'] = ll_hash_from_cache
+    else:
+        entrymeths['hash'] = ll_hash_recomputed
+        entrymeths['fasthashfn'] = fasthashfn
+
+    # Build the lltype data structures
+    DICTENTRY = lltype.Struct("dictentry", *entryfields)
+    DICTENTRYARRAY = lltype.GcArray(DICTENTRY,
+                                    adtmeths=entrymeths)
+    fields = [("num_items", lltype.Signed),
+              ("resize_counter", lltype.Signed),
+              ("entries", lltype.Ptr(DICTENTRYARRAY)),
+              ("indexes", lltype.Ptr(lltype.GcArray(lltype.Signed)))]
+    if get_custom_eq_hash is not None:
+        r_rdict_eqfn, r_rdict_hashfn = get_custom_eq_hash()
+        fields.extend([ ("fnkeyeq", r_rdict_eqfn.lowleveltype),
+                        ("fnkeyhash", r_rdict_hashfn.lowleveltype) ])
+        adtmeths = {
+            'keyhash':        ll_keyhash_custom,
+            'keyeq':          ll_keyeq_custom,
+            'r_rdict_eqfn':   r_rdict_eqfn,
+            'r_rdict_hashfn': r_rdict_hashfn,
+            'paranoia':       True,
+            }
+    else:
+        # figure out which functions must be used to hash and compare
+        ll_keyhash = ll_hash_function
+        ll_keyeq = ll_eq_function  # can be None
+        ll_keyhash = lltype.staticAdtMethod(ll_keyhash)
+        if ll_keyeq is not None:
+            ll_keyeq = lltype.staticAdtMethod(ll_keyeq)
+        adtmeths = {
+            'keyhash':  ll_keyhash,
+            'keyeq':    ll_keyeq,
+            'paranoia': False,
+            }
+    adtmeths['KEY']   = DICTKEY
+    adtmeths['VALUE'] = DICTVALUE
+    adtmeths['allocate'] = lltype.typeMethod(_ll_malloc_dict)
+    DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
+                                *fields))
+    return DICT
+
 class DictRepr(AbstractDictRepr):
 
     def __init__(self, rtyper, key_repr, value_repr, dictkey, dictvalue,
-                 custom_eq_hash=None, force_non_null=False):
+                 custom_eq_hash=None):
         self.rtyper = rtyper
         self.DICT = lltype.GcForwardReference()
         self.lowleveltype = lltype.Ptr(self.DICT)
-        self.custom_eq_hash = custom_eq_hash is not None
+        self.custom_eq_hash = custom_eq_hash
         if not isinstance(key_repr, rmodel.Repr):  # not computed yet, done by setup()
             assert callable(key_repr)
             self._key_repr_computer = key_repr
@@ -60,8 +133,6 @@ class DictRepr(AbstractDictRepr):
         self.dictkey = dictkey
         self.dictvalue = dictvalue
         self.dict_cache = {}
-        self._custom_eq_hash_repr = custom_eq_hash
-        self.force_non_null = force_non_null
         # setup() needs to be called to finish this initialization
 
     def _externalvsinternal(self, rtyper, item_repr):
@@ -74,138 +145,9 @@ class DictRepr(AbstractDictRepr):
         if 'value_repr' not in self.__dict__:
             self.external_value_repr, self.value_repr = self.pickrepr(self._value_repr_computer())
         if isinstance(self.DICT, lltype.GcForwardReference):
-            self.DICTKEY = self.key_repr.lowleveltype
-            self.DICTVALUE = self.value_repr.lowleveltype
-
-            # compute the shape of the DICTENTRY structure
-            entryfields = []
-            entrymeths = {
-                'allocate': lltype.typeMethod(_ll_malloc_entries),
-                'delete': _ll_free_entries,
-                'must_clear_key':   (isinstance(self.DICTKEY, lltype.Ptr)
-                                     and self.DICTKEY._needsgc()),
-                'must_clear_value': (isinstance(self.DICTVALUE, lltype.Ptr)
-                                     and self.DICTVALUE._needsgc()),
-                }
-
-            # * the key
-            entryfields.append(("key", self.DICTKEY))
-
-            # * if NULL is not a valid ll value for the key or the value
-            #   field of the entry, it can be used as a marker for
-            #   never-used entries.  Otherwise, we need an explicit flag.
-            s_key   = self.dictkey.s_value
-            s_value = self.dictvalue.s_value
-            nullkeymarker = not self.key_repr.can_ll_be_null(s_key)
-            nullvaluemarker = not self.value_repr.can_ll_be_null(s_value)
-            if self.force_non_null:
-                if not nullkeymarker:
-                    rmodel.warning("%s can be null, but forcing non-null in dict key" % s_key)
-                    nullkeymarker = True
-                if not nullvaluemarker:
-                    rmodel.warning("%s can be null, but forcing non-null in dict value" % s_value)
-                    nullvaluemarker = True
-            dummykeyobj = self.key_repr.get_ll_dummyval_obj(self.rtyper,
-                                                            s_key)
-            dummyvalueobj = self.value_repr.get_ll_dummyval_obj(self.rtyper,
-                                                                s_value)
-
-            # * the state of the entry - trying to encode it as dummy objects
-            if nullkeymarker and dummykeyobj:
-                # all the state can be encoded in the key
-                entrymeths['everused'] = ll_everused_from_key
-                entrymeths['dummy_obj'] = dummykeyobj
-                entrymeths['valid'] = ll_valid_from_key
-                entrymeths['mark_deleted'] = ll_mark_deleted_in_key
-                # the key is overwritten by 'dummy' when the entry is deleted
-                entrymeths['must_clear_key'] = False
-
-            elif nullvaluemarker and dummyvalueobj:
-                # all the state can be encoded in the value
-                entrymeths['everused'] = ll_everused_from_value
-                entrymeths['dummy_obj'] = dummyvalueobj
-                entrymeths['valid'] = ll_valid_from_value
-                entrymeths['mark_deleted'] = ll_mark_deleted_in_value
-                # value is overwritten by 'dummy' when entry is deleted
-                entrymeths['must_clear_value'] = False
-
-            else:
-                # we need a flag to know if the entry was ever used
-                # (we cannot use a NULL as a marker for this, because
-                # the key and value will be reset to NULL to clear their
-                # reference)
-                entryfields.append(("f_everused", lltype.Bool))
-                entrymeths['everused'] = ll_everused_from_flag
-
-                # can we still rely on a dummy obj to mark deleted entries?
-                if dummykeyobj:
-                    entrymeths['dummy_obj'] = dummykeyobj
-                    entrymeths['valid'] = ll_valid_from_key
-                    entrymeths['mark_deleted'] = ll_mark_deleted_in_key
-                    # key is overwritten by 'dummy' when entry is deleted
-                    entrymeths['must_clear_key'] = False
-                elif dummyvalueobj:
-                    entrymeths['dummy_obj'] = dummyvalueobj
-                    entrymeths['valid'] = ll_valid_from_value
-                    entrymeths['mark_deleted'] = ll_mark_deleted_in_value
-                    # value is overwritten by 'dummy' when entry is deleted
-                    entrymeths['must_clear_value'] = False
-                else:
-                    entryfields.append(("f_valid", lltype.Bool))
-                    entrymeths['valid'] = ll_valid_from_flag
-                    entrymeths['mark_deleted'] = ll_mark_deleted_in_flag
-
-            # * the value
-            entryfields.append(("value", self.DICTVALUE))
-
-            # * the hash, if needed
-            if self.custom_eq_hash:
-                fasthashfn = None
-            else:
-                fasthashfn = self.key_repr.get_ll_fasthash_function()
-            if fasthashfn is None:
-                entryfields.append(("f_hash", lltype.Signed))
-                entrymeths['hash'] = ll_hash_from_cache
-            else:
-                entrymeths['hash'] = ll_hash_recomputed
-                entrymeths['fasthashfn'] = fasthashfn
-
-            # Build the lltype data structures
-            self.DICTENTRY = lltype.Struct("dictentry", *entryfields)
-            self.DICTENTRYARRAY = lltype.GcArray(self.DICTENTRY,
-                                                 adtmeths=entrymeths)
-            fields =          [ ("num_items", lltype.Signed),
-                                ("resize_counter", lltype.Signed),
-                                ("entries", lltype.Ptr(self.DICTENTRYARRAY)) ]
-            if self.custom_eq_hash:
-                self.r_rdict_eqfn, self.r_rdict_hashfn = self._custom_eq_hash_repr()
-                fields.extend([ ("fnkeyeq", self.r_rdict_eqfn.lowleveltype),
-                                ("fnkeyhash", self.r_rdict_hashfn.lowleveltype) ])
-                adtmeths = {
-                    'keyhash':        ll_keyhash_custom,
-                    'keyeq':          ll_keyeq_custom,
-                    'r_rdict_eqfn':   self.r_rdict_eqfn,
-                    'r_rdict_hashfn': self.r_rdict_hashfn,
-                    'paranoia':       True,
-                    }
-            else:
-                # figure out which functions must be used to hash and compare
-                ll_keyhash = self.key_repr.get_ll_hash_function()
-                ll_keyeq = self.key_repr.get_ll_eq_function()  # can be None
-                ll_keyhash = lltype.staticAdtMethod(ll_keyhash)
-                if ll_keyeq is not None:
-                    ll_keyeq = lltype.staticAdtMethod(ll_keyeq)
-                adtmeths = {
-                    'keyhash':  ll_keyhash,
-                    'keyeq':    ll_keyeq,
-                    'paranoia': False,
-                    }
-            adtmeths['KEY']   = self.DICTKEY
-            adtmeths['VALUE'] = self.DICTVALUE
-            adtmeths['allocate'] = lltype.typeMethod(_ll_malloc_dict)
-            self.DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
-                                             *fields))
-
+            DICTKEY = self.key_repr.lowleveltype
+            DICTVALUE = self.value_repr.lowleveltype
+            xxx
 
     def convert_const(self, dictobj):
         from pypy.rpython.lltypesystem import llmemory
@@ -385,41 +327,6 @@ class __extend__(pairtype(DictRepr, DictRepr)):
 #  be direct_call'ed from rtyped flow graphs, which means that they will
 #  get flowed and annotated, mostly with SomePtr.
 
-def ll_everused_from_flag(entries, i):
-    return entries[i].f_everused
-
-def ll_everused_from_key(entries, i):
-    return bool(entries[i].key)
-
-def ll_everused_from_value(entries, i):
-    return bool(entries[i].value)
-
-def ll_valid_from_flag(entries, i):
-    return entries[i].f_valid
-
-def ll_mark_deleted_in_flag(entries, i):
-    entries[i].f_valid = False
-
-def ll_valid_from_key(entries, i):
-    ENTRIES = lltype.typeOf(entries).TO
-    dummy = ENTRIES.dummy_obj.ll_dummy_value
-    return entries.everused(i) and entries[i].key != dummy
-
-def ll_mark_deleted_in_key(entries, i):
-    ENTRIES = lltype.typeOf(entries).TO
-    dummy = ENTRIES.dummy_obj.ll_dummy_value
-    entries[i].key = dummy
-
-def ll_valid_from_value(entries, i):
-    ENTRIES = lltype.typeOf(entries).TO
-    dummy = ENTRIES.dummy_obj.ll_dummy_value
-    return entries.everused(i) and entries[i].value != dummy
-
-def ll_mark_deleted_in_value(entries, i):
-    ENTRIES = lltype.typeOf(entries).TO
-    dummy = ENTRIES.dummy_obj.ll_dummy_value
-    entries[i].value = dummy
-
 def ll_hash_from_cache(entries, i):
     return entries[i].f_hash
 
@@ -464,15 +371,17 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     valid = (i & HIGHEST_BIT) == 0
     i = i & MASK
     ENTRY = lltype.typeOf(d.entries).TO.OF
-    entry = d.entries[i]
-    if not d.entries.everused(i):
+    index = d.indexes[i]
+    entry = d.entries[index]
+    if index == FREE:
         # a new entry that was never used before
         ll_assert(not valid, "valid but not everused")
         rc = d.resize_counter - 3
         if rc <= 0:       # if needed, resize the dict -- before the insertion
             ll_dict_resize(d)
-            i = ll_dict_lookup_clean(d, hash)  # then redo the lookup for 'key'
-            entry = d.entries[i]
+            index = ll_dict_lookup_clean(d, hash)
+            # then redo the lookup for 'key'
+            entry = d.entries[index]
             rc = d.resize_counter - 3
             ll_assert(rc > 0, "ll_dict_resize failed?")
         d.resize_counter = rc
@@ -496,12 +405,11 @@ def ll_dict_insertclean(d, key, value, hash):
     # to user code.  ll_dict_insertclean() doesn't resize the dict, either.
     i = ll_dict_lookup_clean(d, hash)
     ENTRY = lltype.typeOf(d.entries).TO.OF
-    entry = d.entries[i]
+    index = d.indexes[i]
+    entry = d.entries[index]
     entry.value = value
     entry.key = key
     if hasattr(ENTRY, 'f_hash'):     entry.f_hash = hash
-    if hasattr(ENTRY, 'f_valid'):    entry.f_valid = True
-    if hasattr(ENTRY, 'f_everused'): entry.f_everused = True
     d.num_items += 1
     d.resize_counter -= 3
 
@@ -513,6 +421,7 @@ def ll_dict_delitem(d, key):
 
 @jit.look_inside_iff(lambda d, i: jit.isvirtual(d) and jit.isconstant(i))
 def _ll_dict_del(d, i):
+    XXX
     d.entries.mark_deleted(i)
     d.num_items -= 1
     # clear the key and the value if they are GC pointers
@@ -539,7 +448,8 @@ def _ll_dict_del(d, i):
 
 def ll_dict_resize(d):
     old_entries = d.entries
-    old_size = len(old_entries)
+    old_indexes = d.indexes
+    old_size = len(old_indexes)
     # make a 'new_size' estimate and shrink it if there are many
     # deleted entry markers.  See CPython for why it is a good idea to
     # quadruple the dictionary size as long as it's not too big.
@@ -550,17 +460,19 @@ def ll_dict_resize(d):
     while new_size <= new_estimate:
         new_size *= 2
     #
-    d.entries = lltype.typeOf(old_entries).TO.allocate(new_size)
-    d.num_items = 0
+    new_item_size = new_size // 3 * 2 + 1
+    d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
+    d.indexes = lltype.malloc(lltype.typeOf(d).TO.indexes.TO, new_size)
+    d.num_items = len(old_entries)
     d.resize_counter = new_size * 2
     i = 0
+    indexes = d.indexes
     while i < old_size:
-        if old_entries.valid(i):
-            hash = old_entries.hash(i)
-            entry = old_entries[i]
-            ll_dict_insertclean(d, entry.key, entry.value, hash)
+        index = old_indexes[i]
+        if index >= 0:
+            indexes[ll_dict_lookup_clean(d, old_entries.hash(i))] = index
         i += 1
-    old_entries.delete()
+    rgc.ll_arraycopy(old_entries, d.entries, 0, 0, len(old_entries))
 ll_dict_resize.oopspec = 'dict.resize(d)'
 
 # ------- a port of CPython's dictobject.c's lookdict implementation -------
@@ -569,28 +481,30 @@ PERTURB_SHIFT = 5
 @jit.look_inside_iff(lambda d, key, hash: jit.isvirtual(d) and jit.isconstant(key))
 def ll_dict_lookup(d, key, hash):
     entries = d.entries
+    indexes = d.indexes
     ENTRIES = lltype.typeOf(entries).TO
     direct_compare = not hasattr(ENTRIES, 'no_direct_compare')
     mask = len(entries) - 1
     i = hash & mask
     # do the first try before any looping
-    if entries.valid(i):
-        checkingkey = entries[i].key
+    index = indexes[i]
+    if index >= 0:
+        checkingkey = entries[index].key
         if direct_compare and checkingkey == key:
-            return i   # found the entry
-        if d.keyeq is not None and entries.hash(i) == hash:
+            return index   # found the entry
+        if d.keyeq is not None and entries.hash(index) == hash:
             # correct hash, maybe the key is e.g. a different pointer to
             # an equal object
             found = d.keyeq(checkingkey, key)
             if d.paranoia:
                 if (entries != d.entries or
-                    not entries.valid(i) or entries[i].key != checkingkey):
+                    not indexes[i] >= 0 or entries[index].key != checkingkey):
                     # the compare did major nasty stuff to the dict: start over
                     return ll_dict_lookup(d, key, hash)
             if found:
-                return i   # found the entry
+                return index   # found the entry
         freeslot = -1
-    elif entries.everused(i):
+    elif index == DELETED:
         freeslot = i
     else:
         return i | HIGHEST_BIT # pristine entry -- lookup failed
@@ -603,28 +517,30 @@ def ll_dict_lookup(d, key, hash):
         i = r_uint(i)
         i = (i << 2) + i + perturb + 1
         i = intmask(i) & mask
+        index = indexes[i]
         # keep 'i' as a signed number here, to consistently pass signed
         # arguments to the small helper methods.
-        if not entries.everused(i):
+        if index == FREE:
             if freeslot == -1:
                 freeslot = i
             return freeslot | HIGHEST_BIT
-        elif entries.valid(i):
-            checkingkey = entries[i].key
+        elif index >= 0:
+            checkingkey = entries[index].key
             if direct_compare and checkingkey == key:
-                return i
-            if d.keyeq is not None and entries.hash(i) == hash:
+                return index
+            if d.keyeq is not None and entries.hash(index) == hash:
                 # correct hash, maybe the key is e.g. a different pointer to
                 # an equal object
                 found = d.keyeq(checkingkey, key)
                 if d.paranoia:
                     if (entries != d.entries or
-                        not entries.valid(i) or entries[i].key != checkingkey):
+                        not indexes[i] >= 0 or
+                        entries[index].key != checkingkey):
                         # the compare did major nasty stuff to the dict:
                         # start over
                         return ll_dict_lookup(d, key, hash)
                 if found:
-                    return i   # found the entry
+                    return index   # found the entry
         elif freeslot == -1:
             freeslot = i
         perturb >>= PERTURB_SHIFT
@@ -633,11 +549,11 @@ def ll_dict_lookup_clean(d, hash):
     # a simplified version of ll_dict_lookup() which assumes that the
     # key is new, and the dictionary doesn't contain deleted entries.
     # It only finds the next free slot for the given hash.
-    entries = d.entries
-    mask = len(entries) - 1
+    indexes = d.indexes
+    mask = len(indexes) - 1
     i = hash & mask
     perturb = r_uint(hash)
-    while entries.everused(i):
+    while i != FREE:
         i = r_uint(i)
         i = (i << 2) + i + perturb + 1
         i = intmask(i) & mask
@@ -649,10 +565,15 @@ def ll_dict_lookup_clean(d, hash):
 #  Irregular operations.
 
 DICT_INITSIZE = 8
+DICT_ITEMS_INITSIZE = 5
 
+@jit.unroll_safe # we always unroll the small allocation
 def ll_newdict(DICT):
     d = DICT.allocate()
-    d.entries = DICT.entries.TO.allocate(DICT_INITSIZE)
+    d.indexes = lltype.malloc(DICT.indexes.TO, DICT_INITSIZE)
+    for i in range(DICT_INITSIZE):
+        d.indexes[i] = FREE
+    d.entries = DICT.entries.TO.allocate(DICT_ITEMS_INITSIZE)    
     d.num_items = 0
     d.resize_counter = DICT_INITSIZE * 2
     return d
@@ -662,8 +583,10 @@ def ll_newdict_size(DICT, length_estimate):
     n = DICT_INITSIZE
     while n < length_estimate:
         n *= 2
+    items_size = n // 3 * 2 + 1
     d = DICT.allocate()
-    d.entries = DICT.entries.TO.allocate(n)
+    d.entries = DICT.entries.TO.allocate(items_size)
+    d.indexes = lltype.malloc(DICT.indexes.TO, n)
     d.num_items = 0
     d.resize_counter = n * 2
     return d
@@ -675,19 +598,14 @@ def _ll_malloc_dict(DICT):
     return lltype.malloc(DICT)
 def _ll_malloc_entries(ENTRIES, n):
     return lltype.malloc(ENTRIES, n, zero=True)
-def _ll_free_entries(entries):
-    pass
 
 
-def rtype_r_dict(hop, i_force_non_null=None):
+def rtype_r_dict(hop):
     r_dict = hop.r_result
     if not r_dict.custom_eq_hash:
         raise TyperError("r_dict() call does not return an r_dict instance")
     v_eqfn = hop.inputarg(r_dict.r_rdict_eqfn, arg=0)
     v_hashfn = hop.inputarg(r_dict.r_rdict_hashfn, arg=1)
-    if i_force_non_null is not None:
-        assert i_force_non_null == 2
-        hop.inputarg(lltype.Void, arg=2)
     cDICT = hop.inputconst(lltype.Void, r_dict.DICT)
     hop.exception_cannot_occur()
     v_result = hop.gendirectcall(ll_newdict, cDICT)
@@ -780,6 +698,7 @@ def ll_setdefault(dict, key, default):
         return default
 
 def ll_copy(dict):
+    xxx
     DICT = lltype.typeOf(dict).TO
     dictsize = len(dict.entries)
     d = DICT.allocate()
@@ -803,6 +722,7 @@ def ll_copy(dict):
 ll_copy.oopspec = 'dict.copy(dict)'
 
 def ll_clear(d):
+    xxx
     if (len(d.entries) == DICT_INITSIZE and
         d.resize_counter == DICT_INITSIZE * 2):
         return
@@ -810,10 +730,10 @@ def ll_clear(d):
     d.entries = lltype.typeOf(old_entries).TO.allocate(DICT_INITSIZE)
     d.num_items = 0
     d.resize_counter = DICT_INITSIZE * 2
-    old_entries.delete()
 ll_clear.oopspec = 'dict.clear(d)'
 
 def ll_update(dic1, dic2):
+    xxx
     entries = dic2.entries
     d2len = len(entries)
     i = 0
