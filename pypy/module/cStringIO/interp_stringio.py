@@ -1,5 +1,5 @@
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.baseobjspace import Wrappable
+from pypy.interpreter.baseobjspace import Wrappable, W_Root
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.rlib.rStringIO import RStringIO
@@ -165,6 +165,7 @@ class W_OutputType(RStringIO, W_InputOutputType):
         self.seek(i)
         return ''.join(bigbuffer[p:i])
 
+    @unwrap_spec(w_size=W_Root)
     def descr_truncate(self, w_size=None):
         self.check_closed()
         space = self.space
