@@ -77,6 +77,20 @@ class TestRDictDirect(object):
         for item in ['a', 'b', 'c', 'd', 'e', 'f']:
             assert rdict.ll_dict_getitem(ll_d, llstr(item)) == ord(item) - ord('a') + 1
 
+    def test_dict_iteration(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT) 
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 1)        
+        rdict.ll_dict_setitem(ll_d, llstr("j"), 2)        
+        ITER = rdict.get_ll_dictiter(lltype.Ptr(DICT))
+        ll_iter = rdict.ll_dictiter(ITER, ll_d)
+        ll_iterkeys = rdict.ll_dictnext_group['keys']
+        next = ll_iterkeys(lltype.Signed, ll_iter)
+        assert hlstr(next) == "k"
+        next = ll_iterkeys(lltype.Signed, ll_iter)
+        assert hlstr(next) == "j"
+        py.test.raises(StopIteration, ll_iterkeys, lltype.Signed, ll_iter)
+
 class BaseTestRdict(BaseRtypingTest):
 
     def test_dict_creation(self):
