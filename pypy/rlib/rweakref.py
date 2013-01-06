@@ -68,7 +68,6 @@ class RWeakKeyDictionary(object):
 
 from pypy.rpython import extregistry
 from pypy.annotation import model as annmodel
-from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.tool.pairtype import pairtype
 
 class Entry(extregistry.ExtRegistryEntry):
@@ -175,9 +174,9 @@ class SomeWeakKeyDict(annmodel.SomeObject):
 class __extend__(pairtype(SomeWeakKeyDict, SomeWeakKeyDict)):
     def union((s_wkd1, s_wkd2)):
         if s_wkd1.keyclassdef is not s_wkd2.keyclassdef:
-            return SomeObject() # not the same key class! complain...
+            return annmodel.SomeObject() # not the same key class! complain...
         if s_wkd1.valueclassdef is not s_wkd2.valueclassdef:
-            return SomeObject() # not the same value class! complain...
+            return annmodel.SomeObject() # not the same value class! complain...
         return SomeWeakKeyDict(s_wkd1.keyclassdef, s_wkd1.valueclassdef)
 
 class Entry(extregistry.ExtRegistryEntry):

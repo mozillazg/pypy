@@ -42,20 +42,19 @@ DELETED = -1
 
 def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                 ll_fasthash_function=None, ll_hash_function=None,
-                ll_eq_function=None):
+                ll_eq_function=None, method_cache={}):
     # get the actual DICT type. if DICT is None, it's created, otherwise
     # forward reference is becoming DICT
     if DICT is None:
         DICT = lltype.GcForwardReference()
     # compute the shape of the DICTENTRY structure
     entryfields = []
-    entrymeths = {
-        'allocate': lltype.typeMethod(_ll_malloc_entries),
-        'must_clear_key':   (isinstance(DICTKEY, lltype.Ptr)
-                             and DICTKEY._needsgc()),
-        'must_clear_value': (isinstance(DICTVALUE, lltype.Ptr)
-                             and DICTVALUE._needsgc()),
-        }
+    entrymeths = {'allocate': lltype.typeMethod(_ll_malloc_entries),
+                  'valid': ll_valid_entry,
+                  'clear_key': (isinstance(DICTKEY, lltype.Ptr) and
+                                DICTKEY._needsgc()),
+                  'clear_value': (isinstance(DICTVALUE, lltype.Ptr) and
+                                  DICTVALUE._needsgc())}
 
     # * the key
     entryfields.append(("key", DICTKEY))
@@ -79,7 +78,7 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     DICTENTRY = lltype.Struct("dictentry", *entryfields)
     DICTENTRYARRAY = lltype.GcArray(DICTENTRY,
                                     adtmeths=entrymeths)
-    array_adtmeths = {'allocate': lltype.typeMethod(_ll_malloc_items)}
+    array_adtmeths = {'allocate': lltype.typeMethod(_ll_malloc_indexes)}
     fields = [("num_items", lltype.Signed),
               ("resize_counter", lltype.Signed),
               ("entries", lltype.Ptr(DICTENTRYARRAY)),
@@ -111,6 +110,7 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     adtmeths['KEY']   = DICTKEY
     adtmeths['VALUE'] = DICTVALUE
     adtmeths['allocate'] = lltype.typeMethod(_ll_malloc_dict)
+    adtmeths['resize'] = ll_dict_resize
     DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
                                 *fields))
     return DICT
@@ -337,6 +337,9 @@ class __extend__(pairtype(DictRepr, DictRepr)):
 def ll_hash_from_cache(entries, i):
     return entries[i].f_hash
 
+def ll_valid_entry(entires, index):
+    return index >= 0
+
 def ll_hash_recomputed(entries, i):
     ENTRIES = lltype.typeOf(entries).TO
     return ENTRIES.fasthashfn(entries[i].key)
@@ -390,7 +393,7 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
         ll_assert(not valid, "valid but not everused")
         rc = d.resize_counter - 1
         if rc <= 0:       # if needed, resize the dict -- before the insertion
-            ll_dict_resize(d)
+            d.resize()
             i = ll_dict_lookup_clean(d, hash)
             # then redo the lookup for 'key'
             entry = d.entries[index]
@@ -442,9 +445,9 @@ def _ll_dict_del(d, i):
     d.indexes[i] = DELETED
     d.num_items -= 1
     entry = d.entries[d.num_items]
-    if ENTRIES.must_clear_key:
+    if ENTRIES.clear_key:
         entry.key = lltype.nullptr(ENTRY.key.TO)
-    if ENTRIES.must_clear_value:
+    if ENTRIES.clear_value:
         entry.value = lltype.nullptr(ENTRY.value.TO)
     #
     # The rest is commented out: like CPython we no longer shrink the
@@ -482,7 +485,7 @@ def ll_dict_resize(d):
     indexes = d.indexes
     while i < old_size:
         index = old_indexes[i]
-        if index >= 0:
+        if old_entries.valid(index):
             indexes[ll_dict_lookup_clean(d, old_entries.hash(index))] = index
         i += 1
     rgc.ll_arraycopy(old_entries, d.entries, 0, 0, min(len(old_entries),
@@ -493,6 +496,14 @@ ll_dict_resize.oopspec = 'dict.resize(d)'
 PERTURB_SHIFT = 5
 
 _look_inside_lookup = lambda d, key, hash: jit.isvirtual(d) and jit.isconstant(key)
+from pypy.rlib.objectmodel import compute_identity_hash
+
+def ll_debugrepr(x):
+    if x:
+        h = compute_identity_hash(x)
+    else:
+        h = 0
+    return '<%x>' % (h,)
 
 @jit.look_inside_iff(_look_inside_lookup)
 def ll_dict_lookup(d, key, hash):
@@ -501,18 +512,21 @@ def ll_dict_lookup(d, key, hash):
     mask = len(indexes) - 1
     i = hash & mask
     # do the first try before any looping
+    ENTRIES = lltype.typeOf(entries).TO
+    direct_compare = not hasattr(ENTRIES, 'no_direct_compare')
     index = indexes[i]
-    if index >= 0:
+    if entries.valid(index):
         checkingkey = entries[index].key
-        if checkingkey == key:
+        if direct_compare and checkingkey == key:
             return i   # found the entry
         if d.keyeq is not None and entries.hash(index) == hash:
             # correct hash, maybe the key is e.g. a different pointer to
             # an equal object
             found = d.keyeq(checkingkey, key)
+            llop.debug_print(lltype.Void, "comparing keys", ll_debugrepr(checkingkey), ll_debugrepr(key), found)
             if d.paranoia:
                 if (entries != d.entries or
-                    not indexes[i] >= 0 or entries[index].key != checkingkey):
+                    not entries.valid(indexes[i]) or entries[index].key != checkingkey):
                     # the compare did major nasty stuff to the dict: start over
                     return ll_dict_lookup(d, key, hash)
             if found:
@@ -538,9 +552,9 @@ def ll_dict_lookup(d, key, hash):
             if freeslot == -1:
                 freeslot = i
             return freeslot | HIGHEST_BIT
-        elif index >= 0:
+        elif entries.valid(index):
             checkingkey = entries[index].key
-            if checkingkey == key:
+            if direct_compare and checkingkey == key:
                 return i
             if d.keyeq is not None and entries.hash(index) == hash:
                 # correct hash, maybe the key is e.g. a different pointer to
@@ -548,7 +562,7 @@ def ll_dict_lookup(d, key, hash):
                 found = d.keyeq(checkingkey, key)
                 if d.paranoia:
                     if (entries != d.entries or
-                        not indexes[i] >= 0 or
+                        not entries.valid(indexes[i]) or
                         entries[index].key != checkingkey):
                         # the compare did major nasty stuff to the dict:
                         # start over
@@ -614,7 +628,7 @@ def _ll_malloc_dict(DICT):
     return lltype.malloc(DICT)
 def _ll_malloc_entries(ENTRIES, n):
     return lltype.malloc(ENTRIES, n, zero=True)
-def _ll_malloc_items(ITEMS, n):
+def _ll_malloc_indexes(ITEMS, n):
     res = lltype.malloc(ITEMS, n)
     i = 0
     while i < n:
