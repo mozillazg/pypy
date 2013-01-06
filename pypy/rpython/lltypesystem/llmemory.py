@@ -90,6 +90,7 @@ class ItemOffset(AddressOffset):
                 try:
                     endmarker = _end_markers[parent]
                 except KeyError:
+                    xxx
                     endmarker = _endmarker_struct(A, parent=parent,
                                                   parentindex=index)
                     _end_markers[parent] = endmarker

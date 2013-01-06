@@ -3,6 +3,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.rpython.rdict import (AbstractDictRepr, AbstractDictIteratorRepr,
                                 rtype_newdict)
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib import objectmodel, jit, rgc
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import r_uint, intmask, LONG_BIT
@@ -154,6 +155,8 @@ class DictRepr(AbstractDictRepr):
                  ll_hash_function=self.key_repr.get_ll_hash_function(),
                  ll_eq_function=self.key_repr.get_ll_eq_function(),
                  get_custom_eq_hash=self.custom_eq_hash)
+            if self.custom_eq_hash is not None:
+                self.r_rdict_eqfn, self.r_rdict_hashfn = self.custom_eq_hash()
 
     def convert_const(self, dictobj):
         from pypy.rpython.lltypesystem import llmemory
@@ -366,7 +369,8 @@ def ll_dict_getitem(d, key):
 def ll_dict_setitem(d, key, value):
     hash = d.keyhash(key)
     i = ll_dict_lookup(d, key, hash)
-    return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
+    res = _ll_dict_setitem_lookup_done(d, key, value, hash, i)
+    return res
 
 def _look_inside_setitem(d, key, value, hash, i):
     return jit.isvirtual(d) and jit.isconstant(key)
@@ -392,6 +396,7 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
             entry = d.entries[index]
             rc = d.resize_counter - 1
             ll_assert(rc > 0, "ll_dict_resize failed?")
+        ll_assert(index < len(d.entries), "invalid insert")
         d.resize_counter = rc
         d.indexes[i] = index
         entry.value = value
@@ -419,14 +424,13 @@ def ll_dict_delitem(d, key):
 @jit.look_inside_iff(lambda d, i: jit.isvirtual(d) and jit.isconstant(i))
 def _ll_dict_del(d, i):
     index = d.indexes[i]
-    d.indexes[i] = DELETED
-    d.num_items -= 1
     ENTRIES = lltype.typeOf(d.entries).TO
     ENTRY = ENTRIES.OF
-    if index != d.num_items:
-        old_entry = d.entries[d.num_items]
+    if index != d.num_items - 1:
+        old_entry = d.entries[d.num_items - 1]
         key = old_entry.key
         to_insert_i = ll_dict_lookup(d, key, d.keyhash(key))
+        ll_assert(not to_insert_i & HIGHEST_BIT, "invalid entry")
         d.indexes[to_insert_i] = index
         # copy the value
         new_entry = d.entries[index]
@@ -435,6 +439,8 @@ def _ll_dict_del(d, i):
         if hasattr(ENTRY, 'f_hash'):
             new_entry.f_hash = old_entry.f_hash
     # clear the key and the value if they are GC pointers
+    d.indexes[i] = DELETED
+    d.num_items -= 1
     entry = d.entries[d.num_items]
     if ENTRIES.must_clear_key:
         entry.key = lltype.nullptr(ENTRY.key.TO)
@@ -471,8 +477,7 @@ def ll_dict_resize(d):
     new_item_size = new_size // 3 * 2 + 1
     d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
     d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(new_size)
-    d.num_items = len(old_entries) - 1
-    d.resize_counter = new_item_size
+    d.resize_counter = new_item_size - d.num_items
     i = 0
     indexes = d.indexes
     while i < old_size:
@@ -480,7 +485,8 @@ def ll_dict_resize(d):
         if index >= 0:
             indexes[ll_dict_lookup_clean(d, old_entries.hash(index))] = index
         i += 1
-    rgc.ll_arraycopy(old_entries, d.entries, 0, 0, len(old_entries))
+    rgc.ll_arraycopy(old_entries, d.entries, 0, 0, min(len(old_entries),
+                                                       len(d.entries)))
 ll_dict_resize.oopspec = 'dict.resize(d)'
 
 # ------- a port of CPython's dictobject.c's lookdict implementation -------
@@ -535,7 +541,7 @@ def ll_dict_lookup(d, key, hash):
         elif index >= 0:
             checkingkey = entries[index].key
             if checkingkey == key:
-                return index
+                return i
             if d.keyeq is not None and entries.hash(index) == hash:
                 # correct hash, maybe the key is e.g. a different pointer to
                 # an equal object
@@ -710,24 +716,17 @@ def ll_setdefault(dict, key, default):
         return default
 
 def ll_copy(dict):
-    xxx
     DICT = lltype.typeOf(dict).TO
     dictsize = len(dict.entries)
     d = DICT.allocate()
-    d.entries = DICT.entries.TO.allocate(dictsize)
+    d.entries = lltype.malloc(DICT.entries.TO, dictsize)
+    d.indexes = DICT.indexes.TO.allocate(len(dict.indexes))
     d.num_items = dict.num_items
     d.resize_counter = dict.resize_counter
     if hasattr(DICT, 'fnkeyeq'):   d.fnkeyeq   = dict.fnkeyeq
     if hasattr(DICT, 'fnkeyhash'): d.fnkeyhash = dict.fnkeyhash
-    i = 0
-    while i < dictsize:
-        d_entry = d.entries[i]
-        entry = dict.entries[i]
-        ENTRY = lltype.typeOf(d.entries).TO.OF
-        d_entry.key = entry.key
-        d_entry.value = entry.value
-        if hasattr(ENTRY, 'f_hash'):     d_entry.f_hash     = entry.f_hash
-        i += 1
+    rgc.ll_arraycopy(dict.indexes, d.indexes, 0, 0, len(dict.indexes))
+    rgc.ll_arraycopy(dict.entries, d.entries, 0, 0, len(dict.entries))
     return d
 ll_copy.oopspec = 'dict.copy(dict)'
 
@@ -743,17 +742,15 @@ def ll_clear(d):
 ll_clear.oopspec = 'dict.clear(d)'
 
 def ll_update(dic1, dic2):
-    xxx
     entries = dic2.entries
-    d2len = len(entries)
+    d2len = dic2.num_items
     i = 0
     while i < d2len:
-        if entries.valid(i):
-            entry = entries[i]
-            hash = entries.hash(i)
-            key = entry.key
-            j = ll_dict_lookup(dic1, key, hash)
-            _ll_dict_setitem_lookup_done(dic1, key, entry.value, hash, j)
+        entry = entries[i]
+        hash = entries.hash(i)
+        key = entry.key
+        j = ll_dict_lookup(dic1, key, hash)
+        _ll_dict_setitem_lookup_done(dic1, key, entry.value, hash, j)
         i += 1
 ll_update.oopspec = 'dict.update(dic1, dic2)'
 
@@ -772,27 +769,23 @@ def _make_ll_keys_values_items(kind):
     def ll_kvi(LIST, dic):
         res = LIST.ll_newlist(dic.num_items)
         entries = dic.entries
-        dlen = len(entries)
+        dlen = dic.num_items
         items = res.ll_items()
         i = 0
-        p = 0
         while i < dlen:
-            if entries.valid(i):
-                ELEM = lltype.typeOf(items).TO.OF
-                if ELEM is not lltype.Void:
-                    entry = entries[i]
-                    if kind == 'items':
-                        r = lltype.malloc(ELEM.TO)
-                        r.item0 = recast(ELEM.TO.item0, entry.key)
-                        r.item1 = recast(ELEM.TO.item1, entry.value)
-                        items[p] = r
-                    elif kind == 'keys':
-                        items[p] = recast(ELEM, entry.key)
-                    elif kind == 'values':
-                        items[p] = recast(ELEM, entry.value)
-                p += 1
+            ELEM = lltype.typeOf(items).TO.OF
+            if ELEM is not lltype.Void:
+                entry = entries[i]
+                if kind == 'items':
+                    r = lltype.malloc(ELEM.TO)
+                    r.item0 = recast(ELEM.TO.item0, entry.key)
+                    r.item1 = recast(ELEM.TO.item1, entry.value)
+                    items[i] = r
+                elif kind == 'keys':
+                    items[i] = recast(ELEM, entry.key)
+                elif kind == 'values':
+                    items[i] = recast(ELEM, entry.value)
             i += 1
-        assert p == res.ll_length()
         return res
     ll_kvi.oopspec = 'dict.%s(dic)' % kind
     return ll_kvi
@@ -805,40 +798,14 @@ def ll_contains(d, key):
     i = ll_dict_lookup(d, key, d.keyhash(key))
     return not i & HIGHEST_BIT
 
-POPITEMINDEX = lltype.Struct('PopItemIndex', ('nextindex', lltype.Signed))
-global_popitem_index = lltype.malloc(POPITEMINDEX, zero=True, immortal=True)
-
-def _ll_getnextitem(dic):
-    entries = dic.entries
-    ENTRY = lltype.typeOf(entries).TO.OF
-    dmask = len(entries) - 1
-    if hasattr(ENTRY, 'f_hash'):
-        if entries.valid(0):
-            return 0
-        base = entries[0].f_hash
-    else:
-        base = global_popitem_index.nextindex
-    counter = 0
-    while counter <= dmask:
-        i = (base + counter) & dmask
-        counter += 1
-        if entries.valid(i):
-            break
-    else:
-        raise KeyError
-    if hasattr(ENTRY, 'f_hash'):
-        entries[0].f_hash = base + counter
-    else:
-        global_popitem_index.nextindex = base + counter
-    return i
-
 def ll_popitem(ELEM, dic):
-    i = _ll_getnextitem(dic)
-    entry = dic.entries[i]
+    if dic.num_items == 0:
+        raise KeyError
+    entry = dic.entries[dic.num_items - 1]
     r = lltype.malloc(ELEM.TO)
     r.item0 = recast(ELEM.TO.item0, entry.key)
     r.item1 = recast(ELEM.TO.item1, entry.value)
-    _ll_dict_del(dic, i)
+    ll_dict_delitem(dic, entry.key)
     return r
 
 def ll_pop(dic, key):

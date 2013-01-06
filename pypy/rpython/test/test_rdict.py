@@ -91,6 +91,33 @@ class TestRDictDirect(object):
         assert hlstr(next) == "j"
         py.test.raises(StopIteration, ll_iterkeys, lltype.Signed, ll_iter)
 
+    def test_popitem(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT) 
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 1)        
+        rdict.ll_dict_setitem(ll_d, llstr("j"), 2)
+        ll_elem = rdict.ll_popitem(lltype.Ptr(
+            lltype.GcStruct('x', ('item0', lltype.Ptr(rstr.STR)),
+                            ('item1', lltype.Signed))), ll_d)
+        assert hlstr(ll_elem.item0) == "j"
+        assert ll_elem.item1 == 2
+
+    def test_direct_enter_and_del(self):
+        def eq(a, b):
+            return a == b
+        
+        DICT = rdict.get_ll_dict(lltype.Signed, lltype.Signed,
+                                 ll_fasthash_function=intmask,
+                                 ll_hash_function=intmask,
+                                 ll_eq_function=eq)
+        ll_d = rdict.ll_newdict(DICT) 
+        numbers = [i * rdict.DICT_INITSIZE + 1 for i in range(8)]
+        for num in numbers:
+            rdict.ll_dict_setitem(ll_d, num, 1)
+            rdict.ll_dict_delitem(ll_d, num)
+            for k in ll_d.indexes:
+                assert k < 0
+
 class BaseTestRdict(BaseRtypingTest):
 
     def test_dict_creation(self):
@@ -258,12 +285,12 @@ class BaseTestRdict(BaseRtypingTest):
         res = self.interpret(f, ())
         assert res == 2
 
-        def f():
+        def f2():
             d = {}
             d.setdefault('a', 2)
             x = d.setdefault('a', -3)
             return x
-        res = self.interpret(f, ())
+        res = self.interpret(f2, ())
         assert res == 2
 
     def test_dict_copy(self):
@@ -802,8 +829,7 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
             return d
 
         res = self.interpret(func2, [ord(x), ord(y)])
-        for i in range(len(res.entries)):
-            assert not (res.entries.everused(i) and not res.entries.valid(i))
+        assert len([i for i in res.indexes if i >= 0]) == 2
 
         def func3(c0, c1, c2, c3, c4, c5, c6, c7):
             d = {}
@@ -822,8 +848,8 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         res = self.interpret(func3, [ord(char_by_hash[i][0])
                                    for i in range(rdict.DICT_INITSIZE)])
         count_frees = 0
-        for i in range(len(res.entries)):
-            if not res.entries.everused(i):
+        for i in res.indexes:
+            if i == -1:
                 count_frees += 1
         assert count_frees >= 3
 
@@ -844,9 +870,9 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
                     del d[chr(ord('A') - i)]
             return d
         res = self.interpret(func, [0])
-        assert len(res.entries) > rdict.DICT_INITSIZE
+        assert len(res.indexes) > rdict.DICT_INITSIZE
         res = self.interpret(func, [1])
-        assert len(res.entries) == rdict.DICT_INITSIZE
+        assert len(res.indexes) == rdict.DICT_INITSIZE
 
     def test_dict_valid_resize(self):
         # see if we find our keys after resize
@@ -863,87 +889,6 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         self.interpret(func, [])
 
     # ____________________________________________________________
-
-    def test_opt_nullkeymarker(self):
-        def f():
-            d = {"hello": None}
-            d["world"] = None
-            return "hello" in d, d
-        res = self.interpret(f, [])
-        assert res.item0 == True
-        DICT = lltype.typeOf(res.item1).TO
-        assert not hasattr(DICT.entries.TO.OF, 'f_everused')# non-None string keys
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')   # strings have a dummy
-
-    def test_opt_nullvaluemarker(self):
-        def f(n):
-            d = {-5: "abcd"}
-            d[123] = "def"
-            return len(d[n]), d
-        res = self.interpret(f, [-5])
-        assert res.item0 == 4
-        DICT = lltype.typeOf(res.item1).TO
-        assert not hasattr(DICT.entries.TO.OF, 'f_everused')# non-None str values
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')   # strs have a dummy
-
-    def test_opt_nonullmarker(self):
-        class A:
-            pass
-        def f(n):
-            if n > 5:
-                a = A()
-            else:
-                a = None
-            d = {a: -5441}
-            d[A()] = n+9872
-            return d[a], d
-        res = self.interpret(f, [-5])
-        assert res.item0 == -5441
-        DICT = lltype.typeOf(res.item1).TO
-        assert hasattr(DICT.entries.TO.OF, 'f_everused') # can-be-None A instances
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')# with a dummy A instance
-
-        res = self.interpret(f, [6])
-        assert res.item0 == -5441
-
-    def test_opt_nonnegint_dummy(self):
-        def f(n):
-            d = {n: 12}
-            d[-87] = 24
-            del d[n]
-            return len(d.copy()), d[-87], d
-        res = self.interpret(f, [5])
-        assert res.item0 == 1
-        assert res.item1 == 24
-        DICT = lltype.typeOf(res.item2).TO
-        assert hasattr(DICT.entries.TO.OF, 'f_everused') # all ints can be zero
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')# nonneg int: dummy -1
-
-    def test_opt_no_dummy(self):
-        def f(n):
-            d = {n: 12}
-            d[-87] = -24
-            del d[n]
-            return len(d.copy()), d[-87], d
-        res = self.interpret(f, [5])
-        assert res.item0 == 1
-        assert res.item1 == -24
-        DICT = lltype.typeOf(res.item2).TO
-        assert hasattr(DICT.entries.TO.OF, 'f_everused') # all ints can be zero
-        assert hasattr(DICT.entries.TO.OF, 'f_valid')    # no dummy available
-
-    def test_opt_boolean_has_no_dummy(self):
-        def f(n):
-            d = {n: True}
-            d[-87] = True
-            del d[n]
-            return len(d.copy()), d[-87], d
-        res = self.interpret(f, [5])
-        assert res.item0 == 1
-        assert res.item1 is True
-        DICT = lltype.typeOf(res.item2).TO
-        assert hasattr(DICT.entries.TO.OF, 'f_everused') # all ints can be zero
-        assert hasattr(DICT.entries.TO.OF, 'f_valid')    # no dummy available
 
     def test_opt_multiple_identical_dicts(self):
         def f(n):
@@ -1159,7 +1104,7 @@ class TestStress:
                        DictValue(None, annmodel.SomeString(value_can_be_none)))
         dictrepr.setup()
         print dictrepr.lowleveltype
-        for key, value in dictrepr.DICTENTRY._adtmeths.items():
+        for key, value in dictrepr.DICT.entries.TO._adtmeths.items():
             print '    %s = %s' % (key, value)
         l_dict = rdict.ll_newdict(dictrepr.DICT)
         referencetable = [None] * 400
