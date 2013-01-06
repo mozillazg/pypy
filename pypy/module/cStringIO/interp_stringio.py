@@ -165,7 +165,6 @@ class W_OutputType(RStringIO, W_InputOutputType):
         self.seek(i)
         return ''.join(bigbuffer[p:i])
 
-    @unwrap_spec(w_size=W_Root)
     def descr_truncate(self, w_size=None):
         self.check_closed()
         space = self.space
@@ -249,7 +248,6 @@ W_OutputType.typedef = TypeDef(
 
 # ____________________________________________________________
 
-@unwrap_spec(w_string=W_Root)
 def StringIO(space, w_string=None):
     if space.is_none(w_string):
         return space.wrap(W_OutputType(space))
