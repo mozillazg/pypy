@@ -637,14 +637,17 @@ def rtype_r_dict(hop):
 #
 #  Iteration.
 
+def get_ll_dictiter(DICT):
+    return lltype.Ptr(lltype.GcStruct('dictiter',
+                                      ('dict', DICT),
+                                      ('index', lltype.Signed)))
+
 class DictIteratorRepr(AbstractDictIteratorRepr):
 
     def __init__(self, r_dict, variant="keys"):
         self.r_dict = r_dict
         self.variant = variant
-        self.lowleveltype = lltype.Ptr(lltype.GcStruct('dictiter',
-                                         ('dict', r_dict.lowleveltype),
-                                         ('index', lltype.Signed)))
+        self.lowleveltype = get_ll_dictiter(r_dict.lowleveltype)
         self.ll_dictiter = ll_dictiter
         self.ll_dictnext = ll_dictnext_group[variant]
 
@@ -664,30 +667,23 @@ def _make_ll_dictnext(kind):
     def ll_dictnext(RETURNTYPE, iter):
         # note that RETURNTYPE is None for keys and values
         dict = iter.dict
-        if dict:
-            entries = dict.entries
-            index = iter.index
-            entries_len = len(entries)
-            while index < entries_len:
-                entry = entries[index]
-                is_valid = entries.valid(index)
-                index = index + 1
-                if is_valid:
-                    iter.index = index
-                    if RETURNTYPE is lltype.Void:
-                        return None
-                    elif kind == 'items':
-                        r = lltype.malloc(RETURNTYPE.TO)
-                        r.item0 = recast(RETURNTYPE.TO.item0, entry.key)
-                        r.item1 = recast(RETURNTYPE.TO.item1, entry.value)
-                        return r
-                    elif kind == 'keys':
-                        return entry.key
-                    elif kind == 'values':
-                        return entry.value
+        if not dict or iter.index >= dict.num_items:
             # clear the reference to the dict and prevent restarts
             iter.dict = lltype.nullptr(lltype.typeOf(iter).TO.dict.TO)
-        raise StopIteration
+            raise StopIteration
+        entry = dict.entries[iter.index]
+        iter.index += 1
+        if RETURNTYPE is lltype.Void:
+            return None
+        elif kind == 'items':
+            r = lltype.malloc(RETURNTYPE.TO)
+            r.item0 = recast(RETURNTYPE.TO.item0, entry.key)
+            r.item1 = recast(RETURNTYPE.TO.item1, entry.value)
+            return r
+        elif kind == 'keys':
+            return entry.key
+        elif kind == 'values':
+            return entry.value
     return ll_dictnext
 
 ll_dictnext_group = {'keys'  : _make_ll_dictnext('keys'),
