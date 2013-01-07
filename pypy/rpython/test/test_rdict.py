@@ -24,6 +24,12 @@ def not_really_random():
         yield x
 
 
+def count_items(ll_d, TP):
+    return len([i for i in
+                [rdict.ll_index_getitem(ll_d.size, ll_d.indexes, i)
+                 for i in range(ll_d.size)] if i == TP])
+    
+
 class TestRDictDirect(object):
     def _get_str_dict(self):
         # STR -> lltype.Signed
@@ -37,8 +43,7 @@ class TestRDictDirect(object):
         DICT = self._get_str_dict()
         ll_d = rdict.ll_newdict(DICT)
         rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
-        assert (len([i for i in ll_d.indexes if i == rdict.FREE]) ==
-                rdict.DICT_INITSIZE - 1)
+        assert count_items(ll_d, rdict.FREE) == rdict.DICT_INITSIZE - 1
         assert rdict.ll_dict_getitem(ll_d, llstr("abc")) == 13
 
     def test_dict_del_lastitem(self):
@@ -48,9 +53,8 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
         py.test.raises(KeyError, rdict.ll_dict_delitem, ll_d, llstr("def"))
         rdict.ll_dict_delitem(ll_d, llstr("abc"))
-        assert (len([i for i in ll_d.indexes if i == rdict.FREE]) ==
-                rdict.DICT_INITSIZE - 1)
-        assert (len([i for i in ll_d.indexes if i == rdict.DELETED]) == 1)
+        assert count_items(ll_d, rdict.FREE) == rdict.DICT_INITSIZE - 1
+        assert count_items(ll_d, rdict.DELETED) == 1
         py.test.raises(KeyError, rdict.ll_dict_getitem, ll_d, llstr("abc"))
 
     def test_dict_del_not_lastitem(self):
@@ -59,9 +63,8 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
         rdict.ll_dict_setitem(ll_d, llstr("def"), 15)
         rdict.ll_dict_delitem(ll_d, llstr("abc"))
-        assert (len([i for i in ll_d.indexes if i == rdict.FREE]) ==
-                rdict.DICT_INITSIZE - 2)
-        assert (len([i for i in ll_d.indexes if i == rdict.DELETED]) == 1)
+        assert count_items(ll_d, rdict.FREE) == rdict.DICT_INITSIZE - 2
+        assert count_items(ll_d, rdict.DELETED) == 1
 
     def test_dict_resize(self):
         DICT = self._get_str_dict()
@@ -70,10 +73,10 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("b"), 2)        
         rdict.ll_dict_setitem(ll_d, llstr("c"), 3)        
         rdict.ll_dict_setitem(ll_d, llstr("d"), 4)         
-        assert len(ll_d.indexes) == 8
+        assert ll_d.size == 8
         rdict.ll_dict_setitem(ll_d, llstr("e"), 5)
         rdict.ll_dict_setitem(ll_d, llstr("f"), 6)
-        assert len(ll_d.indexes) == 32
+        assert ll_d.size == 32
         for item in ['a', 'b', 'c', 'd', 'e', 'f']:
             assert rdict.ll_dict_getitem(ll_d, llstr(item)) == ord(item) - ord('a') + 1
 
@@ -115,8 +118,10 @@ class TestRDictDirect(object):
         for num in numbers:
             rdict.ll_dict_setitem(ll_d, num, 1)
             rdict.ll_dict_delitem(ll_d, num)
-            for k in ll_d.indexes:
-                assert k < 0
+            tot = (count_items(ll_d, rdict.FREE) +
+                   count_items(ll_d, rdict.DELETED))
+            assert tot == ll_d.size
+
 
 class BaseTestRdict(BaseRtypingTest):
 
@@ -829,7 +834,11 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
             return d
 
         res = self.interpret(func2, [ord(x), ord(y)])
-        assert len([i for i in res.indexes if i >= 0]) == 2
+        c = 0
+        for i in range(res.size):
+            if rdict.ll_index_getitem(res.size, res.indexes, i) >= 0:
+                c += 1
+        assert c == 2
 
         def func3(c0, c1, c2, c3, c4, c5, c6, c7):
             d = {}
@@ -847,11 +856,7 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
             py.test.skip("make dict tests more indepdent from initsize")
         res = self.interpret(func3, [ord(char_by_hash[i][0])
                                    for i in range(rdict.DICT_INITSIZE)])
-        count_frees = 0
-        for i in res.indexes:
-            if i == -1:
-                count_frees += 1
-        assert count_frees >= 3
+        assert count_items(res, rdict.FREE) >= 3
 
     def test_dict_resize(self):
         # XXX we no longer automatically resize on 'del'.  We need to
@@ -870,11 +875,12 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
                     del d[chr(ord('A') - i)]
             return d
         res = self.interpret(func, [0])
-        assert len(res.indexes) > rdict.DICT_INITSIZE
+        assert res.size > rdict.DICT_INITSIZE
         res = self.interpret(func, [1])
-        assert len(res.indexes) == rdict.DICT_INITSIZE
+        assert res.size == rdict.DICT_INITSIZE
 
     def test_dict_valid_resize(self):
+        py.test.skip("no longer valid, we're a bit too paranoid now")
         # see if we find our keys after resize
         def func():
             d = {}
