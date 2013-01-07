@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.lltypesystem import rdict
+from pypy.rpython.lltypesystem import rdict_old as rdict
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.memory.support import mangle_hash
 

@@ -1,13 +1,13 @@
 from pypy.objspace.flow.model import Constant
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rdict
-from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rdict_old as rdict
 from pypy.rpython.lltypesystem.llmemory import weakref_create, weakref_deref
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.rmodel import Repr
 from pypy.rlib.rweakref import RWeakKeyDictionary
 from pypy.rlib import jit
-from pypy.rlib.debug import ll_assert
 from pypy.rlib.objectmodel import compute_identity_hash
+from pypy.rlib.objectmodel import we_are_translated
 
 
 # Warning: this implementation of RWeakKeyDictionary is not exactly
@@ -25,7 +25,7 @@ class WeakKeyDictRepr(Repr):
 
     def convert_const(self, weakdict):
         if not isinstance(weakdict, RWeakKeyDictionary):
-            raise TypeError("expected an RWeakKeyDictionary: %r" % (
+            raise TyperError("expected an RWeakKeyDictionary: %r" % (
                 weakdict,))
         try:
             key = Constant(weakdict)
@@ -33,7 +33,7 @@ class WeakKeyDictRepr(Repr):
         except KeyError:
             self.setup()
             if weakdict.length() != 0:
-                raise TypeError("got a non-empty prebuilt RWeakKeyDictionary")
+                raise TyperError("got a non-empty prebuilt RWeakKeyDictionary")
             l_dict = ll_new_weakdict()
             self.dict_cache[key] = l_dict
             return l_dict
@@ -83,10 +83,8 @@ def ll_debugrepr(x):
         h = 0
     return '<%x>' % (h,)
 
-def ll_valid(entries, index):
-    if index < 0:
-        return False
-    key = entries[index].key
+def ll_valid(entries, i):
+    key = entries[i].key
     if not key:
         return False
     elif weakref_deref(rclass.OBJECTPTR, key):
@@ -95,16 +93,19 @@ def ll_valid(entries, index):
         # The entry might be a dead weakref still holding a strong
         # reference to the value; for this case, we clear the old
         # value from the entry, if any.
-        entries[index].value = NULLVALUE
+        entries[i].value = NULLVALUE
         return False
+
+def ll_everused(entries, i):
+    return bool(entries[i].key)
 
 entrymeths = {
     'allocate': lltype.typeMethod(rdict._ll_malloc_entries),
+    'delete': rdict._ll_free_entries,
+    'valid': ll_valid,
+    'everused': ll_everused,
     'hash': rdict.ll_hash_from_cache,
     'no_direct_compare': True,
-    'clear_key': lambda : llmemory.dead_wref,
-    'clear_value': lambda : lltype.nullptr(rclass.OBJECTPTR.TO),
-    'valid': ll_valid,
     }
 WEAKDICTENTRYARRAY = lltype.GcArray(WEAKDICTENTRY,
                                     adtmeths=entrymeths,
@@ -114,30 +115,22 @@ WEAKDICTENTRYARRAY = lltype.GcArray(WEAKDICTENTRY,
 @jit.dont_look_inside
 def ll_new_weakdict():
     d = lltype.malloc(WEAKDICT)
-    d.entries = WEAKDICT.entries.TO.allocate(rdict.DICT_ITEMS_INITSIZE)
-    d.indexes = WEAKDICT.indexes.TO.allocate(rdict.DICT_INITSIZE)
+    d.entries = WEAKDICT.entries.TO.allocate(rdict.DICT_INITSIZE)
     d.num_items = 0
-    d.resize_counter = rdict.DICT_ITEMS_INITSIZE
+    d.resize_counter = rdict.DICT_INITSIZE * 2
     return d
 
 @jit.dont_look_inside
 def ll_get(d, llkey):
     hash = compute_identity_hash(llkey)
-    #llop.debug_print(lltype.Void, "computed key", ll_debugrepr(llkey),
-    #                 hex(hash))
     i = rdict.ll_dict_lookup(d, llkey, hash) & rdict.MASK
-    index = d.indexes[i]
-    if index < 0:
-        #llop.debug_print(lltype.Void, i, 'get', hex(hash), "null")
-        return NULLVALUE
-    #llop.debug_print(lltype.Void, i, "getting", index)
     #llop.debug_print(lltype.Void, i, 'get', hex(hash),
-    #                 ll_debugrepr(d.entries[index].key),
-    #                 ll_debugrepr(d.entries[index].value))
+    #                 ll_debugrepr(d.entries[i].key),
+    #                 ll_debugrepr(d.entries[i].value))
     # NB. ll_valid() above was just called at least on entry i, so if
     # it is an invalid entry with a dead weakref, the value was reset
     # to NULLVALUE.
-    return d.entries[index].value
+    return d.entries[i].value
 
 @jit.dont_look_inside
 def ll_set(d, llkey, llvalue):
@@ -151,20 +144,15 @@ def ll_set_nonnull(d, llkey, llvalue):
     hash = compute_identity_hash(llkey)
     keyref = weakref_create(llkey)    # GC effects here, before the rest
     i = rdict.ll_dict_lookup(d, llkey, hash) & rdict.MASK
-    index = d.indexes[i]
-    everused = index != rdict.FREE
-    if index < 0:
-        index = d.num_items
-        d.indexes[i] = index
-        d.num_items += 1
-    d.entries[index].key = keyref
-    d.entries[index].value = llvalue
-    d.entries[index].f_hash = hash
-    #llop.debug_print(lltype.Void, i, 'stored', index, d.num_items, hex(hash),
+    everused = d.entries.everused(i)
+    d.entries[i].key = keyref
+    d.entries[i].value = llvalue
+    d.entries[i].f_hash = hash
+    #llop.debug_print(lltype.Void, i, 'stored', hex(hash),
     #                 ll_debugrepr(llkey),
     #                 ll_debugrepr(llvalue))
     if not everused:
-        d.resize_counter -= 1
+        d.resize_counter -= 3
         if d.resize_counter <= 0:
             #llop.debug_print(lltype.Void, 'RESIZE')
             ll_weakdict_resize(d)
@@ -173,55 +161,26 @@ def ll_set_nonnull(d, llkey, llvalue):
 def ll_set_null(d, llkey):
     hash = compute_identity_hash(llkey)
     i = rdict.ll_dict_lookup(d, llkey, hash) & rdict.MASK
-    index = d.indexes[i]
-    if d.entries.valid(index):
-        d.entries[index].key = llmemory.dead_wref
-        d.entries[index].value = NULLVALUE
-        #llop.debug_print(lltype.Void, i, index, 'zero')
+    if d.entries.everused(i):
+        # If the entry was ever used, clean up its key and value.
+        # We don't store a NULL value, but a dead weakref, because
+        # the entry must still be marked as everused().
+        d.entries[i].key = llmemory.dead_wref
+        d.entries[i].value = NULLVALUE
+        #llop.debug_print(lltype.Void, i, 'zero')
+
+def ll_update_num_items(d):
+    entries = d.entries
+    num_items = 0
+    for i in range(len(entries)):
+        if entries.valid(i):
+            num_items += 1
+    d.num_items = num_items
 
 def ll_weakdict_resize(d):
-    #llop.debug_print(lltype.Void, "weakdict resize")
-    old_entries = d.entries
-    old_indexes = d.indexes
-    old_size = len(old_indexes)
-    # make a 'new_size' estimate and shrink it if there are many
-    # deleted entry markers.  See CPython for why it is a good idea to
-    # quadruple the dictionary size as long as it's not too big.
-    # count the number of valid entries
-    i = 0
-    num_items = 0
-    while i < d.num_items:
-        if old_entries.valid(i):
-            num_items += 1
-        i += 1
-    if num_items > 50000: new_estimate = (num_items + 1) * 2
-    else:                 new_estimate = (num_items + 1) * 4
-    new_size = rdict.DICT_INITSIZE
-    while new_size <= new_estimate:
-        new_size *= 2
-    #
-    new_item_size = new_size // 3 * 2 + 1
-    d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
-    d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(new_size)
-    i = 0
-    indexes = d.indexes
-    j = 0
-    while i < old_size:
-        index = old_indexes[i]
-        if old_entries.valid(index):
-            hash = old_entries.hash(index)
-            lookup_i = rdict.ll_dict_lookup_clean(d, hash)
-            indexes[lookup_i] = j
-            #llop.debug_print(lltype.Void, "inserting", hex(hash), i,
-            #                 "to", lookup_i, index, "=>", j)
-            #llop.debug_print(lltype.Void, hex(old_entries[index].f_hash))
-            d.entries[j].key = old_entries[index].key
-            d.entries[j].value = old_entries[index].value
-            d.entries[j].f_hash = old_entries[index].f_hash
-            j += 1
-        i += 1
-    d.num_items = j
-    d.resize_counter = new_item_size - j
+    # first set num_items to its correct, up-to-date value
+    ll_update_num_items(d)
+    rdict.ll_dict_resize(d)
 
 def ll_keyeq(d, weakkey1, realkey2):
     # only called by ll_dict_lookup() with the first arg coming from an
@@ -229,14 +188,12 @@ def ll_keyeq(d, weakkey1, realkey2):
     if not weakkey1:
         assert bool(realkey2)
         return False
-    realkey1 = weakref_deref(rclass.OBJECTPTR, weakkey1)
-    #llop.debug_print(lltype.Void, "comparison", realkey1, realkey2)
-    return realkey1 == realkey2
+    return weakref_deref(rclass.OBJECTPTR, weakkey1) == realkey2
 
 @jit.dont_look_inside
 def ll_length(d):
     # xxx slow, but it's only for debugging
-    d.resize()
+    ll_update_num_items(d)
     #llop.debug_print(lltype.Void, 'length:', d.num_items)
     return d.num_items
 
@@ -245,15 +202,10 @@ dictmeths = {
     'll_set': ll_set,
     'keyeq': ll_keyeq,
     'paranoia': False,
-    'resize': ll_weakdict_resize,
     }
-
-INDEXESARRAY = lltype.GcArray(lltype.Signed,
-              adtmeths={'allocate' : lltype.typeMethod(rdict._ll_malloc_indexes)})
 
 WEAKDICT = lltype.GcStruct("weakkeydict",
                            ("num_items", lltype.Signed),
                            ("resize_counter", lltype.Signed),
-                           ("indexes", lltype.Ptr(INDEXESARRAY)),
                            ("entries", lltype.Ptr(WEAKDICTENTRYARRAY)),
                            adtmeths=dictmeths)
