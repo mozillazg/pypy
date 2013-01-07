@@ -523,7 +523,7 @@ def ll_dict_lookup(d, key, hash):
             # correct hash, maybe the key is e.g. a different pointer to
             # an equal object
             found = d.keyeq(checkingkey, key)
-            llop.debug_print(lltype.Void, "comparing keys", ll_debugrepr(checkingkey), ll_debugrepr(key), found)
+            #llop.debug_print(lltype.Void, "comparing keys", ll_debugrepr(checkingkey), ll_debugrepr(key), found)
             if d.paranoia:
                 if (entries != d.entries or
                     not entries.valid(indexes[i]) or entries[index].key != checkingkey):
