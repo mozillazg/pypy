@@ -350,18 +350,18 @@ MAX_BYTE_MASK = ~(2 ** 8 - 1)
 
 def _ll_malloc_indexes(n):
     # XXXX 64 bit only
-    if n & MAX_INT_MASK:
-        res = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                     lltype.malloc(DICTINDEX_SIGNED.TO, n))
-    elif n & MAX_SHORT_MASK:
-        res = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                     lltype.malloc(DICTINDEX_INT.TO, n))
-    elif n & MAX_BYTE_MASK:
-        res = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                     lltype.malloc(DICTINDEX_SHORT.TO, n))
-    else:
-        res = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                     lltype.malloc(DICTINDEX_BYTE.TO, n))
+    #if n & MAX_INT_MASK:
+    res = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                 lltype.malloc(DICTINDEX_SIGNED.TO, n))
+    #elif n & MAX_SHORT_MASK:
+    #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
+    #                                 lltype.malloc(DICTINDEX_INT.TO, n))
+    #elif n & MAX_BYTE_MASK:
+    #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
+    #                                 lltype.malloc(DICTINDEX_SHORT.TO, n))
+    #else:
+    #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
+    #                                 lltype.malloc(DICTINDEX_BYTE.TO, n))
     i = 0
     while i < n:
         ll_index_setitem(n, res, i, FREE)
@@ -369,30 +369,30 @@ def _ll_malloc_indexes(n):
     return res
 
 def ll_index_getitem(size, indexes, i):
-    if size & MAX_INT_MASK:
-        return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i]
-    elif size & MAX_SHORT_MASK:    
-        return rffi.cast(lltype.Signed,
-                         lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i])
-    elif size & MAX_BYTE_MASK:
-        return rffi.cast(lltype.Signed,
-                         lltype.cast_opaque_ptr(DICTINDEX_SHORT, indexes)[i])
-    else:
-        return rffi.cast(lltype.Signed,
-                         lltype.cast_opaque_ptr(DICTINDEX_BYTE, indexes)[i])
+    #if size & MAX_INT_MASK:
+    return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i]
+    #elif size & MAX_SHORT_MASK:    
+    #    return rffi.cast(lltype.Signed,
+    #                     lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i])
+    #elif size & MAX_BYTE_MASK:
+    #    return rffi.cast(lltype.Signed,
+    #                     lltype.cast_opaque_ptr(DICTINDEX_SHORT, indexes)[i])
+    #else:
+    #    return rffi.cast(lltype.Signed,
+    #                     lltype.cast_opaque_ptr(DICTINDEX_BYTE, indexes)[i])
 
 def ll_index_setitem(size, indexes, i, v):
-    if size & MAX_INT_MASK:
-        lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v
-    elif size & MAX_SHORT_MASK:    
-        lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i] = rffi.cast(
-            rffi.INT_real, v)
-    elif size & MAX_BYTE_MASK:
-        lltype.cast_opaque_ptr(DICTINDEX_SHORT, indexes)[i] = rffi.cast(
-            rffi.SHORT, v)
-    else:
-        lltype.cast_opaque_ptr(DICTINDEX_BYTE, indexes)[i] = rffi.cast(
-            rffi.SIGNEDCHAR, v)
+    #if size & MAX_INT_MASK:
+    lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v
+    #elif size & MAX_SHORT_MASK:    
+    #    lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i] = rffi.cast(
+    #        rffi.INT_real, v)
+    #elif size & MAX_BYTE_MASK:
+    #    lltype.cast_opaque_ptr(DICTINDEX_SHORT, indexes)[i] = rffi.cast(
+    #        rffi.SHORT, v)
+    #else:
+    #    lltype.cast_opaque_ptr(DICTINDEX_BYTE, indexes)[i] = rffi.cast(
+    #        rffi.SIGNEDCHAR, v)
 
 def ll_dict_copy_indexes(size, from_indexes, to_indexes):
     i = 0
