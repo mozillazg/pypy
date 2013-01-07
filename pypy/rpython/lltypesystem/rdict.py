@@ -345,9 +345,15 @@ DICTINDEXOPAQUE = llmemory.GCREF
 DICTINDEX_SIGNED = lltype.Ptr(lltype.GcArray(lltype.Signed))
 DICTINDEX_INT = lltype.Ptr(lltype.GcArray(rffi.INT_real))
 
+MAX_INT = 2 ** 31 - 1
+
 def _ll_malloc_indexes(n):
-    res = lltype.malloc(DICTINDEX_SIGNED.TO, n)
-    res = lltype.cast_opaque_ptr(DICTINDEXOPAQUE, res)
+    if n < MAX_INT:
+        res = lltype.malloc(DICTINDEX_INT.TO, n)
+        res = lltype.cast_opaque_ptr(DICTINDEXOPAQUE, res)
+    else:
+        res = lltype.malloc(DICTINDEX_SIGNED.TO, n)
+        res = lltype.cast_opaque_ptr(DICTINDEXOPAQUE, res)
     i = 0
     while i < n:
         ll_index_setitem(n, res, i, FREE)
@@ -355,9 +361,16 @@ def _ll_malloc_indexes(n):
     return res
 
 def ll_index_getitem(size, indexes, i):
+    if size < MAX_INT:
+        res = lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i]
+        return rffi.cast(lltype.Signed, res)
     return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i]
 
 def ll_index_setitem(size, indexes, i, v):
+    if size < MAX_INT:
+        arg = rffi.cast(rffi.INT_real, v)
+        lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i] = arg
+        return
     lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v
 
 def ll_dict_copy_indexes(size, from_indexes, to_indexes):
