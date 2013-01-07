@@ -155,7 +155,7 @@ class DictRepr(AbstractDictRepr):
             DICTVALUE = self.value_repr.lowleveltype
             kwd = {}
             if self.custom_eq_hash:
-                kwd['custom_eq_hash'] = self.custom_eq_hash
+                kwd['get_custom_eq_hash'] = self.custom_eq_hash
             else:
                 kwd['ll_hash_function'] = self.key_repr.get_ll_hash_function()
                 kwd['ll_eq_function'] = self.key_repr.get_ll_eq_function()
