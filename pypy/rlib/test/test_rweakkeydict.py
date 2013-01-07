@@ -36,25 +36,19 @@ def make_test(loop=100, prebuilt=None):
         d = prebuilt
         if d is None:
             d = RWeakKeyDictionary(KX, VX)
-        llop.debug_print(lltype.Void, "XXX 1")
         k1, k3, v1, v2, v3 = g(d)
         rgc.collect(); rgc.collect()
-        llop.debug_print(lltype.Void, "XXX 2")
         assert d.get(k1) is v1
         assert d.get(k3) is v3
         assert d.get(k1) is not v2
         assert d.get(k3) is not v2
-        llop.debug_print(lltype.Void, "XXX 3")
         assert d.length() == 2
-        llop.debug_print(lltype.Void, "XXX 4")
         d.set(k1, None)
         assert d.get(k1) is None
         assert d.get(k3) is v3
         assert d.length() == 1
-        llop.debug_print(lltype.Void, "XXX 5")
         # resizing should also work
         lots_of_keys = [KX() for i in range(loop)]
-        llop.debug_print(lltype.Void, "XXX 6")
         for k in lots_of_keys:
             d.set(k, v1)
         for k in lots_of_keys:
@@ -63,26 +57,19 @@ def make_test(loop=100, prebuilt=None):
         assert d.get(k3) is v3
         assert d.length() == loop + 1
         # a subclass
-        llop.debug_print(lltype.Void, "XXX 7")
         ky = KY()
         vy = VY()
         d.set(ky, vy)
         assert d.get(ky) is vy
         assert d.length() == loop + 2
         # deleting by storing Nones
-        llop.debug_print(lltype.Void, "XXX 8")
         for k in lots_of_keys:
             d.set(k, None)
-        llop.debug_print(lltype.Void, "XXX 9")
         for k in lots_of_keys:
             assert d.get(k) is None
-        llop.debug_print(lltype.Void, "XXX 10")
         assert d.get(k1) is None
-        llop.debug_print(lltype.Void, "XXX 11")
         assert d.get(k3) is v3
-        llop.debug_print(lltype.Void, "XXX 12")
         assert d.get(ky) is vy
-        llop.debug_print(lltype.Void, "XXX 13")
         assert d.length() == 2
     return f
 
