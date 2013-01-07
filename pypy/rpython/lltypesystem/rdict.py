@@ -31,6 +31,7 @@ DELETED = -1
 #
 #    struct dicttable {
 #        int num_items;
+#        int size;
 #        int resize_counter;
 #        int *indexes; # note that this can be different int
 #        Array *entries;
@@ -84,6 +85,7 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     
     fields = [("num_items", lltype.Signed),
               ("resize_counter", lltype.Signed),
+              ("size", lltype.Signed),
               ("entries", lltype.Ptr(DICTENTRYARRAY)),
               ("indexes", lltype.Ptr(lltype.GcArray(lltype.Signed,
                                      adtmeths=array_adtmeths)))]
@@ -356,9 +358,9 @@ def ll_dict_index_getitem(indexes, i):
 def ll_dict_index_setitem(indexes, i, v):
     indexes[i] = v
 
-def ll_dict_copy_indexes(from_indexes, to_indexes):
+def ll_dict_copy_indexes(size, from_indexes, to_indexes):
     i = 0
-    while i < len(from_indexes):
+    while i < size:
         to_indexes.setitem(i, from_indexes.getitem(i))
         i += 1
 
@@ -484,7 +486,7 @@ def _ll_dict_del(d, i):
 def ll_dict_resize(d):
     old_entries = d.entries
     old_indexes = d.indexes
-    old_size = len(old_indexes)
+    old_size = d.size
     # make a 'new_size' estimate and shrink it if there are many
     # deleted entry markers.  See CPython for why it is a good idea to
     # quadruple the dictionary size as long as it's not too big.
@@ -497,6 +499,7 @@ def ll_dict_resize(d):
     #
     new_item_size = new_size // 3 * 2 + 1
     d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(new_size)
+    d.size = new_size
     d.resize_counter = new_item_size - d.num_items
     i = 0
     indexes = d.indexes
@@ -532,7 +535,7 @@ def ll_debugrepr(x):
 def ll_dict_lookup(d, key, hash):
     entries = d.entries
     indexes = d.indexes
-    mask = len(indexes) - 1
+    mask = d.size - 1
     i = hash & mask
     # do the first try before any looping
     ENTRIES = lltype.typeOf(entries).TO
@@ -602,7 +605,7 @@ def ll_dict_lookup_clean(d, hash):
     # key is new, and the dictionary doesn't contain deleted entries.
     # It only finds the next free slot for the given hash.
     indexes = d.indexes
-    mask = len(indexes) - 1
+    mask = d.size - 1
     i = hash & mask
     perturb = r_uint(hash)
     while indexes.getitem(i) != FREE:
@@ -625,6 +628,7 @@ def ll_newdict(DICT):
     # XXX don't use _ll_items_allocate because of jit.unroll_safe,
     #     should be *really* jit_unroll_iff
     d.indexes = lltype.malloc(DICT.indexes.TO, DICT_INITSIZE)
+    d.size = DICT_INITSIZE
     d.num_items = 0
     for i in range(DICT_INITSIZE):
         d.indexes.setitem(i, FREE)
@@ -641,6 +645,7 @@ def ll_newdict_size(DICT, length_estimate):
     d = DICT.allocate()
     d.entries = DICT.entries.TO.allocate(items_size)
     d.indexes = DICT.indexes.TO.allocate(n)
+    d.size = n
     d.num_items = 0
     d.resize_counter = items_size
     return d
@@ -758,24 +763,26 @@ def ll_copy(dict):
     dictsize = len(dict.entries)
     d = DICT.allocate()
     d.entries = lltype.malloc(DICT.entries.TO, dictsize)
-    d.indexes = DICT.indexes.TO.allocate(len(dict.indexes))
+    d.indexes = DICT.indexes.TO.allocate(dict.size)
+    d.size = dict.size
     d.num_items = dict.num_items
     d.resize_counter = dict.resize_counter
     if hasattr(DICT, 'fnkeyeq'):   d.fnkeyeq   = dict.fnkeyeq
     if hasattr(DICT, 'fnkeyhash'): d.fnkeyhash = dict.fnkeyhash
-    ll_dict_copy_indexes(dict.indexes, d.indexes)
+    ll_dict_copy_indexes(d.size, dict.indexes, d.indexes)
     #rgc.ll_arraycopy(dict.indexes, d.indexes, 0, 0, len(dict.indexes))
     rgc.ll_arraycopy(dict.entries, d.entries, 0, 0, len(dict.entries))
     return d
 ll_copy.oopspec = 'dict.copy(dict)'
 
 def ll_clear(d):
-    if (len(d.indexes) == DICT_INITSIZE and
+    if (d.size == DICT_INITSIZE and
         d.resize_counter == DICT_ITEMS_INITSIZE):
         return
     old_entries = d.entries
     d.entries = lltype.typeOf(old_entries).TO.allocate(DICT_ITEMS_INITSIZE)
     d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(DICT_INITSIZE)
+    d.size = DICT_INITSIZE
     d.num_items = 0
     d.resize_counter = DICT_ITEMS_INITSIZE
 ll_clear.oopspec = 'dict.clear(d)'
