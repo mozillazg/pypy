@@ -346,8 +346,12 @@ MAX_INT = 2 ** 31 - 1
 
 def _ll_malloc_indexes(n):
     # XXXX 64 bit only
-    res = lltype.cast_opaque_ptr(llmemory.GCREF,
-                 lltype.malloc(DICTINDEX_SIGNED.TO, n))
+    if n < MAX_INT:
+        res = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                     lltype.malloc(DICTINDEX_INT.TO, n))
+    else:
+        res = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                     lltype.malloc(DICTINDEX_SIGNED.TO, n))
     i = 0
     while i < n:
         ll_index_setitem(n, res, i, FREE)
@@ -355,10 +359,17 @@ def _ll_malloc_indexes(n):
     return res
 
 def ll_index_getitem(size, indexes, i):
+    if size < MAX_INT:
+        return rffi.cast(lltype.Signed,
+                         lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i])
     return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i]
 
 def ll_index_setitem(size, indexes, i, v):
-    lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v
+    if size < MAX_INT:
+        lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i] = rffi.cast(
+            rffi.INT_real, v)
+    else:
+        lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v
 
 def ll_dict_copy_indexes(size, from_indexes, to_indexes):
     i = 0
