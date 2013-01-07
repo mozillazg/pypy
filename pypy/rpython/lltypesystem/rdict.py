@@ -78,7 +78,10 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     DICTENTRY = lltype.Struct("dictentry", *entryfields)
     DICTENTRYARRAY = lltype.GcArray(DICTENTRY,
                                     adtmeths=entrymeths)
-    array_adtmeths = {'allocate': lltype.typeMethod(_ll_malloc_indexes)}
+    array_adtmeths = {'allocate': lltype.typeMethod(_ll_malloc_indexes),
+                      'getitem': ll_dict_index_getitem,
+                      'setitem': ll_dict_index_setitem}
+    
     fields = [("num_items", lltype.Signed),
               ("resize_counter", lltype.Signed),
               ("entries", lltype.Ptr(DICTENTRYARRAY)),
@@ -150,11 +153,14 @@ class DictRepr(AbstractDictRepr):
         if isinstance(self.DICT, lltype.GcForwardReference):
             DICTKEY = self.key_repr.lowleveltype
             DICTVALUE = self.value_repr.lowleveltype
-            get_ll_dict(DICTKEY, DICTVALUE, DICT=self.DICT,
-                 ll_fasthash_function=self.key_repr.get_ll_fasthash_function(),
-                 ll_hash_function=self.key_repr.get_ll_hash_function(),
-                 ll_eq_function=self.key_repr.get_ll_eq_function(),
-                 get_custom_eq_hash=self.custom_eq_hash)
+            kwd = {}
+            if self.custom_eq_hash:
+                kwd['custom_eq_hash'] = self.custom_eq_hash
+            else:
+                kwd['ll_hash_function'] = self.key_repr.get_ll_hash_function()
+                kwd['ll_eq_function'] = self.key_repr.get_ll_eq_function()
+                kwd['ll_fasthash_function'] = self.key_repr.get_ll_fasthash_function()
+            get_ll_dict(DICTKEY, DICTVALUE, DICT=self.DICT, **kwd)
             if self.custom_eq_hash is not None:
                 self.r_rdict_eqfn, self.r_rdict_hashfn = self.custom_eq_hash()
 
@@ -344,8 +350,20 @@ def ll_hash_recomputed(entries, i):
     ENTRIES = lltype.typeOf(entries).TO
     return ENTRIES.fasthashfn(entries[i].key)
 
+def ll_dict_index_getitem(indexes, i):
+    return indexes[i]
+
+def ll_dict_index_setitem(indexes, i, v):
+    indexes[i] = v
+
+def ll_dict_copy_indexes(from_indexes, to_indexes):
+    i = 0
+    while i < len(from_indexes):
+        to_indexes.setitem(i, from_indexes.getitem(i))
+        i += 1
+
 def ll_get_value(d, i):
-    return d.entries[d.indexes[i]].value
+    return d.entries[d.indexes.getitem(i)].value
 
 def ll_keyhash_custom(d, key):
     DICT = lltype.typeOf(d).TO
@@ -385,7 +403,7 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     valid = (i & HIGHEST_BIT) == 0
     i = i & MASK
     ENTRY = lltype.typeOf(d.entries).TO.OF
-    index = d.indexes[i]
+    index = d.indexes.getitem(i)
     if index == FREE:
         index = d.num_items
         entry = d.entries[index]
@@ -401,12 +419,12 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
             ll_assert(rc > 0, "ll_dict_resize failed?")
         ll_assert(index < len(d.entries), "invalid insert")
         d.resize_counter = rc
-        d.indexes[i] = index
+        d.indexes.setitem(i, index)
         entry.value = value
     elif index == DELETED:
         index = d.num_items
         entry = d.entries[index]        
-        d.indexes[i] = index
+        d.indexes.setitem(i, index)
         entry.value = value
     else:
         # override an existing or deleted entry
@@ -426,7 +444,7 @@ def ll_dict_delitem(d, key):
 
 @jit.look_inside_iff(lambda d, i: jit.isvirtual(d) and jit.isconstant(i))
 def _ll_dict_del(d, i):
-    index = d.indexes[i]
+    index = d.indexes.getitem(i)
     ENTRIES = lltype.typeOf(d.entries).TO
     ENTRY = ENTRIES.OF
     if index != d.num_items - 1:
@@ -434,7 +452,7 @@ def _ll_dict_del(d, i):
         key = old_entry.key
         to_insert_i = ll_dict_lookup(d, key, d.keyhash(key))
         ll_assert(not to_insert_i & HIGHEST_BIT, "invalid entry")
-        d.indexes[to_insert_i] = index
+        d.indexes.setitem(to_insert_i, index)
         # copy the value
         new_entry = d.entries[index]
         new_entry.key = key
@@ -442,7 +460,7 @@ def _ll_dict_del(d, i):
         if hasattr(ENTRY, 'f_hash'):
             new_entry.f_hash = old_entry.f_hash
     # clear the key and the value if they are GC pointers
-    d.indexes[i] = DELETED
+    d.indexes.setitem(i, DELETED)
     d.num_items -= 1
     entry = d.entries[d.num_items]
     if ENTRIES.clear_key:
@@ -478,18 +496,23 @@ def ll_dict_resize(d):
         new_size *= 2
     #
     new_item_size = new_size // 3 * 2 + 1
-    d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
     d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(new_size)
     d.resize_counter = new_item_size - d.num_items
     i = 0
     indexes = d.indexes
     while i < old_size:
-        index = old_indexes[i]
+        index = old_indexes.getitem(i)
         if old_entries.valid(index):
-            indexes[ll_dict_lookup_clean(d, old_entries.hash(index))] = index
+            pos = ll_dict_lookup_clean(d, old_entries.hash(index))
+            indexes.setitem(pos, index)
         i += 1
-    rgc.ll_arraycopy(old_entries, d.entries, 0, 0, min(len(old_entries),
-                                                       len(d.entries)))
+    if len(old_entries) != new_item_size:
+        d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
+        rgc.ll_arraycopy(old_entries, d.entries, 0, 0, min(len(old_entries),
+                                                           len(d.entries)))
+    else:
+        # we just removed deleted items, but we didn't do anything else special
+        d.entries = old_entries
 ll_dict_resize.oopspec = 'dict.resize(d)'
 
 # ------- a port of CPython's dictobject.c's lookdict implementation -------
@@ -514,7 +537,7 @@ def ll_dict_lookup(d, key, hash):
     # do the first try before any looping
     ENTRIES = lltype.typeOf(entries).TO
     direct_compare = not hasattr(ENTRIES, 'no_direct_compare')
-    index = indexes[i]
+    index = indexes.getitem(i)
     if entries.valid(index):
         checkingkey = entries[index].key
         if direct_compare and checkingkey == key:
@@ -526,7 +549,8 @@ def ll_dict_lookup(d, key, hash):
             #llop.debug_print(lltype.Void, "comparing keys", ll_debugrepr(checkingkey), ll_debugrepr(key), found)
             if d.paranoia:
                 if (entries != d.entries or
-                    not entries.valid(indexes[i]) or entries[index].key != checkingkey):
+                    not entries.valid(indexes.getitem(i))
+                    or entries[index].key != checkingkey):
                     # the compare did major nasty stuff to the dict: start over
                     return ll_dict_lookup(d, key, hash)
             if found:
@@ -545,7 +569,7 @@ def ll_dict_lookup(d, key, hash):
         i = r_uint(i)
         i = (i << 2) + i + perturb + 1
         i = intmask(i) & mask
-        index = indexes[i]
+        index = indexes.getitem(i)
         # keep 'i' as a signed number here, to consistently pass signed
         # arguments to the small helper methods.
         if index == FREE:
@@ -562,7 +586,7 @@ def ll_dict_lookup(d, key, hash):
                 found = d.keyeq(checkingkey, key)
                 if d.paranoia:
                     if (entries != d.entries or
-                        not entries.valid(indexes[i]) or
+                        not entries.valid(indexes.getitem(i)) or
                         entries[index].key != checkingkey):
                         # the compare did major nasty stuff to the dict:
                         # start over
@@ -581,7 +605,7 @@ def ll_dict_lookup_clean(d, hash):
     mask = len(indexes) - 1
     i = hash & mask
     perturb = r_uint(hash)
-    while d.indexes[i] != FREE:
+    while indexes.getitem(i) != FREE:
         i = r_uint(i)
         i = (i << 2) + i + perturb + 1
         i = intmask(i) & mask
@@ -601,10 +625,10 @@ def ll_newdict(DICT):
     # XXX don't use _ll_items_allocate because of jit.unroll_safe,
     #     should be *really* jit_unroll_iff
     d.indexes = lltype.malloc(DICT.indexes.TO, DICT_INITSIZE)
-    for i in range(DICT_INITSIZE):
-        d.indexes[i] = FREE
-    d.entries = DICT.entries.TO.allocate(DICT_ITEMS_INITSIZE)    
     d.num_items = 0
+    for i in range(DICT_INITSIZE):
+        d.indexes.setitem(i, FREE)
+    d.entries = DICT.entries.TO.allocate(DICT_ITEMS_INITSIZE)    
     d.resize_counter = DICT_ITEMS_INITSIZE
     return d
 
@@ -739,7 +763,8 @@ def ll_copy(dict):
     d.resize_counter = dict.resize_counter
     if hasattr(DICT, 'fnkeyeq'):   d.fnkeyeq   = dict.fnkeyeq
     if hasattr(DICT, 'fnkeyhash'): d.fnkeyhash = dict.fnkeyhash
-    rgc.ll_arraycopy(dict.indexes, d.indexes, 0, 0, len(dict.indexes))
+    ll_dict_copy_indexes(dict.indexes, d.indexes)
+    #rgc.ll_arraycopy(dict.indexes, d.indexes, 0, 0, len(dict.indexes))
     rgc.ll_arraycopy(dict.entries, d.entries, 0, 0, len(dict.entries))
     return d
 ll_copy.oopspec = 'dict.copy(dict)'
