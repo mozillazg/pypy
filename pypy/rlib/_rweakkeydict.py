@@ -123,17 +123,17 @@ def ll_new_weakdict():
 @jit.dont_look_inside
 def ll_get(d, llkey):
     hash = compute_identity_hash(llkey)
-    llop.debug_print(lltype.Void, "computed key", ll_debugrepr(llkey),
-                     hex(hash))
+    #llop.debug_print(lltype.Void, "computed key", ll_debugrepr(llkey),
+    #                 hex(hash))
     i = rdict.ll_dict_lookup(d, llkey, hash) & rdict.MASK
     index = d.indexes[i]
     if index < 0:
-        llop.debug_print(lltype.Void, i, 'get', hex(hash), "null")
+        #llop.debug_print(lltype.Void, i, 'get', hex(hash), "null")
         return NULLVALUE
-    llop.debug_print(lltype.Void, i, "getting", index)
-    llop.debug_print(lltype.Void, i, 'get', hex(hash),
-                     ll_debugrepr(d.entries[index].key),
-                     ll_debugrepr(d.entries[index].value))
+    #llop.debug_print(lltype.Void, i, "getting", index)
+    #llop.debug_print(lltype.Void, i, 'get', hex(hash),
+    #                 ll_debugrepr(d.entries[index].key),
+    #                 ll_debugrepr(d.entries[index].value))
     # NB. ll_valid() above was just called at least on entry i, so if
     # it is an invalid entry with a dead weakref, the value was reset
     # to NULLVALUE.
@@ -160,13 +160,13 @@ def ll_set_nonnull(d, llkey, llvalue):
     d.entries[index].key = keyref
     d.entries[index].value = llvalue
     d.entries[index].f_hash = hash
-    llop.debug_print(lltype.Void, i, 'stored', index, d.num_items, hex(hash),
-                     ll_debugrepr(llkey),
-                     ll_debugrepr(llvalue))
+    #llop.debug_print(lltype.Void, i, 'stored', index, d.num_items, hex(hash),
+    #                 ll_debugrepr(llkey),
+    #                 ll_debugrepr(llvalue))
     if not everused:
         d.resize_counter -= 1
         if d.resize_counter <= 0:
-            llop.debug_print(lltype.Void, 'RESIZE')
+            #llop.debug_print(lltype.Void, 'RESIZE')
             ll_weakdict_resize(d)
 
 @jit.dont_look_inside
@@ -177,10 +177,10 @@ def ll_set_null(d, llkey):
     if d.entries.valid(index):
         d.entries[index].key = llmemory.dead_wref
         d.entries[index].value = NULLVALUE
-        llop.debug_print(lltype.Void, i, index, 'zero')
+        #llop.debug_print(lltype.Void, i, index, 'zero')
 
 def ll_weakdict_resize(d):
-    llop.debug_print(lltype.Void, "weakdict resize")
+    #llop.debug_print(lltype.Void, "weakdict resize")
     old_entries = d.entries
     old_indexes = d.indexes
     old_size = len(old_indexes)
@@ -203,7 +203,6 @@ def ll_weakdict_resize(d):
     new_item_size = new_size // 3 * 2 + 1
     d.entries = lltype.typeOf(old_entries).TO.allocate(new_item_size)
     d.indexes = lltype.typeOf(d).TO.indexes.TO.allocate(new_size)
-    d.resize_counter = new_item_size - num_items
     i = 0
     indexes = d.indexes
     j = 0
@@ -213,15 +212,16 @@ def ll_weakdict_resize(d):
             hash = old_entries.hash(index)
             lookup_i = rdict.ll_dict_lookup_clean(d, hash)
             indexes[lookup_i] = j
-            llop.debug_print(lltype.Void, "inserting", hex(hash), i,
-                             "to", lookup_i, index, "=>", j)
-            llop.debug_print(lltype.Void, hex(old_entries[index].f_hash))
+            #llop.debug_print(lltype.Void, "inserting", hex(hash), i,
+            #                 "to", lookup_i, index, "=>", j)
+            #llop.debug_print(lltype.Void, hex(old_entries[index].f_hash))
             d.entries[j].key = old_entries[index].key
             d.entries[j].value = old_entries[index].value
             d.entries[j].f_hash = old_entries[index].f_hash
             j += 1
         i += 1
     d.num_items = j
+    d.resize_counter = new_item_size - j
 
 def ll_keyeq(d, weakkey1, realkey2):
     # only called by ll_dict_lookup() with the first arg coming from an
@@ -230,14 +230,14 @@ def ll_keyeq(d, weakkey1, realkey2):
         assert bool(realkey2)
         return False
     realkey1 = weakref_deref(rclass.OBJECTPTR, weakkey1)
-    llop.debug_print(lltype.Void, "comparison", realkey1, realkey2)
+    #llop.debug_print(lltype.Void, "comparison", realkey1, realkey2)
     return realkey1 == realkey2
 
 @jit.dont_look_inside
 def ll_length(d):
     # xxx slow, but it's only for debugging
     d.resize()
-    llop.debug_print(lltype.Void, 'length:', d.num_items)
+    #llop.debug_print(lltype.Void, 'length:', d.num_items)
     return d.num_items
 
 dictmeths = {
