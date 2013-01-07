@@ -2,7 +2,7 @@ from pypy.tool.pairtype import pairtype
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.rdict import (AbstractDictRepr, AbstractDictIteratorRepr,
                                 rtype_newdict)
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib import objectmodel, jit, rgc
 from pypy.rlib.debug import ll_assert
@@ -84,7 +84,7 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
               ("resize_counter", lltype.Signed),
               ("size", lltype.Signed),
               ("entries", lltype.Ptr(DICTENTRYARRAY)),
-              ("indexes", DICTINDEXARRAY)]
+              ("indexes", llmemory.GCREF)]
     if get_custom_eq_hash is not None:
         r_rdict_eqfn, r_rdict_hashfn = get_custom_eq_hash()
         fields.extend([ ("fnkeyeq", r_rdict_eqfn.lowleveltype),
@@ -340,26 +340,31 @@ class __extend__(pairtype(DictRepr, DictRepr)):
 
 # --------------------- indexes ------------------
 
-DICTINDEXARRAY = lltype.Ptr(lltype.GcArray(lltype.Signed))
+DICTINDEX_SIGNED = lltype.Ptr(lltype.GcArray(lltype.Signed))
+DICTINDEX_INT = lltype.Ptr(lltype.GcArray(rffi.INT_real))
+MAX_INT = 2 ** 31 - 1
 
 def _ll_malloc_indexes(n):
-    res = lltype.malloc(DICTINDEXARRAY.TO, n)
+    # XXXX 64 bit only
+    res = lltype.cast_opaque_ptr(llmemory.GCREF,
+                 lltype.malloc(DICTINDEX_SIGNED.TO, n))
     i = 0
     while i < n:
-        res[i] = FREE
+        ll_index_setitem(n, res, i, FREE)
         i += 1
     return res
 
 def ll_index_getitem(size, indexes, i):
-    return indexes[i]
+    return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i]
 
 def ll_index_setitem(size, indexes, i, v):
-    indexes[i] = v
+    lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v
 
 def ll_dict_copy_indexes(size, from_indexes, to_indexes):
     i = 0
     while i < size:
-        ll_index_setitem(size, i, ll_index_getitem(size, from_indexes, i))
+        ll_index_setitem(size, to_indexes, i,
+                         ll_index_getitem(size, from_indexes, i))
         i += 1
 
 # ---------------------- hashes -------------------
@@ -632,16 +637,11 @@ def ll_dict_lookup_clean(d, hash):
 DICT_INITSIZE = 8
 DICT_ITEMS_INITSIZE = 5
 
-@jit.unroll_safe # we always unroll the small allocation
 def ll_newdict(DICT):
     d = DICT.allocate()
-    # XXX don't use _ll_items_allocate because of jit.unroll_safe,
-    #     should be *really* jit_unroll_iff
-    d.indexes = lltype.malloc(DICT.indexes.TO, DICT_INITSIZE)
+    d.indexes = _ll_malloc_indexes(DICT_INITSIZE)
     d.size = DICT_INITSIZE
     d.num_items = 0
-    for i in range(DICT_INITSIZE):
-        ll_index_setitem(d.size, d.indexes, i, FREE)
     d.entries = DICT.entries.TO.allocate(DICT_ITEMS_INITSIZE)    
     d.resize_counter = DICT_ITEMS_INITSIZE
     return d
