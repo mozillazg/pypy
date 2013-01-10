@@ -352,6 +352,7 @@ MAX_INT_MASK = ~(2 ** 31 - 1)
 MAX_SHORT_MASK = ~(2 ** 16 - 1)
 MAX_BYTE_MASK = ~(2 ** 8 - 1)
 
+@jit.look_inside_iff(lambda n : jit.isconstant(n))
 def _ll_malloc_indexes(n):
     # XXXX 64 bit only
     #if n & MAX_INT_MASK:
@@ -447,11 +448,17 @@ def ll_get_value(d, i):
 
 def ll_keyhash_custom(d, key):
     DICT = lltype.typeOf(d).TO
-    return objectmodel.hlinvoke(DICT.r_rdict_hashfn, d.fnkeyhash, key)
+    if objectmodel.we_are_translated():
+        return objectmodel.hlinvoke(DICT.r_rdict_hashfn, d.fnkeyhash, key)
+    else:
+        return DICT.r_rdict_hashfn(d.fnkeyhash, key)
 
 def ll_keyeq_custom(d, key1, key2):
     DICT = lltype.typeOf(d).TO
-    return objectmodel.hlinvoke(DICT.r_rdict_eqfn, d.fnkeyeq, key1, key2)
+    if objectmodel.we_are_translated():
+        return objectmodel.hlinvoke(DICT.r_rdict_eqfn, d.fnkeyeq, key1, key2)
+    else:
+        DICT.r_rdict_eqfn(d.fnkeyeq, key1, key2)
 
 def ll_dict_len(d):
     return d.num_items
@@ -588,7 +595,6 @@ def ll_dict_resize(d):
             pos = ll_dict_lookup_clean(d, old_entries.hash(index))
             ll_index_setitem(d.size, indexes, pos, index)
         i += 1
-ll_dict_resize.oopspec = 'dict.resize(d)'
 
 # ------- a port of CPython's dictobject.c's lookdict implementation -------
 PERTURB_SHIFT = 5
@@ -834,7 +840,6 @@ def ll_copy(dict):
     #rgc.ll_arraycopy(dict.indexes, d.indexes, 0, 0, len(dict.indexes))
     rgc.ll_arraycopy(dict.entries, d.entries, 0, 0, dict.num_items)
     return d
-ll_copy.oopspec = 'dict.copy(dict)'
 
 def ll_clear(d):
     if (d.size == DICT_INITSIZE and
@@ -846,7 +851,6 @@ def ll_clear(d):
     d.size = DICT_INITSIZE
     d.num_items = 0
     d.resize_counter = DICT_RESIZE_START
-ll_clear.oopspec = 'dict.clear(d)'
 
 def ll_update(dic1, dic2):
     entries = dic2.entries
@@ -859,7 +863,6 @@ def ll_update(dic1, dic2):
         j = ll_dict_lookup(dic1, key, hash)
         _ll_dict_setitem_lookup_done(dic1, key, entry.value, hash, j)
         i += 1
-ll_update.oopspec = 'dict.update(dic1, dic2)'
 
 # this is an implementation of keys(), values() and items()
 # in a single function.
@@ -894,7 +897,6 @@ def _make_ll_keys_values_items(kind):
                     items[i] = recast(ELEM, entry.value)
             i += 1
         return res
-    ll_kvi.oopspec = 'dict.%s(dic)' % kind
     return ll_kvi
 
 ll_dict_keys   = _make_ll_keys_values_items('keys')
