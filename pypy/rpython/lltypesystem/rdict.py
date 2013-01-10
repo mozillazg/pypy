@@ -196,7 +196,11 @@ class DictRepr(AbstractDictRepr):
                 for dictkeycontainer, dictvalue in dictobj._dict.items():
                     llkey = r_key.convert_const(dictkeycontainer.key)
                     llvalue = r_value.convert_const(dictvalue)
-                    ll_dict_setitem(l_dict, llkey, llvalue)
+                    # we cannot call normal ll_dict_setitem here
+                    # because calling keyhash might potentially
+                    # be illegal
+                    ll_dict_insertclean(l_dict, llkey, llvalue,
+                                        dictkeycontainer.hash)
                 return l_dict
 
             else:
@@ -471,8 +475,30 @@ def ll_dict_getitem(d, key):
 def ll_dict_setitem(d, key, value):
     hash = d.keyhash(key)
     i = ll_dict_lookup(d, key, hash)
-    res = _ll_dict_setitem_lookup_done(d, key, value, hash, i)
-    return res
+    return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
+
+def ll_dict_insertclean(d, key, value, hash):
+    i = ll_dict_lookup_clean(d, key, hash)
+    return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
+
+def ll_dict_lookup_clean(d, hash):
+    # a simplified version of ll_dict_lookup() which assumes that the
+    # key is new, and the dictionary doesn't contain deleted entries.
+    # It only finds the next free slot for the given hash.
+
+    # this is crucial during convert_const, where we cannot call keyhash
+    # directly. Unused otherwise
+    
+    indexes = d.indexes
+    mask = len(indexes) - 1
+    i = hash & mask
+    perturb = r_uint(hash)
+    while indexes[i] >= 0:
+        i = r_uint(i)
+        i = (i << 2) + i + perturb + 1
+        i = intmask(i) & mask
+        perturb >>= PERTURB_SHIFT
+    return i
 
 def _look_inside_setitem(d, key, value, hash, i):
     return jit.isvirtual(d) and jit.isconstant(key)
