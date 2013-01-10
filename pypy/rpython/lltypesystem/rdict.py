@@ -448,17 +448,11 @@ def ll_get_value(d, i):
 
 def ll_keyhash_custom(d, key):
     DICT = lltype.typeOf(d).TO
-    if objectmodel.we_are_translated():
-        return objectmodel.hlinvoke(DICT.r_rdict_hashfn, d.fnkeyhash, key)
-    else:
-        return DICT.r_rdict_hashfn(d.fnkeyhash, key)
+    return objectmodel.hlinvoke(DICT.r_rdict_hashfn, d.fnkeyhash, key)
 
 def ll_keyeq_custom(d, key1, key2):
     DICT = lltype.typeOf(d).TO
-    if objectmodel.we_are_translated():
-        return objectmodel.hlinvoke(DICT.r_rdict_eqfn, d.fnkeyeq, key1, key2)
-    else:
-        DICT.r_rdict_eqfn(d.fnkeyeq, key1, key2)
+    return objectmodel.hlinvoke(DICT.r_rdict_eqfn, d.fnkeyeq, key1, key2)
 
 def ll_dict_len(d):
     return d.num_items
