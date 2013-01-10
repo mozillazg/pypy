@@ -478,7 +478,7 @@ def ll_dict_setitem(d, key, value):
     return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
 
 def ll_dict_insertclean(d, key, value, hash):
-    i = ll_dict_lookup_clean(d, key, hash)
+    i = ll_dict_lookup_clean(d, hash)
     return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
 
 def ll_dict_lookup_clean(d, hash):
