@@ -418,7 +418,7 @@ def ll_entries_resize_up(d):
         some = 4
     else:
         some = 7
-    new_lgt = lgt + some + (lgt >> 3)
+    new_lgt = lgt + some + (lgt >> 2)
     new_entries = lltype.typeOf(d).TO.entries.TO.allocate(new_lgt)
     rgc.ll_arraycopy(d.entries, new_entries, 0, 0, lgt)
     d.entries = new_entries
