@@ -479,7 +479,7 @@ def ll_dict_setitem(d, key, value):
 
 def ll_dict_insertclean(d, key, value, hash):
     i = ll_dict_lookup_clean(d, hash)
-    return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
+    return _ll_dict_setitem_lookup_done(d, key, value, hash, i | HIGHEST_BIT)
 
 def ll_dict_lookup_clean(d, hash):
     # a simplified version of ll_dict_lookup() which assumes that the
@@ -487,13 +487,13 @@ def ll_dict_lookup_clean(d, hash):
     # It only finds the next free slot for the given hash.
 
     # this is crucial during convert_const, where we cannot call keyhash
-    # directly. Unused otherwise
+    # directly.
     
     indexes = d.indexes
-    mask = len(indexes) - 1
+    mask = d.size - 1
     i = hash & mask
     perturb = r_uint(hash)
-    while indexes[i] >= 0:
+    while ll_index_getitem(d.size, indexes, i) >= 0:
         i = r_uint(i)
         i = (i << 2) + i + perturb + 1
         i = intmask(i) & mask
@@ -697,21 +697,6 @@ def ll_dict_lookup(d, key, hash):
         elif freeslot == -1:
             freeslot = i
         perturb >>= PERTURB_SHIFT
-
-def ll_dict_lookup_clean(d, hash):
-    # a simplified version of ll_dict_lookup() which assumes that the
-    # key is new, and the dictionary doesn't contain deleted entries.
-    # It only finds the next free slot for the given hash.
-    indexes = d.indexes
-    mask = d.size - 1
-    i = hash & mask
-    perturb = r_uint(hash)
-    while ll_index_getitem(d.size, indexes, i) != FREE:
-        i = r_uint(i)
-        i = (i << 2) + i + perturb + 1
-        i = intmask(i) & mask
-        perturb >>= PERTURB_SHIFT
-    return i
 
 # ____________________________________________________________
 #

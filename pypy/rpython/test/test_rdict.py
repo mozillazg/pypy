@@ -1004,6 +1004,31 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         finally:
             lltype._array._check_range = original_check_range
 
+    def test_prebuilt_custom_dict(self):
+        class W(object):
+            def __init__(self, x):
+                self.x = x
+        
+        def hash(w):
+            return w.x
+
+        def eq(w1, w2):
+            return w1.x == w2.x
+        
+        d = r_dict(eq, hash)
+        w1 = W(1)
+        w2 = W(2)
+        w3 = W(3)
+        d[w1] = 3
+        d[w2] = 2
+        d[w3] = 8
+
+        def f(i):
+            return d[W(i)]
+
+        res = self.interpret(f, [2])
+        assert res == 2
+
     # ____________________________________________________________
 
 
