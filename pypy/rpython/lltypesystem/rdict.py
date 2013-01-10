@@ -423,14 +423,17 @@ def ll_entries_resize_up(d):
     rgc.ll_arraycopy(d.entries, new_entries, 0, 0, lgt)
     d.entries = new_entries
     return new_entries
+ll_entries_resize_up._never_inline_ = True
 
 def ll_entry_getitem(entries, d, item):
     if len(entries) <= item:
         entries = ll_entries_resize_up(d)
     return entries[item]
+ll_entry_getitem._always_inline_ = True
 
 def ll_entry_getitem_clean(entries, item):
     return entries[item]
+ll_entry_getitem_clean._always_inline_ = True
 
 def ll_entry_popitem(d):
     pass
