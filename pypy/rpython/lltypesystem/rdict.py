@@ -1,3 +1,5 @@
+
+import sys
 from pypy.tool.pairtype import pairtype
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.rdict import (AbstractDictRepr, AbstractDictIteratorRepr,
@@ -6,6 +8,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib import objectmodel, jit, rgc
 from pypy.rlib.debug import ll_assert
+from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rarithmetic import r_uint, intmask, LONG_BIT
 from pypy.rpython import rmodel
 from pypy.rpython.error import TyperError
@@ -352,58 +355,58 @@ DICTINDEX_SIGNED = lltype.Ptr(lltype.GcArray(lltype.Signed))
 DICTINDEX_INT = lltype.Ptr(lltype.GcArray(rffi.INT_real))
 DICTINDEX_SHORT = lltype.Ptr(lltype.GcArray(rffi.SHORT))
 DICTINDEX_BYTE = lltype.Ptr(lltype.GcArray(rffi.SIGNEDCHAR))
-MAX_INT_MASK = ~(2 ** 31 - 1)
-MAX_SHORT_MASK = ~(2 ** 16 - 1)
-MAX_BYTE_MASK = ~(2 ** 8 - 1)
 
 def _ll_malloc_indexes(n):
-    # XXXX 64 bit only
-    #if n & MAX_INT_MASK:
-    res = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                 lltype.malloc(DICTINDEX_SIGNED.TO, n,
-                                               zero=True))
-    #elif n & MAX_SHORT_MASK:
-    #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
-    #                                 lltype.malloc(DICTINDEX_INT.TO, n))
-    #elif n & MAX_BYTE_MASK:
-    #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
-    #                                 lltype.malloc(DICTINDEX_SHORT.TO, n))
-    #else:
-    #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
-    #                                 lltype.malloc(DICTINDEX_BYTE.TO, n))
+    if IS_64BIT and n < 2 ** 31:
+        res = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                     lltype.malloc(DICTINDEX_INT.TO, n,
+                                                   zero=True))        
+    else:
+        res = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                     lltype.malloc(DICTINDEX_SIGNED.TO, n,
+                                                   zero=True))
     return res
 
-def ll_index_getitem(size, indexes, i):
-    #if size & MAX_INT_MASK:
+def ll_index_getitem_signed(size, indexes, i):
     return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] - 2
-    #elif size & MAX_SHORT_MASK:    
-    #    return rffi.cast(lltype.Signed,
-    #                     lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i])
-    #elif size & MAX_BYTE_MASK:
-    #    return rffi.cast(lltype.Signed,
-    #                     lltype.cast_opaque_ptr(DICTINDEX_SHORT, indexes)[i])
-    #else:
-    #    return rffi.cast(lltype.Signed,
-    #                     lltype.cast_opaque_ptr(DICTINDEX_BYTE, indexes)[i])
 
-def ll_index_setitem(size, indexes, i, v):
-    #if size & MAX_INT_MASK:
+def ll_index_getitem_int(size, indexes, i):
+    res = lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i]
+    return rffi.cast(lltype.Signed, res) - 2
+
+def ll_index_setitem_signed(size, indexes, i, v):
     lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v + 2
-    #elif size & MAX_SHORT_MASK:    
-    #    lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i] = rffi.cast(
-    #        rffi.INT_real, v)
-    #elif size & MAX_BYTE_MASK:
-    #    lltype.cast_opaque_ptr(DICTINDEX_SHORT, indexes)[i] = rffi.cast(
-    #        rffi.SHORT, v)
-    #else:
-    #    lltype.cast_opaque_ptr(DICTINDEX_BYTE, indexes)[i] = rffi.cast(
-    #        rffi.SIGNEDCHAR, v)
 
-def ll_dict_copy_indexes(size, from_indexes, to_indexes):
+def ll_index_setitem_int(size, indexes, i, v):
+    v = rffi.cast(rffi.INT_real, v + 2)
+    lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i] = v
+
+IS_64BIT = sys.maxint != 2 ** 31 - 1
+
+def _pick_index_setitem(d):
+    if IS_64BIT and d.size < 2 ** 31:
+        return ll_index_setitem_int            
+    return ll_index_setitem_signed
+
+def _pick_index_getitem(d):
+    if IS_64BIT and d.size < 2 ** 31:
+        return ll_index_getitem_int            
+    return ll_index_getitem_signed
+
+def d_signed_indexes(d):
+    if IS_64BIT and d.size < 2 ** 31:
+        return False
+    return True
+
+def ll_dict_copy_indexes(size, from_d, to_d):
+    ll_index_getitem = _pick_index_getitem(from_d)
+    ll_index_setitem = _pick_index_setitem(to_d)
+    from_indexes = from_d.indexes
+    to_indexes = to_d.indexes
     i = 0
     while i < size:
-        ll_index_setitem(size, to_indexes, i,
-                         ll_index_getitem(size, from_indexes, i))
+        v = ll_index_getitem(size, from_indexes, i)
+        ll_index_setitem(size, to_indexes, i, v)
         i += 1
 
 # ---------------------- entries -----------------------
@@ -446,7 +449,8 @@ def ll_hash_recomputed(entries, i):
     ENTRIES = lltype.typeOf(entries).TO
     return ENTRIES.fasthashfn(entries[i].key)
 
-def ll_get_value(d, i):
+@specialize.ll_and_arg(2)
+def ll_get_value(d, i, ll_index_getitem):
     return d.entries.getitem_clean(ll_index_getitem(d.size, d.indexes, i)).value
 
 def ll_keyhash_custom(d, key):
@@ -465,22 +469,45 @@ def ll_dict_is_true(d):
     return bool(d) and d.num_items != 0
 
 def ll_dict_getitem(d, key):
-    i = ll_dict_lookup(d, key, d.keyhash(key))
-    if not i & HIGHEST_BIT:
-        return ll_get_value(d, i)
+    if d_signed_indexes(d):
+        i = ll_dict_lookup(d, key, d.keyhash(key), ll_index_getitem_signed)
+        if not i & HIGHEST_BIT:
+            return ll_get_value(d, i, ll_index_getitem_signed)
+        else:
+            raise KeyError
     else:
-        raise KeyError
+        i = ll_dict_lookup(d, key, d.keyhash(key), ll_index_getitem_int)
+        if not i & HIGHEST_BIT:
+            return ll_get_value(d, i, ll_index_getitem_int)
+        else:
+            raise KeyError
 
 def ll_dict_setitem(d, key, value):
-    hash = d.keyhash(key)
-    i = ll_dict_lookup(d, key, hash)
-    return _ll_dict_setitem_lookup_done(d, key, value, hash, i)
+    if d_signed_indexes(d):
+        hash = d.keyhash(key)
+        i = ll_dict_lookup(d, key, hash, ll_index_getitem_signed)
+        _ll_dict_setitem_lookup_done(d, key, value, hash, i,
+                                     ll_index_getitem_signed,
+                                     ll_index_setitem_signed)
+    else:
+        hash = d.keyhash(key)
+        i = ll_dict_lookup(d, key, hash, ll_index_getitem_int)
+        _ll_dict_setitem_lookup_done(d, key, value, hash, i,
+                                     ll_index_getitem_int,
+                                     ll_index_setitem_int)
 
 def ll_dict_insertclean(d, key, value, hash):
-    i = ll_dict_lookup_clean(d, hash)
-    return _ll_dict_setitem_lookup_done(d, key, value, hash, i | HIGHEST_BIT)
+    if d_signed_indexes(d):
+        i = ll_dict_lookup_clean(d, hash, ll_index_getitem_signed)
+        _ll_dict_setitem_lookup_done(d, key, value, hash, i | HIGHEST_BIT,
+                                     ll_index_getitem_signed)
+    else:
+        i = ll_dict_lookup_clean(d, hash, ll_index_getitem_int)
+        _ll_dict_setitem_lookup_done(d, key, value, hash, i | HIGHEST_BIT,
+                                     ll_index_getitem_int)
 
-def ll_dict_lookup_clean(d, hash):
+@specialize.ll_and_arg(2)
+def ll_dict_lookup_clean(d, hash, ll_index_getitem):
     # a simplified version of ll_dict_lookup() which assumes that the
     # key is new, and the dictionary doesn't contain deleted entries.
     # It only finds the next free slot for the given hash.
@@ -499,13 +526,15 @@ def ll_dict_lookup_clean(d, hash):
         perturb >>= PERTURB_SHIFT
     return i
 
-def _look_inside_setitem(d, key, value, hash, i):
+def _look_inside_setitem(d, key, value, hash, i, _1, _2):
     return jit.isvirtual(d) and jit.isconstant(key)
 
 # It may be safe to look inside always, it has a few branches though, and their
 # frequencies needs to be investigated.
 @jit.look_inside_iff(_look_inside_setitem)
-def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
+@specialize.ll_and_arg(5, 6)
+def _ll_dict_setitem_lookup_done(d, key, value, hash, i, ll_index_getitem,
+                                 ll_index_setitem):
     valid = (i & HIGHEST_BIT) == 0
     i = i & MASK
     ENTRY = lltype.typeOf(d.entries).TO.OF
@@ -518,7 +547,10 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
         rc = d.resize_counter - 1
         if rc <= 0:       # if needed, resize the dict -- before the insertion
             d.resize()
-            i = ll_dict_lookup_clean(d, hash)
+            if d_signed_indexes(d):
+                i = ll_dict_lookup_clean(d, hash, ll_index_getitem_signed)
+            else:
+                i = ll_dict_lookup_clean(d, hash, ll_index_getitem_int)
             # then redo the lookup for 'key'
             entry = d.entries.getitem(d, index)
             rc = d.resize_counter - 1
@@ -543,20 +575,28 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     d.num_items += 1
 
 def ll_dict_delitem(d, key):
-    i = ll_dict_lookup(d, key, d.keyhash(key))
-    if i & HIGHEST_BIT:
-        raise KeyError
-    _ll_dict_del(d, i)
+    if d_signed_indexes(d):
+        i = ll_dict_lookup(d, key, d.keyhash(key), ll_index_getitem_signed)
+        if i & HIGHEST_BIT:
+            raise KeyError
+        _ll_dict_del(d, i, ll_index_getitem_signed, ll_index_setitem_signed)
+    else:
+        i = ll_dict_lookup(d, key, d.keyhash(key), ll_index_getitem_int)
+        if i & HIGHEST_BIT:
+            raise KeyError
+        _ll_dict_del(d, i, ll_index_getitem_int, ll_index_setitem_int)
 
-@jit.look_inside_iff(lambda d, i: jit.isvirtual(d) and jit.isconstant(i))
-def _ll_dict_del(d, i):
+@jit.look_inside_iff(lambda d, i, _1, _2: jit.isvirtual(d) and
+                     jit.isconstant(i))
+@specialize.ll_and_arg(2, 3)
+def _ll_dict_del(d, i, ll_index_getitem, ll_index_setitem):
     index = ll_index_getitem(d.size, d.indexes, i)
     ENTRIES = lltype.typeOf(d.entries).TO
     ENTRY = ENTRIES.OF
     if index != d.num_items - 1:
         old_entry = d.entries.getitem(d, d.num_items - 1)
         key = old_entry.key
-        to_insert_i = ll_dict_lookup(d, key, d.keyhash(key))
+        to_insert_i = ll_dict_lookup(d, key, d.keyhash(key), ll_index_getitem)
         ll_assert(not to_insert_i & HIGHEST_BIT, "invalid entry")
         ll_index_setitem(d.size, d.indexes, to_insert_i, index)
         # copy the value
@@ -603,22 +643,31 @@ def ll_dict_resize(d):
         new_size *= 2
     #
     new_item_size = new_size // 3 * 2 + 1
+    ll_index_getitem = _pick_index_getitem(d)
     d.indexes = _ll_malloc_indexes(new_size)
     d.size = new_size
     d.resize_counter = new_item_size - d.num_items
     i = 0
     indexes = d.indexes
+    ll_index_setitem = _pick_index_setitem(d)
     while i < old_size:
         index = ll_index_getitem(old_size, old_indexes, i)
         if old_entries.valid(index):
-            pos = ll_dict_lookup_clean(d, old_entries.hash(index))
+            # XXX we can do better here, but we have to remember about
+            #     paranoia
+            if d_signed_indexes(d):
+                pos = ll_dict_lookup_clean(d, old_entries.hash(index),
+                                           ll_index_getitem_signed)
+            else:
+                pos = ll_dict_lookup_clean(d, old_entries.hash(index),
+                                           ll_index_getitem_int)
             ll_index_setitem(d.size, indexes, pos, index)
         i += 1
 
 # ------- a port of CPython's dictobject.c's lookdict implementation -------
 PERTURB_SHIFT = 5
 
-_look_inside_lookup = lambda d, key, hash: jit.isvirtual(d) and jit.isconstant(key)
+_look_inside_lookup = lambda d, key, hash, _: jit.isvirtual(d) and jit.isconstant(key)
 from pypy.rlib.objectmodel import compute_identity_hash
 
 def ll_debugrepr(x):
@@ -629,7 +678,8 @@ def ll_debugrepr(x):
     return '<%x>' % (h,)
 
 @jit.look_inside_iff(_look_inside_lookup)
-def ll_dict_lookup(d, key, hash):
+@specialize.ll_and_arg(3)
+def ll_dict_lookup(d, key, hash, ll_index_getitem):
     entries = d.entries
     indexes = d.indexes
     mask = d.size - 1
@@ -648,11 +698,16 @@ def ll_dict_lookup(d, key, hash):
             found = d.keyeq(checkingkey, key)
             #llop.debug_print(lltype.Void, "comparing keys", ll_debugrepr(checkingkey), ll_debugrepr(key), found)
             if d.paranoia:
-                if (entries != d.entries or
+                if (entries != d.entries or indexes != d.indexes or
                     not entries.valid(ll_index_getitem(d.size, indexes, i))
                     or entries.getitem_clean(index).key != checkingkey):
                     # the compare did major nasty stuff to the dict: start over
-                    return ll_dict_lookup(d, key, hash)
+                    if d_signed_indexes(d):
+                        return ll_dict_lookup(d, key, hash,
+                                              ll_index_getitem_signed)
+                    else:
+                        return ll_dict_lookup(d, key, hash,
+                                              ll_index_getitem_int)
             if found:
                 return i   # found the entry
         freeslot = -1
@@ -685,12 +740,17 @@ def ll_dict_lookup(d, key, hash):
                 # an equal object
                 found = d.keyeq(checkingkey, key)
                 if d.paranoia:
-                    if (entries != d.entries or
+                    if (entries != d.entries or indexes != d.indexes or
                         not entries.valid(ll_index_getitem(d.size, indexes, i)) or
                         entries.getitem_clean(index).key != checkingkey):
                         # the compare did major nasty stuff to the dict:
                         # start over
-                        return ll_dict_lookup(d, key, hash)
+                        if d_signed_indexes(d):
+                            return ll_dict_lookup(d, key, hash,
+                                                  ll_index_getitem_signed)
+                        else:
+                            return ll_dict_lookup(d, key, hash,
+                                                  ll_index_getitem_int)
                 if found:
                     return i   # found the entry
         elif freeslot == -1:
@@ -814,20 +874,43 @@ ll_dictnext_group = {'keys'  : _make_ll_dictnext('keys'),
 # methods
 
 def ll_get(dict, key, default):
-    i = ll_dict_lookup(dict, key, dict.keyhash(key))
-    if not i & HIGHEST_BIT:
-        return ll_get_value(dict, i)
+    if d_signed_indexes(dict):
+        i = ll_dict_lookup(dict, key, dict.keyhash(key),
+                           ll_index_getitem_signed)
+        if not i & HIGHEST_BIT:
+            return ll_get_value(dict, i, ll_index_getitem_signed)
+        else:
+            return default
     else:
-        return default
+        i = ll_dict_lookup(dict, key, dict.keyhash(key),
+                           ll_index_getitem_int)
+        if not i & HIGHEST_BIT:
+            return ll_get_value(dict, i, ll_index_getitem_int)
+        else:
+            return default        
 
 def ll_setdefault(dict, key, default):
-    hash = dict.keyhash(key)
-    i = ll_dict_lookup(dict, key, hash)
-    if not i & HIGHEST_BIT:
-        return ll_get_value(dict, i)
+    if d_signed_indexes(dict):
+        hash = dict.keyhash(key)
+        i = ll_dict_lookup(dict, key, hash, ll_index_getitem_signed)
+        if not i & HIGHEST_BIT:
+            return ll_get_value(dict, i, ll_index_getitem_signed)
+        else:
+            _ll_dict_setitem_lookup_done(dict, key, default, hash, i,
+                                         ll_index_getitem_signed,
+                                         ll_index_setitem_signed)
+            return default
     else:
-        _ll_dict_setitem_lookup_done(dict, key, default, hash, i)
-        return default
+        hash = dict.keyhash(key)
+        i = ll_dict_lookup(dict, key, hash, ll_index_getitem_int)
+        if not i & HIGHEST_BIT:
+            return ll_get_value(dict, i, ll_index_getitem_int)
+        else:
+            _ll_dict_setitem_lookup_done(dict, key, default, hash, i,
+                                         ll_index_getitem_int,
+                                         ll_index_setitem_int)
+            return default
+
 
 def ll_copy(dict):
     DICT = lltype.typeOf(dict).TO
@@ -840,8 +923,7 @@ def ll_copy(dict):
     d.resize_counter = dict.resize_counter
     if hasattr(DICT, 'fnkeyeq'):   d.fnkeyeq   = dict.fnkeyeq
     if hasattr(DICT, 'fnkeyhash'): d.fnkeyhash = dict.fnkeyhash
-    ll_dict_copy_indexes(d.size, dict.indexes, d.indexes)
-    #rgc.ll_arraycopy(dict.indexes, d.indexes, 0, 0, len(dict.indexes))
+    ll_dict_copy_indexes(d.size, dict, d)
     rgc.ll_arraycopy(dict.entries, d.entries, 0, 0, dict.num_items)
     return d
 
@@ -864,8 +946,19 @@ def ll_update(dic1, dic2):
         entry = entries.getitem_clean(i)
         hash = entries.hash(i)
         key = entry.key
-        j = ll_dict_lookup(dic1, key, hash)
-        _ll_dict_setitem_lookup_done(dic1, key, entry.value, hash, j)
+        if d_signed_indexes(dic1):
+            j = ll_dict_lookup(dic1, key, hash, ll_index_getitem_signed)
+        else:
+            j = ll_dict_lookup(dic1, key, hash, ll_index_getitem_int)
+        # a separate lookup since it might have changed
+        if d_signed_indexes(dic1):
+            _ll_dict_setitem_lookup_done(dic1, key, entry.value, hash, j,
+                                         ll_index_getitem_signed,
+                                         ll_index_setitem_signed)
+        else:
+            _ll_dict_setitem_lookup_done(dic1, key, entry.value, hash, j,
+                                         ll_index_getitem_int,
+                                         ll_index_setitem_int)
         i += 1
 
 # this is an implementation of keys(), values() and items()
@@ -908,7 +1001,10 @@ ll_dict_values = _make_ll_keys_values_items('values')
 ll_dict_items  = _make_ll_keys_values_items('items')
 
 def ll_contains(d, key):
-    i = ll_dict_lookup(d, key, d.keyhash(key))
+    if d_signed_indexes(d):
+        i = ll_dict_lookup(d, key, d.keyhash(key), ll_index_getitem_signed)
+    else:
+        i = ll_dict_lookup(d, key, d.keyhash(key), ll_index_getitem_int)
     return not i & HIGHEST_BIT
 
 def ll_popitem(ELEM, dic):
@@ -922,13 +1018,24 @@ def ll_popitem(ELEM, dic):
     return r
 
 def ll_pop(dic, key):
-    i = ll_dict_lookup(dic, key, dic.keyhash(key))
-    if not i & HIGHEST_BIT:
-        value = ll_get_value(dic, i)
-        _ll_dict_del(dic, i)
-        return value
+    if d_signed_indexes(dic):
+        i = ll_dict_lookup(dic, key, dic.keyhash(key), ll_index_getitem_signed)
+        if not i & HIGHEST_BIT:
+            value = ll_get_value(dic, i, ll_index_getitem_signed)
+            _ll_dict_del(dic, i, ll_index_getitem_signed,
+                         ll_index_setitem_signed)
+            return value
+        else:
+            raise KeyError
     else:
-        raise KeyError
+        i = ll_dict_lookup(dic, key, dic.keyhash(key), ll_index_getitem_int)
+        if not i & HIGHEST_BIT:
+            value = ll_get_value(dic, i, ll_index_getitem_int)
+            _ll_dict_del(dic, i, ll_index_getitem_int,
+                         ll_index_setitem_int)
+            return value
+        else:
+            raise KeyError
 
 def ll_pop_default(dic, key, dfl):
     try:
