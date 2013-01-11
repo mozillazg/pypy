@@ -24,8 +24,9 @@ def not_really_random():
         yield x
 
 def foreach_index(ll_d):
+    ll_index_getitem = rdict._pick_index_getitem(ll_d)
     for i in range(ll_d.size):
-        yield rdict.ll_index_getitem(ll_d.size, ll_d.indexes, i)
+        yield ll_index_getitem(ll_d.size, ll_d.indexes, i)
 
 def count_items(ll_d, ITEM):
     c = 0
