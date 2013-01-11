@@ -5,6 +5,10 @@
 #include "structmember.h"
 #include "structseq.h"
 
+#ifdef PYPY_FORCE_OLD_GLIBC
+__asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
+#endif
+
 static char visible_length_key[] = "n_sequence_fields";
 static char real_length_key[] = "n_fields";
 static char unnamed_fields_key[] = "n_unnamed_fields";

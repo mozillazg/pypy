@@ -31,6 +31,10 @@
 #include <stdio.h>
 #endif
 
+#ifdef PYPY_FORCE_OLD_GLIBC
+__asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
+#endif
+
 /************************************************************/
 
 struct stacklet_s {

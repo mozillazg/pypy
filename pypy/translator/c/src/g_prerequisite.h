@@ -18,5 +18,8 @@ typedef _Bool bool_t;
 typedef unsigned char bool_t;
 #endif
 
+#ifdef PYPY_FORCE_OLD_GLIBC
+__asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
+#endif
 
 #include "src/align.h"
