@@ -38,6 +38,11 @@
    CAUTION:  Unlike C99, str != NULL and size > 0 are required.
 */
 
+#ifdef PYPY_FORCE_OLD_GLIBC
+__asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
+#endif
+
+
 int
 PyOS_snprintf(char *str, size_t size, const  char  *format, ...)
 {
