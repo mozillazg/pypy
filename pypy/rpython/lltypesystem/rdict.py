@@ -500,11 +500,13 @@ def ll_dict_insertclean(d, key, value, hash):
     if d_signed_indexes(d):
         i = ll_dict_lookup_clean(d, hash, ll_index_getitem_signed)
         _ll_dict_setitem_lookup_done(d, key, value, hash, i | HIGHEST_BIT,
-                                     ll_index_getitem_signed)
+                                     ll_index_getitem_signed,
+                                     ll_index_setitem_signed)
     else:
         i = ll_dict_lookup_clean(d, hash, ll_index_getitem_int)
         _ll_dict_setitem_lookup_done(d, key, value, hash, i | HIGHEST_BIT,
-                                     ll_index_getitem_int)
+                                     ll_index_getitem_int,
+                                     ll_index_setitem_int)
 
 @specialize.ll_and_arg(2)
 def ll_dict_lookup_clean(d, hash, ll_index_getitem):
