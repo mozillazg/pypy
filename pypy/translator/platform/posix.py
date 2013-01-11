@@ -112,6 +112,10 @@ class BasePosix(Platform):
         else:
             cflags = self.cflags + self.standalone_only
 
+        # disables glibc source fortify because
+        # it requires glibc 2.15 for the __fdel_chk symbol
+        cflags.append('-D_FORTIFY_SOURCE=0')
+
         m = GnuMakefile(path)
         m.exe_name = exe_name
         m.eci = eci
