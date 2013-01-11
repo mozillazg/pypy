@@ -356,12 +356,12 @@ MAX_INT_MASK = ~(2 ** 31 - 1)
 MAX_SHORT_MASK = ~(2 ** 16 - 1)
 MAX_BYTE_MASK = ~(2 ** 8 - 1)
 
-@jit.look_inside_iff(lambda n : jit.isconstant(n))
 def _ll_malloc_indexes(n):
     # XXXX 64 bit only
     #if n & MAX_INT_MASK:
     res = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                 lltype.malloc(DICTINDEX_SIGNED.TO, n))
+                                 lltype.malloc(DICTINDEX_SIGNED.TO, n,
+                                               zero=True))
     #elif n & MAX_SHORT_MASK:
     #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
     #                                 lltype.malloc(DICTINDEX_INT.TO, n))
@@ -371,15 +371,11 @@ def _ll_malloc_indexes(n):
     #else:
     #    res = lltype.cast_opaque_ptr(llmemory.GCREF,
     #                                 lltype.malloc(DICTINDEX_BYTE.TO, n))
-    i = 0
-    while i < n:
-        ll_index_setitem(n, res, i, FREE)
-        i += 1
     return res
 
 def ll_index_getitem(size, indexes, i):
     #if size & MAX_INT_MASK:
-    return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i]
+    return lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] - 2
     #elif size & MAX_SHORT_MASK:    
     #    return rffi.cast(lltype.Signed,
     #                     lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i])
@@ -392,7 +388,7 @@ def ll_index_getitem(size, indexes, i):
 
 def ll_index_setitem(size, indexes, i, v):
     #if size & MAX_INT_MASK:
-    lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v
+    lltype.cast_opaque_ptr(DICTINDEX_SIGNED, indexes)[i] = v + 2
     #elif size & MAX_SHORT_MASK:    
     #    lltype.cast_opaque_ptr(DICTINDEX_INT, indexes)[i] = rffi.cast(
     #        rffi.INT_real, v)
