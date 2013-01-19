@@ -656,6 +656,31 @@ class VRefTests:
         res = self.meta_interp(f, [10])
         assert res == 0
 
+    def test_force_virtual_vref(self):
+        myjitdriver = JitDriver(greens=[], reds=['n', 'ec'])
+
+        class ExecutionContext(object):
+            pass
+
+        class Frame(object):
+            pass
+
+        def f(n):
+            ec = ExecutionContext()
+            while n > 0:
+                myjitdriver.jit_merge_point(n=n, ec=ec)
+                frame = Frame()
+                ec.topframeref = virtual_ref(frame)
+                ec.topframeref()
+                frame_vref = ec.topframeref
+                ec.topframeref = vref_None
+                virtual_ref_finish(frame_vref, frame)
+                n -= 1
+            return n
+        res = self.meta_interp(f, [10])
+        assert res == 0
+        self.check_resops({'int_sub': 1, 'int_gt': 1, 'jump': 1})
+
 
 class TestLLtype(VRefTests, LLJitMixin):
     pass
