@@ -1,8 +1,11 @@
-from pypy.rpython.rmodel import inputconst, log
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass
-from pypy.jit.metainterp import history
+from pypy.annotation import model as annmodel
 from pypy.jit.codewriter import heaptracker
+from pypy.jit.metainterp import history
 from pypy.rlib.jit import InvalidVirtualRef
+from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.rmodel import inputconst, log
+
 
 class VirtualRefInfo:
 
@@ -125,30 +128,32 @@ class VirtualRefInfo:
     # ____________________________________________________________
 
     def get_force_virtual_fnptr(self):
-        #
         def force_virtual_if_necessary(inst):
             if not inst or inst.typeptr != self.jit_virtual_ref_vtable:
                 return inst    # common, fast case
             return self.force_virtual(inst)
-        #
+
         FUNC = lltype.FuncType([rclass.OBJECTPTR], rclass.OBJECTPTR)
-        funcptr = self.warmrunnerdesc.helper_func(
-            lltype.Ptr(FUNC),
-            force_virtual_if_necessary)
-        return inputconst(lltype.typeOf(funcptr), funcptr)
+        args_s = [annmodel.lltype_to_annotation(v) for v in FUNC.ARGS]
+        s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
+        mixlevelann = MixLevelHelperAnnotator(self.warmrunnerdesc.rtyper)
+        c_func = mixlevelann.constfunc(force_virtual_if_necessary, args_s, s_result)
+        mixlevelann.finish()
+        return inputconst(lltype.typeOf(c_func.value), c_func.value)
 
     def get_is_virtual_fnptr(self):
-        #
         def is_virtual(inst):
             if not inst:
                 return False
             return inst.typeptr == self.jit_virtual_ref_vtable
-        #
+
         FUNC = lltype.FuncType([rclass.OBJECTPTR], lltype.Bool)
         funcptr = self.warmrunnerdesc.helper_func(lltype.Ptr(FUNC), is_virtual)
         return inputconst(lltype.typeOf(funcptr), funcptr)
 
     def force_virtual(self, inst):
+        from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
+
         vref = lltype.cast_pointer(lltype.Ptr(self.JIT_VIRTUAL_REF), inst)
         token = vref.virtual_token
         if token != self.TOKEN_NONE:
@@ -161,7 +166,6 @@ class VirtualRefInfo:
                 vref.virtual_token = self.TOKEN_NONE
             else:
                 assert not vref.forced
-                from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
                 ResumeGuardForcedDescr.force_now(self.cpu, token)
                 assert vref.virtual_token == self.TOKEN_NONE
                 assert vref.forced
