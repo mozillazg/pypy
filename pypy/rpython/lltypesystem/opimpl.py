@@ -648,7 +648,7 @@ def op_gc_set_extra_threshold(threshold):
     pass
 
 def op_gc_call_custom_trace(gc, *args):
-    gc._call_custom_trace(*args)
+    gc._call_custom_trace_body(*args)
 
 def op_shrink_array(array, smallersize):
     return False

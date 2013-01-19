@@ -889,6 +889,8 @@ class BaseFrameworkGCTransformer(GCTransformer):
                   resultvar=op.result)
 
     def gct_gc_call_custom_trace(self, hop):
+        import pdb
+        pdb.set_trace()
         args = hop.spaceop.args
         args[3].concretetype
         hop.genop('direct_call', [])

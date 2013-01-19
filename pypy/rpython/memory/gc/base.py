@@ -210,7 +210,7 @@ class GCBase(object):
             i += 1
     trace._annspecialcase_ = 'specialize:arg(2)'
 
-    def _call_custom_trace(self, obj, typeid, callback, arg):
+    def _call_custom_trace_body(self, obj, typeid, callback, arg):
         #def wrapper(item, arg):
         #    if self.is_valid_gc_object(item):
         #        callback(item, arg)
@@ -218,6 +218,12 @@ class GCBase(object):
         for obj_typeid, func in self.custom_trace_funcs:
             if typeid == obj_typeid:
                 func(obj, callback, arg)
+
+
+    @specialize.arg(3)
+    def _call_custom_trace(self, obj, typeid, callback, arg):
+        llop.gc_call_custom_trace(lltype.Void, self, obj, typeid, callback,
+                                  arg)
 
     def _trace_slow_path(self, obj, callback, arg):
         typeid = self.get_type_id(obj)
@@ -238,8 +244,7 @@ class GCBase(object):
         if self.has_custom_trace(typeid):
             # an obscure hack to flow those only when we
             # actually have all typeids
-            llop.gc_call_custom_trace(lltype.Void, self, obj, typeid, callback,
-                                      arg)
+            self._call_custom_trace(obj, typeid, callback, arg)
     _trace_slow_path._annspecialcase_ = 'specialize:arg(2)'
 
     def trace_partial(self, obj, start, stop, callback, arg):
