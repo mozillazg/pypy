@@ -1,14 +1,14 @@
 from pypy.annotation import model as annmodel
 from pypy.jit.codewriter import heaptracker
 from pypy.jit.metainterp import history
+from pypy.objspace.flow.model import Constant
 from pypy.rlib.jit import InvalidVirtualRef
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.rmodel import inputconst, log
 
 
-class VirtualRefInfo:
-
+class VirtualRefInfo(object):
     def __init__(self, warmrunnerdesc):
         self.warmrunnerdesc = warmrunnerdesc
         self.cpu = warmrunnerdesc.cpu

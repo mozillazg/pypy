@@ -1,11 +1,11 @@
 import py
-from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
+from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.exceptiondata import UnknownException
 from pypy.rlib.jit import JitDriver, dont_look_inside, vref_None
 from pypy.rlib.jit import virtual_ref, virtual_ref_finish, InvalidVirtualRef
 from pypy.rlib.jit import non_virtual_ref
 from pypy.rlib.objectmodel import compute_unique_id
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin, _get_jitcodes
+from pypy.jit.metainterp.test.support import LLJitMixin, _get_jitcodes, _get_rtyper
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.virtualref import VirtualRefInfo
 
@@ -21,21 +21,23 @@ class VRefTests:
     def test_rewrite_graphs(self):
         class X:
             pass
+
         def fn():
             x = X()
             vref = virtual_ref(x)
             x1 = vref()                  # jit_force_virtual
             virtual_ref_finish(vref, x)
         #
-        _get_jitcodes(self, self.CPUClass, fn, [], self.type_system)
-        graph = self.all_graphs[0]
-        assert graph.name == 'fn'
+        rtyper = _get_rtyper(fn, [], self.type_system)
+        graph = rtyper.annotator.translator.graphs[0]
+        _get_jitcodes(self, self.CPUClass, rtyper, make_jitcodes=False)
         self.vrefinfo.replace_force_virtual_with_call([graph])
-        #
+        assert graph.name == 'fn'
+
         def check_call(op, fname):
             assert op.opname == 'direct_call'
             assert op.args[0].value._obj._name == fname
-        #
+
         ops = [op for block, op in graph.iterblockops()]
         check_call(ops[-3], 'virtual_ref')
         check_call(ops[-2], 'force_virtual_if_necessary')
