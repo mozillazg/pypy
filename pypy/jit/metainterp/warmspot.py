@@ -218,10 +218,10 @@ class WarmRunnerDesc(object):
 
         verbose = False # not self.cpu.translate_support_code
         self.rewrite_access_helpers()
+        self.rewrite_force_virtual(vrefinfo)
         self.codewriter.make_jitcodes(verbose=verbose)
         self.rewrite_can_enter_jits()
         self.rewrite_set_param_and_get_stats()
-        self.rewrite_force_virtual(vrefinfo)
         self.rewrite_force_quasi_immutable()
         self.add_finish()
         self.metainterp_sd.finish_setup(self.codewriter)

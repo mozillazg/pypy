@@ -224,9 +224,6 @@ def _ll_1_gc_identityhash(x):
 def _ll_1_gc_id(ptr):
     return llop.gc_id(lltype.Signed, ptr)
 
-def _ll_1_jit_force_virtual(inst):
-    return llop.jit_force_virtual(lltype.typeOf(inst), inst)
-
 
 def _ll_2_int_floordiv_ovf_zer(x, y):
     if y == 0:
