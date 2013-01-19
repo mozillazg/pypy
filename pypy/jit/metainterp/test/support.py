@@ -1,5 +1,7 @@
+import sys
 
-import py, sys
+import py
+
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.jit.backend.llgraph import runner
@@ -13,10 +15,16 @@ from pypy.rlib.rfloat import isnan
 from pypy.translator.backendopt.all import backend_optimizations
 
 
-def _get_jitcodes(testself, CPUClass, func, values, type_system,
-                  supports_longlong=False, translationoptions={}, **kwds):
+def _get_rtyper(func, values, type_system, translationoptions={}):
     from pypy.jit.codewriter import support
 
+    func._jit_unroll_safe_ = True
+    return support.annotate(func, values, type_system=type_system,
+                            translationoptions=translationoptions)
+
+
+def _get_jitcodes(testself, CPUClass, rtyper, supports_longlong=False,
+                  make_jitcodes=True, **kwds):
     class FakeJitCell(object):
         __product_token = None
         def get_procedure_token(self):
@@ -47,11 +55,7 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system,
     if kwds.pop('disable_optimizations', False):
         FakeWarmRunnerState.enable_opts = {}
 
-    func._jit_unroll_safe_ = True
-    rtyper = support.annotate(func, values, type_system=type_system,
-                              translationoptions=translationoptions)
     graphs = rtyper.annotator.translator.graphs
-    testself.all_graphs = graphs
     result_kind = history.getkind(graphs[0].getreturnvar().concretetype)[0]
 
     class FakeJitDriverSD:
@@ -79,8 +83,9 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system,
     FakeJitDriverSD.warmstate = testself.warmrunnerstate
     if hasattr(testself, 'finish_setup_for_interp_operations'):
         testself.finish_setup_for_interp_operations()
-    #
-    cw.make_jitcodes(verbose=True)
+
+    if make_jitcodes:
+        cw.make_jitcodes(verbose=True)
 
 def _run_with_blackhole(testself, args):
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
@@ -209,7 +214,8 @@ class JitMixin:
 
     def interp_operations(self, f, args, **kwds):
         # get the JitCodes for the function f
-        _get_jitcodes(self, self.CPUClass, f, args, self.type_system, **kwds)
+        rtyper = _get_rtyper(f, args, self.type_system)
+        _get_jitcodes(self, self.CPUClass, rtyper, **kwds)
         # try to run it with blackhole.py
         result1 = _run_with_blackhole(self, args)
         # try to run it with pyjitpl.py
