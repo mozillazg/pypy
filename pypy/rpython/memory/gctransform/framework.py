@@ -888,6 +888,11 @@ class BaseFrameworkGCTransformer(GCTransformer):
                                   source_addr, dest_addr] + op.args[2:],
                   resultvar=op.result)
 
+    def gct_gc_call_custom_trace(self, hop):
+        args = hop.spaceop.args
+        args[3].concretetype
+        hop.genop('direct_call', [])
+
     def gct_weakref_create(self, hop):
         op = hop.spaceop
 
@@ -1216,6 +1221,7 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         else:
             lltype2vtable = None
         self.translator = translator
+        self.custom_trace_funcs = []
         super(TransformerLayoutBuilder, self).__init__(GCClass, lltype2vtable)
 
     def has_finalizer(self, TYPE):
@@ -1229,7 +1235,7 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
     def has_custom_trace(self, TYPE):
         rtti = get_rtti(TYPE)
-        return rtti is not None and getattr(rtti._obj, 'custom_trace_funcptr',
+        return rtti is not None and getattr(rtti._obj, 'custom_trace_func',
                                             None)
 
     def make_finalizer_funcptr_for_type(self, TYPE):
@@ -1249,16 +1255,14 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         light = not FinalizerAnalyzer(self.translator).analyze_light_finalizer(g)
         return fptr, light
 
-    def make_custom_trace_funcptr_for_type(self, TYPE):
+    def get_custom_trace_func(self, TYPE):
         if not self.has_custom_trace(TYPE):
             return None
         rtti = get_rtti(TYPE)
-        fptr = rtti._obj.custom_trace_funcptr
-        if not hasattr(fptr._obj, 'graph'):
-            ll_func = fptr._obj._callable
-            fptr = self.transformer.annotate_finalizer(ll_func,
-                    [llmemory.Address, llmemory.Address], llmemory.Address)
-        return fptr
+        return rtti._obj.custom_trace_func
+
+    def record_custom_trace(self, typeid, custom_trace_func):
+        self.custom_trace_funcs.append((typeid, custom_trace_func))
 
 
 def gen_zero_gc_pointers(TYPE, v, llops, previous_steps=None):

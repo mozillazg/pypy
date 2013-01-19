@@ -500,6 +500,7 @@ LL_OPERATIONS = {
     'gc_gcflag_extra'     : LLOp(),
     'gc_add_memory_pressure': LLOp(),
     'gc_set_extra_threshold': LLOp(canrun=True, canmallocgc=True),
+    'gc_call_custom_trace': LLOp(canrun=True), # cannot malloc
 
     # ------- JIT & GC interaction, only for some GCs ----------
 

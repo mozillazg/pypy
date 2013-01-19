@@ -103,6 +103,7 @@ class BaseGCTransformer(object):
             self.minimalgctransformer = self.MinimalGCTransformer(self)
         else:
             self.minimalgctransformer = None
+        self.call_custom_trace_cache = {}
 
     def get_lltype_of_exception_value(self):
         exceptiondata = self.translator.rtyper.getexceptiondata()

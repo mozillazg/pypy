@@ -26,7 +26,7 @@ class GCManagedHeap(object):
     def prepare_graphs(self, flowgraphs):
         lltype2vtable = self.llinterp.typer.lltype2vtable
         # only valid for direct layout builder
-        self.gc.custom_trace_funcs = {}
+        self.gc.custom_trace_funcs = []
         layoutbuilder = DirectRunLayoutBuilder(self.gc.__class__,
                                                lltype2vtable,
                                                self.llinterp,
@@ -232,7 +232,7 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         return llhelper(gctypelayout.GCData.FINALIZER_OR_CT, ll_finalizer), light
 
     def record_custom_trace(self, tid, custom_trace_func):
-        self.custom_trace_funcs[tid] = custom_trace_func
+        self.custom_trace_funcs.append((tid, custom_trace_func))
 
     def get_custom_trace_func(self, TYPE):
         from pypy.rpython.memory.gctransform.support import get_rtti

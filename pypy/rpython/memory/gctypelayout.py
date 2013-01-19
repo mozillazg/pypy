@@ -183,7 +183,7 @@ def check_typeid(typeid):
               "invalid type_id")
 
 
-def encode_type_shape(builder, info, TYPE, index):
+def encode_type_shape(builder, info, TYPE, index, type_id):
     """Encode the shape of the TYPE into the TYPE_INFO structure 'info'."""
     offsets = offsets_to_gc_pointers(TYPE)
     infobits = index
@@ -202,7 +202,7 @@ def encode_type_shape(builder, info, TYPE, index):
     custom_trace_func = builder.get_custom_trace_func(TYPE)
     if custom_trace_func is not None:
         infobits |= T_HAS_CUSTOM_TRACE
-        builder.record_custom_trace(index, custom_trace_func)
+        builder.record_custom_trace(type_id, custom_trace_func)
     #
     if not TYPE._is_varsize():
         info.fixedsize = llarena.round_up_for_allocation(
@@ -296,9 +296,10 @@ class TypeLayoutBuilder(object):
                 info = fullinfo.header
             type_id = self.type_info_group.add_member(fullinfo)
             if self.can_encode_type_shape:
-                encode_type_shape(self, info, TYPE, type_id.index)
+                encode_type_shape(self, info, TYPE, type_id.index, type_id)
             else:
-                self._pending_type_shapes.append((info, TYPE, type_id.index))
+                self._pending_type_shapes.append((info, TYPE, type_id.index,
+                                                  type_id))
             # store it
             self.id_of_type[TYPE] = type_id
             self.add_vtable_after_typeinfo(TYPE)
@@ -341,8 +342,8 @@ class TypeLayoutBuilder(object):
     def encode_type_shapes_now(self):
         if not self.can_encode_type_shape:
             self.can_encode_type_shape = True
-            for info, TYPE, index in self._pending_type_shapes:
-                encode_type_shape(self, info, TYPE, index)
+            for info, TYPE, index, type_id in self._pending_type_shapes:
+                encode_type_shape(self, info, TYPE, index, type_id)
             del self._pending_type_shapes
 
     def delay_encoding(self):

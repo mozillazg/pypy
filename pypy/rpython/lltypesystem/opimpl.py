@@ -647,6 +647,9 @@ def op_gc_assume_young_pointers(addr):
 def op_gc_set_extra_threshold(threshold):
     pass
 
+def op_gc_call_custom_trace(gc, *args):
+    gc._call_custom_trace(*args)
+
 def op_shrink_array(array, smallersize):
     return False
 

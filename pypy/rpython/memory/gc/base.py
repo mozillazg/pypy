@@ -6,6 +6,7 @@ from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
 from pypy.rpython.memory.support import AddressDict, null_address_dict
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
+from pypy.rlib.objectmodel import specialize
 
 TYPEID_MAP = lltype.GcStruct('TYPEID_MAP', ('count', lltype.Signed),
                              ('size', lltype.Signed),
@@ -210,11 +211,13 @@ class GCBase(object):
     trace._annspecialcase_ = 'specialize:arg(2)'
 
     def _call_custom_trace(self, obj, typeid, callback, arg):
-        def wrapper(item, arg):
-            if self.is_valid_gc_object(item):
-                callback(item, arg)
-        
-        self.custom_trace_funcs[typeid.index](obj, wrapper, arg)
+        #def wrapper(item, arg):
+        #    if self.is_valid_gc_object(item):
+        #        callback(item, arg)
+
+        for obj_typeid, func in self.custom_trace_funcs:
+            if typeid == obj_typeid:
+                func(obj, callback, arg)
 
     def _trace_slow_path(self, obj, callback, arg):
         typeid = self.get_type_id(obj)
@@ -233,7 +236,10 @@ class GCBase(object):
                 item += itemlength
                 length -= 1
         if self.has_custom_trace(typeid):
-            self._call_custom_trace(obj, typeid, callback, arg)
+            # an obscure hack to flow those only when we
+            # actually have all typeids
+            llop.gc_call_custom_trace(lltype.Void, self, obj, typeid, callback,
+                                      arg)
     _trace_slow_path._annspecialcase_ = 'specialize:arg(2)'
 
     def trace_partial(self, obj, start, stop, callback, arg):
