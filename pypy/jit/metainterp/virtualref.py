@@ -139,7 +139,7 @@ class VirtualRefInfo:
         mixlevelann = MixLevelHelperAnnotator(self.warmrunnerdesc.rtyper)
         c_func = mixlevelann.constfunc(force_virtual_if_necessary, args_s, s_result)
         mixlevelann.finish()
-        return inputconst(lltype.typeOf(c_func.value), c_func.value)
+        return c_func
 
     def get_is_virtual_fnptr(self):
         def is_virtual(inst):
