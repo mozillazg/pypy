@@ -1,26 +1,26 @@
+import os
+import sys
+
 import py
+
 from rpython.annotator import model as annmodel
-from rpython.rtyper.lltypesystem import lltype, rstr
-from rpython.rtyper.lltypesystem import ll2ctypes
-from rpython.rtyper.lltypesystem.llmemory import cast_ptr_to_adr
-from rpython.rtyper.lltypesystem.llmemory import itemoffsetof, raw_memcopy
 from rpython.annotator.model import lltype_to_annotation
-from rpython.tool.sourcetools import func_with_new_name
-from rpython.rlib.objectmodel import Symbolic
-from rpython.rlib.objectmodel import keepalive_until_here, enforceargs
-from rpython.rlib import rarithmetic, rgc
-from rpython.rtyper.extregistry import ExtRegistryEntry
-from rpython.rlib.unroll import unrolling_iterable
-from rpython.rtyper.tool.rfficache import platform, sizeof_c_type
-from rpython.translator.tool.cbuild import ExternalCompilationInfo
-from rpython.rtyper.annlowlevel import llhelper
-from rpython.rlib.objectmodel import we_are_translated
-from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, assert_str0
-from rpython.rlib import jit
-from rpython.rtyper.lltypesystem import llmemory
+from rpython.rlib import rarithmetic, rgc, jit
+from rpython.rlib.objectmodel import (Symbolic, keepalive_until_here,
+    enforceargs, we_are_translated)
 from rpython.rlib.rarithmetic import maxint, LONG_BIT
+from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, assert_str0
+from rpython.rlib.unroll import unrolling_iterable
+from rpython.rtyper.annlowlevel import llhelper
+from rpython.rtyper.extregistry import ExtRegistryEntry
+from rpython.rtyper.lltypesystem import lltype, ll2ctypes, llmemory
+from rpython.rtyper.lltypesystem.llmemory import (cast_ptr_to_adr, itemoffsetof,
+    raw_memcopy)
+from rpython.rtyper.tool.rfficache import platform, sizeof_c_type
+from rpython.tool.sourcetools import func_with_new_name
 from rpython.translator.platform import CompilationError
-import os, sys
+from rpython.translator.tool.cbuild import ExternalCompilationInfo
+
 
 class CConstant(Symbolic):
     """ A C-level constant, maybe #define, rendered directly.
