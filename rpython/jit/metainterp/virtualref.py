@@ -1,4 +1,4 @@
-from rpython.annotation import model as annmodel
+from rpython.annotator import model as annmodel
 from rpython.jit.codewriter import heaptracker
 from rpython.jit.metainterp import history
 from rpython.rlib.jit import InvalidVirtualRef
