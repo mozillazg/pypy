@@ -1,18 +1,20 @@
-import py, weakref
+import weakref
+
+import py
+
 from rpython.jit.backend import model
 from rpython.jit.backend.llgraph import support
-from rpython.jit.metainterp.history import AbstractDescr
-from rpython.jit.metainterp.history import Const, getkind
-from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID
-from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter import longlong, heaptracker
 from rpython.jit.codewriter.effectinfo import EffectInfo
-
+from rpython.jit.metainterp.history import (AbstractDescr, Const, getkind, INT,
+    REF, FLOAT, VOID)
+from rpython.jit.metainterp.resoperation import rop
 from rpython.rtyper.llinterp import LLInterpreter, LLException
 from rpython.rtyper.lltypesystem import lltype, llmemory, rffi, rclass, rstr
-
+from rpython.rlib.objectmodel import compute_unique_id
 from rpython.rlib.rarithmetic import ovfcheck, r_uint, r_ulonglong
 from rpython.rlib.rtimer import read_timestamp
+
 
 class LLTrace(object):
     has_been_freed = False
@@ -171,6 +173,7 @@ class LLGraphCPU(model.AbstractCPU):
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
         self.descrs = {}
+        self.token_to_frame = {}
         class MiniStats:
             pass
         self.stats = stats or MiniStats()
@@ -262,7 +265,7 @@ class LLGraphCPU(model.AbstractCPU):
         return gcref
 
     def force(self, force_token):
-        frame = force_token
+        frame = self.token_to_frame[force_token]
         assert isinstance(frame, LLFrame)
         assert frame.forced_deadframe is None
         values = []
@@ -905,7 +908,8 @@ class LLFrame(object):
         return self.cpu.bh_new_with_vtable(vtable, descr)
 
     def execute_force_token(self, _):
-        return self
+        self.cpu.token_to_frame[compute_unique_id(self)] = self
+        return compute_unique_id(self)
 
     def execute_cond_call_gc_wb(self, descr, a, b):
         py.test.skip("cond_call_gc_wb not supported")

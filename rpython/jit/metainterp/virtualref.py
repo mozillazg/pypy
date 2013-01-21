@@ -1,7 +1,7 @@
 from rpython.annotator import model as annmodel
 from rpython.jit.codewriter import heaptracker
 from rpython.jit.metainterp import history
-from rpython.rlib.jit import InvalidVirtualRef
+from rpython.rlib.jit import InvalidVirtualRef, look_inside_iff
 from rpython.rtyper.annlowlevel import MixLevelHelperAnnotator
 from rpython.rtyper.lltypesystem import lltype, llmemory, rclass
 from rpython.rtyper.rmodel import inputconst, log
