@@ -132,6 +132,7 @@ class VirtualRefInfo(object):
                 return inst    # common, fast case
             return self.force_virtual(inst)
 
+        self.set_force_now_ptr()
         FUNC = lltype.FuncType([rclass.OBJECTPTR], rclass.OBJECTPTR)
         args_s = [annmodel.lltype_to_annotation(v) for v in FUNC.ARGS]
         s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
@@ -139,6 +140,17 @@ class VirtualRefInfo(object):
         c_func = mixlevelann.constfunc(force_virtual_if_necessary, args_s, s_result)
         mixlevelann.finish()
         return c_func
+
+    def set_force_now_ptr(self):
+        if hasattr(self, "force_now_ptr"):
+            return
+
+        def force_now(token):
+            from rpython.jit.metainterp.compile import ResumeGuardForcedDescr
+            ResumeGuardForcedDescr.force_now(self.cpu, token)
+        FUNC = lltype.FuncType([lltype.Signed], lltype.Void)
+        funcptr = self.warmrunnerdesc.helper_func(lltype.Ptr(FUNC), force_now)
+        self.force_now_ptr = funcptr
 
     def get_is_virtual_fnptr(self):
         def is_virtual(inst):
@@ -151,8 +163,6 @@ class VirtualRefInfo(object):
         return inputconst(lltype.typeOf(funcptr), funcptr)
 
     def force_virtual(self, inst):
-        from rpython.jit.metainterp.compile import ResumeGuardForcedDescr
-
         vref = lltype.cast_pointer(lltype.Ptr(self.JIT_VIRTUAL_REF), inst)
         token = vref.virtual_token
         if token != self.TOKEN_NONE:
@@ -165,7 +175,7 @@ class VirtualRefInfo(object):
                 vref.virtual_token = self.TOKEN_NONE
             else:
                 assert not vref.forced
-                ResumeGuardForcedDescr.force_now(self.cpu, token)
+                self.force_now_ptr(token)
                 assert vref.virtual_token == self.TOKEN_NONE
                 assert vref.forced
         elif not vref.forced:
