@@ -11,8 +11,10 @@ The output is found in the directory /tmp/usession-YOURNAME/build/.
 
 import shutil
 import sys
-import py
 import os
+#Add toplevel repository dir to sys.path
+sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+import py
 import fnmatch
 from rpython.tool.udir import udir
 
@@ -43,7 +45,7 @@ def fix_permissions(basedir):
 
 def package(basedir, name='pypy-nightly', rename_pypy_c='pypy',
             copy_to_dir = None, override_pypy_c = None):
-    basedir = py.path.local(basedir)
+    basedir = py.path.local('goal', basedir)
     if override_pypy_c is None:
         basename = 'pypy-c'
         if sys.platform == 'win32':
