@@ -46,14 +46,17 @@ else:
     #UNICHR = unichr
     #ORD = ord
     def UNICHR(c):
+        assert not we_are_translated()
         if c <= sys.maxunicode and c <= MAXUNICODE:
             return unichr(c)
         else:
             c -= 0x10000
             return (unichr(0xD800 + (c >> 10)) +
                     unichr(0xDC00 + (c & 0x03FF)))
+    UNICHR._flowspace_rewrite_directly_as_ = unichr
     
     def ORD(u):
+        assert not we_are_translated()
         assert isinstance(u, unicode)
         if len(u) == 1:
             return ord(u[0])
@@ -63,6 +66,7 @@ else:
             if 0xD800 <= ch1 <= 0xDBFF and 0xDC00 <= ch2 <= 0xDFFF:
                 return (((ch1 - 0xD800) << 10) | (ch2 - 0xDC00)) + 0x10000
         raise ValueError
+    ORD._flowspace_rewrite_directly_as_ = ord
 
 def _STORECHAR(result, CH, byteorder):
      hi = chr(((CH) >> 8) & 0xff)
