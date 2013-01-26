@@ -84,7 +84,8 @@ def get_mock_model():
                 return str(self.value)
 
         class ConstInt(Const):
-            pass
+            def getint(self):
+                return self.value
 
         class ConstPtr(Const):
             pass
