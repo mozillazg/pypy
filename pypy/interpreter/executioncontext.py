@@ -157,9 +157,12 @@ class ExecutionContext(object):
             self._trace(frame, 'exception', None, operationerr)
         #operationerr.print_detailed_traceback(self.space)
 
-    def sys_exc_info(self): # attn: the result is not the wrapped sys.exc_info() !!!
-        """Implements sys.exc_info().
-        Return an OperationError instance or None."""
+    @jit.unroll_safe
+    def sys_exc_info(self):
+        """
+        Implements sys.exc_info(). It does not have the same return type as
+        sys.exc_info(). Return an OperationError instance or None.
+        """
         frame = self.gettopframe_nohidden()
         while frame:
             if frame.last_exception is not None:
