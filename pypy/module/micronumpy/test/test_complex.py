@@ -6,8 +6,8 @@ from pypy.conftest import option
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app
 from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
-from pypy.rlib.rfloat import isnan, isinf, copysign
-from pypy.rlib.rcomplex import c_pow
+from rpython.rlib.rfloat import isnan, isinf, copysign
+from rpython.rlib.rcomplex import c_pow
 
 
 def rAlmostEqual(a, b, rel_err=2e-15, abs_err=5e-323, msg='', isnumpy=False):
@@ -577,6 +577,12 @@ class AppTestUfuncs(BaseNumpyAppTest):
             raises((TypeError, AttributeError), 'c2.imag = 10.')
             assert(real(c2) == 3.0)
             assert(imag(c2) == 4.0)
+
+    def test_conj(self):
+        from _numpypy import array
+
+        a = array([1 + 2j, 1 - 2j])
+        assert (a.conj() == [1 - 2j, 1 + 2j]).all()
 
     def test_math(self):
         if self.isWindows:
