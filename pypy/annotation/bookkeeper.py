@@ -1,6 +1,9 @@
 """
 The Bookkeeper class.
 """
+
+from __future__ import absolute_import
+
 import sys, types, inspect, weakref
 
 from pypy.objspace.flow.model import Constant
@@ -10,13 +13,13 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, s_ImpossibleValue, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
      SomeUnicodeString, SomeList, SomeObject, HarmlesslyBlocked, \
-     SomeWeakRef, lltype_to_annotation, SomeType
+     SomeWeakRef, lltype_to_annotation, SomeType, SomeByteArray
 from pypy.annotation.classdef import InstanceSource, ClassDef
 from pypy.annotation.listdef import ListDef, ListItem
 from pypy.annotation.dictdef import DictDef
 from pypy.annotation import description
 from pypy.annotation.signature import annotationoftype
-from pypy.interpreter.argument import ArgumentsForTranslation
+from pypy.objspace.flow.argument import ArgumentsForTranslation
 from pypy.rlib.objectmodel import r_dict, Symbolic
 from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -101,7 +104,7 @@ class Stats(object):
 
     def consider_list_delitem(self, idx):
         return self.indexrepr(idx)
-    
+
     def consider_str_join(self, s):
         if s.is_constant():
             return repr(s.const)
@@ -224,7 +227,7 @@ class Bookkeeper(object):
                 check_no_flags(s_value_or_def.listdef.listitem)
             elif isinstance(s_value_or_def, SomeDict):
                 check_no_flags(s_value_or_def.dictdef.dictkey)
-                check_no_flags(s_value_or_def.dictdef.dictvalue)                
+                check_no_flags(s_value_or_def.dictdef.dictvalue)
             elif isinstance(s_value_or_def, SomeTuple):
                 for s_item in s_value_or_def.items:
                     check_no_flags(s_item)
@@ -238,9 +241,9 @@ class Bookkeeper(object):
             elif isinstance(s_value_or_def, ListItem):
                 if s_value_or_def in seen:
                     return
-                seen.add(s_value_or_def)                
+                seen.add(s_value_or_def)
                 check_no_flags(s_value_or_def.s_value)
-            
+
         for clsdef in self.classdefs:
             check_no_flags(clsdef)
 
@@ -346,6 +349,8 @@ class Bookkeeper(object):
                 result = SomeUnicodeCodePoint()
             else:
                 result = SomeUnicodeString()
+        elif tp is bytearray:
+            result = SomeByteArray()
         elif tp is tuple:
             result = SomeTuple(items = [self.immutablevalue(e, need_const) for e in x])
         elif tp is float:
@@ -366,14 +371,14 @@ class Bookkeeper(object):
                 listdef = ListDef(self, s_ImpossibleValue)
                 for e in x:
                     listdef.generalize(self.immutablevalue(e, False))
-                result = SomeList(listdef)    
+                result = SomeList(listdef)
         elif tp is dict or tp is r_dict:
             if need_const:
                 key = Constant(x)
                 try:
                     return self.immutable_cache[key]
                 except KeyError:
-                    result = SomeDict(DictDef(self, 
+                    result = SomeDict(DictDef(self,
                                               s_ImpossibleValue,
                                               s_ImpossibleValue,
                                               is_r_dict = tp is r_dict))
@@ -396,7 +401,7 @@ class Bookkeeper(object):
                     result.const_box = key
                     return result
             else:
-                dictdef = DictDef(self, 
+                dictdef = DictDef(self,
                 s_ImpossibleValue,
                 s_ImpossibleValue,
                 is_r_dict = tp is r_dict)
@@ -545,7 +550,7 @@ class Bookkeeper(object):
             return True
         else:
             return False
-        
+
     def getfrozen(self, pyobj):
         return description.FrozenDesc(self, pyobj)
 
@@ -566,7 +571,7 @@ class Bookkeeper(object):
         key = (x.__class__, x)
         if key in self.seen_mutable:
             return
-        clsdef = self.getuniqueclassdef(x.__class__)        
+        clsdef = self.getuniqueclassdef(x.__class__)
         self.seen_mutable[key] = True
         self.event('mutable', x)
         source = InstanceSource(self, x)
@@ -586,7 +591,7 @@ class Bookkeeper(object):
         except KeyError:
             access_sets = map[attrname] = UnionFind(description.ClassAttrFamily)
         return access_sets
-    
+
     def pbc_getattr(self, pbc, s_attr):
         assert s_attr.is_constant()
         attr = s_attr.const
@@ -598,7 +603,7 @@ class Bookkeeper(object):
         first = descs[0]
         if len(descs) == 1:
             return first.s_read_attribute(attr)
-        
+
         change = first.mergeattrfamilies(descs[1:], attr)
         attrfamily = first.getattrfamily(attr)
 
@@ -700,7 +705,7 @@ class Bookkeeper(object):
     def ondegenerated(self, what, s_value, where=None, called_from_graph=None):
         self.annotator.ondegenerated(what, s_value, where=where,
                                      called_from_graph=called_from_graph)
-        
+
     def whereami(self):
         return self.annotator.whereami(self.position_key)
 

@@ -1,5 +1,4 @@
 from weakref import WeakValueDictionary
-from pypy.tool.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.rpython.error import TyperError
 from pypy.rlib.objectmodel import malloc_zero_filled, we_are_translated
@@ -9,18 +8,17 @@ from pypy.rlib.debug import ll_assert
 from pypy.rlib import jit
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.rmodel import inputconst, IntegerRepr
-from pypy.rpython.rstr import AbstractStringRepr,AbstractCharRepr,\
-     AbstractUniCharRepr, AbstractStringIteratorRepr,\
-     AbstractLLHelpers, AbstractUnicodeRepr
+from pypy.rpython.rstr import (AbstractStringRepr, AbstractCharRepr,
+     AbstractUniCharRepr, AbstractStringIteratorRepr,
+     AbstractLLHelpers, AbstractUnicodeRepr)
 from pypy.rpython.lltypesystem import ll_str
 from pypy.rpython.lltypesystem.lltype import \
      GcStruct, Signed, Array, Char, UniChar, Ptr, malloc, \
      Bool, Void, GcArray, nullptr, cast_primitive, typeOf,\
-     staticAdtMethod, GcForwardReference
+     staticAdtMethod, GcForwardReference, malloc
 from pypy.rpython.rmodel import Repr
 from pypy.rpython.lltypesystem import llmemory
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rpython.lltypesystem.lloperation import llop
 
 # ____________________________________________________________
 #
@@ -53,10 +51,15 @@ def emptystrfun():
 def emptyunicodefun():
     return emptyunicode
 
-def _new_copy_contents_fun(TP, CHAR_TP, name):
-    def _str_ofs(item):
-        return (llmemory.offsetof(TP, 'chars') +
-                llmemory.itemoffsetof(TP.chars, 0) +
+def _new_copy_contents_fun(SRC_TP, DST_TP, CHAR_TP, name):
+    def _str_ofs_src(item):
+        return (llmemory.offsetof(SRC_TP, 'chars') +
+                llmemory.itemoffsetof(SRC_TP.chars, 0) +
+                llmemory.sizeof(CHAR_TP) * item)
+
+    def _str_ofs_dst(item):
+        return (llmemory.offsetof(DST_TP, 'chars') +
+                llmemory.itemoffsetof(DST_TP.chars, 0) +
                 llmemory.sizeof(CHAR_TP) * item)
 
     @jit.oopspec('stroruni.copy_contents(src, dst, srcstart, dststart, length)')
@@ -70,21 +73,23 @@ def _new_copy_contents_fun(TP, CHAR_TP, name):
         # because it might move the strings.  The keepalive_until_here()
         # are obscurely essential to make sure that the strings stay alive
         # longer than the raw_memcopy().
+        assert typeOf(src).TO == SRC_TP
+        assert typeOf(dst).TO == DST_TP
         assert srcstart >= 0
         assert dststart >= 0
         assert length >= 0
-        src = llmemory.cast_ptr_to_adr(src) + _str_ofs(srcstart)
-        dst = llmemory.cast_ptr_to_adr(dst) + _str_ofs(dststart)
+        src = llmemory.cast_ptr_to_adr(src) + _str_ofs_src(srcstart)
+        dst = llmemory.cast_ptr_to_adr(dst) + _str_ofs_dst(dststart)
         llmemory.raw_memcopy(src, dst, llmemory.sizeof(CHAR_TP) * length)
         keepalive_until_here(src)
         keepalive_until_here(dst)
     copy_string_contents._always_inline_ = True
     return func_with_new_name(copy_string_contents, 'copy_%s_contents' % name)
 
-copy_string_contents = _new_copy_contents_fun(STR, Char, 'string')
-copy_unicode_contents = _new_copy_contents_fun(UNICODE, UniChar, 'unicode')
+copy_string_contents = _new_copy_contents_fun(STR, STR, Char, 'string')
+copy_unicode_contents = _new_copy_contents_fun(UNICODE, UNICODE, UniChar,
+                                               'unicode')
 
-SIGNED_ARRAY = GcArray(Signed)
 CONST_STR_CACHE = WeakValueDictionary()
 CONST_UNICODE_CACHE = WeakValueDictionary()
 
@@ -201,28 +206,6 @@ class UniCharRepr(AbstractUniCharRepr, UnicodeRepr):
 #  get flowed and annotated, mostly with SomePtr.
 #
 
-def ll_construct_restart_positions(s, l):
-    # Construct the array of possible restarting positions
-    # T = Array_of_ints [-1..len2]
-    # T[-1] = -1 s2.chars[-1] is supposed to be unequal to everything else
-    T = malloc( SIGNED_ARRAY, l)
-    T[0] = 0
-    i = 1
-    j = 0
-    while i<l:
-        if s.chars[i] == s.chars[j]:
-            j += 1
-            T[i] = j
-            i += 1
-        elif j>0:
-            j = T[j-1]
-        else:
-            T[i] = 0
-            i += 1
-            j = 0
-    return T
-
-
 FAST_COUNT = 0
 FAST_FIND = 1
 FAST_RFIND = 2
@@ -233,6 +216,7 @@ from pypy.rlib.rarithmetic import LONG_BIT as BLOOM_WIDTH
 
 def bloom_add(mask, c):
     return mask | (1 << (ord(c) & (BLOOM_WIDTH - 1)))
+
 
 def bloom(mask, c):
     return mask & (1 << (ord(c) & (BLOOM_WIDTH - 1)))
@@ -284,8 +268,8 @@ class LLHelpers(AbstractLLHelpers):
 
     def ll_stritem_nonneg(s, i):
         chars = s.chars
-        ll_assert(i>=0, "negative str getitem index")
-        ll_assert(i<len(chars), "str getitem index out of bound")
+        ll_assert(i >= 0, "negative str getitem index")
+        ll_assert(i < len(chars), "str getitem index out of bound")
         return chars[i]
     ll_stritem_nonneg._annenforceargs_ = [None, int]
 
@@ -309,6 +293,15 @@ class LLHelpers(AbstractLLHelpers):
             s.chars[i] = cast_primitive(UniChar, str.chars[i])
         return s
 
+    def ll_str2bytearray(str):
+        from pypy.rpython.lltypesystem.rbytearray import BYTEARRAY
+        
+        lgt = len(str.chars)
+        b = malloc(BYTEARRAY, lgt)
+        for i in range(lgt):
+            b.chars[i] = str.chars[i]
+        return b
+
     @jit.elidable
     def ll_strhash(s):
         # unlike CPython, there is no reason to avoid to return -1
@@ -324,18 +317,29 @@ class LLHelpers(AbstractLLHelpers):
             s.hash = x
         return x
 
+    def ll_length(s):
+        return len(s.chars)
+
     def ll_strfasthash(s):
         return s.hash     # assumes that the hash is already computed
 
     @jit.elidable
     def ll_strconcat(s1, s2):
-        len1 = len(s1.chars)
-        len2 = len(s2.chars)
+        len1 = s1.length()
+        len2 = s2.length()
         # a single '+' like this is allowed to overflow: it gets
         # a negative result, and the gc will complain
-        newstr = s1.malloc(len1 + len2)
-        s1.copy_contents(s1, newstr, 0, 0, len1)
-        s1.copy_contents(s2, newstr, 0, len1, len2)
+        # the typechecks below are if TP == BYTEARRAY
+        if typeOf(s1) == Ptr(STR):
+            newstr = s2.malloc(len1 + len2)
+            newstr.copy_contents_from_str(s1, newstr, 0, 0, len1)
+        else:
+            newstr = s1.malloc(len1 + len2)            
+            newstr.copy_contents(s1, newstr, 0, 0, len1)
+        if typeOf(s2) == Ptr(STR):
+            newstr.copy_contents_from_str(s2, newstr, 0, len1, len2)
+        else:
+            newstr.copy_contents(s2, newstr, 0, len1, len2)
         return newstr
     ll_strconcat.oopspec = 'stroruni.concat(s1, s2)'
 
@@ -373,11 +377,6 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
         return result
 
-    def ll_upper_char(ch):
-        if 'a' <= ch <= 'z':
-            ch = chr(ord(ch) - 32)
-        return ch
-
     @jit.elidable
     def ll_lower(s):
         s_chars = s.chars
@@ -391,11 +390,6 @@ class LLHelpers(AbstractLLHelpers):
             result.chars[i] = LLHelpers.ll_lower_char(s_chars[i])
             i += 1
         return result
-
-    def ll_lower_char(ch):
-        if 'A' <= ch <= 'Z':
-            ch = chr(ord(ch) + 32)
-        return ch
 
     def ll_join(s, length, items):
         s_chars = s.chars
@@ -632,9 +626,9 @@ class LLHelpers(AbstractLLHelpers):
             i = start - 1
             while i + 1 <= start + w:
                 i += 1
-                if s1.chars[i+m-1] == s2.chars[m-1]:
+                if s1.chars[i + m - 1] == s2.chars[m - 1]:
                     for j in range(mlast):
-                        if s1.chars[i+j] != s2.chars[j]:
+                        if s1.chars[i + j] != s2.chars[j]:
                             break
                     else:
                         if mode != FAST_COUNT:
@@ -670,16 +664,16 @@ class LLHelpers(AbstractLLHelpers):
                 i -= 1
                 if s1.chars[i] == s2.chars[0]:
                     for j in xrange(mlast, 0, -1):
-                        if s1.chars[i+j] != s2.chars[j]:
+                        if s1.chars[i + j] != s2.chars[j]:
                             break
                     else:
                         return i
-                    if i-1 >= 0 and not bloom(mask, s1.chars[i-1]):
+                    if i - 1 >= 0 and not bloom(mask, s1.chars[i - 1]):
                         i -= m
                     else:
                         i -= skip
                 else:
-                    if i-1 >= 0 and not bloom(mask, s1.chars[i-1]):
+                    if i - 1 >= 0 and not bloom(mask, s1.chars[i - 1]):
                         i -= m
 
         if mode != FAST_COUNT:
@@ -710,7 +704,6 @@ class LLHelpers(AbstractLLHelpers):
             malloc = mallocunicode
             copy_contents = copy_unicode_contents
         result = malloc(itemslen)
-        res_chars = result.chars
         res_index = 0
         i = 0
         while i < num_items:
@@ -886,7 +879,7 @@ class LLHelpers(AbstractLLHelpers):
             sign = -1
             i += 1
         elif chars[i] == '+':
-            i += 1;
+            i += 1
         # skip whitespaces between sign and digits
         while i < strlen and chars[i] == ' ':
             i += 1
@@ -990,7 +983,7 @@ class LLHelpers(AbstractLLHelpers):
                     vchunk = hop.gendirectcall(ll_str.ll_int2oct, vitem,
                                                inputconst(Bool, False))
                 else:
-                    raise TyperError, "%%%s is not RPython" % (code, )
+                    raise TyperError("%%%s is not RPython" % (code,))
             else:
                 from pypy.rpython.lltypesystem.rstr import string_repr, unicode_repr
                 if is_unicode:
@@ -1019,13 +1012,17 @@ STR.become(GcStruct('rpy_string', ('hash',  Signed),
                     adtmeths={'malloc' : staticAdtMethod(mallocstr),
                               'empty'  : staticAdtMethod(emptystrfun),
                               'copy_contents' : staticAdtMethod(copy_string_contents),
-                              'gethash': LLHelpers.ll_strhash}))
+                              'copy_contents_from_str' : staticAdtMethod(copy_string_contents),
+                              'gethash': LLHelpers.ll_strhash,
+                              'length': LLHelpers.ll_length}))
 UNICODE.become(GcStruct('rpy_unicode', ('hash', Signed),
                         ('chars', Array(UniChar, hints={'immutable': True})),
                         adtmeths={'malloc' : staticAdtMethod(mallocunicode),
                                   'empty'  : staticAdtMethod(emptyunicodefun),
                                   'copy_contents' : staticAdtMethod(copy_unicode_contents),
-                                  'gethash': LLHelpers.ll_strhash}
+                                  'copy_contents_from_str' : staticAdtMethod(copy_unicode_contents),
+                                  'gethash': LLHelpers.ll_strhash,
+                                  'length': LLHelpers.ll_length}
                         ))
 
 

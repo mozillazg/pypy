@@ -137,8 +137,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
                                                          inline=True)
         if hasattr(self, 'GC_PARAMS'):
             # for tests: the GC choice can be specified as class attributes
-            from pypy.rpython.memory.gc.marksweep import MarkSweepGC
-            GCClass = getattr(self, 'GCClass', MarkSweepGC)
+            GCClass = self.GCClass
             GC_PARAMS = self.GC_PARAMS
         else:
             # for regular translation: pick the GC from the config
@@ -386,6 +385,10 @@ class BaseFrameworkGCTransformer(GCTransformer):
             self.obtainfreespace_ptr = getfn(GCClass.obtain_free_space.im_func,
                                              [s_gc, annmodel.SomeInteger()],
                                              annmodel.SomeAddress())
+        if getattr(GCClass, 'set_extra_threshold', False):
+            self.setextrathreshold_ptr = getfn(
+                GCClass.set_extra_threshold.im_func,
+                [s_gc, annmodel.SomeInteger()], annmodel.s_None)
 
         if GCClass.moving_gc:
             self.id_ptr = getfn(GCClass.id.im_func,
@@ -465,9 +468,6 @@ class BaseFrameworkGCTransformer(GCTransformer):
                                              getfn(func,
                                                    [annmodel.SomeAddress()],
                                                    annmodel.s_None)
-        self.statistics_ptr = getfn(GCClass.statistics.im_func,
-                                    [s_gc, annmodel.SomeInteger()],
-                                    annmodel.SomeInteger())
 
         # thread support
         if translator.config.translation.continuation:
@@ -827,13 +827,6 @@ class BaseFrameworkGCTransformer(GCTransformer):
         hop.genop("direct_call",
                   [self.root_walker.gc_start_fresh_new_state_ptr])
 
-    def gct_gc_x_swap_pool(self, hop):
-        raise NotImplementedError("old operation deprecated")
-    def gct_gc_x_clone(self, hop):
-        raise NotImplementedError("old operation deprecated")
-    def gct_gc_x_size_header(self, hop):
-        raise NotImplementedError("old operation deprecated")
-
     def gct_do_malloc_fixedsize_clear(self, hop):
         # used by the JIT (see pypy.jit.backend.llsupport.gc)
         op = hop.spaceop
@@ -966,6 +959,13 @@ class BaseFrameworkGCTransformer(GCTransformer):
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
 
+    def gct_gc_set_extra_threshold(self, hop):
+        livevars = self.push_roots(hop)
+        [v_size] = hop.spaceop.args
+        hop.genop("direct_call",
+                  [self.setextrathreshold_ptr, self.c_const_gc, v_size])
+        self.pop_roots(hop, livevars)
+
     def gct_gc_set_max_heap_size(self, hop):
         [v_size] = hop.spaceop.args
         hop.genop("direct_call", [self.set_max_heap_size_ptr,
@@ -979,6 +979,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
         assert self.translator.config.translation.thread
         if hasattr(self.root_walker, 'thread_run_ptr'):
             livevars = self.push_roots(hop)
+            assert not livevars, "live GC var around %s!" % (hop.spaceop,)
             hop.genop("direct_call", [self.root_walker.thread_run_ptr])
             self.pop_roots(hop, livevars)
 
@@ -993,6 +994,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
         assert self.translator.config.translation.thread
         if hasattr(self.root_walker, 'thread_die_ptr'):
             livevars = self.push_roots(hop)
+            assert not livevars, "live GC var around %s!" % (hop.spaceop,)
             hop.genop("direct_call", [self.root_walker.thread_die_ptr])
             self.pop_roots(hop, livevars)
 

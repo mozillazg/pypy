@@ -2,6 +2,8 @@
 Unary operations on SomeValues.
 """
 
+from __future__ import absolute_import
+
 from types import MethodType
 from pypy.annotation.model import \
      SomeObject, SomeInteger, SomeBool, SomeString, SomeChar, SomeList, \
@@ -76,7 +78,7 @@ class __extend__(SomeObject):
         s_obj.is_true_behavior(r)
 
         bk = getbookkeeper()
-        knowntypedata = r.knowntypedata = {}
+        knowntypedata = {}
         fn, block, i = bk.position_key
         op = block.operations[i]
         assert op.opname == "is_true" or op.opname == "nonzero"
@@ -86,8 +88,8 @@ class __extend__(SomeObject):
         if s_obj.can_be_none():
             s_nonnone_obj = s_obj.nonnoneify()
         add_knowntypedata(knowntypedata, True, [arg], s_nonnone_obj)
+        r.set_knowntypedata(knowntypedata)
         return r
-        
 
     def nonzero(obj):
         return obj.is_true()
@@ -524,7 +526,14 @@ class __extend__(SomeUnicodeString):
         return SomeString()
     method_encode.can_only_throw = [UnicodeEncodeError]
 
+
 class __extend__(SomeString):
+    def method_isdigit(chr):
+        return s_Bool
+
+    def method_isalpha(chr):
+        return s_Bool
+
     def method_upper(str):
         return SomeString()
 
@@ -558,12 +567,6 @@ class __extend__(SomeChar, SomeUnicodeCodePoint):
 class __extend__(SomeChar):
 
     def method_isspace(chr):
-        return s_Bool
-
-    def method_isdigit(chr):
-        return s_Bool
-
-    def method_isalpha(chr):
         return s_Bool
 
     def method_isalnum(chr):

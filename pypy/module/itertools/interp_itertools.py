@@ -43,9 +43,8 @@ class W_Count(Wrappable):
                                space.newtuple(args_w)])
 
 def check_number(space, w_obj):
-    if (space.lookup(w_obj, '__add__') is None or
-        space.is_true(space.isinstance(w_obj, space.w_str)) or
-        space.is_true(space.isinstance(w_obj, space.w_unicode))):
+    if (space.lookup(w_obj, '__int__') is None and
+        space.lookup(w_obj, '__float__') is None):
         raise OperationError(space.w_TypeError,
                              space.wrap("expected a number"))
 
@@ -65,20 +64,18 @@ W_Count.typedef = TypeDef(
         next = interp2app(W_Count.next_w),
         __reduce__ = interp2app(W_Count.reduce_w),
         __repr__ = interp2app(W_Count.repr_w),
-        __doc__ = """Make an iterator that returns consecutive integers starting
-    with n.  If not specified n defaults to zero. Does not currently
-    support python long integers. Often used as an argument to imap()
-    to generate consecutive data points.  Also, used with izip() to
-    add sequence numbers.
+        __doc__ = """Make an iterator that returns evenly spaced values starting
+    with n.  If not specified n defaults to zero.  Often used as an
+    argument to imap() to generate consecutive data points.  Also,
+    used with izip() to add sequence numbers.
 
-    Equivalent to :
+    Equivalent to:
 
-    def count(n=0):
-        if not isinstance(n, int):
-            raise TypeError("%s is not a regular integer" % n)
+    def count(start=0, step=1):
+        n = start
         while True:
             yield n
-            n += 1
+            n += step
     """)
 
 
@@ -93,7 +90,7 @@ class W_Repeat(Wrappable):
             self.count = 0
         else:
             self.counting = True
-            self.count = self.space.int_w(w_times)
+            self.count = max(self.space.int_w(w_times), 0)
 
     def next_w(self):
         if self.counting:
@@ -104,6 +101,11 @@ class W_Repeat(Wrappable):
 
     def iter_w(self):
         return self.space.wrap(self)
+
+    def length_w(self):
+        if not self.counting:
+            return self.space.w_NotImplemented
+        return self.space.wrap(self.count)
 
     def repr_w(self):
         objrepr = self.space.str_w(self.space.repr(self.w_obj))
@@ -121,10 +123,11 @@ def W_Repeat___new__(space, w_subtype, w_object, w_times=None):
 W_Repeat.typedef = TypeDef(
         'repeat',
         __module__ = 'itertools',
-        __new__  = interp2app(W_Repeat___new__),
-        __iter__ = interp2app(W_Repeat.iter_w),
-        next     = interp2app(W_Repeat.next_w),
-        __repr__ = interp2app(W_Repeat.repr_w),
+        __new__          = interp2app(W_Repeat___new__),
+        __iter__         = interp2app(W_Repeat.iter_w),
+        __length_hint__  = interp2app(W_Repeat.length_w),
+        next             = interp2app(W_Repeat.next_w),
+        __repr__         = interp2app(W_Repeat.repr_w),
         __doc__  = """Make an iterator that returns object over and over again.
     Runs indefinitely unless the times argument is specified.  Used
     as argument to imap() for invariant parameters to the called
