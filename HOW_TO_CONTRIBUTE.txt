@@ -2,38 +2,31 @@ All the numpy python code has been imported into lib_pypy/numpy,
 from a random version of numpy (git version fd15162 to be exact).
 
 pypy has a builtin module called _numpypy that provides things like
-ndarray, dtypes, ufuncs, and binfuncs.
+ndarray, dtypes, ufuncs, and binfuncs. It has no linalg module, and
+lots is missing or incomplete.
 
-The branch will be complete when it is possible to run
-pypy -c 'import numpy;numpy.test()' and most tests pass.
+The strategy for completing this branch is:
+1. Find missing functionality or a failing test 
+2. Fix and test
 
-The strategy for completing the branch is:
-1. Set up pypy and cpython
-2. Find missing functionality or a failing test 
-3. Fix and test
+And in more detail (asusming you already can run tests on untranslated pypy:
+1a. download a nightly default branch version of pypy
+1a. copy the pypy executable into pypy/bin
+1c. update to this branch
+1d. run 'pypy/bin/pypy -c "import numpy; numpy.test(verbose=2)"
+2a. if the failure is pure python, update it on this branch.
+2b. if the failure is deeper, the failing part of the test probably
+    belongs in pypy/module/micronumpy/tests. Transplant the test there
+    and submit a patch to pypy
+Let us know you are planning to work on this, usually a note on IRC will be sufficient.
 
-Currently, 'import numpy' fails, since we are missing the
-c-level multiarray module.
-
-So what we need in the short-term is to implement a python version of
-multiarray, work has been begun and it lives in lib_pypy/numpypy/multiarray.py
-
-And in more detail:
-1a. Get a recent trunk version of numpy
-1a. Install numpy into python, for extra points use virtualenv, by running 'python setup.py install' in the numpy trunk
-1c. Get the source tree for this branch of pypy
-1d. Download a nightly build of pypy and put the binary into the source tree, preferably at pypy/translator/goal/pypy. Alternatively, translate pypy
-2a. Run 'pypy/translator/goal/pypy -c 'import numpy;numpy.test()'
-2b. Something will fail. Poke around to see what the missing function or import is supposed to do. Hint: try http://docs.scipy.org/doc/numpy/reference/index.html
-2c. Let us know you are planning to work on this, usually a note on IRC will be sufficient.
-2c. Write a test for the missing functionality. For instance, tests for multiarray live in lib_pypy/numpypy/test/test_multiarray.py Try to think of corner cases: inappropriate arguments, missing defaults, and other wierd combination of arguments.
-3a. Try to find where numpy implemented it and stare at that till it makes sense.
-3b. Write some code
-3c. Test under pypy, python, and then think again about the tests, did you miss a corner case? Testing is done by:
- pypy/translator/pypy pytest.py lib_pypy/numpypy/test
-as well as
- python pytest.py lib_pypy/numpypy/test
-3d. Rerun 2a to make sure you accomplished what you set out to do
-3e. Commit and push your changes, if you are working on a fork let us know what you have done.
+It may be possible to run on an untranslated pypy, the command line to do this is
+python pypy/bin/pyinteractive.py --withmod-micronumpy --withmod-struct --withmod-binascii --withmod-itertools --withmod-rctime --withmod-signal
+I didn't have much luck, even something as simple as 
+>>>import numpy as np
+>>>x = np.array([np.nan, np.inf])
+>>>print x
+failed, where a translated pypy succeeded, but ymmv
 
 
+Matti Picus (mattip on IRC)
