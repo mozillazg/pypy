@@ -14,7 +14,7 @@ class BuildersModule(MixedModule):
 class TimeModule(MixedModule):
     appleveldefs = {}
     interpleveldefs = {}
-    if sys.platform.startswith("linux"):
+    if sys.platform.startswith("linux") or 'bsd' in sys.platform:
         from pypy.module.__pypy__ import interp_time
         interpleveldefs["clock_gettime"] = "interp_time.clock_gettime"
         interpleveldefs["clock_getres"] = "interp_time.clock_getres"
@@ -71,6 +71,6 @@ class Module(MixedModule):
         PYC_MAGIC = get_pyc_magic(self.space)
         self.extra_interpdef('PYC_MAGIC', 'space.wrap(%d)' % PYC_MAGIC)
         #
-        from pypy.jit.backend import detect_cpu
+        from rpython.jit.backend import detect_cpu
         model = detect_cpu.autodetect_main_model_and_size()
         self.extra_interpdef('cpumodel', 'space.wrap(%r)' % model)
