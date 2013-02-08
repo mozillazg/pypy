@@ -1456,7 +1456,7 @@ class _container(object):
         return _ptr(Ptr(self._TYPE), self, True)
     def _as_obj(self, check=True):
         return self
-    def _normalizedcontainer(self):
+    def _normalizedcontainer(self, check=True):
         return self
     def _getid(self):
         return id(self)
@@ -1651,10 +1651,7 @@ class _array(_parentable):
         if n < 0:
             raise ValueError, "negative array length"
         _parentable.__init__(self, TYPE)
-        try:
-            myrange = range(n)
-        except OverflowError:
-            raise MemoryError("definitely too many items")
+        myrange = self._check_range(n)
         self.items = [TYPE.OF._allocate(initialization=initialization,
                                         parent=self, parentindex=j)
                       for j in myrange]
@@ -1663,6 +1660,14 @@ class _array(_parentable):
 
     def __repr__(self):
         return '<%s>' % (self,)
+
+    def _check_range(self, n):
+        # checks that it's ok to make an array of size 'n', and returns
+        # range(n).  Explicitly overridden by some tests.
+        try:
+            return range(n)
+        except OverflowError:
+            raise MemoryError("definitely too many items")
 
     def _str_item(self, item):
         if isinstance(item, _uninitialized):
@@ -1960,12 +1965,12 @@ def malloc(T, n=None, flavor='gc', immortal=False, zero=False,
         assert n is None
         o = _opaque(T, initialization=initialization)
     else:
-        raise TypeError, "malloc for Structs and Arrays only"
-    if T._gckind != 'gc' and not immortal and flavor.startswith('gc'):
+        raise TypeError, "malloc: unmallocable type"
+    if flavor == 'gc' and T._gckind != 'gc' and not immortal:
         raise TypeError, "gc flavor malloc of a non-GC non-immortal structure"
     if flavor == "raw" and not immortal and track_allocation:
         leakfinder.remember_malloc(o, framedepth=2)
-    solid = immortal or not flavor.startswith('gc') # immortal or non-gc case
+    solid = immortal or flavor == 'raw'
     return _ptr(Ptr(T), o, solid)
 
 def free(p, flavor, track_allocation=True):

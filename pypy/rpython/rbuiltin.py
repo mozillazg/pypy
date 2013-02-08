@@ -44,7 +44,7 @@ class __extend__(annmodel.SomeBuiltin):
 
 def call_args_expand(hop, takes_kwds = True):
     hop = hop.copy()
-    from pypy.interpreter.argument import ArgumentsForTranslation
+    from pypy.objspace.flow.argument import ArgumentsForTranslation
     arguments = ArgumentsForTranslation.fromshape(
             None, hop.args_s[1].const, # shape
             range(hop.nb_args-2))
@@ -221,6 +221,9 @@ def rtype_builtin_unichr(hop):
 
 def rtype_builtin_unicode(hop):
     return hop.args_r[0].rtype_unicode(hop)
+
+def rtype_builtin_bytearray(hop):
+    return hop.args_r[0].rtype_bytearray(hop)
 
 def rtype_builtin_list(hop):
     return hop.args_r[0].rtype_bltn_list(hop)

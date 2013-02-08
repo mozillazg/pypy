@@ -32,8 +32,6 @@ class TypeDef:
         self.rawdict = {}
         self.acceptable_as_base_class = '__new__' in rawdict
         self.applevel_subclasses_base = None
-        # xxx used by faking
-        self.fakedcpytype = None
         self.add_entries(**rawdict)
         assert __total_ordering__ in (None, 'auto'), "Unknown value for __total_ordering"
         if __total_ordering__ == 'auto':
@@ -106,6 +104,13 @@ def default_identity_hash(space, w_obj):
 # features, but limit ourselves to 6, chosen a bit arbitrarily based on
 # typical usage (case 1 is the most common kind of app-level subclasses;
 # case 2 is the memory-saving kind defined with __slots__).
+#
+#  +----------------------------------------------------------------+
+#  | NOTE: if withmapdict is enabled, the following doesn't apply!  |
+#  | Map dicts can flexibly allow any slots/__dict__/__weakref__ to |
+#  | show up only when needed.  In particular there is no way with  |
+#  | mapdict to prevent some objects from being weakrefable.        |
+#  +----------------------------------------------------------------+
 #
 #     dict   slots   del   weakrefable
 #
