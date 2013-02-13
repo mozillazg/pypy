@@ -49,6 +49,9 @@ class TestNumArrayDirect(object):
         a = create_array([10, 5, 3], MockDtype(), order='C')
         assert a.strides == [15, 3, 1]
         assert a.backstrides == [135, 12, 2]
+        a = create_array([1, 0, 7], MockDtype(), order='C')
+        assert a.strides == [7, 7, 1]
+        assert a.backstrides == [0, 0, 6]
 
     def test_create_slice_f(self):
         a = create_array([10, 5, 3], MockDtype(), order='F')
@@ -1595,6 +1598,12 @@ class AppTestNumArray(BaseNumpyAppTest):
         a[a<0] = -a[a<0]
         assert (a == [1, 1]).all()
 
+    def test_int_list_index(slf):
+        from numpypy import array, arange
+        assert (array([10,11,12,13])[[1,2]] == [11, 12]).all()
+        assert (arange(6).reshape((2,3))[[0,1]] == [[0, 1, 2], [3, 4, 5]]).all()
+        assert arange(6).reshape((2,3))[(0,1)] == 1
+
     def test_int_array_index(self):
         from numpypy import array, arange, zeros
         b = arange(10)[array([3, 2, 1, 5])]
@@ -1657,6 +1666,9 @@ class AppTestNumArray(BaseNumpyAppTest):
         a = arange(6, dtype='f4').reshape(2,3)
         b = a.astype('i4')
 
+        a = array('x').astype('S3').dtype
+        assert a.itemsize == 3
+        
     def test_base(self):
         from _numpypy import array
         assert array(1).base is None
@@ -1726,6 +1738,13 @@ class AppTestNumArray(BaseNumpyAppTest):
         a.data[4] = '\xff'
         assert a[1] == 0xff
         assert len(a.data) == 16
+
+
+    def test_explicit_dtype_conversion(self):
+        from _numpypy import array
+        a = array([1.0, 2.0])
+        b = array(a, dtype='d')
+        assert a.dtype is b.dtype
 
 class AppTestMultiDim(BaseNumpyAppTest):
     def test_init(self):
@@ -2176,6 +2195,8 @@ class AppTestMultiDim(BaseNumpyAppTest):
         assert (a + a).item(1) == 4
         raises(IndexError, "array(5).item(1)")
         assert array([1]).item() == 1
+        a = array('x')
+        assert a.item() == 'x'
 
     def test_int_array_index(self):
         from _numpypy import array
@@ -2464,7 +2485,7 @@ class AppTestRepr(BaseNumpyAppTest):
 
 class AppTestRecordDtype(BaseNumpyAppTest):
     def test_zeros(self):
-        from _numpypy import zeros
+        from _numpypy import zeros, integer
         a = zeros(2, dtype=[('x', int), ('y', float)])
         raises(IndexError, 'a[0]["xyz"]')
         assert a[0]['x'] == 0
@@ -2517,26 +2538,52 @@ class AppTestRecordDtype(BaseNumpyAppTest):
 
     def test_string_record(self):
         from _numpypy import dtype, array
-        d = dtype([('x', str), ('y', 'int32')])
-        assert d.fields['x'] == (dtype(str), 0)
-        assert d.fields['y'] == (dtype('int32'), 1)
-        d = dtype([('x', 'S1'), ('y', 'int32')])
-        assert d.fields['x'] == (dtype(str), 0)
-        assert d.fields['y'] == (dtype('int32'), 1)
-        a = array([('a', 2), ('c', 1)], dtype=d)
-        assert a[1]['y'] == 1
-        assert a[0]['x'] == 'a'
 
-    def test_stringarray(self):
+        d = dtype([('x', str), ('y', 'int32')])
+        assert str(d.fields['x'][0]) == '|S0'
+        assert d.fields['x'][1] == 0
+        assert str(d.fields['y'][0]) == 'int32'
+        assert d.fields['y'][1] == 0
+        assert d.name == 'void32'
+
+        a = array([('a', 2), ('cde', 1)], dtype=d)
+        assert a[0]['x'] == '\x02'
+        assert a[0]['y'] == 2
+        assert a[1]['x'] == '\x01'
+        assert a[1]['y'] == 1
+
+        d = dtype([('x', 'S1'), ('y', 'int32')])
+        assert str(d.fields['x'][0]) == '|S1'
+        assert d.fields['x'][1] == 0
+        assert str(d.fields['y'][0]) == 'int32'
+        assert d.fields['y'][1] == 1
+        assert d.name == 'void40'
+
+        a = array([('a', 2), ('cde', 1)], dtype=d)
+        assert a[0]['x'] == 'a'
+        assert a[0]['y'] == 2
+        assert a[1]['x'] == 'c'
+        assert a[1]['y'] == 1
+
+    def test_string_array(self):
         from _numpypy import array
-        a = array(['abc'],'S3')
-        assert str(a.dtype) == '|S3'
         a = array(['abc'])
         assert str(a.dtype) == '|S3'
-        a = array(['abc','defg','ab'])
+        a = array(['abc'], 'S')
+        assert str(a.dtype) == '|S3'
+        a = array(['abc'], 'S3')
+        assert str(a.dtype) == '|S3'
+        a = array(['abcde'], 'S3')
+        assert str(a.dtype) == '|S3'
+        a = array(['abc', 'defg', 'ab'])
         assert str(a.dtype) == '|S4'
         assert a[0] == 'abc'
         assert a[1] == 'defg'
+        assert a[2] == 'ab'
+        a = array(['abc', 'defg', 'ab'], 'S3')
+        assert str(a.dtype) == '|S3'
+        assert a[0] == 'abc'
+        assert a[1] == 'def'
         assert a[2] == 'ab'
         raises(TypeError, a, 'sum')
         raises(TypeError, 'a+a')
@@ -2545,6 +2592,14 @@ class AppTestRecordDtype(BaseNumpyAppTest):
         from _numpypy import array
         a = array('ffff')
         assert a.shape == ()
+        a = array([], dtype='S')
+        assert str(a.dtype) == '|S1'
+        a = array('x', dtype='>S')
+        assert str(a.dtype) == '|S1'
+        a = array('x', dtype='c')
+        assert str(a.dtype) == '|S1'
+        # XXX can sort flexible types, why not comparison?
+        #assert a == 'x'
 
     def test_flexible_repr(self):
         # numpypy overrides _numpypy repr with pure python one
@@ -2559,14 +2614,14 @@ class AppTestRecordDtype(BaseNumpyAppTest):
         s = repr(a)
         assert s.replace('\n', '') == \
                       "array(['abc', 'defg', 'ab'],       dtype='|S4')"
-        
-       
+
+
 class AppTestPyPy(BaseNumpyAppTest):
     def setup_class(cls):
         if option.runappdirect and '__pypy__' not in sys.builtin_module_names:
             py.test.skip("pypy only test")
         BaseNumpyAppTest.setup_class.im_func(cls)
-    
+
     def test_init_2(self):
         # this test is pypy only since in numpy it becomes an object dtype
         import _numpypy

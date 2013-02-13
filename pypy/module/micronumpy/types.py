@@ -648,6 +648,8 @@ class Float(Primitive):
     _mixin_ = True
 
     def _coerce(self, space, w_item):
+        if space.is_none(w_item):
+            return self.box(rfloat.NAN)
         return self.box(space.float_w(space.call_function(space.w_float, w_item)))
 
     def str_format(self, box):
@@ -1017,18 +1019,26 @@ class ComplexFloating(object):
     def str_format(self, box):
         real, imag = self.for_computation(self.unbox(box))
         imag_str = str_format(imag) + 'j'
-        
+
         # (0+2j) => 2j
         if real == 0:
-            return imag_str        
+            return imag_str
 
         real_str = str_format(real)
         op = '+' if imag >= 0 else ''
         return ''.join(['(', real_str, op, imag_str, ')'])
 
     @staticmethod
-    def for_computation(v):   
+    def for_computation(v):
         return float(v[0]), float(v[1])
+
+    @raw_unary_op
+    def _to_builtin_type(self, v):
+        return v
+
+    def to_builtin_type(self, space, box):
+        real,imag = self.for_computation(self.unbox(box))
+        return space.newcomplex(real, imag) 
 
     def read_bool(self, arr, i, offset):
         v = self.for_computation(self._read(arr.storage, i, offset))
@@ -1091,7 +1101,7 @@ class ComplexFloating(object):
     @complex_binary_op
     def mul(self, v1, v2):
         return rcomplex.c_mul(v1, v2)
-    
+
     @complex_binary_op
     def div(self, v1, v2):
         try:
@@ -1593,7 +1603,7 @@ class StringType(BaseType, BaseStringType):
         arr = interp_boxes.VoidBoxStorage(len(arg), new_string_dtype(space, len(arg)))
         for i in range(len(arg)):
             arr.storage[i] = arg[i]
-        return interp_boxes.W_StringBox(arr,  0, None)
+        return interp_boxes.W_StringBox(arr,  0, arr.dtype)
 
     @jit.unroll_safe
     def store(self, arr, i, offset, box):
@@ -1626,6 +1636,10 @@ class StringType(BaseType, BaseStringType):
         builder.append(self.to_str(item))
         builder.append("'")
         return builder.build()
+
+    # XXX move to base class when UnicodeType is supported
+    def to_builtin_type(self, space, box):
+        return space.wrap(self.to_str(box))
 
 class VoidType(BaseType, BaseStringType):
     T = lltype.Char
