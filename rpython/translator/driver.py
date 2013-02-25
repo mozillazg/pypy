@@ -102,13 +102,13 @@ class TranslationDriver(SimpleTaskEngine):
         
         self.default_goal = default_goal
         self.extra_goals = []
-        self.exposed = []
+        self._tasks = []
 
         # expose tasks
         def expose_task(task):
             def proc():
                 return self.proceed(task)
-            self.exposed.append(task)
+            self._tasks.append(task)
             setattr(self, task, proc)
 
         expose_task('annotate')
