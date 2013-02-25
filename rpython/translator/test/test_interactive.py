@@ -27,7 +27,7 @@ def test_simple_rtype():
     t.annotate()
     t.rtype()
 
-    assert 'rtype_lltype' in t.driver.done    
+    assert 'rtype_lltype' in t.driver.done
 
 def test_simple_backendopt():
     def f(x, y):
@@ -35,7 +35,7 @@ def test_simple_backendopt():
 
     t = Translation(f, [int, int], backend='c')
     t.backendopt()
-    
+
     assert 'backendopt_lltype' in t.driver.done
 
 def test_simple_source():
@@ -51,9 +51,6 @@ def test_simple_source():
     t.source_c()
     assert 'source_c' in t.driver.done
 
-    t = Translation(f, [int, int])
-    py.test.raises(Exception, "t.source()")
-    
 def test_disable_logic():
 
     def f(x,y):

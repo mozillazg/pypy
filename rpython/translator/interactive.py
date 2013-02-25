@@ -3,8 +3,6 @@ from rpython.translator import driver
 
 
 DEFAULTS = {
-  'translation.backend': None,
-  'translation.type_system': None,
   'translation.verbose': True,
 }
 
@@ -91,61 +89,57 @@ class Translation(object):
 
     def rtype(self, **kwds):
         self.update_options(kwds)
-        ts = self.ensure_type_system()
-        return getattr(self.driver, 'rtype_' + ts)()
+        return self.driver.rtype()
 
     def backendopt(self, **kwds):
         self.update_options(kwds)
-        ts = self.ensure_type_system('lltype')
-        return getattr(self.driver, 'backendopt_' + ts)()
+        return self.driver.backendopt()
 
     # backend depedent
 
     def source(self, **kwds):
         self.update_options(kwds)
-        backend = self.ensure_backend()
-        getattr(self.driver, 'source_' + backend)()
+        return self.driver.source()
 
     def source_c(self, **kwds):
         self.update_options(kwds)
         self.ensure_backend('c')
-        self.driver.source_c()
+        self.driver.source()
 
     def source_cl(self, **kwds):
         self.update_options(kwds)
         self.ensure_backend('cl')
-        self.driver.source_cl()
+        self.driver.source()
 
     def compile(self, **kwds):
         self.update_options(kwds)
-        backend = self.ensure_backend()
-        getattr(self.driver, 'compile_' + backend)()
+        self.driver.compile()
         return self.driver.c_entryp
 
     def compile_c(self, **kwds):
         self.update_options(kwds)
         self.ensure_backend('c')
-        self.driver.compile_c()
+        self.driver.compile()
         return self.driver.c_entryp
 
     def compile_cli(self, **kwds):
         self.update_options(kwds)
         self.ensure_backend('cli')
-        self.driver.compile_cli()
+        self.driver.compile()
         return self.driver.c_entryp
 
     def source_cli(self, **kwds):
         self.update_options(kwds)
         self.ensure_backend('cli')
-        self.driver.source_cli()
+        self.driver.source()
 
     def compile_jvm(self, **kwds):
         self.update_options(kwds)
         self.ensure_backend('jvm')
-        self.driver.compile_jvm()
+        self.driver.compile()
         return self.driver.c_entryp
 
     def source_jvm(self, **kwds):
         self.update_options(kwds)
         self.ensure_backend('jvm')
-        self.driver.source_jvm()
+        self.driver.source()
