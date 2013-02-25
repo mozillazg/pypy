@@ -17,12 +17,9 @@ log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
 
 
-def taskdef(title, new_state=None, expected_states=[], idemp=False,
-            earlycheck=None):
+def taskdef(title, idemp=False, earlycheck=None):
     def decorator(taskfunc):
         taskfunc.task_title = title
-        taskfunc.task_newstate = None
-        taskfunc.task_expected_states = expected_states
         taskfunc.task_idempotent = idemp
         taskfunc.task_earlycheck = earlycheck
         return taskfunc
@@ -30,13 +27,6 @@ def taskdef(title, new_state=None, expected_states=[], idemp=False,
 
 # TODO:
 # sanity-checks using states
-
-_BACKEND_TO_TYPESYSTEM = {
-    'c': 'lltype',
-}
-
-def backend_to_typesystem(backend):
-    return _BACKEND_TO_TYPESYSTEM.get(backend, 'ootype')
 
 # set of translation steps to profile
 PROFILE = set([])
@@ -67,8 +57,7 @@ class ProfInstrument(object):
 class TranslationDriver(object):
     _backend_extra_options = {}
 
-    def __init__(self, setopts=None, default_goal=None,
-                 disable=[],
+    def __init__(self, setopts=None,
                  exe_name=None, extmod_name=None,
                  config=None, overrides=None):
         self.timer = Timer()
@@ -90,14 +79,6 @@ class TranslationDriver(object):
 
         self.done = {}
 
-        self.disable(disable)
-
-        if default_goal:
-            default_goal, = self.backend_select_goals([default_goal])
-        
-        self.default_goal = default_goal
-        self.extra_goals = []
-
         self.tasks = tasks = {}
 
         for name in dir(self):
@@ -105,9 +86,7 @@ class TranslationDriver(object):
                 task_name = name[len('task_'):]
                 task = getattr(self, name)
                 assert callable(task)
-                task_deps = getattr(task, 'task_deps', [])
-
-                tasks[task_name] = task, task_deps
+                tasks[task_name] = task
 
         self._tasks = []
         # expose tasks
@@ -126,24 +105,16 @@ class TranslationDriver(object):
         expose_task('source')
         expose_task('compile')
 
-    def set_extra_goals(self, goals):
-        self.extra_goals = goals
-
     def set_backend_extra_options(self, extra_options):
         self._backend_extra_options = extra_options
-        
+
     def get_info(self): # XXX more?
         d = {'backend': self.config.translation.backend}
         return d
 
-    def get_backend_and_type_system(self):
-        type_system = self.config.translation.type_system
-        backend = self.config.translation.backend
-        return backend, type_system
-
     def backend_select_goals(self, goals):
-        backend, ts = self.get_backend_and_type_system()
-        postfixes = [''] + ['_'+p for p in (backend, ts) if p]
+        backend = self.config.translation.backend
+        postfixes = ['', '_' + backend]
         l = []
         for goal in goals:
             for postfix in postfixes:
@@ -155,9 +126,6 @@ class TranslationDriver(object):
                 raise Exception, "cannot infer complete goal from: %r" % goal 
             l.append(new_goal)
         return l
-
-    def disable(self, to_disable):
-        self._disabled = to_disable
 
     def setup(self, entry_point, inputtypes, policy=None, extra={}, empty_translator=None):
         standalone = inputtypes is None
@@ -203,7 +171,8 @@ class TranslationDriver(object):
         self.secondary_entrypoints = libdef.functions
 
     def instrument_result(self, args):
-        backend, ts = self.get_backend_and_type_system()
+        backend = self.config.translation.backend
+        backend = self.config.translation.backend
         if backend != 'c' or sys.platform == 'win32':
             raise Exception("instrumentation requires the c backend"
                             " and unix for now")
@@ -268,6 +237,7 @@ class TranslationDriver(object):
             if not func.task_idempotent:
                 self.done[goal] = True
             if instrument:
+                xxx
                 self.proceed('compile')
                 assert False, 'we should not get here'
         finally:
@@ -681,27 +651,31 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
 
         res = None
         for goal in goals:
-            taskcallable, _ = self.tasks[goal]
-            self._event('planned', goal, taskcallable)
+            taskcallable = self.tasks[goal]
+            if taskcallable.task_earlycheck:
+                func.task_earlycheck(self)
         for goal in goals:
-            taskcallable, _ = self.tasks[goal]
-            self._event('pre', goal, taskcallable)
+            taskcallable = self.tasks[goal]
+            fork_before = self.config.translation.fork_before
+            if fork_before:
+                fork_before, = self.backend_select_goals([fork_before])
+                if not fork_before in self.done and fork_before == goal:
+                    prereq = getattr(self, 'prereq_checkpt_%s' % goal, None)
+                    if prereq:
+                        prereq()
+                    from rpython.translator.goal import unixcheckpoint
+                    unixcheckpoint.restartable_point(auto='run')
             res = self._do(goal, taskcallable)
-            self._event('post', goal, taskcallable)
         return res
 
     def from_targetspec(targetspec_dic, config=None, args=None,
-                        empty_translator=None,
-                        disable=[],
-                        default_goal=None):
+                        empty_translator=None):
         if args is None:
             args = []
 
-        driver = TranslationDriver(config=config, default_goal=default_goal,
-                                   disable=disable)
+        driver = TranslationDriver(config=config)
         # patch some attributes of the os module to make sure they
         # have the same value on every platform.
-        backend, ts = driver.get_backend_and_type_system()
         if backend in ('cli', 'jvm'):
             from rpython.translator.oosupport.support import patch_os
             driver.old_cli_defs = patch_os()
@@ -727,23 +701,6 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
     def prereq_checkpt_rtype(self):
         assert 'rpython.rtyper.rmodel' not in sys.modules, (
             "cannot fork because the rtyper has already been imported")
-    prereq_checkpt_rtype_lltype = prereq_checkpt_rtype
-    prereq_checkpt_rtype_ootype = prereq_checkpt_rtype    
-
-    # checkpointing support
-    def _event(self, kind, goal, func):
-        if kind == 'planned' and func.task_earlycheck:
-            func.task_earlycheck(self)
-        if kind == 'pre':
-            fork_before = self.config.translation.fork_before
-            if fork_before:
-                fork_before, = self.backend_select_goals([fork_before])
-                if not fork_before in self.done and fork_before == goal:
-                    prereq = getattr(self, 'prereq_checkpt_%s' % goal, None)
-                    if prereq:
-                        prereq()
-                    from rpython.translator.goal import unixcheckpoint
-                    unixcheckpoint.restartable_point(auto='run')
 
 def mkexename(name):
     if sys.platform == 'win32':
