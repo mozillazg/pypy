@@ -277,10 +277,29 @@ def main():
         pdb_plus_show.start(tb)
 
     try:
-        drv = driver.TranslationDriver.from_targetspec(targetspec_dic, config, args,
-                                                       empty_translator=t,
-                                                       disable=translateconfig.skipped_goals,
-                                                       default_goal='compile')
+        if args is None:
+            args = []
+        drv = driver.TranslationDriver(config=config)
+        # patch some attributes of the os module to make sure they
+        # have the same value on every platform.
+        if config.translation.backend in ('cli', 'jvm'):
+            from rpython.translator.oosupport.support import patch_os
+            drv.old_cli_defs = patch_os()
+
+        target = targetspec_dic['target']
+        spec = target(drv, args)
+
+        try:
+            entry_point, inputtypes, policy = spec
+        except ValueError:
+            entry_point, inputtypes = spec
+            policy = None
+
+        drv.setup(entry_point, inputtypes,
+                     policy=policy,
+                     extra=targetspec_dic,
+                     empty_translator=t)
+
         log_config(translateconfig, "translate.py configuration")
         if config.translation.jit:
             if 'jitpolicy' not in targetspec_dic:

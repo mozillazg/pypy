@@ -88,7 +88,7 @@ class CBackend(object):
             from rpython.translator.tool.staticsizereport import dump_static_data_info
             targetdir = cbuilder.targetdir
             fname = dump_static_data_info(self.driver.log, database, targetdir)
-            dstname = self.compute_exe_name() + '.staticdata.info'
+            dstname = self.driver.compute_exe_name() + '.staticdata.info'
             shutil.copy(str(fname), str(dstname))
             self.driver.log.info('Static data info written to %s' % dstname)
 
@@ -100,7 +100,7 @@ class CBackend(object):
         cbuilder = self.cbuilder
         kwds = {}
         if self.driver.standalone and self.driver.exe_name is not None:
-            kwds['exe_name'] = self.compute_exe_name().basename
+            kwds['exe_name'] = self.driver.compute_exe_name().basename
         cbuilder.compile(**kwds)
 
         if self.driver.standalone:
@@ -114,7 +114,7 @@ class CBackend(object):
         """
         if self.driver.exe_name is not None:
             exename = self.driver.c_entryp
-            newexename = self.compute_exe_name()
+            newexename = self.driver.compute_exe_name()
             if sys.platform == 'win32':
                 newexename = newexename.new(ext='exe')
             shutil.copy(str(exename), str(newexename))
@@ -129,12 +129,6 @@ class CBackend(object):
             self.driver.c_entryp = newexename
         self.driver.log.info('usession directory: %s' % (udir,))
         self.driver.log.info("created: %s" % (self.driver.c_entryp,))
-
-    def compute_exe_name(self):
-        newexename = self.exe_name % self.get_info()
-        if '/' not in newexename and '\\' not in newexename:
-            newexename = './' + newexename
-        return py.path.local(newexename)
 
     def get_tasks(self):
         yield self.task_database
@@ -445,6 +439,12 @@ class TranslationDriver(object):
 
         log.llinterpret.event("result -> %s" % v)
 
+    def compute_exe_name(self):
+        newexename = self.exe_name % self.get_info()
+        if '/' not in newexename and '\\' not in newexename:
+            newexename = './' + newexename
+        return py.path.local(newexename)
+
     @taskdef('Generating CLI source')
     def task_source_cli(self):
         from rpython.translator.cli.gencli import GenCli
@@ -630,36 +630,6 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
         for task in tasks:
             res = self._do(task.task_name, task)
         return res
-
-    def from_targetspec(targetspec_dic, config=None, args=None,
-                        empty_translator=None):
-        if args is None:
-            args = []
-
-        driver = TranslationDriver(config=config)
-        # patch some attributes of the os module to make sure they
-        # have the same value on every platform.
-        if backend in ('cli', 'jvm'):
-            from rpython.translator.oosupport.support import patch_os
-            driver.old_cli_defs = patch_os()
-
-        target = targetspec_dic['target']
-        spec = target(driver, args)
-
-        try:
-            entry_point, inputtypes, policy = spec
-        except ValueError:
-            entry_point, inputtypes = spec
-            policy = None
-
-        driver.setup(entry_point, inputtypes,
-                     policy=policy,
-                     extra=targetspec_dic,
-                     empty_translator=empty_translator)
-
-        return driver
-
-    from_targetspec = staticmethod(from_targetspec)
 
     def prereq_checkpt_rtype(self):
         assert 'rpython.rtyper.rmodel' not in sys.modules, (
