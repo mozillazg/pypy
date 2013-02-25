@@ -418,10 +418,10 @@ class TranslationDriver(SimpleTaskEngine):
                 i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=hybrid"'
                 raise Exception(str(e) + '\n' + i)
 
-    @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'],
-        "Creating database for generating c source",
-        earlycheck = possibly_check_for_boehm)
-    def task_database_c(self):
+    #@taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'],
+    #    "Creating database for generating c source",
+    #    earlycheck = possibly_check_for_boehm)
+    def _task_database_c(self):
         """ Create a database for further backend generation
         """
         translator = self.translator
@@ -449,10 +449,12 @@ class TranslationDriver(SimpleTaskEngine):
         self.cbuilder = cbuilder
         self.database = database
 
-    @taskdef(['database_c'], "Generating c source")
+    @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'],
+             "Generating c source")
     def task_source_c(self):
         """ Create C source files from the generated database
         """
+        self._task_database_c()
         cbuilder = self.cbuilder
         database = self.database
         if self._backend_extra_options.get('c_debug_defines', False):
