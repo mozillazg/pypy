@@ -114,28 +114,14 @@ class TranslationDriver(SimpleTaskEngine):
             setattr(self, task, proc)
 
         backend, ts = self.get_backend_and_type_system()
-        for task in self.tasks:
-            explicit_task = task
-            if task == 'annotate':
-                expose_task(task)
-            else:
-                task, postfix = task.split('_')
-                if task in ('rtype', 'backendopt', 'llinterpret',
-                            'pyjitpl'):
-                    if ts:
-                        if ts == postfix:
-                            expose_task(task, explicit_task)
-                    else:
-                        expose_task(explicit_task)
-                elif task in ('source', 'compile', 'run'):
-                    if backend:
-                        if backend == postfix:
-                            expose_task(task, explicit_task)
-                    elif ts:
-                        if ts == backend_to_typesystem(postfix):
-                            expose_task(explicit_task)
-                    else:
-                        expose_task(explicit_task)
+        expose_task('annotate')
+        expose_task('rtype')
+        if config.translation.jit:
+            expose_task('pyjitpl')
+        if not config.translation.backendopt.none:
+            expose_task('backendopt')
+        expose_task('source')
+        expose_task('compile')
 
     def set_extra_goals(self, goals):
         self.extra_goals = goals
