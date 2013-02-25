@@ -644,15 +644,6 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
                 func.task_earlycheck(self)
         for goal in goals:
             taskcallable = self.tasks[goal]
-            fork_before = self.config.translation.fork_before
-            if fork_before:
-                fork_before, = self.backend_select_goals([fork_before])
-                if not fork_before in self.done and fork_before == goal:
-                    prereq = getattr(self, 'prereq_checkpt_%s' % goal, None)
-                    if prereq:
-                        prereq()
-                    from rpython.translator.goal import unixcheckpoint
-                    unixcheckpoint.restartable_point(auto='run')
             res = self._do(goal, taskcallable)
         return res
 
