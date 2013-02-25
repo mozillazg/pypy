@@ -116,7 +116,7 @@ def compile(fn, argtypes, view=False, gcpolicy="none", backendopt=True,
             t.view()
     except AttributeError:
         pass
-    t.compile_c()
+    t.compile()
     ll_res = graphof(t.context, fn).getreturnvar().concretetype
 
     def output(stdout):
@@ -461,7 +461,7 @@ def test_name():
 
     t = Translation(f, [], backend="c")
     t.annotate()
-    t.compile_c()
+    t.compile()
     if py.test.config.option.view:
         t.view()
     assert hasattr(ctypes.CDLL(str(t.driver.c_entryp)), 'pypy_xyz_f')
@@ -477,7 +477,7 @@ def test_entrypoints():
 
     t = Translation(f, [], backend="c", secondaryentrypoints="test_entrypoints42")
     t.annotate()
-    t.compile_c()
+    t.compile()
     if py.test.config.option.view:
         t.view()
     assert hasattr(ctypes.CDLL(str(t.driver.c_entryp)), 'foobar')
@@ -496,7 +496,7 @@ def test_exportstruct():
     export_struct("BarStruct", foo._obj)
     t = Translation(f, [], backend="c")
     t.annotate()
-    t.compile_c()
+    t.compile()
     if py.test.config.option.view:
         t.view()
     assert hasattr(ctypes.CDLL(str(t.driver.c_entryp)), 'BarStruct')
@@ -562,7 +562,7 @@ def test_inhibit_tail_call():
     t = Translation(main, [int], backend="c")
     t.rtype()
     t.context._graphof(foobar_fn).inhibit_tail_call = True
-    t.source_c()
+    t.source()
     lines = t.driver.cbuilder.c_source_filename.join('..',
                               'rpython_translator_c_test_test_genc.c').readlines()
     for i, line in enumerate(lines):

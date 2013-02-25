@@ -48,7 +48,7 @@ def test_simple_source():
     assert 'source' in t.driver.done
 
     t = Translation(f, [int, int])
-    t.source_c()
+    t.source()
     assert 'source' in t.driver.done
 
 def test_disable_logic():
@@ -59,7 +59,7 @@ def test_disable_logic():
 
     t = Translation(f, [int, int])
     t.disable(['backendopt'])
-    t.source_c()
+    t.source()
 
     assert 'backendopt' not in t.driver.done
 
@@ -70,7 +70,7 @@ def test_simple_compile_c():
         return x+y
 
     t = Translation(f, [int, int])
-    t.source(backend='c')
+    t.source()
     t.compile()
 
     dll = ctypes.CDLL(str(t.driver.c_entryp))
@@ -83,32 +83,12 @@ def test_simple_rtype_with_type_system():
         return x+y
 
     t = Translation(f, [int, int])
-    t.rtype(type_system='lltype')
-
-    assert 'rtype' in t.driver.done    
-
-    t = Translation(f, [int, int])
-    t.rtype(type_system='ootype')
-    assert 'rtype' in t.driver.done        
+    t.rtype()
 
     t = Translation(f, [int, int], type_system='ootype')
     t.rtype()
-    assert 'rtype' in t.driver.done    
-
-    t = Translation(f, [int, int])
-    t.rtype(backend='cli')
     assert 'rtype' in t.driver.done
-
 
     t = Translation(f, [int, int], backend='cli', type_system='ootype')
     t.rtype()
-    assert 'rtype' in t.driver.done        
-
-    t = Translation(f, [int, int], type_system='lltype')
-    t.annotate()
-    py.test.raises(Exception, "t.rtype(backend='cli')")
-
-    t = Translation(f, [int, int], backend='cli')
-    t.annotate()
-    py.test.raises(Exception, "t.rtype(type_system='lltype')")
-
+    assert 'rtype' in t.driver.done

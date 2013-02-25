@@ -46,96 +46,30 @@ class Translation(object):
             self.config.translation.gc = gc
         self.config.translation.set(**kwds)
 
-    def ensure_opt(self, name, value=None, fallback=None):
-        if value is not None:
-            self.update_options({name: value})
-            return value
-        val = getattr(self.config.translation, name, None)
-        if fallback is not None and val is None:
-            self.update_options({name: fallback})
-            return fallback
-        if val is not None:
-            return val
-        raise Exception(
-                    "the %r option should have been specified at this point" % name)
-
-    def ensure_type_system(self, type_system=None):
-        if self.config.translation.backend is not None:
-            return self.ensure_opt('type_system')
-        return self.ensure_opt('type_system', type_system, 'lltype')
-
-    def ensure_backend(self, backend=None):
-        backend = self.ensure_opt('backend', backend)
-        self.ensure_type_system()
-        return backend
-
     def set_backend_extra_options(self, **extra_options):
         for name in extra_options:
             backend, option = name.split('_', 1)
-            self.ensure_backend(backend)
+            assert self.config.translation.backend == backend
         self.driver.set_backend_extra_options(extra_options)
 
     # backend independent
 
     def annotate(self, **kwds):
-        self.update_options(kwds)
         return self.driver.annotate()
 
     # type system dependent
 
-    def rtype(self, **kwds):
-        self.update_options(kwds)
+    def rtype(self):
         return self.driver.rtype()
 
-    def backendopt(self, **kwds):
-        self.update_options(kwds)
+    def backendopt(self):
         return self.driver.backendopt()
 
     # backend depedent
 
-    def source(self, **kwds):
-        self.update_options(kwds)
+    def source(self):
         return self.driver.source()
 
-    def source_c(self, **kwds):
-        self.update_options(kwds)
-        self.ensure_backend('c')
-        self.driver.source()
-
-    def source_cl(self, **kwds):
-        self.update_options(kwds)
-        self.ensure_backend('cl')
-        self.driver.source()
-
-    def compile(self, **kwds):
-        self.update_options(kwds)
+    def compile(self):
         self.driver.compile()
         return self.driver.c_entryp
-
-    def compile_c(self, **kwds):
-        self.update_options(kwds)
-        self.ensure_backend('c')
-        self.driver.compile()
-        return self.driver.c_entryp
-
-    def compile_cli(self, **kwds):
-        self.update_options(kwds)
-        self.ensure_backend('cli')
-        self.driver.compile()
-        return self.driver.c_entryp
-
-    def source_cli(self, **kwds):
-        self.update_options(kwds)
-        self.ensure_backend('cli')
-        self.driver.source()
-
-    def compile_jvm(self, **kwds):
-        self.update_options(kwds)
-        self.ensure_backend('jvm')
-        self.driver.compile()
-        return self.driver.c_entryp
-
-    def source_jvm(self, **kwds):
-        self.update_options(kwds)
-        self.ensure_backend('jvm')
-        self.driver.source()
