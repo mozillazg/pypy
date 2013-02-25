@@ -206,6 +206,8 @@ class TranslationDriver(object):
             expose_task(self.task_pyjitpl)
         if not config.translation.backendopt.none:
             expose_task(self.task_backendopt)
+        if config.translation.type_system == 'lltype':
+            expose_task(self.task_stackcheckinsertion_lltype)
         for task in backends[config.translation.backend](self).get_tasks():
             expose_task(task)
 
