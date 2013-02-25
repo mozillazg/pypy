@@ -45,11 +45,11 @@ def test_simple_source():
     t = Translation(f, [int, int], backend='c')
     t.annotate()
     t.source()
-    assert 'source_c' in t.driver.done
+    assert 'source' in t.driver.done
 
     t = Translation(f, [int, int])
     t.source_c()
-    assert 'source_c' in t.driver.done
+    assert 'source' in t.driver.done
 
 def test_disable_logic():
     return # temporary skip
