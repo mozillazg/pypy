@@ -22,33 +22,6 @@ from rpython.config.translationoption import (get_combined_translation_config,
     set_opt_level, final_check_config, OPT_LEVELS, DEFAULT_OPT_LEVEL, set_platform)
 
 
-GOALS = [
-    ("annotate", "do type inference", "-a --annotate", ""),
-    ("rtype", "do rtyping", "-t --rtype", ""),
-    ("pyjitpl", "JIT generation step", "--pyjitpl", ""),
-    ("jittest", "JIT test with llgraph backend", "--jittest", ""),
-    ("backendopt", "do backend optimizations", "--backendopt", ""),
-    ("source", "create source", "-s --source", ""),
-    ("compile", "compile", "-c --compile", " (default goal)"),
-    ("llinterpret", "interpret the rtyped flow graphs", "--llinterpret", ""),
-]
-
-
-def goal_options():
-    result = []
-    for name, doc, cmdline, extra in GOALS:
-        optional = False
-        if name.startswith('?'):
-            optional = True
-            name = name[1:]
-        yesdoc = doc[0].upper() + doc[1:] + extra
-        result.append(BoolOption(name, yesdoc, default=False, cmdline=cmdline,
-                                 negation=False))
-        if not optional:
-            result.append(BoolOption("no_%s" % name, "Don't " + doc, default=False,
-                                     cmdline="--no-" + name, negation=False))
-    return result
-
 translate_optiondescr = OptionDescription("translate", "XXX", [
     StrOption("targetspec", "XXX", default='../../../pypy/goal/targetpypystandalone',
               cmdline=None),
@@ -74,14 +47,9 @@ translate_optiondescr = OptionDescription("translate", "XXX", [
                cmdline="-h --help", negation=False),
     BoolOption("fullhelp", "show full help message and exit", default=False,
                cmdline="--full-help", negation=False),
-    ArbitraryOption("goals", "XXX",
-                    defaultfactory=list),
-    # xxx default goals ['annotate', 'rtype', 'backendopt', 'source', 'compile']
-    ArbitraryOption("skipped_goals", "XXX",
-                    defaultfactory=list),
-    OptionDescription("goal_options",
-                      "Goals that should be reached during translation",
-                      goal_options()),
+    ChoiceOption("goal", "stop after goal", ['annotate', 'rtype', 'backendopt',
+                                             'source', 'compile'],
+                 default='compile')
 ])
 
 import optparse
@@ -116,21 +84,6 @@ def parse_options_and_load_target():
     to_optparse(translateconfig, parser=opt_parser)
 
     options, args = opt_parser.parse_args()
-
-    # set goals and skipped_goals
-    reset = False
-    for name, _, _, _ in GOALS:
-        if name.startswith('?'):
-            continue
-        if getattr(translateconfig.goal_options, name):
-            if name not in translateconfig.goals:
-                translateconfig.goals.append(name)
-        if getattr(translateconfig.goal_options, 'no_' + name):
-            if name not in translateconfig.skipped_goals:
-                if not reset:
-                    translateconfig.skipped_goals[:] = []
-                    reset = True
-                translateconfig.skipped_goals.append(name)
 
     if args:
         arg = args[0]
@@ -304,9 +257,6 @@ def main():
         if config.translation.jit:
             if 'jitpolicy' not in targetspec_dic:
                 raise Exception('target has no jitpolicy defined.')
-            if (translateconfig.goals != ['annotate'] and
-                translateconfig.goals != ['rtype']):
-                drv.set_extra_goals(['pyjitpl'])
             # early check:
             from rpython.jit.backend.detect_cpu import getcpuclassname
             getcpuclassname(config.translation.jit_backend)
@@ -320,8 +270,8 @@ def main():
             drv.exe_name = targetspec_dic['__name__'] + '-%(backend)s'
 
         # Double check to ensure we are not overwriting the current interpreter
-        goals = translateconfig.goals
-        if not goals or 'compile' in goals:
+        goal = translateconfig.goal
+        if goal == 'compile':
             try:
                 this_exe = py.path.local(sys.executable).new(ext='')
                 exe_name = drv.compute_exe_name()
@@ -333,7 +283,7 @@ def main():
                 pass
 
         try:
-            drv.proceed(goals)
+            getattr(drv, goal)()
         finally:
             drv.timer.pprint()
     except SystemExit:

@@ -622,6 +622,8 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
             tasks.append(task)
             if task == goal:
                 break
+        else:
+            raise Exception("No such goal %s." % goal.task_name)
 
         for task in tasks:
             if task.task_earlycheck:
