@@ -6,17 +6,17 @@ import optparse
 
 def test_c_no_jit():
     td = TranslationDriver()
-    goals = ['annotate', 'rtype', 'backendopt', 'source', 'compile']
-    assert td._tasks == goals
+    names = ['annotate', 'rtype', 'backendopt', 'source', 'compile']
+    assert td.tasks == names
 
 
 def test_c_with_jit():
     td = TranslationDriver({'jit': True})
-    goals = ['annotate', 'rtype', 'pyjitpl', 'backendopt', 'source', 'compile']
-    assert td._tasks == goals
+    names = ['annotate', 'rtype', 'pyjitpl', 'backendopt', 'source', 'compile']
+    assert td.tasks == names
 
 
 def test_no_backendopt():
     td = TranslationDriver({'backendopt.none': True})
-    goals = ['annotate', 'rtype', 'source', 'compile']
-    assert td._tasks == goals
+    names = ['annotate', 'rtype', 'source', 'compile']
+    assert td.tasks == names

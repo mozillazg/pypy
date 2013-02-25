@@ -19,6 +19,8 @@ py.log.setconsumer("translation", ansi_log)
 
 def taskdef(title, idemp=False, earlycheck=None):
     def decorator(taskfunc):
+        assert taskfunc.__name__.startswith('task_')
+        taskfunc.task_name = taskfunc.__name__[len('task_'):]
         taskfunc.task_title = title
         taskfunc.task_idempotent = idemp
         taskfunc.task_earlycheck = earlycheck
@@ -79,21 +81,12 @@ class TranslationDriver(object):
 
         self.done = {}
 
-        self.tasks = tasks = {}
-
-        for name in dir(self):
-            if name.startswith('task_'):
-                task_name = name[len('task_'):]
-                task = getattr(self, name)
-                assert callable(task)
-                tasks[task_name] = task
-
-        self._tasks = []
+        self.tasks = tasks = []
         # expose tasks
         def expose_task(task):
             def proc():
                 return self.proceed(task)
-            self._tasks.append(task)
+            tasks.append(task)
             setattr(self, task, proc)
 
         expose_task('annotate')
@@ -111,21 +104,6 @@ class TranslationDriver(object):
     def get_info(self): # XXX more?
         d = {'backend': self.config.translation.backend}
         return d
-
-    def backend_select_goals(self, goals):
-        backend = self.config.translation.backend
-        postfixes = ['', '_' + backend]
-        l = []
-        for goal in goals:
-            for postfix in postfixes:
-                cand = "%s%s" % (goal, postfix)
-                if cand in self.tasks:
-                    new_goal = cand
-                    break
-            else:
-                raise Exception, "cannot infer complete goal from: %r" % goal 
-            l.append(new_goal)
-        return l
 
     def setup(self, entry_point, inputtypes, policy=None, extra={}, empty_translator=None):
         standalone = inputtypes is None
@@ -630,21 +608,25 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
 
     def proceed(self, goal):
         assert isinstance(goal, str)
-        goals = []
-        for task in self._tasks:
-            goals.append(task)
+
+        # XXX
+        tasks = []
+        for task in self.tasks:
+            if task in ('source', 'compile'):
+                realtask = '%s_%s' % (task, self.config.translation.backend)
+            else:
+                realtask = task
+            taskcallable = getattr(self, 'task_' + realtask)
+            tasks.append(taskcallable)
             if task == goal:
                 break
-        goals = self.backend_select_goals(goals)
 
-        res = None
-        for goal in goals:
-            taskcallable = self.tasks[goal]
+        for taskcallable in tasks:
             if taskcallable.task_earlycheck:
                 func.task_earlycheck(self)
-        for goal in goals:
-            taskcallable = self.tasks[goal]
-            res = self._do(goal, taskcallable)
+        res = None
+        for taskcallable in tasks:
+            res = self._do(taskcallable.task_name, taskcallable)
         return res
 
     def from_targetspec(targetspec_dic, config=None, args=None,
