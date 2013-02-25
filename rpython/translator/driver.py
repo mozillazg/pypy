@@ -105,15 +105,12 @@ class TranslationDriver(SimpleTaskEngine):
         self.exposed = []
 
         # expose tasks
-        def expose_task(task, backend_goal=None):
-            if backend_goal is None:
-                backend_goal = task
+        def expose_task(task):
             def proc():
-                return self.proceed(backend_goal)
+                return self.proceed(task)
             self.exposed.append(task)
             setattr(self, task, proc)
 
-        backend, ts = self.get_backend_and_type_system()
         expose_task('annotate')
         expose_task('rtype')
         if config.translation.jit:
