@@ -69,10 +69,6 @@ class Translation(object):
         self.ensure_type_system()
         return backend
 
-    # disable some goals (steps)
-    def disable(self, to_disable):
-        self.driver.disable(to_disable)
-
     def set_backend_extra_options(self, **extra_options):
         for name in extra_options:
             backend, option = name.split('_', 1)

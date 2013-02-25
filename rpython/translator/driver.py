@@ -325,23 +325,15 @@ class TranslationDriver(object):
 
     RTYPE = 'rtype_lltype'
     @taskdef("RTyping")
-    def task_rtype_lltype(self):
+    def task_rtype(self):
         """ RTyping - lltype version
         """
-        rtyper = self.translator.buildrtyper(type_system='lltype')
-        rtyper.specialize(dont_simplify_again=True)
-
-    OOTYPE = 'rtype_ootype'
-    @taskdef("ootyping")
-    def task_rtype_ootype(self):
-        """ RTyping - ootype version
-        """
-        # Maybe type_system should simply be an option used in task_rtype
-        rtyper = self.translator.buildrtyper(type_system="ootype")
+        type_system = self.config.translation.type_system
+        rtyper = self.translator.buildrtyper(type_system)
         rtyper.specialize(dont_simplify_again=True)
 
     @taskdef("JIT compiler generation")
-    def task_pyjitpl_lltype(self):
+    def task_pyjitpl(self):
         """ Generate bytecodes for JIT and flow the JIT helper functions
         lltype version
         """
@@ -354,22 +346,8 @@ class TranslationDriver(object):
         #
         self.log.info("the JIT compiler was generated")
 
-    @taskdef("JIT compiler generation")
-    def task_pyjitpl_ootype(self):
-        """ Generate bytecodes for JIT and flow the JIT helper functions
-        ootype version
-        """
-        get_policy = self.extra['jitpolicy']
-        self.jitpolicy = get_policy(self)
-        #
-        from rpython.jit.metainterp.warmspot import apply_jit
-        apply_jit(self.translator, policy=self.jitpolicy,
-                  backend_name='cli', inline=True) #XXX
-        #
-        self.log.info("the JIT compiler was generated")
-
     @taskdef("test of the JIT on the llgraph backend")
-    def task_jittest_lltype(self):
+    def task_jittest(self):
         """ Run with the JIT on top of the llgraph backend
         """
         # parent process loop: spawn a child, wait for the child to finish,
@@ -383,20 +361,11 @@ class TranslationDriver(object):
 
     BACKENDOPT = 'backendopt_lltype'
     @taskdef("lltype back-end optimisations")
-    def task_backendopt_lltype(self):
+    def task_backendopt(self):
         """ Run all backend optimizations - lltype version
         """
         from rpython.translator.backendopt.all import backend_optimizations
         backend_optimizations(self.translator)
-
-    OOBACKENDOPT = 'backendopt_ootype'
-    @taskdef("ootype back-end optimisations")
-    def task_backendopt_ootype(self):
-        """ Run all backend optimizations - ootype version
-        """
-        from rpython.translator.backendopt.all import backend_optimizations
-        backend_optimizations(self.translator)
-
 
     STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
     @taskdef("inserting stack checks")
