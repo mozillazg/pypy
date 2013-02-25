@@ -103,19 +103,13 @@ def compile(fn, argtypes, view=False, gcpolicy="none", backendopt=True,
         t.disable(["backendopt_lltype"])
     t.driver.config.translation.countmallocs = True
     t.annotate()
-    try:
-        if py.test.config.option.view:
-            t.view()
-    except AttributeError:
-        pass
+    if py.test.config.option.view:
+        t.view()
     t.rtype()
     if backendopt:
         t.backendopt()
-    try:
-        if py.test.config.option.view:
-            t.view()
-    except AttributeError:
-        pass
+    if py.test.config.option.view:
+        t.view()
     t.compile()
     ll_res = graphof(t.context, fn).getreturnvar().concretetype
 
