@@ -3,7 +3,6 @@ import os.path
 import shutil
 
 from rpython.translator.translator import TranslationContext
-from rpython.translator.tool.taskengine import SimpleTaskEngine
 from rpython.translator.goal import query
 from rpython.translator.goal.timing import Timer
 from rpython.annotator.listdef import s_list_of_strings
@@ -65,7 +64,7 @@ class ProfInstrument(object):
         os._exit(0)
 
 
-class TranslationDriver(SimpleTaskEngine):
+class TranslationDriver(object):
     _backend_extra_options = {}
 
     def __init__(self, setopts=None, default_goal=None,
@@ -73,7 +72,6 @@ class TranslationDriver(SimpleTaskEngine):
                  exe_name=None, extmod_name=None,
                  config=None, overrides=None):
         self.timer = Timer()
-        SimpleTaskEngine.__init__(self)
 
         self.log = log
 
@@ -99,8 +97,19 @@ class TranslationDriver(SimpleTaskEngine):
         
         self.default_goal = default_goal
         self.extra_goals = []
-        self._tasks = []
 
+        self.tasks = tasks = {}
+
+        for name in dir(self):
+            if name.startswith('task_'):
+                task_name = name[len('task_'):]
+                task = getattr(self, name)
+                assert callable(task)
+                task_deps = getattr(task, 'task_deps', [])
+
+                tasks[task_name] = task, task_deps
+
+        self._tasks = []
         # expose tasks
         def expose_task(task):
             def proc():
@@ -700,7 +709,17 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
             if task == goal:
                 break
         goals = self.backend_select_goals(goals)
-        return self._execute(goals)
+
+        res = None
+        for goal in goals:
+            taskcallable, _ = self.tasks[goal]
+            self._event('planned', goal, taskcallable)
+        for goal in goals:
+            taskcallable, _ = self.tasks[goal]
+            self._event('pre', goal, taskcallable)
+            res = self._do(goal, taskcallable)
+            self._event('post', goal, taskcallable)
+        return res
 
     def from_targetspec(targetspec_dic, config=None, args=None,
                         empty_translator=None,
