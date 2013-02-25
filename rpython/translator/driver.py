@@ -96,8 +96,6 @@ class TranslationDriver(SimpleTaskEngine):
 
         if default_goal:
             default_goal, = self.backend_select_goals([default_goal])
-            if default_goal in self._maybe_skip():
-                default_goal = None
         
         self.default_goal = default_goal
         self.extra_goals = []
@@ -151,14 +149,6 @@ class TranslationDriver(SimpleTaskEngine):
 
     def disable(self, to_disable):
         self._disabled = to_disable
-
-    def _maybe_skip(self):
-        maybe_skip = []
-        if self._disabled:
-             for goal in self.backend_select_goals(self._disabled):
-                 maybe_skip.extend(self._depending_on_closure(goal))
-        return dict.fromkeys(maybe_skip).keys()
-
 
     def setup(self, entry_point, inputtypes, policy=None, extra={}, empty_translator=None):
         standalone = inputtypes is None
@@ -710,7 +700,7 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
             if task == goal:
                 break
         goals = self.backend_select_goals(goals)
-        return self._execute(goals, task_skip = self._maybe_skip())
+        return self._execute(goals)
 
     def from_targetspec(targetspec_dic, config=None, args=None,
                         empty_translator=None,
