@@ -18,10 +18,9 @@ log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
 
 
-def taskdef(deps, title, new_state=None, expected_states=[],
-            idemp=False, earlycheck=None):
+def taskdef(title, new_state=None, expected_states=[], idemp=False,
+            earlycheck=None):
     def decorator(taskfunc):
-        taskfunc.task_deps = deps
         taskfunc.task_title = title
         taskfunc.task_newstate = None
         taskfunc.task_expected_states = expected_states
@@ -283,7 +282,7 @@ class TranslationDriver(SimpleTaskEngine):
         #import gc; gc.dump_rpy_heap('rpyheap-after-%s.dump' % goal)
         return res
 
-    @taskdef([], "Annotating&simplifying")
+    @taskdef("Annotating&simplifying")
     def task_annotate(self):
         """ Annotate
         """
@@ -326,7 +325,7 @@ class TranslationDriver(SimpleTaskEngine):
         assert not lost, "lost methods, something gone wrong with the annotation of method defs"
 
     RTYPE = 'rtype_lltype'
-    @taskdef(['annotate'], "RTyping")
+    @taskdef("RTyping")
     def task_rtype_lltype(self):
         """ RTyping - lltype version
         """
@@ -334,7 +333,7 @@ class TranslationDriver(SimpleTaskEngine):
         rtyper.specialize(dont_simplify_again=True)
 
     OOTYPE = 'rtype_ootype'
-    @taskdef(['annotate'], "ootyping")
+    @taskdef("ootyping")
     def task_rtype_ootype(self):
         """ RTyping - ootype version
         """
@@ -342,7 +341,7 @@ class TranslationDriver(SimpleTaskEngine):
         rtyper = self.translator.buildrtyper(type_system="ootype")
         rtyper.specialize(dont_simplify_again=True)
 
-    @taskdef([RTYPE], "JIT compiler generation")
+    @taskdef("JIT compiler generation")
     def task_pyjitpl_lltype(self):
         """ Generate bytecodes for JIT and flow the JIT helper functions
         lltype version
@@ -356,7 +355,7 @@ class TranslationDriver(SimpleTaskEngine):
         #
         self.log.info("the JIT compiler was generated")
 
-    @taskdef([OOTYPE], "JIT compiler generation")
+    @taskdef("JIT compiler generation")
     def task_pyjitpl_ootype(self):
         """ Generate bytecodes for JIT and flow the JIT helper functions
         ootype version
@@ -370,7 +369,7 @@ class TranslationDriver(SimpleTaskEngine):
         #
         self.log.info("the JIT compiler was generated")
 
-    @taskdef([RTYPE], "test of the JIT on the llgraph backend")
+    @taskdef("test of the JIT on the llgraph backend")
     def task_jittest_lltype(self):
         """ Run with the JIT on top of the llgraph backend
         """
@@ -384,7 +383,7 @@ class TranslationDriver(SimpleTaskEngine):
         jittest.jittest(self)
 
     BACKENDOPT = 'backendopt_lltype'
-    @taskdef([RTYPE, '??pyjitpl_lltype', '??jittest_lltype'], "lltype back-end optimisations")
+    @taskdef("lltype back-end optimisations")
     def task_backendopt_lltype(self):
         """ Run all backend optimizations - lltype version
         """
@@ -392,7 +391,7 @@ class TranslationDriver(SimpleTaskEngine):
         backend_optimizations(self.translator)
 
     OOBACKENDOPT = 'backendopt_ootype'
-    @taskdef([OOTYPE], "ootype back-end optimisations")
+    @taskdef("ootype back-end optimisations")
     def task_backendopt_ootype(self):
         """ Run all backend optimizations - ootype version
         """
@@ -401,7 +400,7 @@ class TranslationDriver(SimpleTaskEngine):
 
 
     STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
-    @taskdef(['?'+BACKENDOPT, RTYPE, 'annotate'], "inserting stack checks")
+    @taskdef("inserting stack checks")
     def task_stackcheckinsertion_lltype(self):
         from rpython.translator.transform import insert_ll_stackcheck
         count = insert_ll_stackcheck(self.translator)
@@ -449,8 +448,7 @@ class TranslationDriver(SimpleTaskEngine):
         self.cbuilder = cbuilder
         self.database = database
 
-    @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'],
-             "Generating c source")
+    @taskdef("Generating c source")
     def task_source_c(self):
         """ Create C source files from the generated database
         """
@@ -501,7 +499,7 @@ class TranslationDriver(SimpleTaskEngine):
         self.log.info('usession directory: %s' % (udir,))
         self.log.info("created: %s" % (self.c_entryp,))
 
-    @taskdef(['source_c'], "Compiling c source")
+    @taskdef("Compiling c source")
     def task_compile_c(self):
         """ Compile the generated C code using either makefile or
         translator/platform
@@ -518,7 +516,7 @@ class TranslationDriver(SimpleTaskEngine):
         else:
             self.c_entryp = cbuilder.get_entry_point()
 
-    @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE], "LLInterpreting")
+    @taskdef("LLInterpreting")
     def task_llinterpret_lltype(self):
         from rpython.rtyper.llinterp import LLInterpreter
         py.log.setconsumer("llinterp operation", None)
@@ -533,7 +531,7 @@ class TranslationDriver(SimpleTaskEngine):
 
         log.llinterpret.event("result -> %s" % v)
 
-    @taskdef(["?" + OOBACKENDOPT, OOTYPE], 'Generating CLI source')
+    @taskdef('Generating CLI source')
     def task_source_cli(self):
         from rpython.translator.cli.gencli import GenCli
         from rpython.translator.cli.entrypoint import get_entrypoint
@@ -551,7 +549,7 @@ class TranslationDriver(SimpleTaskEngine):
         filename = self.gen.generate_source()
         self.log.info("Wrote %s" % (filename,))
 
-    @taskdef(['source_cli'], 'Compiling CLI source')
+    @taskdef('Compiling CLI source')
     def task_compile_cli(self):
         from rpython.translator.oosupport.support import unpatch_os
         from rpython.translator.cli.test.runtest import CliFunctionWrapper
@@ -622,7 +620,7 @@ $LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work 
         shutil.copy(main_exe, '.')
         self.log.info("Copied to %s" % os.path.join(os.getcwd(), dllname))
 
-    @taskdef(["?" + OOBACKENDOPT, OOTYPE], 'Generating JVM source')
+    @taskdef('Generating JVM source')
     def task_source_jvm(self):
         from rpython.translator.jvm.genjvm import GenJvm
         from rpython.translator.jvm.node import EntryPoint
@@ -634,7 +632,7 @@ $LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work 
         self.jvmsource = self.gen.generate_source()
         self.log.info("Wrote JVM code")
 
-    @taskdef(['source_jvm'], 'Compiling JVM source')
+    @taskdef('Compiling JVM source')
     def task_compile_jvm(self):
         from rpython.translator.oosupport.support import unpatch_os
         from rpython.translator.jvm.test.runtest import JvmGeneratedSourceWrapper
@@ -700,20 +698,17 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
         classlist.close()
         return filename
 
-    @taskdef(['compile_jvm'], 'XXX')
+    @taskdef('XXX')
     def task_run_jvm(self):
         pass
 
-    def proceed(self, goals):
-        if not goals:
-            if self.default_goal:
-                goals = [self.default_goal]
-            else:
-                self.log.info("nothing to do")
-                return
-        elif isinstance(goals, str):
-            goals = [goals]
-        goals.extend(self.extra_goals)
+    def proceed(self, goal):
+        assert isinstance(goal, str)
+        goals = []
+        for task in self._tasks:
+            goals.append(task)
+            if task == goal:
+                break
         goals = self.backend_select_goals(goals)
         return self._execute(goals, task_skip = self._maybe_skip())
 

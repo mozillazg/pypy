@@ -105,7 +105,7 @@ class SimpleTaskEngine(object):
     def _execute(self, goals, *args, **kwds):
         task_skip = kwds.get('task_skip', [])
         res = None
-        goals = self._plan(goals, skip=task_skip)
+        #goals = self._plan(goals, skip=task_skip)
         for goal in goals:
             taskcallable, _ = self.tasks[goal]
             self._event('planned', goal, taskcallable)
