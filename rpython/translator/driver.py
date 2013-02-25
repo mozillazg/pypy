@@ -393,16 +393,13 @@ class TranslationDriver(object):
         self._task_database_c()
         cbuilder = self.cbuilder
         database = self.database
-        if self._backend_extra_options.get('c_debug_defines', False):
-            defines = cbuilder.DEBUG_DEFINES
-        else:
-            defines = {}
+        debug_def = self._backend_extra_options.get('c_debug_defines', False)
         if self.exe_name is not None:
             exe_name = self.exe_name % self.get_info()
         else:
             exe_name = None
-        c_source_filename = cbuilder.generate_source(database, defines,
-                                                     exe_name=exe_name)
+        c_source_filename = cbuilder.generate_source(
+                database, debug_defines=debug_def, exe_name=exe_name)
         self.log.info("written: %s" % (c_source_filename,))
         if self.config.translation.dump_static_data_info:
             from rpython.translator.tool.staticsizereport import dump_static_data_info

@@ -115,7 +115,7 @@ def compile(f, gc, enable_opts='', **kwds):
                 setattr(obj, attr, oldvalue)
 
     cbuilder = genc.CStandaloneBuilder(t, f, t.config)
-    cbuilder.generate_source(defines=cbuilder.DEBUG_DEFINES)
+    cbuilder.generate_source(debug_defines=True)
     cbuilder.compile()
     return cbuilder
 

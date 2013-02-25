@@ -206,11 +206,6 @@ class CBuilder(object):
             return gc.name_to_gcpolicy[name]
         return self.gcpolicy
 
-    # use generate_source(defines=DEBUG_DEFINES) to force the #definition
-    # of the macros that enable debugging assertions
-    DEBUG_DEFINES = {'RPY_ASSERT': 1,
-                     'RPY_LL_ASSERT': 1}
-
     def generate_graphs_for_llinterp(self, db=None):
         # prepare the graphs as when the source is generated, but without
         # actually generating the source.
@@ -224,7 +219,7 @@ class CBuilder(object):
                     funcgen.patch_graph(copy_graph=False)
         return db
 
-    def generate_source(self, db=None, defines={}, exe_name=None):
+    def generate_source(self, db=None, debug_defines=True, exe_name=None):
         assert self.c_source_filename is None
 
         if db is None:
@@ -238,7 +233,10 @@ class CBuilder(object):
             targetdir = NullPyPathLocal(targetdir)
 
         self.targetdir = targetdir
-        defines = defines.copy()
+        defines = {}
+        if debug_defines:
+            defines['RPY_ASSERT'] = 1
+            defines['RPY_LL_ASSERT'] = 1
         if self.config.translation.countmallocs:
             defines['COUNT_OP_MALLOCS'] = 1
         if self.config.translation.sandbox:

@@ -31,7 +31,7 @@ class StandaloneTests(object):
 
         cbuilder = CStandaloneBuilder(t, entry_point, t.config)
         if debug:
-            cbuilder.generate_source(defines=cbuilder.DEBUG_DEFINES)
+            cbuilder.generate_source(debug_defines=True)
         else:
             cbuilder.generate_source()
         cbuilder.compile()
@@ -848,7 +848,7 @@ class TestThread(object):
         t.buildrtyper().specialize()
         #
         cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source(defines=cbuilder.DEBUG_DEFINES)
+        cbuilder.generate_source(debug_defines=True)
         cbuilder.compile()
         #
         return t, cbuilder

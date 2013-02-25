@@ -58,8 +58,7 @@ class AbstractTestAsmGCRoot:
 
         cbuilder = CStandaloneBuilder(t, main, config=config,
                 secondary_entrypoints=sec_ep)
-        c_source_filename = cbuilder.generate_source(
-            defines = cbuilder.DEBUG_DEFINES)
+        c_source_filename = cbuilder.generate_source(debug_defines=True)
         cls._patch_makefile(cbuilder.targetdir)
         if option.view:
             t.view()
