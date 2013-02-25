@@ -48,7 +48,7 @@ class ProfInstrument(object):
         env = os.environ.copy()
         env['PYPY_INSTRUMENT_COUNTERS'] = str(self.datafile)
         self.compiler.platform.execute(exe, args, env=env)
-        
+
     def after(self):
         # xxx
         os._exit(0)
@@ -172,7 +172,6 @@ class TranslationDriver(object):
 
     def instrument_result(self, args):
         backend = self.config.translation.backend
-        backend = self.config.translation.backend
         if backend != 'c' or sys.platform == 'win32':
             raise Exception("instrumentation requires the c backend"
                             " and unix for now")
@@ -244,11 +243,8 @@ class TranslationDriver(object):
             try:
                 debug_stop('translation-task')
                 self.timer.end_event(goal)
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except:
+            except Exception:
                 pass
-        #import gc; gc.dump_rpy_heap('rpyheap-after-%s.dump' % goal)
         return res
 
     @taskdef("Annotating&simplifying")
@@ -283,7 +279,6 @@ class TranslationDriver(object):
         annotator.simplify()
         return s
 
-
     def sanity_check_annotation(self):
         translator = self.translator
         irreg = query.qoutput(query.check_exceptblocks_qgen(translator))
@@ -293,10 +288,9 @@ class TranslationDriver(object):
         lost = query.qoutput(query.check_methods_qgen(translator))
         assert not lost, "lost methods, something gone wrong with the annotation of method defs"
 
-    RTYPE = 'rtype_lltype'
     @taskdef("RTyping")
     def task_rtype(self):
-        """ RTyping - lltype version
+        """ RTyping
         """
         type_system = self.config.translation.type_system
         rtyper = self.translator.buildrtyper(type_system)
@@ -305,7 +299,6 @@ class TranslationDriver(object):
     @taskdef("JIT compiler generation")
     def task_pyjitpl(self):
         """ Generate bytecodes for JIT and flow the JIT helper functions
-        lltype version
         """
         get_policy = self.extra['jitpolicy']
         self.jitpolicy = get_policy(self)
@@ -329,21 +322,18 @@ class TranslationDriver(object):
         from rpython.jit.tl import jittest
         jittest.jittest(self)
 
-    BACKENDOPT = 'backendopt_lltype'
-    @taskdef("lltype back-end optimisations")
+    @taskdef("back-end optimisations")
     def task_backendopt(self):
-        """ Run all backend optimizations - lltype version
+        """ Run all backend optimizations
         """
         from rpython.translator.backendopt.all import backend_optimizations
         backend_optimizations(self.translator)
 
-    STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
     @taskdef("inserting stack checks")
     def task_stackcheckinsertion_lltype(self):
         from rpython.translator.transform import insert_ll_stackcheck
         count = insert_ll_stackcheck(self.translator)
         self.log.info("inserted %d stack checks." % (count,))
-        
 
     def possibly_check_for_boehm(self):
         if self.config.translation.gc == "boehm":
@@ -355,10 +345,9 @@ class TranslationDriver(object):
                 i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=hybrid"'
                 raise Exception(str(e) + '\n' + i)
 
-    #@taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'],
-    #    "Creating database for generating c source",
-    #    earlycheck = possibly_check_for_boehm)
-    def _task_database_c(self):
+    @taskdef("Creating database for generating c source",
+             earlycheck=possibly_check_for_boehm)
+    def task_database_c(self):
         """ Create a database for further backend generation
         """
         translator = self.translator
@@ -390,7 +379,7 @@ class TranslationDriver(object):
     def task_source_c(self):
         """ Create C source files from the generated database
         """
-        self._task_database_c()
+        self.task_database_c()
         cbuilder = self.cbuilder
         database = self.database
         debug_def = self._backend_extra_options.get('c_debug_defines', False)
@@ -420,7 +409,9 @@ class TranslationDriver(object):
         """
         if self.exe_name is not None:
             exename = self.c_entryp
-            newexename = mkexename(self.compute_exe_name())
+            newexename = self.compute_exe_name()
+            if sys.platform == 'win32':
+                newexename = newexename.new(ext='exe')
             shutil.copy(str(exename), str(newexename))
             if self.cbuilder.shared_library_name is not None:
                 soname = self.cbuilder.shared_library_name
@@ -455,7 +446,7 @@ class TranslationDriver(object):
     def task_llinterpret_lltype(self):
         from rpython.rtyper.llinterp import LLInterpreter
         py.log.setconsumer("llinterp operation", None)
-        
+
         translator = self.translator
         interp = LLInterpreter(translator.rtyper)
         bk = translator.annotator.bookkeeper
@@ -493,7 +484,7 @@ class TranslationDriver(object):
         # restore original os values
         if hasattr(self, 'old_cli_defs'):
             unpatch_os(self.old_cli_defs)
-        
+
         self.log.info("Compiled %s" % filename)
         if self.standalone and self.exe_name:
             self.copy_cli_exe()
@@ -547,7 +538,7 @@ $LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work 
         pypylib_dll = os.path.join(usession_path, 'pypylib.dll')
         shutil.copy(dllname, '.')
         shutil.copy(pypylib_dll, '.')
-        
+
         # main.exe is a stub but is needed right now because it's
         # referenced by pypylib.dll.  Will be removed in the future
         translator_path, _ = os.path.split(__file__)
@@ -676,7 +667,7 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
         if backend in ('cli', 'jvm'):
             from rpython.translator.oosupport.support import patch_os
             driver.old_cli_defs = patch_os()
-        
+
         target = targetspec_dic['target']
         spec = target(driver, args)
 
@@ -686,8 +677,8 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
             entry_point, inputtypes = spec
             policy = None
 
-        driver.setup(entry_point, inputtypes, 
-                     policy=policy, 
+        driver.setup(entry_point, inputtypes,
+                     policy=policy,
                      extra=targetspec_dic,
                      empty_translator=empty_translator)
 
@@ -698,8 +689,3 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
     def prereq_checkpt_rtype(self):
         assert 'rpython.rtyper.rmodel' not in sys.modules, (
             "cannot fork because the rtyper has already been imported")
-
-def mkexename(name):
-    if sys.platform == 'win32':
-        name = name.new(ext='exe')
-    return name
