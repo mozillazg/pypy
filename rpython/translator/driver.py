@@ -240,7 +240,6 @@ class TranslationDriver(object):
 
         self.entry_point = entry_point
         self.translator = translator
-        self.libdef = None
         self.secondary_entrypoints = []
 
         if self.config.translation.secondaryentrypoints:
@@ -254,12 +253,6 @@ class TranslationDriver(object):
                 self.secondary_entrypoints.extend(points)
 
         self.translator.driver_instrument_result = self.instrument_result
-
-    def setup_library(self, libdef, policy=None, extra={}, empty_translator=None):
-        """ Used by carbon python only. """
-        self.setup(None, None, policy, extra, empty_translator)
-        self.libdef = libdef
-        self.secondary_entrypoints = libdef.functions
 
     def instrument_result(self, args):
         backend = self.config.translation.backend
@@ -456,10 +449,7 @@ class TranslationDriver(object):
             entry_point_graph = self.translator.graphs[0]
             entry_point = get_entrypoint(entry_point_graph)
         else:
-            # library mode
-            assert self.libdef is not None
-            bk = self.translator.annotator.bookkeeper
-            entry_point = self.libdef.get_entrypoint(bk)
+            raise NotImplementedError
 
         self.gen = GenCli(udir, self.translator, entry_point, config=self.config)
         filename = self.gen.generate_source()
