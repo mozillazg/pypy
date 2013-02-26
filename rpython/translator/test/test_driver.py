@@ -4,21 +4,22 @@ from rpython.translator.interactive import Translation
 
 def test_c_no_jit():
     td = TranslationDriver()
-    names = ['annotate', 'rtype', 'backendopt', 'database', 'source',
-             'compile']
+    names = ['annotate', 'rtype', 'backendopt', 'stackcheckinsertion_lltype',
+             'database', 'source', 'compile']
     assert [task.task_name for task in td.tasks] == names
 
 
 def test_c_with_jit():
     td = TranslationDriver({'jit': True})
-    names = ['annotate', 'rtype', 'pyjitpl', 'backendopt', 'database',
-             'source', 'compile']
+    names = ['annotate', 'rtype', 'pyjitpl', 'backendopt',
+             'stackcheckinsertion_lltype', 'database', 'source', 'compile']
     assert [task.task_name for task in td.tasks] == names
 
 
 def test_no_backendopt():
     td = TranslationDriver({'backendopt.none': True})
-    names = ['annotate', 'rtype', 'database', 'source', 'compile']
+    names = ['annotate', 'rtype', 'stackcheckinsertion_lltype', 'database',
+             'source', 'compile']
     assert [task.task_name for task in td.tasks] == names
 
 
