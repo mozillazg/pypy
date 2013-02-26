@@ -4,6 +4,7 @@ from rpython.translator.interactive import Translation
 
 def test_c_no_jit():
     td = TranslationDriver()
+    td.setup(None, None)
     names = ['annotate', 'rtype', 'backendopt', 'stackcheckinsertion_lltype',
              'database', 'source', 'compile']
     assert [task.task_name for task in td.tasks] == names
@@ -11,6 +12,7 @@ def test_c_no_jit():
 
 def test_c_with_jit():
     td = TranslationDriver({'jit': True})
+    td.setup(None, None)
     names = ['annotate', 'rtype', 'pyjitpl', 'backendopt',
              'stackcheckinsertion_lltype', 'database', 'source', 'compile']
     assert [task.task_name for task in td.tasks] == names
@@ -18,6 +20,7 @@ def test_c_with_jit():
 
 def test_no_backendopt():
     td = TranslationDriver({'backendopt.none': True})
+    td.setup(None, None)
     names = ['annotate', 'rtype', 'stackcheckinsertion_lltype', 'database',
              'source', 'compile']
     assert [task.task_name for task in td.tasks] == names
@@ -74,13 +77,10 @@ def test_simple_source():
     assert 'source' in t.driver.done
 
 def test_disable_logic():
-    return # temporary skip
-
     def f(x,y):
         return x+y
 
-    t = Translation(f, [int, int])
-    t.disable(['backendopt'])
+    t = Translation(f, [int, int], **{'backendopt.none': True})
     t.source()
 
     assert 'backendopt' not in t.driver.done
@@ -111,6 +111,6 @@ def test_simple_rtype_with_type_system():
     t.rtype()
     assert 'rtype' in t.driver.done
 
-    t = Translation(f, [int, int], backend='cli', type_system='ootype')
-    t.rtype()
-    assert 'rtype' in t.driver.done
+    #t = Translation(f, [int, int], backend='cli', type_system='ootype')
+    #t.rtype()
+    #assert 'rtype' in t.driver.done

@@ -192,25 +192,6 @@ class TranslationDriver(object):
 
         self.done = {}
 
-        self.tasks = tasks = []
-        # expose tasks
-        def expose_task(task):
-            def proc():
-                return self.proceed(task)
-            tasks.append(task)
-            setattr(self, task.task_name, proc)
-
-        expose_task(self.task_annotate)
-        expose_task(self.task_rtype)
-        if config.translation.jit:
-            expose_task(self.task_pyjitpl)
-        if not config.translation.backendopt.none:
-            expose_task(self.task_backendopt)
-        if config.translation.type_system == 'lltype':
-            expose_task(self.task_stackcheckinsertion_lltype)
-        for task in backends[config.translation.backend](self).get_tasks():
-            expose_task(task)
-
     def set_backend_extra_options(self, extra_options):
         self._backend_extra_options = extra_options
 
@@ -253,6 +234,25 @@ class TranslationDriver(object):
                 self.secondary_entrypoints.extend(points)
 
         self.translator.driver_instrument_result = self.instrument_result
+
+        self.tasks = tasks = []
+        # expose tasks
+        def expose_task(task):
+            def proc():
+                return self.proceed(task)
+            tasks.append(task)
+            setattr(self, task.task_name, proc)
+
+        expose_task(self.task_annotate)
+        expose_task(self.task_rtype)
+        if self.config.translation.jit:
+            expose_task(self.task_pyjitpl)
+        if not self.config.translation.backendopt.none:
+            expose_task(self.task_backendopt)
+        if self.config.translation.type_system == 'lltype':
+            expose_task(self.task_stackcheckinsertion_lltype)
+        for task in backends[self.config.translation.backend](self).get_tasks():
+            expose_task(task)
 
     def instrument_result(self, args):
         backend = self.config.translation.backend

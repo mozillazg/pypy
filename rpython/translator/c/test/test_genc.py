@@ -97,10 +97,11 @@ def compile(fn, argtypes, view=False, gcpolicy="none", backendopt=True,
         print "THE RESULT IS:", llrepr_out(res), ";"
         return 0
 
-    t = Translation(entry_point, None, gc=gcpolicy, backend="c",
-                    policy=annotatorpolicy, thread=thread)
+    kwds = {}
     if not backendopt:
-        t.disable(["backendopt_lltype"])
+        kwds['backendopt.none'] = True
+    t = Translation(entry_point, None, gc=gcpolicy, backend="c",
+                    policy=annotatorpolicy, thread=thread, **kwds)
     t.driver.config.translation.countmallocs = True
     t.annotate()
     if py.test.config.option.view:
