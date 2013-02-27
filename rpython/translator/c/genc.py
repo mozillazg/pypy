@@ -219,7 +219,7 @@ class CBuilder(object):
                     funcgen.patch_graph(copy_graph=False)
         return db
 
-    def generate_source(self, db=None, debug_defines=True, exe_name=None):
+    def generate_source(self, db=None, debug_defines=False, exe_name=None):
         assert self.c_source_filename is None
 
         if db is None:
