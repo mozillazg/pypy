@@ -170,9 +170,8 @@ class ProfInstrument(object):
 class TranslationDriver(object):
     _backend_extra_options = {}
 
-    def __init__(self, setopts=None,
-                 exe_name=None, extmod_name=None,
-                 config=None, overrides=None):
+    def __init__(self, setopts=None, exe_name=None, extmod_name=None,
+                 config=None):
         self.timer = Timer()
 
         self.log = log
@@ -181,9 +180,6 @@ class TranslationDriver(object):
             from rpython.config.translationoption import get_combined_translation_config
             config = get_combined_translation_config(translating=True)
         self.config = config
-        if overrides is not None:
-            self.config.override(overrides)
-
         if setopts is not None:
             self.config.set(**setopts)
 

@@ -2,7 +2,7 @@ from rpython.translator.driver import TranslationDriver
 
 
 def Translation(entry_point, argtypes=None, policy=None, **kwds):
-    driver = TranslationDriver(overrides={'translation.verbose': True})
+    driver = TranslationDriver(setopts={'translation.verbose': True})
     driver.driver = driver
     driver.config.translation.set(**kwds)
     driver.setup(entry_point, argtypes, policy)
