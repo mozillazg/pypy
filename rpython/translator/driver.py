@@ -108,6 +108,7 @@ class CBackend(object):
             self.create_exe()
         else:
             self.driver.c_entryp = cbuilder.get_entry_point()
+        return self.driver.c_entryp
 
     def create_exe(self):
         """ Copy the compiled executable into translator/goal

@@ -43,9 +43,9 @@ class UsingFrameworkTest(object):
 
         t = Translation(main, gc=cls.gcpolicy,
                         taggedpointers=cls.taggedpointers,
-                        gcremovetypeptr=cls.removetypeptr)
-        t.disable(['backendopt'])
-        t.set_backend_extra_options(c_debug_defines=True)
+                        gcremovetypeptr=cls.removetypeptr,
+                        **{'backendopt.none': True})
+        t.set_backend_extra_options({'c_debug_defines': True})
         t.rtype()
         if option.view:
             t.viewcg()
