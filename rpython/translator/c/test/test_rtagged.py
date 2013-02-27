@@ -69,7 +69,7 @@ from rpython.conftest import option
 def test_tagged_boehm():
     t = Translation(entry_point, gc='boehm', taggedpointers=True)
     try:
-        exename = str(t.compile_c())
+        exename = str(t.compile())
     finally:
         if option.view:
             t.view()
