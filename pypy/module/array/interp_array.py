@@ -226,6 +226,8 @@ def make_array(mytype):
             # note that we don't call clear_all_weakrefs here because
             # an array with freed buffer is ok to see - it's just empty with 0
             # length
+            # XXX wrong, because we can then increase its length again,
+            # XXX which creates a memory leak
             self.setlen(0)
 
         def setlen(self, size, zero=False, overallocate=True):
