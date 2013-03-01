@@ -278,7 +278,6 @@ _finalizer_objects = weakref.WeakKeyDictionary()
 
 class _UntranslatedFinalizingObject(object):
     def __del__(self):
-        print "DING"
         g = object.__new__(self.original_class)
         g.__dict__ = self.dict
         _finalizer_queue.append((g, self.func))
@@ -297,7 +296,8 @@ def register_finalizer(method):
             "    %r\n"
             "    %r" % (f.func, func))
         return
-    assert isinstance(obj.__class__, type), (
+    typ = obj.__class__
+    assert isinstance(typ, type), (
         "to run register_finalizer() untranslated, "
         "the object's class must be new-style")
     assert hasattr(obj, '__dict__'), (
@@ -306,8 +306,17 @@ def register_finalizer(method):
     assert not hasattr(obj, '__slots__'), (
         "to run register_finalizer() untranslated, "
         "the object must not have __slots__")
+    if (hasattr(typ, '__del__')
+            and not hasattr(typ.__del__, '__protect_double_calls')):
+        def __del__(self):
+            if not hasattr(self, '__protect_double_calls'):
+                self.__protect_double_calls = True
+                super_del(self)
+        __del__.__protect_double_calls = True
+        super_del = typ.__del__
+        typ.__del__ = __del__
     f = _UntranslatedFinalizingObject()
-    f.original_class = obj.__class__
+    f.original_class = typ
     f.dict = obj.__dict__
     f.func = func
     _finalizer_objects[obj] = f

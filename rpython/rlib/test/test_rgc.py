@@ -280,3 +280,25 @@ def test_progress_through_finalizer_queue():
     assert seen == [(40, 2)] * 3 + [True]
     rgc.progress_through_finalizer_queue()
     assert seen == [(40, 2)] * 3 + [True]
+
+def test_register_finalizer_with_del():
+    seen = []
+    class Point(object):
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+        def finalize(self):
+            seen.append(('finalize', self.x, self.y))
+        def __del__(self):
+            seen.append(('del', self.x, self.y))
+    p = Point(40, 2)
+    rgc.register_finalizer(p.finalize)
+    rgc.register_finalizer(p.finalize)  # 2nd time ignored
+    del p
+    #
+    attempt = 0
+    while len(seen) < 2:
+        assert attempt < 5, "finalize() and __del__() seem not to be called"
+        attempt += 1
+        gc.collect()
+    assert seen == [('finalize', 40, 2), ('del', 40, 2)]
