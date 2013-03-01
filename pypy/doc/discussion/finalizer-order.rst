@@ -47,6 +47,12 @@ To make it possible, the RPython interface is now the following one:
   that we attach gives more control over the ordering than just an
   RPython ``__del__()``.
 
+We try to consistently call ``__del__()`` a destructor, to distinguish
+it from a finalizer.  A finalizer runs earlier, and in topological
+order; care must be taken that the object might still be reachable at
+this point if we're clever enough.  A destructor on the other hand runs
+last; nothing can be done with the object any more.
+
 
 Lightweight finalizers
 ----------------------
@@ -68,7 +74,7 @@ Register_finalizer
 
 The interface is made with PyPy in mind, but should be generally useful.
 
-``rgc.register_finalizer(obj, finalizer_function)``
+``rgc.register_finalizer(obj.finalizer_method)``
 
    After a major collection, the GC finds all objects ``obj`` on which a
    finalizer was registered and which are unreachable, and mark them as
@@ -80,9 +86,14 @@ The interface is made with PyPy in mind, but should be generally useful.
    already a call to ``rgc.progress_through_finalizer_queue()`` in
    progress.
 
+   It is only allowed to register one finalizer per object,
+   but we can cumulate one register_finalizer() and a __del__().  It is
+   allowed to call register_finalizer() several times with the same
+   arguments, and the finalizer_method will only be called once.
+
 ``rgc.progress_through_finalizer_queue()``
 
-   This function calls ``finalizer_function(obj)`` for the objects in
+   This function calls ``obj.finalizer_method()`` for the objects in
    the queue, in order.  The progression through the queue is interrupted
    when one function raises ``rgc.FinalizeLater``; in that case, this
    function remains at the front of the queue, and will be called again

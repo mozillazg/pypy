@@ -228,3 +228,55 @@ def test_get_memory_usage():
     x1 = X()
     n = rgc.get_rpy_memory_usage(rgc.cast_instance_to_gcref(x1))
     assert n >= 8 and n <= 64
+
+def test_register_finalizer():
+    seen = []
+    class Point(object):
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+        def finalize(self):
+            seen.append((self.x, self.y))
+    p = Point(40, 2)
+    rgc.register_finalizer(p.finalize)
+    rgc.register_finalizer(p.finalize)  # 2nd time ignored
+    del p
+    #
+    attempt = 0
+    while not seen:
+        assert attempt < 5, "finalize() seems not to be called"
+        attempt += 1
+        gc.collect()
+    assert seen == [(40, 2)]
+
+def test_progress_through_finalizer_queue():
+    seen = []
+    class Point(object):
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+        def finalize(self):
+            if len(seen) < 3:
+                seen.append((self.x, self.y))
+                raise rgc.FinalizeLater
+            seen.append(True)
+    p = Point(40, 2)
+    rgc.register_finalizer(p.finalize)
+    rgc.register_finalizer(p.finalize)  # 2nd time ignored
+    del p
+    #
+    attempt = 0
+    while not seen:
+        assert attempt < 5, "finalize() seems not to be called"
+        attempt += 1
+        gc.collect()
+    assert seen == [(40, 2)]
+    #
+    rgc.progress_through_finalizer_queue()
+    assert seen == [(40, 2)] * 2
+    rgc.progress_through_finalizer_queue()
+    assert seen == [(40, 2)] * 3
+    rgc.progress_through_finalizer_queue()
+    assert seen == [(40, 2)] * 3 + [True]
+    rgc.progress_through_finalizer_queue()
+    assert seen == [(40, 2)] * 3 + [True]

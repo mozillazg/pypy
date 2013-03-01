@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 
-import gc
+import gc, weakref
 import types
+import collections
 
 from rpython.rlib import jit
 from rpython.rlib.objectmodel import we_are_translated, enforceargs, specialize
@@ -267,9 +268,59 @@ def no_collect(func):
     func._gc_no_collect_ = True
     return func
 
-def must_be_light_finalizer(func):
-    func._must_be_light_finalizer_ = True
-    return func
+# ____________________________________________________________
+
+class FinalizeLater(Exception):
+    pass
+
+_finalizer_queue = collections.deque()
+_finalizer_objects = weakref.WeakKeyDictionary()
+
+class _UntranslatedFinalizingObject(object):
+    def __del__(self):
+        print "DING"
+        g = object.__new__(self.original_class)
+        g.__dict__ = self.dict
+        _finalizer_queue.append((g, self.func))
+        progress_through_finalizer_queue()
+
+def register_finalizer(method):
+    "NOT_RPYTHON"
+    # Cheat, cheat.  When method() is called, its 'self' will actually be
+    # a different object, but with the same __dict__ as the original one.
+    obj = method.im_self
+    func = method.im_func
+    f = _finalizer_objects.get(obj)
+    if f is not None:
+        assert func is f.func, (
+            "register_finalizer() called twice on the same object:\n"
+            "    %r\n"
+            "    %r" % (f.func, func))
+        return
+    assert isinstance(obj.__class__, type), (
+        "to run register_finalizer() untranslated, "
+        "the object's class must be new-style")
+    assert hasattr(obj, '__dict__'), (
+        "to run register_finalizer() untranslated, "
+        "the object must have a __dict__")
+    assert not hasattr(obj, '__slots__'), (
+        "to run register_finalizer() untranslated, "
+        "the object must not have __slots__")
+    f = _UntranslatedFinalizingObject()
+    f.original_class = obj.__class__
+    f.dict = obj.__dict__
+    f.func = func
+    _finalizer_objects[obj] = f
+
+def progress_through_finalizer_queue():
+    "NOT_RPYTHON"
+    while _finalizer_queue:
+        obj, func = _finalizer_queue.popleft()
+        try:
+            func(obj)
+        except FinalizeLater:
+            _finalizer_queue.appendleft((obj, func))
+            break
 
 # ____________________________________________________________
 
