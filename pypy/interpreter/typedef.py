@@ -95,12 +95,12 @@ def default_identity_hash(space, w_obj):
 # app-level, the corresponding interp-level W_XxxObject class cannot
 # generally represent instances of app-level subclasses of Xxx.  The
 # reason is that it is missing a place to store the __dict__, the slots,
-# the weakref lifeline, and it typically has no interp-level __del__.
+# and the weakref lifeline.
 # So we create a few interp-level subclasses of W_XxxObject, which add
 # some combination of features.
 #
-# We don't build 2**4 == 16 subclasses for all combinations of requested
-# features, but limit ourselves to 6, chosen a bit arbitrarily based on
+# We don't build 2**3 == 8 subclasses for all combinations of requested
+# features, but limit ourselves to 4, chosen a bit arbitrarily based on
 # typical usage (case 1 is the most common kind of app-level subclasses;
 # case 2 is the memory-saving kind defined with __slots__).
 #
@@ -111,21 +111,17 @@ def default_identity_hash(space, w_obj):
 #  | mapdict to prevent some objects from being weakrefable.        |
 #  +----------------------------------------------------------------+
 #
-#     dict   slots   del   weakrefable
+#     dict   slots   weakrefable
 #
-# 1.    Y      N      N         Y          UserDictWeakref
-# 2.    N      Y      N         N          UserSlots
-# 3.    Y      Y      N         Y          UserDictWeakrefSlots
-# 4.    N      Y      N         Y          UserSlotsWeakref
-# 5.    Y      Y      Y         Y          UserDictWeakrefSlotsDel
-# 6.    N      Y      Y         Y          UserSlotsWeakrefDel
+# 1.    Y      N          Y          UserDictWeakref
+# 2.    N      Y          N          UserSlots
+# 3.    Y      Y          Y          UserDictWeakrefSlots
+# 4.    N      Y          Y          UserSlotsWeakref
 #
 # Note that if the app-level explicitly requests no dict, we should not
 # provide one, otherwise storing random attributes on the app-level
 # instance would unexpectedly work.  We don't care too much, though, if
-# an object is weakrefable when it shouldn't really be.  It's important
-# that it has a __del__ only if absolutely needed, as this kills the
-# performance of the GCs.
+# an object is weakrefable when it shouldn't really be.
 #
 # Interp-level inheritance is like this:
 #
@@ -134,21 +130,16 @@ def default_identity_hash(space, w_obj):
 #            1     2
 #           /       \
 #          3         4
-#         /           \
-#        5             6
 
 def get_unique_interplevel_subclass(config, cls, hasdict, wants_slots,
-                                    needsdel=False, weakrefable=False):
+                                    weakrefable=False):
     "NOT_RPYTHON: initialization-time only"
-    if hasattr(cls, '__del__') and getattr(cls, "handle_del_manually", False):
-        needsdel = False
     assert cls.typedef.acceptable_as_base_class
-    key = config, cls, hasdict, wants_slots, needsdel, weakrefable
+    key = config, cls, hasdict, wants_slots, weakrefable
     try:
         return _subclass_cache[key]
     except KeyError:
-        subcls = _getusercls(config, cls, hasdict, wants_slots, needsdel,
-                             weakrefable)
+        subcls = _getusercls(config, cls, hasdict, wants_slots, weakrefable)
         assert key not in _subclass_cache
         _subclass_cache[key] = subcls
         return subcls
@@ -169,29 +160,15 @@ def enum_interplevel_subclasses(config, cls):
     assert len(result) <= 6
     return result.keys()
 
-def _getusercls(config, cls, wants_dict, wants_slots, wants_del, weakrefable):
+def _getusercls(config, cls, wants_dict, wants_slots, weakrefable):
     typedef = cls.typedef
     if wants_dict and typedef.hasdict:
         wants_dict = False
     if config.objspace.std.withmapdict and not typedef.hasdict:
         # mapdict only works if the type does not already have a dict
-        if wants_del:
-            parentcls = get_unique_interplevel_subclass(config, cls, True, True,
-                                                        False, True)
-            return _usersubclswithfeature(config, parentcls, "del")
         return _usersubclswithfeature(config, cls, "user", "dict", "weakref", "slots")
     # Forest of if's - see the comment above.
-    if wants_del:
-        if wants_dict:
-            # case 5.  Parent class is 3.
-            parentcls = get_unique_interplevel_subclass(config, cls, True, True,
-                                                        False, True)
-        else:
-            # case 6.  Parent class is 4.
-            parentcls = get_unique_interplevel_subclass(config, cls, False, True,
-                                                        False, True)
-        return _usersubclswithfeature(config, parentcls, "del")
-    elif wants_dict:
+    if wants_dict:
         if wants_slots:
             # case 3.  Parent class is 1.
             parentcls = get_unique_interplevel_subclass(config, cls, True, False,
@@ -233,8 +210,7 @@ def _builduserclswithfeature(config, supercls, *features):
 
     def add(Proto):
         for key, value in Proto.__dict__.items():
-            if (not key.startswith('__') and not key.startswith('_mixin_')
-                    or key == '__del__'):
+            if not key.startswith('__') and not key.startswith('_mixin_'):
                 if hasattr(value, "func_name"):
                     value = func_with_new_name(value, value.func_name)
                 body[key] = value
@@ -278,23 +254,7 @@ def _builduserclswithfeature(config, supercls, *features):
                 self._lifeline_ = None
         add(Proto)
 
-    if "del" in features:
-        parent_destructor = getattr(supercls, '__del__', None)
-        def call_parent_del(self):
-            assert isinstance(self, subcls)
-            parent_destructor(self)
-        def call_applevel_del(self):
-            assert isinstance(self, subcls)
-            self.space.userdel(self)
-        class Proto(object):
-            def __del__(self):
-                self.clear_all_weakrefs()
-                self.enqueue_for_destruction(self.space, call_applevel_del,
-                                             'method __del__ of ')
-                if parent_destructor is not None:
-                    self.enqueue_for_destruction(self.space, call_parent_del,
-                                                 'internal destructor of ')
-        add(Proto)
+    assert "del" not in features
 
     if "slots" in features:
         class Proto(object):

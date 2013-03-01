@@ -38,17 +38,9 @@ class W_File(W_AbstractStream):
 
     def __init__(self, space):
         self.space = space
+        self.register_finalizer()
 
-    def __del__(self):
-        # assume that the file and stream objects are only visible in the
-        # thread that runs __del__, so no race condition should be possible
-        self.clear_all_weakrefs()
-        if self.stream is not None:
-            self.enqueue_for_destruction(self.space, W_File.destructor,
-                                         'close() method of ')
-
-    def destructor(self):
-        assert isinstance(self, W_File)
+    def finalizer(self):
         try:
             self.direct_close()
         except StreamErrors, e:
