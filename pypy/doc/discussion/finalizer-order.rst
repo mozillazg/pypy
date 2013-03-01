@@ -1,8 +1,5 @@
-.. XXX armin, what do we do with this?
-
-
-Ordering finalizers in the SemiSpace GC
-=======================================
+Ordering finalizers in the SemiSpace/Hybrid/Minimark GC
+=======================================================
 
 Goal
 ----
