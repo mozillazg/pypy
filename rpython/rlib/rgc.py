@@ -277,11 +277,13 @@ _finalizer_queue = collections.deque()
 _finalizer_objects = weakref.WeakKeyDictionary()
 
 class _UntranslatedFinalizingObject(object):
+    call_finalizer = None
     def __del__(self):
         g = object.__new__(self.original_class)
         g.__dict__ = self.dict
         _finalizer_queue.append((g, self.func))
         progress_through_finalizer_queue()
+        delattr(g, '__disable_del')
 
 def register_finalizer(method):
     "NOT_RPYTHON"
@@ -307,19 +309,21 @@ def register_finalizer(method):
         "to run register_finalizer() untranslated, "
         "the object must not have __slots__")
     if (hasattr(typ, '__del__')
-            and not hasattr(typ.__del__, '__protect_double_calls')):
+            and not hasattr(typ.__del__, '__disablable')):
         def __del__(self):
-            if not hasattr(self, '__protect_double_calls'):
-                self.__protect_double_calls = True
+            if not hasattr(self, '__disable_del'):
+                self.__disable_del = True
                 super_del(self)
-        __del__.__protect_double_calls = True
+        __del__.__disablable = True
         super_del = typ.__del__
         typ.__del__ = __del__
     f = _UntranslatedFinalizingObject()
     f.original_class = typ
+    obj.__dict__ = obj.__dict__.copy()  # PyPy: break the dict->obj dependency
     f.dict = obj.__dict__
     f.func = func
     _finalizer_objects[obj] = f
+    obj.__disable_del = True
 
 def progress_through_finalizer_queue():
     "NOT_RPYTHON"
