@@ -474,6 +474,8 @@ LL_OPERATIONS = {
     'gc_call_rtti_destructor': LLOp(),
     'gc_deallocate':        LLOp(),
     'gc_reload_possibly_moved': LLOp(),
+    'gc_register_finalizer': LLOp(),
+    'gc_progress_finalizer_queue': LLOp(),
     # see rlib/objectmodel for gc_identityhash and gc_id
     'gc_identityhash':      LLOp(sideeffects=False, canmallocgc=True),
     'gc_id':                LLOp(sideeffects=False, canmallocgc=True),

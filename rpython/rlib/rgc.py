@@ -335,6 +335,36 @@ def progress_through_finalizer_queue():
             _finalizer_queue.appendleft((obj, func))
             break
 
+class RegisterFinalizerEntry(ExtRegistryEntry):
+    _about_ = register_finalizer
+
+    def compute_result_annotation(self, s_method):
+        from rpython.annotator import model as annmodel
+        from rpython.annotator.description import MethodDesc
+        assert (isinstance(s_method, annmodel.SomePBC) and
+                s_method.getKind() is MethodDesc and
+                len(s_method.descriptions) == 1)
+        #
+        [methoddesc] = s_method.descriptions
+        key = (register_finalizer, methoddesc.funcdesc, methoddesc.name)
+        self.bookkeeper.emulate_pbc_call(key, s_method, [])
+        return annmodel.s_None
+
+    def specialize_call(self, hop):
+        from rpython.rtyper.annlowlevel import base_ptr_lltype
+        [v_self] = hop.inputargs(hop.args_r[0])
+        r_func, is_method = hop.args_r[0].get_r_implfunc()
+        assert is_method
+        c_llfn = r_func.get_unique_llfn()
+        v_llfn = hop.genop('cast_ptr_to_adr', [c_llfn],
+                           resulttype=llmemory.Address)
+        v_self = hop.genop('cast_pointer', [v_self],
+                           resulttype=base_ptr_lltype())
+        hop.exception_cannot_occur()
+        return hop.genop('gc_register_finalizer', [v_self, v_llfn],
+                         resulttype=lltype.Void)
+
+
 # ____________________________________________________________
 
 def get_rpy_roots():

@@ -2,6 +2,7 @@ import cStringIO
 import os
 import sys
 import traceback
+import gc
 
 import py
 
@@ -63,6 +64,7 @@ class LLInterpreter(object):
         self.frame_stack = []
         self.tracer = None
         self.frame_class = LLFrame
+        self.finalizer_queue = []
         if tracing:
             self.tracer = Tracer()
 
@@ -795,6 +797,30 @@ class LLFrame(object):
 
     def op_gc__collect(self, *gen):
         self.heap.collect(*gen)
+        #
+        old_finalizer_queue = self.llinterpreter.finalizer_queue
+        if old_finalizer_queue:
+            self.llinterpreter.finalizer_queue = []
+            old_finalizer_queue.reverse()
+            while old_finalizer_queue:
+                llobj, llfn = old_finalizer_queue.pop()
+                if not _still_alive(llobj):
+                    # dies
+                    FPTR = lltype.typeOf(llfn.ptr)
+                    llptr = lltype.cast_pointer(FPTR.TO.ARGS[0],
+                                                llobj._as_ptr())
+                    self.op_direct_call(llfn.ptr, llptr)
+                else:
+                    # survives
+                    self.llinterpreter.finalizer_queue.append((llobj, llfn))
+
+    def op_gc_register_finalizer(self, llptr, llfn):
+        llobj = llptr._obj
+        for llobj1, llfn1 in self.llinterpreter.finalizer_queue:
+            if llobj1 == llobj:
+                assert llfn1 == llfn
+                return
+        self.llinterpreter.finalizer_queue.append((llobj, llfn))
 
     def op_gc_heap_stats(self):
         raise NotImplementedError
@@ -1399,6 +1425,24 @@ class _address_of_local_var_accessor(object):
         if addr and isinstance(addr.ptr._obj, llmemory._gctransformed_wref):
             return llmemory.fakeaddress(addr.ptr._obj._ptr)
         return addr
+
+
+def _still_alive(llobj):
+    # hack hack hack
+    pending = [llobj]
+    seen = set(pending)
+    while pending:
+        l = gc.get_referrers(pending.pop())
+        for x in l:
+            if isinstance(x, lltype._ptr):
+                return True   # still alive: there is a Ptr to it
+        for x in l:
+            if isinstance(x, lltype._struct):
+                if x not in seen:
+                    pending.append(x)
+                    seen.add(x)
+        x = None
+    return False
 
 
 # by default we route all logging messages to nothingness

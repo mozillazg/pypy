@@ -11,6 +11,7 @@ from rpython.rtyper.lltypesystem import lltype
 from rpython.annotator import model as annmodel
 from rpython.annotator.model import lltype_to_annotation
 from rpython.rlib.rarithmetic import r_uint, ovfcheck
+from rpython.rlib import rgc
 from rpython.tool import leakfinder
 from rpython.conftest import option
 
@@ -658,3 +659,27 @@ def test_userdefined_exception():
 
     e = py.test.raises(UnknownException, interpret, f, [])
     assert e.value.args[0] is FooError
+
+def test_register_finalizer():
+    class Glob(object):
+        seen = 0
+    glob = Glob()
+    class A(object):
+        def finalize(self):
+            glob.seen += 1
+    def h():
+        a1 = A()
+        rgc.register_finalizer(a1.finalize)
+        a2 = A()
+        rgc.register_finalizer(a2.finalize)
+        return a1
+    def stuff(a, n):
+        a.x = n
+    def g(n):
+        a = h()
+        rgc.collect()
+        stuff(a, n)
+        return glob.seen
+
+    res = interpret(g, [42])
+    assert res == 1
