@@ -11,7 +11,7 @@ from rpython.memory.gctypelayout import ll_weakref_deref, WEAKREF, \
      WEAKREFPTR
 from rpython.tool.sourcetools import func_with_new_name
 from rpython.translator.backendopt import graphanalyze
-from rpython.translator.backendopt.finalizer import FinalizerAnalyzer
+from rpython.translator.backendopt.destructor import DestructorAnalyzer
 from rpython.translator.backendopt.support import var_needsgc
 import types
 
@@ -650,21 +650,15 @@ class BaseFrameworkGCTransformer(GCTransformer):
         info = self.layoutbuilder.get_info(type_id)
         c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
         kind_and_fptr = self.special_funcptr_for_type(TYPE)
-        has_finalizer = (kind_and_fptr is not None and
-                         kind_and_fptr[0] == "finalizer")
-        has_light_finalizer = (kind_and_fptr is not None and
-                               kind_and_fptr[0] == "light_finalizer")
-        if has_light_finalizer:
-            has_finalizer = True
-        c_has_finalizer = rmodel.inputconst(lltype.Bool, has_finalizer)
-        c_has_light_finalizer = rmodel.inputconst(lltype.Bool,
-                                                  has_light_finalizer)
+        has_destructor = (kind_and_fptr is not None and
+                          kind_and_fptr[0] == "destructor")
+        c_has_destructor = rmodel.inputconst(lltype.Bool, has_destructor)
 
         if not op.opname.endswith('_varsize') and not flags.get('varsize'):
             #malloc_ptr = self.malloc_fixedsize_ptr
             zero = flags.get('zero', False)
             if (self.malloc_fast_ptr is not None and
-                not c_has_finalizer.value and
+                not has_destructor and
                 (self.malloc_fast_is_clearing or not zero)):
                 malloc_ptr = self.malloc_fast_ptr
             elif zero:
@@ -672,10 +666,9 @@ class BaseFrameworkGCTransformer(GCTransformer):
             else:
                 malloc_ptr = self.malloc_fixedsize_ptr
             args = [self.c_const_gc, c_type_id, c_size,
-                    c_has_finalizer, c_has_light_finalizer,
-                    rmodel.inputconst(lltype.Bool, False)]
+                    c_has_destructor, rmodel.inputconst(lltype.Bool, False)]
         else:
-            assert not c_has_finalizer.value
+            assert not has_destructor
             info_varsize = self.layoutbuilder.get_info_varsize(type_id)
             v_length = op.args[-1]
             c_ofstolength = rmodel.inputconst(lltype.Signed,
@@ -830,13 +823,12 @@ class BaseFrameworkGCTransformer(GCTransformer):
     def gct_do_malloc_fixedsize_clear(self, hop):
         # used by the JIT (see rpython.jit.backend.llsupport.gc)
         op = hop.spaceop
-        [v_typeid, v_size,
-         v_has_finalizer, v_has_light_finalizer, v_contains_weakptr] = op.args
+        [v_typeid, v_size, v_has_destructor, v_contains_weakptr] = op.args
         livevars = self.push_roots(hop)
         hop.genop("direct_call",
                   [self.malloc_fixedsize_clear_ptr, self.c_const_gc,
                    v_typeid, v_size,
-                   v_has_finalizer, v_has_light_finalizer,
+                   v_has_destructor,
                    v_contains_weakptr],
                   resultvar=op.result)
         self.pop_roots(hop, livevars)
@@ -1204,6 +1196,9 @@ class BaseFrameworkGCTransformer(GCTransformer):
     def pop_roots(self, hop, livevars):
         raise NotImplementedError
 
+    def gct_gc_register_finalizer(self, op):
+        xxx
+
 
 class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
@@ -1218,36 +1213,32 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         self.translator = translator
         super(TransformerLayoutBuilder, self).__init__(GCClass, lltype2vtable)
 
-    def has_finalizer(self, TYPE):
+    def has_destructor(self, TYPE):
         rtti = get_rtti(TYPE)
         return rtti is not None and getattr(rtti._obj, 'destructor_funcptr',
                                             None)
-
-    def has_light_finalizer(self, TYPE):
-        special = self.special_funcptr_for_type(TYPE)
-        return special is not None and special[0] == 'light_finalizer'
 
     def has_custom_trace(self, TYPE):
         rtti = get_rtti(TYPE)
         return rtti is not None and getattr(rtti._obj, 'custom_trace_funcptr',
                                             None)
 
-    def make_finalizer_funcptr_for_type(self, TYPE):
-        if not self.has_finalizer(TYPE):
-            return None, False
+    def make_destructor_funcptr_for_type(self, TYPE):
+        if not self.has_destructor(TYPE):
+            return None
         rtti = get_rtti(TYPE)
         destrptr = rtti._obj.destructor_funcptr
         DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]
         typename = TYPE.__name__
-        def ll_finalizer(addr, ignored):
+        def ll_destructor(addr, ignored):
             v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
             ll_call_destructor(destrptr, v, typename)
             return llmemory.NULL
-        fptr = self.transformer.annotate_finalizer(ll_finalizer,
+        fptr = self.transformer.annotate_finalizer(ll_destructor,
                 [llmemory.Address, llmemory.Address], llmemory.Address)
         g = destrptr._obj.graph
-        light = not FinalizerAnalyzer(self.translator).analyze_light_finalizer(g)
-        return fptr, light
+        DestructorAnalyzer(self.translator).check_destructor(g)
+        return fptr
 
     def make_custom_trace_funcptr_for_type(self, TYPE):
         if not self.has_custom_trace(TYPE):

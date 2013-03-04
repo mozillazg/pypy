@@ -2,6 +2,7 @@ import os, py
 from rpython.tool.udir import udir
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
+from rpython.rlib import rgc
 
 
 class SemiSpaceGCTestDefines:
@@ -51,7 +52,8 @@ class SemiSpaceGCTestDefines:
             def __init__(self, key):
                 self.key = key
                 self.refs = []
-            def __del__(self):
+                rgc.register_finalizer(self.finalize)
+            def finalize(self):
                 assert state.age[self.key] == -1
                 state.age[self.key] = state.time
                 state.progress = True
@@ -113,8 +115,8 @@ class SemiSpaceGCTestDefines:
 
         return f
 
-    def test_finalizer_order(self):
-        res = self.run('finalizer_order')
+    def test_full_finalizer_order(self):
+        res = self.run('full_finalizer_order')
         if res != "ok":
             i, summary, msg = res.split('\n')
             i = int(i)

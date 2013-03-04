@@ -129,112 +129,118 @@ class GCTest(object):
         assert res == concat(100)
         #assert simulator.current_size - curr < 16000 * INT_SIZE / 4
 
+    def test_destructor(self):
+        class B(object):
+            pass
+        b = B()
+        b.nextid = 0
+        b.num_deleted = 0
+        class A(object):
+            def __init__(self):
+                self.id = b.nextid
+                b.nextid += 1
+            def __del__(self):
+                b.num_deleted += 1
+        def f(x):
+            a = A()
+            i = 0
+            while i < x:
+                i += 1
+                a = A()
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            return b.num_deleted
+        res = self.interpret(f, [5])
+        assert res == 6
+
     def test_finalizer(self):
         class B(object):
             pass
         b = B()
         b.nextid = 0
-        b.num_deleted = 0
+        b.num_finalized = 0
         class A(object):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
-                b.num_deleted += 1
-        def f(x):
-            a = A()
+            def finalizer(self):
+                b.num_finalized += 1
+        def allocate(x):
             i = 0
             while i < x:
                 i += 1
                 a = A()
+                rgc.register_finalizer(a.finalizer)
+        def f(x):
+            allocate(x)
             llop.gc__collect(lltype.Void)
             llop.gc__collect(lltype.Void)
-            return b.num_deleted
-        res = self.interpret(f, [5])
+            return b.num_finalized
+        res = self.interpret(f, [6])
         assert res == 6
 
-    def test_finalizer_calls_malloc(self):
+    def test_finalizer_and_destructor(self):
         class B(object):
             pass
         b = B()
         b.nextid = 0
+        b.num_finalized = 0
         b.num_deleted = 0
         class A(object):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
-                b.num_deleted += 1
-                C()
-        class C(A):
+            def finalizer(self):
+                assert n.num_deleted <= b.num_finalized
+                b.num_finalized += 1
             def __del__(self):
                 b.num_deleted += 1
         def f(x):
             a = A()
+            rgc.register_finalizer(a.finalizer)
             i = 0
             while i < x:
                 i += 1
                 a = A()
             llop.gc__collect(lltype.Void)
             llop.gc__collect(lltype.Void)
-            return b.num_deleted
+            return b.num_finalized * 100 + b.num_deleted
         res = self.interpret(f, [5])
-        assert res == 12
+        assert res == 606
 
-    def test_finalizer_calls_collect(self):
+    def test_finalize_later(self):
         class B(object):
             pass
         b = B()
         b.nextid = 0
-        b.num_deleted = 0
+        b.num_finalized = 0
         class A(object):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
-                b.num_deleted += 1
+            def finalizer(self):
+                b.num_finalized += 1
+                if (b.num_finalized % 3) == 0:
+                    raise rgc.FinalizeLater
+        def f(x):
+            a = A()
+            rgc.register_finalizer(a.finalizer)
+            i = 0
+            while i < x:
+                i += 1
+                a = A()
+            llop.gc__collect(lltype.Void)
+            if b.num_finalized == 0:
                 llop.gc__collect(lltype.Void)
-        def f(x):
-            a = A()
-            i = 0
-            while i < x:
-                i += 1
-                a = A()
-            llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
-            return b.num_deleted
+            assert b.num_finalized == 3
+            rgc.progress_through_finalizer_queue()
+            assert b.num_finalized == 6
+            rgc.progress_through_finalizer_queue()
+            assert b.num_finalized == 8
+            rgc.progress_through_finalizer_queue()
+            assert b.num_finalized == 8
         res = self.interpret(f, [5])
-        assert res == 6
-
-    def test_finalizer_resurrects(self):
-        class B(object):
-            pass
-        b = B()
-        b.nextid = 0
-        b.num_deleted = 0
-        class A(object):
-            def __init__(self):
-                self.id = b.nextid
-                b.nextid += 1
-            def __del__(self):
-                b.num_deleted += 1
-                b.a = self
-        def f(x):
-            a = A()
-            i = 0
-            while i < x:
-                i += 1
-                a = A()
-            llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
-            aid = b.a.id
-            b.a = None
-            # check that __del__ is not called again
-            llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
-            return b.num_deleted * 10 + aid + 100 * (b.a is None)
-        res = self.interpret(f, [5])
-        assert 160 <= res <= 165
+        assert res == 606
 
     def test_custom_trace(self):
         from rpython.rtyper.annlowlevel import llhelper

@@ -377,15 +377,12 @@ class TypeLayoutBuilder(object):
     def special_funcptr_for_type(self, TYPE):
         if TYPE in self._special_funcptrs:
             return self._special_funcptrs[TYPE]
-        fptr1, is_lightweight = self.make_finalizer_funcptr_for_type(TYPE)
+        fptr1 = self.make_destructor_funcptr_for_type(TYPE)
         fptr2 = self.make_custom_trace_funcptr_for_type(TYPE)
         assert not (fptr1 and fptr2), (
             "type %r needs both a finalizer and a custom tracer" % (TYPE,))
         if fptr1:
-            if is_lightweight:
-                kind_and_fptr = "light_finalizer", fptr1
-            else:
-                kind_and_fptr = "finalizer", fptr1
+            kind_and_fptr = "destructor", fptr1
         elif fptr2:
             kind_and_fptr = "custom_trace", fptr2
         else:
@@ -393,9 +390,9 @@ class TypeLayoutBuilder(object):
         self._special_funcptrs[TYPE] = kind_and_fptr
         return kind_and_fptr
 
-    def make_finalizer_funcptr_for_type(self, TYPE):
+    def make_destructor_funcptr_for_type(self, TYPE):
         # must be overridden for proper finalizer support
-        return None, False
+        return None
 
     def make_custom_trace_funcptr_for_type(self, TYPE):
         # must be overridden for proper custom tracer support

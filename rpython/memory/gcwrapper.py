@@ -1,4 +1,4 @@
-from rpython.translator.backendopt.finalizer import FinalizerAnalyzer
+from rpython.translator.backendopt.destructor import DestructorAnalyzer
 from rpython.rtyper.lltypesystem import lltype, llmemory, llheap
 from rpython.rtyper import llinterp
 from rpython.rtyper.annlowlevel import llhelper
@@ -204,7 +204,7 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         self.llinterp = llinterp
         super(DirectRunLayoutBuilder, self).__init__(GCClass, lltype2vtable)
 
-    def make_finalizer_funcptr_for_type(self, TYPE):
+    def make_destructor_funcptr_for_type(self, TYPE):
         from rpython.memory.gctransform.support import get_rtti
         rtti = get_rtti(TYPE)
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
@@ -212,10 +212,10 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
             DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]
             destrgraph = destrptr._obj.graph
         else:
-            return None, False
+            return None
 
         t = self.llinterp.typer.annotator.translator
-        light = not FinalizerAnalyzer(t).analyze_light_finalizer(destrgraph)
+        DestructorAnalyzer(t).check_destructor(destrgraph)
         def ll_finalizer(addr, dummy):
             assert dummy == llmemory.NULL
             try:
@@ -225,7 +225,7 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
                 raise RuntimeError(
                     "a finalizer raised an exception, shouldn't happen")
             return llmemory.NULL
-        return llhelper(gctypelayout.GCData.FINALIZER_OR_CT, ll_finalizer), light
+        return llhelper(gctypelayout.GCData.FINALIZER_OR_CT, ll_finalizer)
 
     def make_custom_trace_funcptr_for_type(self, TYPE):
         from rpython.memory.gctransform.support import get_rtti

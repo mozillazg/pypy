@@ -2,15 +2,12 @@
 from rpython.translator.backendopt import graphanalyze
 from rpython.rtyper.lltypesystem import lltype
 
-class FinalizerError(Exception):
-    """ __del__ marked as lightweight finalizer, but the analyzer did
-    not agree
-    """
+class DestructorError(Exception):
+    """The __del__() method contains unsupported operations"""
 
-class FinalizerAnalyzer(graphanalyze.BoolGraphAnalyzer):
-    """ Analyzer that determines whether a finalizer is lightweight enough
-    so it can be called without all the complicated logic in the garbage
-    collector. The set of operations here is restrictive for a good reason
+class DestructorAnalyzer(graphanalyze.BoolGraphAnalyzer):
+    """ Analyzer that checks if a destructor is lightweight enough for
+    RPython.  The set of operations here is restrictive for a good reason
     - it's better to be safe. Specifically disallowed operations:
 
     * anything that escapes self
@@ -20,12 +17,10 @@ class FinalizerAnalyzer(graphanalyze.BoolGraphAnalyzer):
                      'direct_ptradd', 'force_cast', 'track_alloc_stop',
                      'raw_free']
 
-    def analyze_light_finalizer(self, graph):
+    def check_destructor(self, graph):
         result = self.analyze_direct_call(graph)
-        if (result is self.top_result() and
-            getattr(graph.func, '_must_be_light_finalizer_', False)):
-            raise FinalizerError(FinalizerError.__doc__, graph)
-        return result
+        if result is self.top_result():
+            raise DestructorError(DestructorError.__doc__, graph)
 
     def analyze_simple_operation(self, op, graphinfo):
         if op.opname in self.ok_operations:
