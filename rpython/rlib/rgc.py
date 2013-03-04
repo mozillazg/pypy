@@ -275,6 +275,7 @@ class FinalizeLater(Exception):
 
 _finalizer_queue = collections.deque()
 _finalizer_objects = weakref.WeakKeyDictionary()
+_finalizer_lock = [None]
 
 class _UntranslatedFinalizingObject(object):
     call_finalizer = None
@@ -327,14 +328,23 @@ def register_finalizer(method):
 
 def progress_through_finalizer_queue():
     "NOT_RPYTHON"
+    try:
+        _finalizer_lock.pop()
+    except IndexError:   # list is already empty
+        return
     while _finalizer_queue:
         obj, func = _finalizer_queue.popleft()
         try:
             func(obj)
         except FinalizeLater:
             _finalizer_queue.appendleft((obj, func))
-            return False   # interrupted
-    return True   # completed
+            break
+        except Exception, e:
+            raise AssertionError("progress_through_finalizer_queue(): "
+                                 "%s raised %s: %s" % (func,
+                                                       e.__class__.__name__,
+                                                       e))
+    _finalizer_lock.append(None)
 
 class RegisterFinalizerEntry(ExtRegistryEntry):
     _about_ = register_finalizer
