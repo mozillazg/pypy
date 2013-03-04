@@ -369,8 +369,6 @@ class DirectVRef(object):
     def __call__(self):
         if self._state == 'non-forced':
             self._state = 'forced'
-        elif self._state == 'invalid':
-            raise InvalidVirtualRef
         return self._x
 
     @property
@@ -381,7 +379,7 @@ class DirectVRef(object):
 
     def _finish(self):
         if self._state == 'non-forced':
-            self._state = 'invalid'
+            self._state = 'forced'
 
 class DirectJitVRef(DirectVRef):
     def __init__(self, x):
