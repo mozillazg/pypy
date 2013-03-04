@@ -59,22 +59,13 @@ class ExecutionContext(object):
         frame.f_backref = self.topframeref
         self.topframeref = jit.virtual_ref(frame)
 
-    def leave(self, frame, w_exitvalue, got_exception):
+    def leave(self, frame, w_exitvalue):
         try:
             if self.profilefunc:
                 self._trace(frame, 'leaveframe', w_exitvalue)
         finally:
             frame_vref = self.topframeref
             self.topframeref = frame.f_backref
-            if frame.escaped or got_exception:
-                # if this frame escaped to applevel, we must ensure that also
-                # f_back does
-                f_back = frame.f_backref()
-                if f_back:
-                    f_back.mark_as_escaped()
-                # force the frame (from the JIT point of view), so that it can
-                # be accessed also later
-                frame_vref()
             jit.virtual_ref_finish(frame_vref, frame)
 
         if self.w_tracefunc is not None and not frame.hide():

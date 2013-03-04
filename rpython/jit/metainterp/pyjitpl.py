@@ -1170,16 +1170,10 @@ class MIFrame(object):
         # virtual_ref_finish() assumes that we have a stack-like, last-in
         # first-out order.
         metainterp = self.metainterp
-        vrefbox = metainterp.virtualref_boxes.pop()
+        metainterp.virtualref_boxes.pop()
         lastbox = metainterp.virtualref_boxes.pop()
         assert box.getref_base() == lastbox.getref_base()
-        vrefinfo = metainterp.staticdata.virtualref_info
-        vref = vrefbox.getref_base()
-        if vrefinfo.is_virtual_ref(vref):
-            # XXX write a comment about nullbox
-            nullbox = self.metainterp.cpu.ts.CONST_NULL
-            metainterp.history.record(rop.VIRTUAL_REF_FINISH,
-                                      [vrefbox, nullbox], None)
+        # we just pop it
 
     @arguments()
     def opimpl_ll_read_timestamp(self):
