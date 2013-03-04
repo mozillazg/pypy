@@ -153,7 +153,7 @@ class GCTest(object):
         res = self.interpret(f, [5])
         assert res == 6
 
-    def test_finalizer(self):
+    def test_finalizer_simple(self):
         class B(object):
             pass
         b = B()
@@ -303,7 +303,7 @@ class GCTest(object):
         res = self.interpret(f, [])
         assert res
 
-    def test_weakref_to_object_with_finalizer(self):
+    def test_weakref_to_object_with_destructor(self):
         import weakref
         class A(object):
             count = 0
@@ -322,6 +322,32 @@ class GCTest(object):
             return result
         res = self.interpret(f, [])
         assert res
+
+    def test_weakref_to_object_with_finalizer(self):
+        import weakref
+        class A(object):
+            count = 0
+        a = A()
+        class B(object):
+            def __init__(self, ref):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
+                # when the finalizer is called, the weakref to myself is
+                # still valid in RPython
+                a.count += 100 + (self.ref() is None)
+        def g():
+            b = B()
+            ref = weakref.ref(b)
+            b.ref = ref
+            return b
+        def f():
+            ref = g()
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            result = a.count + 10 * (ref() is None)
+            return result
+        res = self.interpret(f, [])
+        assert res == 110
 
     def test_bug_1(self):
         import weakref
@@ -348,8 +374,10 @@ class GCTest(object):
             count = 0
         a = A()
         class B(object):
-            def __del__(self):
-                # when __del__ is called, the weakref to c should be dead
+            def __init__(self, ref):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
+                # when the finalizer is called, the weakref to c should be dead
                 if self.ref() is None:
                     a.count += 10  # ok
                 else:
@@ -371,40 +399,14 @@ class GCTest(object):
         res = self.interpret(f, [])
         assert res == 11
 
-    def test_weakref_to_object_with_finalizer_ordering(self):
-        import weakref
-        class A(object):
-            count = 0
-        a = A()
-        class B(object):
-            def __del__(self):
-                # when __del__ is called, the weakref to myself is still valid
-                # in RPython (at least with most GCs; this test might be
-                # skipped for specific GCs)
-                if self.ref() is self:
-                    a.count += 10  # ok
-                else:
-                    a.count = 666  # not ok
-        def g():
-            b = B()
-            ref = weakref.ref(b)
-            b.ref = ref
-            return ref
-        def f():
-            ref = g()
-            llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
-            result = a.count + (ref() is None)
-            return result
-        res = self.interpret(f, [])
-        assert res == 11
-
     def test_weakref_bug_1(self):
         import weakref
         class A(object):
             pass
         class B(object):
-            def __del__(self):
+            def __init__(self, ref):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
                 self.wref().x += 1
         def g(a):
             b = B()
@@ -453,7 +455,8 @@ class GCTest(object):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
                 b.num_deleted += 1
                 b.all.append(D(b.num_deleted))
         class D(object):
@@ -486,14 +489,16 @@ class GCTest(object):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
-                llop.gc__collect(lltype.Void)
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
                 b.num_deleted += 1
+                self.do_finalizer()
+            def do_finalizer(self):
+                llop.gc__collect(lltype.Void)
                 C()
                 C()
         class C(A):
-            def __del__(self):
-                b.num_deleted += 1
+            def do_finalizer(self):
                 b.num_deleted_c += 1
         def f(x, y):
             persistent_a1 = A()
@@ -873,7 +878,8 @@ class TestHybridGC(TestGenerationalGC):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
                 b.num_deleted += 1
         def f(x):
             a = A()

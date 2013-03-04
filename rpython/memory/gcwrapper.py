@@ -225,7 +225,7 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
                 raise RuntimeError(
                     "a finalizer raised an exception, shouldn't happen")
             return llmemory.NULL
-        return llhelper(gctypelayout.GCData.FINALIZER_OR_CT, ll_finalizer)
+        return llhelper(gctypelayout.GCData.DESTRUCTOR_OR_CT, ll_finalizer)
 
     def make_custom_trace_funcptr_for_type(self, TYPE):
         from rpython.memory.gctransform.support import get_rtti

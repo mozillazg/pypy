@@ -115,8 +115,8 @@ class SemiSpaceGCTestDefines:
 
         return f
 
-    def test_full_finalizer_order(self):
-        res = self.run('full_finalizer_order')
+    def test_finalizer_order(self):
+        res = self.run('finalizer_order')
         if res != "ok":
             i, summary, msg = res.split('\n')
             i = int(i)

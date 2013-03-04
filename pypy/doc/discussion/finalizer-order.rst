@@ -39,7 +39,7 @@ To make it possible, the RPython interface is now the following one:
   by the GC when the last reference to the object goes away, like in
   CPython.  However (like "lightweight finalizers" used to be), all
   ``__del__()`` methods must only contain simple enough code, and this
-  is checked.
+  is checked.  This is now called "destructors".
 
 * For any more advanced usage --- in particular for any app-level object
   with a __del__ --- we don't use the RPython-level ``__del__()``
@@ -54,13 +54,12 @@ this point if we're clever enough.  A destructor on the other hand runs
 last; nothing can be done with the object any more.
 
 
-Lightweight finalizers
-----------------------
+Destructors
+-----------
 
-A lightweight finalizer is an RPython ``__del__()`` method that is
-called directly by the GC when there is no more reference to an object
-(including from other objects with finalizers).  Intended for objects
-that just need to free a block of raw memory or close a file.
+A destructor is an RPython ``__del__()`` method that is called directly
+by the GC when there is no more reference to an object.  Intended for
+objects that just need to free a block of raw memory or close a file.
 
 There are restrictions on the kind of code you can put in ``__del__()``,
 including all other functions called by it.  These restrictions are
@@ -68,11 +67,16 @@ checked.  In particular you cannot access fields containing GC objects;
 and if you call an external C function, it must be a "safe" function.
 (XXX check/implement this)
 
+If there are several objects with destructors, they are called in a
+random order --- but that should be fine because destructors cannot
+do much anyway.
+
 
 Register_finalizer
 ------------------
 
-The interface is made with PyPy in mind, but should be generally useful.
+The interface for full finalizers is made with PyPy in mind, but should
+be generally useful.
 
 ``rgc.register_finalizer(obj.finalizer_method)``
 
@@ -82,9 +86,9 @@ The interface is made with PyPy in mind, but should be generally useful.
    picks a topological ordering (breaking cycles randomly) and enqueues
    the objects and their registered finalizer functions in that order.
    Finally, when the major collection is done, it calls
-   ``rgc.progress_through_finalizer_queue()`` once, unless there is
+   ``rgc.progress_through_finalizer_queue()`` once (unless there is
    already a call to ``rgc.progress_through_finalizer_queue()`` in
-   progress.
+   progress).
 
    It is only allowed to register one finalizer per object,
    but we can cumulate one register_finalizer() and a __del__().  It is
@@ -99,15 +103,16 @@ The interface is made with PyPy in mind, but should be generally useful.
    function remains at the front of the queue, and will be called again
    by the next call to ``progress_through_finalizer_queue()``.
 
-The idea is that the finalizer functions in PyPy either do their clean-up
-immediately (for the case where they are not lightweight finalizers, but
-don't require synchronization), or are postponed to be executed at the
-end of the current bytecode by the interpreter.  This is done by writing
-such functions with this logic::
+The idea is that the finalizer functions in PyPy either do their
+clean-up immediately (for the case where destructors are not
+appropriate, but they still don't require complete synchronization with
+the Python code), or are postponed to be executed at the end of the
+current bytecode by the interpreter.  This is done by writing such
+functions with this logic::
 
     def finalize(self):
         ec = self.space.getexecutioncontext()
-        if not ec.running_finalizers:
+        if not ec.running_finalizers_between_bytecodes:
             ec.schedule_later_call_to_progress_through_finalizer_queue()
             raise FinalizeLater
         else:

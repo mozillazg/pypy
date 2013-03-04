@@ -333,7 +333,8 @@ def progress_through_finalizer_queue():
             func(obj)
         except FinalizeLater:
             _finalizer_queue.appendleft((obj, func))
-            break
+            return False   # interrupted
+    return True   # completed
 
 class RegisterFinalizerEntry(ExtRegistryEntry):
     _about_ = register_finalizer
@@ -342,8 +343,10 @@ class RegisterFinalizerEntry(ExtRegistryEntry):
         from rpython.annotator import model as annmodel
         from rpython.annotator.description import MethodDesc
         assert (isinstance(s_method, annmodel.SomePBC) and
-                s_method.getKind() is MethodDesc and
-                len(s_method.descriptions) == 1)
+                s_method.getKind() is MethodDesc)
+        if len(s_method.descriptions) != 1:
+            raise Exception("rgc.register_finalizer(method): the method must "
+                            "not be overridden.  Add an indirection if needed")
         #
         [methoddesc] = s_method.descriptions
         key = (register_finalizer, methoddesc.funcdesc, methoddesc.name)
