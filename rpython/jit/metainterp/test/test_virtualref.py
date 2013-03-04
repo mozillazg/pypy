@@ -59,7 +59,7 @@ class VRefTests(object):
         self.interp_operations(f, [])
         self.check_operations_history(new_with_vtable=1,     # X()
                                       virtual_ref=1,
-                                      virtual_ref_finish=1)
+                                      virtual_ref_finish=0)
 
     def test_make_vref_guard(self):
         if not isinstance(self, TestLLtype):
@@ -551,7 +551,7 @@ class VRefTests(object):
         assert res == 1
         self.check_resops(new_with_vtable=4)     # vref, xy
 
-    def test_cannot_use_invalid_virtualref(self):
+    def test_force_after_finish(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
         class XY:

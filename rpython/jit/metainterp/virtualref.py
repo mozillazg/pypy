@@ -163,8 +163,8 @@ class VirtualRefInfo:
                 assert not vref.forced
                 from rpython.jit.metainterp.compile import ResumeGuardForcedDescr
                 ResumeGuardForcedDescr.force_now(self.cpu, token)
-                assert vref.virtual_token == TOKEN_NONE
-                assert vref.forced
+                if vref.virtual_token != TOKEN_NONE or not vref.forced:
+                    raise InvalidVirtualRef
         elif not vref.forced:
             # token == TOKEN_NONE and the vref was not forced: it's invalid
             raise InvalidVirtualRef

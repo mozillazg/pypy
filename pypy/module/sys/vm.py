@@ -43,7 +43,6 @@ purposes only."""
             break
         depth -= 1
         f = ec.getnextframe_nohidden(f)
-    f.mark_as_escaped()
     return space.wrap(f)
 
 @unwrap_spec(new_limit="c_int")

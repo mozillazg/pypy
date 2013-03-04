@@ -49,7 +49,6 @@ class PyFrame(eval.Frame):
     instr_ub                 = 0
     instr_prev_plus_one      = 0
     is_being_profiled        = False
-    escaped                  = False  # see mark_as_escaped()
 
     def __init__(self, space, code, w_globals, outer_func):
         if not we_are_translated():
@@ -71,15 +70,6 @@ class PyFrame(eval.Frame):
         # class bodies only have CO_NEWLOCALS.
         self.initialize_frame_scopes(outer_func, code)
         self.f_lineno = code.co_firstlineno
-
-    def mark_as_escaped(self):
-        """
-        Must be called on frames that are exposed to applevel, e.g. by
-        sys._getframe().  This ensures that the virtualref holding the frame
-        is properly forced by ec.leave(), and thus the frame will be still
-        accessible even after the corresponding C stack died.
-        """
-        self.escaped = True
 
     def append_block(self, block):
         assert block.previous is self.lastblock
@@ -153,7 +143,6 @@ class PyFrame(eval.Frame):
                 not self.space.config.translating)
         executioncontext = self.space.getexecutioncontext()
         executioncontext.enter(self)
-        got_exception = True
         w_exitvalue = self.space.w_None
         try:
             executioncontext.call_trace(self)
@@ -180,9 +169,8 @@ class PyFrame(eval.Frame):
             # clean up the exception, might be useful for not
             # allocating exception objects in some cases
             self.last_exception = None
-            got_exception = False
         finally:
-            executioncontext.leave(self, w_exitvalue, got_exception)
+            executioncontext.leave(self, w_exitvalue)
         return w_exitvalue
     execute_frame.insert_stack_check_here = True
 
