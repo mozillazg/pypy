@@ -5,6 +5,7 @@ import _numpypy as ndarray
 import _numpypy as array
 
 from _numpypy import *
+from _numpypy import dtype, empty
 def bad_func(*args, **kwargs):
     raise ValueError('bad_func called')
 def nop(*args, **kwargs):
