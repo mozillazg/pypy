@@ -388,6 +388,19 @@ def test_cmp_none():
     assert (x == ["hello"]) is False
     assert (x != ["hello"]) is True
 
+def test_cmp_pointer_with_0():
+    p = new_pointer_type(new_primitive_type("int"))
+    x = cast(p, 0)
+    assert (x == 0) is True
+    assert (x != 0) is False
+    assert (0 == x) is True
+    assert (0 != x) is False
+    y = cast(p, 42)
+    assert (y == 0) is False
+    assert (y != 0) is True
+    assert (0 == y) is False
+    assert (0 != y) is True
+
 def test_invalid_indexing():
     p = new_primitive_type("int")
     x = cast(p, 42)
@@ -766,6 +779,7 @@ def test_struct_init_list():
     assert s.a2 == 456
     assert s.a3 == 0
     assert s.p4 == cast(BVoidP, 0)
+    assert s.p4 == 0
     #
     s = newp(BStructPtr, {'a2': 41122, 'a3': -123})
     assert s.a1 == 0
@@ -778,8 +792,13 @@ def test_struct_init_list():
     p = newp(BIntPtr, 14141)
     s = newp(BStructPtr, [12, 34, 56, p])
     assert s.p4 == p
+    s.p4 = 0
+    assert s.p4 == 0
     #
     s = newp(BStructPtr, [12, 34, 56, cast(BVoidP, 0)])
+    assert s.p4 == 0
+    #
+    s = newp(BStructPtr, [12, 34, 56, 0])
     assert s.p4 == cast(BVoidP, 0)
     #
     py.test.raises(TypeError, newp, BStructPtr, [12, 34, 56, None])
@@ -998,8 +1017,12 @@ def test_call_function_23():
     f = cast(BFunc23, _testfunc(23))
     res = f(b"foo")
     assert res == 1000 * ord(b'f')
-    res = f(None)
+    res = f(0)          # NULL
     assert res == -42
+    res = f(long(0))    # NULL
+    assert res == -42
+    py.test.raises(TypeError, f, None)
+    py.test.raises(TypeError, f, 0.0)
 
 def test_call_function_23_bis():
     # declaring the function as int(unsigned char*)
@@ -1264,25 +1287,29 @@ def test_callback_returning_void():
     py.test.raises(TypeError, callback, BFunc, cb, -42)
 
 def test_enum_type():
-    BEnum = new_enum_type("foo", (), ())
+    BUInt = new_primitive_type("unsigned int")
+    BEnum = new_enum_type("foo", (), (), BUInt)
     assert repr(BEnum) == "<ctype 'enum foo'>"
     assert BEnum.kind == "enum"
     assert BEnum.cname == "enum foo"
     assert BEnum.elements == {}
     #
-    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20))
+    BInt = new_primitive_type("int")
+    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20), BInt)
     assert BEnum.kind == "enum"
     assert BEnum.elements == {-20: 'ab', 0: 'def', 1: 'c'}
     # 'elements' is not the real dict, but merely a copy
     BEnum.elements[2] = '??'
     assert BEnum.elements == {-20: 'ab', 0: 'def', 1: 'c'}
     #
-    BEnum = new_enum_type("bar", ('ab', 'cd'), (5, 5))
+    BEnum = new_enum_type("bar", ('ab', 'cd'), (5, 5), BUInt)
     assert BEnum.elements == {5: 'ab'}
     assert BEnum.relements == {'ab': 5, 'cd': 5}
 
 def test_cast_to_enum():
-    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20))
+    BInt = new_primitive_type("int")
+    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20), BInt)
+    assert sizeof(BEnum) == sizeof(BInt)
     e = cast(BEnum, 0)
     assert repr(e) == "<cdata 'enum foo' 0: def>"
     assert repr(cast(BEnum, -42)) == "<cdata 'enum foo' -42>"
@@ -1294,18 +1321,27 @@ def test_cast_to_enum():
     assert int(cast(BEnum, -242 + 2**128)) == -242
     assert string(cast(BEnum, -242 + 2**128)) == '-242'
     #
-    BEnum = new_enum_type("bar", ('def', 'c', 'ab'), (0, 1, 20))
+    BUInt = new_primitive_type("unsigned int")
+    BEnum = new_enum_type("bar", ('def', 'c', 'ab'), (0, 1, 20), BUInt)
     e = cast(BEnum, -1)
     assert repr(e) == "<cdata 'enum bar' 4294967295>"     # unsigned int
+    #
+    BLong = new_primitive_type("long")
+    BEnum = new_enum_type("baz", (), (), BLong)
+    assert sizeof(BEnum) == sizeof(BLong)
+    e = cast(BEnum, -1)
+    assert repr(e) == "<cdata 'enum baz' -1>"
 
 def test_enum_with_non_injective_mapping():
-    BEnum = new_enum_type("foo", ('ab', 'cd'), (7, 7))
+    BInt = new_primitive_type("int")
+    BEnum = new_enum_type("foo", ('ab', 'cd'), (7, 7), BInt)
     e = cast(BEnum, 7)
     assert repr(e) == "<cdata 'enum foo' 7: ab>"
     assert string(e) == 'ab'
 
 def test_enum_in_struct():
-    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20))
+    BInt = new_primitive_type("int")
+    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20), BInt)
     BStruct = new_struct_type("bar")
     BStructPtr = new_pointer_type(BStruct)
     complete_struct_or_union(BStruct, [('a1', BEnum, -1)])
@@ -1318,7 +1354,7 @@ def test_enum_in_struct():
         "unsupported operand type for int(): 'NoneType'" in str(e.value)) #PyPy
     py.test.raises(TypeError, 'p.a1 = "def"')
     if sys.version_info < (3,):
-        BEnum2 = new_enum_type(unicode("foo"), (unicode('abc'),), (5,))
+        BEnum2 = new_enum_type(unicode("foo"), (unicode('abc'),), (5,), BInt)
         assert string(cast(BEnum2, 5)) == 'abc'
         assert type(string(cast(BEnum2, 5))) is str
 
@@ -1327,66 +1363,25 @@ def test_enum_overflow():
     max_int = max_uint // 2
     max_ulong = 2 ** (size_of_long()*8) - 1
     max_long = max_ulong // 2
-    # 'unsigned int' case
-    e = new_enum_type("foo", ('a', 'b'), (0, 3))
-    assert sizeof(e) == size_of_int()
-    assert int(cast(e, -1)) == max_uint     # 'e' is unsigned
-    e = new_enum_type("foo", ('a', 'b'), (0, max_uint))
-    assert sizeof(e) == size_of_int()
-    assert int(cast(e, -1)) == max_uint
-    assert e.elements == {0: 'a', max_uint: 'b'}
-    assert e.relements == {'a': 0, 'b': max_uint}
-    # 'signed int' case
-    e = new_enum_type("foo", ('a', 'b'), (-1, max_int))
-    assert sizeof(e) == size_of_int()
-    assert int(cast(e, -1)) == -1
-    assert e.elements == {-1: 'a', max_int: 'b'}
-    assert e.relements == {'a': -1, 'b': max_int}
-    e = new_enum_type("foo", ('a', 'b'), (-max_int-1, max_int))
-    assert sizeof(e) == size_of_int()
-    assert int(cast(e, -1)) == -1
-    assert e.elements == {-max_int-1: 'a', max_int: 'b'}
-    assert e.relements == {'a': -max_int-1, 'b': max_int}
-    # 'unsigned long' case
-    e = new_enum_type("foo", ('a', 'b'), (0, max_long))
-    assert sizeof(e) == size_of_long()
-    assert int(cast(e, -1)) == max_ulong     # 'e' is unsigned
-    e = new_enum_type("foo", ('a', 'b'), (0, max_ulong))
-    assert sizeof(e) == size_of_long()
-    assert int(cast(e, -1)) == max_ulong
-    assert e.elements == {0: 'a', max_ulong: 'b'}
-    assert e.relements == {'a': 0, 'b': max_ulong}
-    # 'signed long' case
-    e = new_enum_type("foo", ('a', 'b'), (-1, max_long))
-    assert sizeof(e) == size_of_long()
-    assert int(cast(e, -1)) == -1
-    assert e.elements == {-1: 'a', max_long: 'b'}
-    assert e.relements == {'a': -1, 'b': max_long}
-    e = new_enum_type("foo", ('a', 'b'), (-max_long-1, max_long))
-    assert sizeof(e) == size_of_long()
-    assert int(cast(e, -1)) == -1
-    assert e.elements == {-max_long-1: 'a', max_long: 'b'}
-    assert e.relements == {'a': -max_long-1, 'b': max_long}
-    # overflow: both negative items and items larger than max_long
-    e = py.test.raises(OverflowError, new_enum_type, "foo", ('a', 'b'),
-                       (-1, max_long + 1))
-    assert str(e.value) == (
-        "enum 'foo' values don't all fit into either 'long' "
-        "or 'unsigned long'")
-    # overflow: items smaller than -max_long-1
-    e = py.test.raises(OverflowError, new_enum_type, "foo", ('a', 'b'),
-                       (-max_long-2, 5))
-    assert str(e.value) == (
-        "enum 'foo' declaration for 'a' does not fit a long or unsigned long")
-    # overflow: items larger than max_ulong
-    e = py.test.raises(OverflowError, new_enum_type, "foo", ('a', 'b'),
-                       (5, max_ulong+1))
-    assert str(e.value) == (
-        "enum 'foo' declaration for 'b' does not fit a long or unsigned long")
+    for BPrimitive in [new_primitive_type("int"),
+                       new_primitive_type("unsigned int"),
+                       new_primitive_type("long"),
+                       new_primitive_type("unsigned long")]:
+        for x in [max_uint, max_int, max_ulong, max_long]:
+            for testcase in [x, x+1, -x-1, -x-2]:
+                if int(cast(BPrimitive, testcase)) == testcase:
+                    # fits
+                    BEnum = new_enum_type("foo", ("AA",), (testcase,),
+                                          BPrimitive)
+                    assert int(cast(BEnum, testcase)) == testcase
+                else:
+                    # overflows
+                    py.test.raises(OverflowError, new_enum_type,
+                                   "foo", ("AA",), (testcase,), BPrimitive)
 
 def test_callback_returning_enum():
     BInt = new_primitive_type("int")
-    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20))
+    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, -20), BInt)
     def cb(n):
         if n & 1:
             return cast(BEnum, n)
@@ -1402,9 +1397,9 @@ def test_callback_returning_enum():
 
 def test_callback_returning_enum_unsigned():
     BInt = new_primitive_type("int")
-    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, 20))
+    BUInt = new_primitive_type("unsigned int")
+    BEnum = new_enum_type("foo", ('def', 'c', 'ab'), (0, 1, 20), BUInt)
     def cb(n):
-        print n
         if n & 1:
             return cast(BEnum, n)
         else:
