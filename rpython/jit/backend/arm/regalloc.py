@@ -15,13 +15,13 @@ from rpython.jit.backend.arm.helper.regalloc import (prepare_op_by_helper_call,
                                                     check_imm_box
                                                     )
 from rpython.jit.backend.arm.jump import remap_frame_layout_mixed
-from rpython.jit.backend.arm.arch import MY_COPY_OF_REGS
 from rpython.jit.backend.arm.arch import WORD, JITFRAME_FIXED_SIZE
 from rpython.jit.codewriter import longlong
-from rpython.jit.metainterp.history import (Const, ConstInt, ConstFloat, ConstPtr,
-                                        Box, BoxPtr,
-                                        INT, REF, FLOAT)
-from rpython.jit.metainterp.history import JitCellToken, TargetToken
+from rpython.jit.metainterp.history import (Const, ConstInt, ConstFloat,
+                                            ConstPtr, BoxInt,
+                                            Box, BoxPtr,
+                                            INT, REF, FLOAT)
+from rpython.jit.metainterp.history import TargetToken
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.backend.llsupport.descr import ArrayDescr
 from rpython.jit.backend.llsupport.gcmap import allocate_gcmap
@@ -32,6 +32,7 @@ from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.backend.llsupport.descr import unpack_arraydescr
 from rpython.jit.backend.llsupport.descr import unpack_fielddescr
 from rpython.jit.backend.llsupport.descr import unpack_interiorfielddescr
+from rpython.rlib.rarithmetic import r_uint
 
 
 # xxx hack: set a default value for TargetToken._ll_loop_code.  If 0, we know
@@ -337,23 +338,19 @@ class Regalloc(BaseRegalloc):
         frame_depth = self.fm.get_frame_depth()
         gcmap = allocate_gcmap(self.assembler,
                         frame_depth, JITFRAME_FIXED_SIZE)
-        debug_start("jit-backend-gcmap")
         for box, loc in self.rm.reg_bindings.iteritems():
             if loc in forbidden_regs:
                 continue
-            if box.type == REF and self.fm.stays_alive(box):
+            if box.type == REF and self.rm.is_still_alive(box):
                 assert not noregs
-                assert isinstance(loc, RegLoc)
-                val = gpr_reg_mgr_cls.all_reg_indexes[loc.value]
+                assert loc.is_reg()
+                val = loc.value
                 gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
         for box, loc in self.fm.bindings.iteritems():
-            if box.type == REF and self.fm.stays_alive(box):
-                assert isinstance(loc, StackLoc)
-                val = loc.value // WORD
+            if box.type == REF and self.rm.is_still_alive(box):
+                assert loc.is_stack()
+                val = loc.position + JITFRAME_FIXED_SIZE
                 gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
-        for i in range(len(gcmap)):
-            debug_print(str(gcmap[i]))
-        debug_stop('jit-backend-gcmap')
         return gcmap
 
     # ------------------------------------------------------------
@@ -1007,28 +1004,21 @@ class Regalloc(BaseRegalloc):
         self.rm.force_allocate_reg(op.result, selected_reg=r.r0)
         t = TempInt()
         self.rm.force_allocate_reg(t, selected_reg=r.r1)
-        self.possibly_free_var(op.result)
         self.possibly_free_var(t)
         return [imm(size)]
 
-    def get_mark_gc_roots(self, gcrootmap, use_copy_area=False):
-        shape = gcrootmap.get_basic_shape()
-        for v, val in self.frame_manager.bindings.items():
-            if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
-                assert val.is_stack()
-                gcrootmap.add_frame_offset(shape, -val.value)
-        for v, reg in self.rm.reg_bindings.items():
-            if reg is r.r0:
-                continue
-            if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
-                if use_copy_area:
-                    assert reg in self.rm.REGLOC_TO_COPY_AREA_OFS
-                    area_offset = self.rm.REGLOC_TO_COPY_AREA_OFS[reg]
-                    gcrootmap.add_frame_offset(shape, area_offset)
-                else:
-                    assert 0, 'sure??'
-        return gcrootmap.compress_callshape(shape,
-                                            self.assembler.datablockwrapper)
+    def prepare_op_call_malloc_nursery_varsize_small(self, op, fcond):
+        size_box = op.getarg(0)
+        assert isinstance(size_box, BoxInt)
+        size = size_box.getint()
+
+        self.rm.force_allocate_reg(op.result, selected_reg=r.r0)
+        t = TempInt()
+        self.rm.force_allocate_reg(t, selected_reg=r.r1)
+        argloc = self.make_sure_var_in_reg(size_box,
+                                            forbidden_vars=[op.result, t])
+        self.possibly_free_var(t)
+        return [argloc]
 
     prepare_op_debug_merge_point = void
     prepare_op_jit_debug = void

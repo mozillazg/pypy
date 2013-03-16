@@ -51,6 +51,8 @@ class Assembler386(BaseAssembler):
     _output_loop_log = None
     _second_tmp_reg = ecx
 
+    DEBUG_FRAME_DEPTH = False
+
     def __init__(self, cpu, translate_support_code=False):
         BaseAssembler.__init__(self, cpu, translate_support_code)
         self.verbose = False
@@ -92,6 +94,7 @@ class Assembler386(BaseAssembler):
         self.datablockwrapper = MachineDataBlockWrapper(self.cpu.asmmemmgr,
                                                         allblocks)
         self.target_tokens_currently_compiling = {}
+        self.frame_depth_to_patch = []
 
     def teardown(self):
         self.pending_guard_tokens = None
@@ -157,9 +160,9 @@ class Assembler386(BaseAssembler):
         self._store_and_reset_exception(mc, None, ebx, ecx)
 
         mc.CALL(imm(self.cpu.realloc_frame))
+        mc.MOV_rr(ebp.value, eax.value)
         self._restore_exception(mc, None, ebx, ecx)
         mc.ADD_ri(esp.value, (align - 1) * WORD)
-        mc.MOV_rr(ebp.value, eax.value)
         mc.MOV_bi(extra_ofs, 0)
 
 
@@ -471,7 +474,7 @@ class Assembler386(BaseAssembler):
             jitframe.JITFRAMEINFO_SIZE, alignment=WORD)
         clt.frame_info = rffi.cast(jitframe.JITFRAMEINFOPTR, frame_info)
         clt.allgcrefs = []
-        clt.frame_info.set_frame_depth(0, 0) # for now
+        clt.frame_info.clear() # for now
 
         if log:
             operations = self._inject_debugging_code(looptoken, operations,
@@ -480,6 +483,7 @@ class Assembler386(BaseAssembler):
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         #
         self._call_header_with_stack_check()
+        self._check_frame_depth_debug(self.mc)
         operations = regalloc.prepare_loop(inputargs, operations, looptoken,
                                            clt.allgcrefs)
         looppos = self.mc.get_relative_pos()
@@ -492,6 +496,8 @@ class Assembler386(BaseAssembler):
         full_size = self.mc.get_relative_pos()
         #
         rawstart = self.materialize_loop(looptoken)
+        self.patch_stack_checks(frame_depth_no_fixed_size + JITFRAME_FIXED_SIZE,
+                                rawstart)
         looptoken._ll_loop_code = looppos + rawstart
         debug_start("jit-backend-addr")
         debug_print("Loop %d (%s) has address 0x%x to 0x%x (bootstrap 0x%x)" % (
@@ -539,14 +545,15 @@ class Assembler386(BaseAssembler):
                                              operations,
                                              self.current_clt.allgcrefs,
                                              self.current_clt.frame_info)
-        stack_check_patch_ofs, ofs2 = self._check_frame_depth(self.mc,
-                                                       regalloc.get_gcmap())
+        self._check_frame_depth(self.mc, regalloc.get_gcmap())
         frame_depth_no_fixed_size = self._assemble(regalloc, inputargs, operations)
         codeendpos = self.mc.get_relative_pos()
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
         #
         rawstart = self.materialize_loop(original_loop_token)
+        self.patch_stack_checks(frame_depth_no_fixed_size + JITFRAME_FIXED_SIZE,
+                                rawstart)
         debug_start("jit-backend-addr")
         debug_print("bridge out of Guard 0x%x has address 0x%x to 0x%x" %
                     (r_uint(descr_number), r_uint(rawstart),
@@ -558,8 +565,6 @@ class Assembler386(BaseAssembler):
         ops_offset = self.mc.ops_offset
         frame_depth = max(self.current_clt.frame_info.jfi_frame_depth,
                           frame_depth_no_fixed_size + JITFRAME_FIXED_SIZE)
-        self._patch_stackadjust(stack_check_patch_ofs + rawstart, frame_depth)
-        self._patch_stackadjust(ofs2 + rawstart, frame_depth)
         self.fixup_target_tokens(rawstart)
         self.update_frame_depth(frame_depth)
         self.teardown()
@@ -622,7 +627,11 @@ class Assembler386(BaseAssembler):
 
     def update_frame_depth(self, frame_depth):
         baseofs = self.cpu.get_baseofs_of_frame_field()
-        self.current_clt.frame_info.set_frame_depth(baseofs, frame_depth)
+        self.current_clt.frame_info.update_frame_depth(baseofs, frame_depth)
+
+    def patch_stack_checks(self, framedepth, rawstart):
+        for ofs in self.frame_depth_to_patch:
+            self._patch_frame_depth(ofs + rawstart, framedepth)
 
     def _check_frame_depth(self, mc, gcmap, expected_size=-1):
         """ check if the frame is of enough depth to follow this bridge.
@@ -650,9 +659,33 @@ class Assembler386(BaseAssembler):
         offset = mc.get_relative_pos() - jg_location
         assert 0 < offset <= 127
         mc.overwrite(jg_location-1, chr(offset))
-        return stack_check_cmp_ofs, ofs2
+        self.frame_depth_to_patch.append(stack_check_cmp_ofs)
+        self.frame_depth_to_patch.append(ofs2)
 
-    def _patch_stackadjust(self, adr, allocated_depth):
+    def _check_frame_depth_debug(self, mc):
+        """ double check the depth size. It prints the error (and potentially
+        segfaults later)
+        """
+        if not self.DEBUG_FRAME_DEPTH:
+            return
+        descrs = self.cpu.gc_ll_descr.getframedescrs(self.cpu)
+        ofs = self.cpu.unpack_fielddescr(descrs.arraydescr.lendescr)
+        mc.CMP_bi(ofs, 0xffffff)
+        stack_check_cmp_ofs = mc.get_relative_pos() - 4
+        mc.J_il8(rx86.Conditions['GE'], 0)
+        jg_location = mc.get_relative_pos()
+        mc.MOV_rr(edi.value, ebp.value)
+        mc.MOV_ri(esi.value, 0xffffff)
+        ofs2 = mc.get_relative_pos() - 4
+        mc.CALL(imm(self.cpu.realloc_frame_crash))
+        # patch the JG above
+        offset = mc.get_relative_pos() - jg_location
+        assert 0 < offset <= 127
+        mc.overwrite(jg_location-1, chr(offset))
+        self.frame_depth_to_patch.append(stack_check_cmp_ofs)
+        self.frame_depth_to_patch.append(ofs2)
+
+    def _patch_frame_depth(self, adr, allocated_depth):
         mc = codebuf.MachineCodeBlockWrapper()
         mc.writeimm32(allocated_depth)
         mc.copy_to_raw_memory(adr)
@@ -1085,15 +1118,9 @@ class Assembler386(BaseAssembler):
         n = len(arglocs)
         for i in range(start, n):
             loc = arglocs[i]
-            if isinstance(loc, RegLoc):
-                if loc.is_xmm:
-                    stack_depth += 2
-                else:
-                    stack_depth += 1
             stack_depth += loc.get_width() // WORD
         if stack_depth > stack_max:
-            stack_depth = align_stack_words(stack_depth)
-            align = (stack_depth - stack_max)
+            align = align_stack_words(stack_depth - stack_max)
             self.mc.SUB_ri(esp.value, align * WORD)
             if can_collect == 1:
                 ofs = self.cpu.get_ofs_of_frame_field('jf_extra_stack_depth')
@@ -1126,6 +1153,10 @@ class Assembler386(BaseAssembler):
             gcmap = self._regalloc.get_gcmap([eax], noregs=noregs)
             self.push_gcmap(self.mc, gcmap, store=True)
         self.mc.CALL(x)
+        if callconv != FFI_DEFAULT_ABI:
+            self._fix_stdcall(callconv, p - align * WORD)
+        elif align:
+            self.mc.ADD_ri(esp.value, align * WORD)
         if can_collect:
             self._reload_frame_if_necessary(self.mc, can_collect=can_collect)
             if align and can_collect == 1:
@@ -1133,10 +1164,6 @@ class Assembler386(BaseAssembler):
                 self.mc.MOV_bi(ofs, 0)
             self.pop_gcmap(self.mc)
         #
-        if callconv != FFI_DEFAULT_ABI:
-            self._fix_stdcall(callconv, p - align * WORD)
-        elif align:
-            self.mc.ADD_ri(esp.value, align * WORD)
 
     def _fix_stdcall(self, callconv, p):
         from rpython.rlib.clibffi import FFI_STDCALL
@@ -1169,8 +1196,7 @@ class Assembler386(BaseAssembler):
                        max(floats - len(unused_xmm), 0))
         align = 0
         if stack_depth > stack_max:
-            stack_depth = align_stack_words(stack_depth)
-            align = (stack_depth - stack_max)
+            align = align_stack_words(stack_depth - stack_max)
             if can_collect == 1:
                 ofs = self.cpu.get_ofs_of_frame_field('jf_extra_stack_depth')
                 self.mc.MOV_bi(ofs, align * WORD)
@@ -2158,7 +2184,7 @@ class Assembler386(BaseAssembler):
             # Call the closestack() function (also releasing the GIL)
             args = [reg]
         #
-        self._emit_call(imm(self.releasegil_addr), args)
+        self._emit_call(imm(self.releasegil_addr), args, can_collect=False)
 
     def call_reacquire_gil(self, gcrootmap, save_loc):
         # save the previous result (eax/xmm0) into the stack temporarily.
@@ -2180,7 +2206,7 @@ class Assembler386(BaseAssembler):
                 reg = edi
             self.mc.LEA_rs(reg.value, css)
             args = [reg]
-        self._emit_call(imm(self.reacqgil_addr), args)
+        self._emit_call(imm(self.reacqgil_addr), args, can_collect=False)
         # restore the result from the stack
         if isinstance(save_loc, RegLoc) and not save_loc.is_xmm:
             self.mc.MOV_rs(save_loc.value, WORD)
@@ -2392,18 +2418,6 @@ class Assembler386(BaseAssembler):
         not_implemented("not implemented operation (guard): %s" %
                         op.getopname())
 
-    def check_frame_before_jump(self, target_token):
-        if target_token in self.target_tokens_currently_compiling:
-            return
-        if target_token._x86_clt is self.current_clt:
-            return
-        # We can have a frame coming from god knows where that's
-        # passed to a jump to another loop. Make sure it has the
-        # correct depth
-        expected_size = target_token._x86_clt.frame_info.jfi_frame_depth
-        self._check_frame_depth(self.mc, self._regalloc.get_gcmap(),
-                                expected_size=expected_size)
-
     def closing_jump(self, target_token):
         target = target_token._ll_loop_code
         if target_token in self.target_tokens_currently_compiling:
@@ -2413,7 +2427,7 @@ class Assembler386(BaseAssembler):
             self.mc.JMP(imm(target))
 
     def label(self):
-        pass
+        self._check_frame_depth_debug(self.mc)
 
     def malloc_cond(self, nursery_free_adr, nursery_top_adr, size, gcmap):
         assert size & (WORD-1) == 0     # must be correctly aligned
