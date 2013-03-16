@@ -52,7 +52,7 @@ class AssemblerARM(ResOpAssembler):
         self._exit_code_addr = 0
         self.current_clt = None
         self.malloc_slowpath = 0
-        self.wb_slowpath = [0, 0, 0, 0]
+        self.wb_slowpath = [0, 0, 0, 0, 0]
         self._regalloc = None
         self.datablockwrapper = None
         self.propagate_exception_path = 0
@@ -180,7 +180,6 @@ class AssemblerARM(ResOpAssembler):
         if not self.cpu.propagate_exception_descr:
             return      # not supported (for tests, or non-translated)
         #
-        #
         mc = ARMv7Builder()
         self._store_and_reset_exception(mc, r.r0)
         ofs = self.cpu.get_ofs_of_frame_field('jf_guard_exc')
@@ -240,11 +239,16 @@ class AssemblerARM(ResOpAssembler):
             assert excvalloc.is_reg()
             self.store_reg(mc, excvalloc, r.ip)
         else:
+            assert exctploc is not r.fp
             # load exc_value from JITFRAME and put it in pos_exc_value
             ofs = self.cpu.get_ofs_of_frame_field('jf_guard_exc')
             self.load_reg(mc, tmpreg, r.fp, ofs)
             self.store_reg(mc, tmpreg, r.ip)
+            # reset exc_value in the JITFRAME
+            mc.gen_load_int(tmpreg.value, 0)
+            self.store_reg(mc, tmpreg, r.fp, ofs)
 
+        # restore pos_exception from exctploc register
         mc.gen_load_int(r.ip.value, self.cpu.pos_exception())
         self.store_reg(mc, exctploc, r.ip)
 
@@ -352,36 +356,60 @@ class AssemblerARM(ResOpAssembler):
             self.wb_slowpath[withcards + 2 * withfloats] = rawstart
 
     def _build_malloc_slowpath(self):
-        return # XXX fix me
         mc = ARMv7Builder()
-        if self.cpu.supports_floats:
-            vfp_regs = r.all_vfp_regs
-        else:
-            vfp_regs = []
+        self._push_all_regs_to_jitframe(mc, [r.r0, r.r1], self.cpu.supports_floats)
+        ofs = self.cpu.get_ofs_of_frame_field('jf_gcmap')
+        # store the gc pattern
+        mc.POP([r.r2.value])
+        self.store_reg(mc, r.r2, r.fp, ofs)
         # We need to push two registers here because we are going to make a
         # call an therefore the stack needs to be 8-byte aligned
         mc.PUSH([r.ip.value, r.lr.value])
-        with saved_registers(mc, [], vfp_regs):
-            # At this point we know that the values we need to compute the size
-            # are stored in r0 and r1.
-            mc.SUB_rr(r.r0.value, r.r1.value, r.r0.value)
-            addr = self.cpu.gc_ll_descr.get_malloc_slowpath_addr()
-            for reg, ofs in CoreRegisterManager.REGLOC_TO_COPY_AREA_OFS.items():
-                mc.STR_ri(reg.value, r.fp.value, imm=ofs)
-            mc.BL(addr)
-            for reg, ofs in CoreRegisterManager.REGLOC_TO_COPY_AREA_OFS.items():
-                mc.LDR_ri(reg.value, r.fp.value, imm=ofs)
+        # At this point we know that the values we need to compute the size
+        # are stored in r0 and r1.
+        mc.SUB_rr(r.r0.value, r.r1.value, r.r0.value) # compute the size we want
 
+        if hasattr(self.cpu.gc_ll_descr, 'passes_frame'):
+            mc.MOV_rr(r.r1.value, r.fp.value)
+
+        addr = self.cpu.gc_ll_descr.get_malloc_slowpath_addr()
+        mc.BL(addr)
+
+        #
+        # If the slowpath malloc failed, we raise a MemoryError that
+        # always interrupts the current loop, as a "good enough"
+        # approximation.
         mc.CMP_ri(r.r0.value, 0)
         mc.B(self.propagate_exception_path, c=c.EQ)
+        #
+        self._reload_frame_if_necessary(mc, align_stack=True)
+        self._pop_all_regs_from_jitframe(mc, [r.r0, r.r1], self.cpu.supports_floats)
+        #
         nursery_free_adr = self.cpu.gc_ll_descr.get_nursery_free_addr()
         mc.gen_load_int(r.r1.value, nursery_free_adr)
         mc.LDR_ri(r.r1.value, r.r1.value)
-        # see above
+        # clear the gc pattern
+        mc.gen_load_int(r.ip.value, 0)
+        self.store_reg(mc, r.ip, r.fp, ofs)
+        # return
         mc.POP([r.ip.value, r.pc.value])
 
         rawstart = mc.materialize(self.cpu.asmmemmgr, [])
         self.malloc_slowpath = rawstart
+
+    def _reload_frame_if_necessary(self, mc, align_stack=False, can_collect=0):
+        gcrootmap = self.cpu.gc_ll_descr.gcrootmap
+        if gcrootmap and gcrootmap.is_shadow_stack:
+            rst = gcrootmap.get_root_stack_top_addr()
+            mc.gen_load_int(r.ip.value, rst)
+            self.load_reg(mc, r.ip, r.ip)
+            self.load_reg(mc, r.fp, r.ip, ofs=-WORD)
+        wbdescr = self.cpu.gc_ll_descr.write_barrier_descr
+        if gcrootmap and wbdescr:
+            # frame never uses card marking, so we enforce this is not
+            # an array
+            self._write_barrier_fastpath(mc, wbdescr, [r.fp], array=False,
+                                         is_frame=True)#, align_stack=align_stack)
 
     def propagate_memoryerror_if_r0_is_null(self):
         # see ../x86/assembler.py:propagate_memoryerror_if_eax_is_null
@@ -530,25 +558,24 @@ class AssemblerARM(ResOpAssembler):
     def gen_shadowstack_header(self, gcrootmap):
         # we need to put two words into the shadowstack: the MARKER_FRAME
         # and the address of the frame (fp, actually)
+        # lr = rst addr
+        # ip = *lr
         rst = gcrootmap.get_root_stack_top_addr()
-        self.mc.gen_load_int(r.ip.value, rst)
-        self.mc.LDR_ri(r.r4.value, r.ip.value)  # LDR r4, [rootstacktop]
+        self.mc.gen_load_int(r.lr.value, rst)
+        self.load_reg(self.mc, r.ip, r.lr)
+        # *ip = r.fp
+        self.store_reg(self.mc, r.fp, r.ip)
         #
-        MARKER = gcrootmap.MARKER_FRAME
-        self.mc.ADD_ri(r.r5.value, r.r4.value,
-                                    imm=2 * WORD)  # ADD r5, r4 [2*WORD]
-        self.mc.gen_load_int(r.r6.value, MARKER)
-        self.mc.STR_ri(r.r6.value, r.r4.value, WORD)  # STR MARKER, r4 [WORD]
-        self.mc.STR_ri(r.fp.value, r.r4.value)  # STR fp, r4
-        #
-        self.mc.STR_ri(r.r5.value, r.ip.value)  # STR r5 [rootstacktop]
+        self.mc.ADD_ri(r.ip.value, r.ip.value, WORD)
+        # *lr = ip + WORD
+        self.store_reg(self.mc, r.ip, r.lr)
 
     def gen_footer_shadowstack(self, gcrootmap, mc):
         rst = gcrootmap.get_root_stack_top_addr()
         mc.gen_load_int(r.ip.value, rst)
-        mc.LDR_ri(r.r4.value, r.ip.value)  # LDR r4, [rootstacktop]
-        mc.SUB_ri(r.r5.value, r.r4.value, imm=2 * WORD)  # ADD r5, r4 [2*WORD]
-        mc.STR_ri(r.r5.value, r.ip.value)
+        self.load_reg(mc, r.r4, r.ip)
+        mc.SUB_ri(r.r4.value, r.r4.value, WORD)
+        self.store_reg(mc, r.r4, r.ip)
 
     def _dump(self, ops, type='loop'):
         debug_start('jit-backend-ops')
@@ -598,14 +625,13 @@ class AssemblerARM(ResOpAssembler):
             jitframe.JITFRAMEINFO_SIZE, alignment=WORD)
         clt.frame_info = rffi.cast(jitframe.JITFRAMEINFOPTR, frame_info)
         clt.allgcrefs = []
-        clt.frame_info.set_frame_depth(0, 0) # for now
+        clt.frame_info.clear() # for now
 
         if False and log:
             operations = self._inject_debugging_code(looptoken, operations,
                                                      'e', looptoken.number)
 
         self._call_header_with_stack_check()
-        #sp_patch_location = self._prepare_sp_patch_position()
 
         regalloc = Regalloc(assembler=self)
         operations = regalloc.prepare_loop(inputargs, operations, looptoken,
@@ -619,7 +645,6 @@ class AssemblerARM(ResOpAssembler):
         #
         size_excluding_failure_stuff = self.mc.get_relative_pos()
 
-        #self._patch_sp_offset(sp_patch_location, frame_depth)
         self.write_pending_failure_recoveries()
 
         rawstart = self.materialize_loop(looptoken)
@@ -742,14 +767,14 @@ class AssemblerARM(ResOpAssembler):
         """
         descrs = self.cpu.gc_ll_descr.getframedescrs(self.cpu)
         ofs = self.cpu.unpack_fielddescr(descrs.arraydescr.lendescr)
-        mc.LDR_ri(r.r12.value, r.fp.value, imm=ofs)
+        mc.LDR_ri(r.ip.value, r.fp.value, imm=ofs)
         stack_check_cmp_ofs = mc.currpos()
         if expected_size == -1:
             mc.NOP()
             mc.NOP()
         else:
             mc.gen_load_int(r.lr.value, expected_size)
-        mc.CMP_rr(r.lr.value, r.ip.value)
+        mc.CMP_rr(r.ip.value, r.lr.value)
 
         jg_location = mc.currpos()
         mc.BKPT()
@@ -797,7 +822,7 @@ class AssemblerARM(ResOpAssembler):
 
         # store a possibly present exception
         # we use a callee saved reg here as a tmp for the exc.
-        self._store_and_reset_exception(mc, None, r.fp, on_frame=True)
+        self._store_and_reset_exception(mc, None, r.r4, on_frame=True)
 
         # call realloc_frame, it takes two arguments
         # arg0: the old jitframe
@@ -805,11 +830,11 @@ class AssemblerARM(ResOpAssembler):
         #
         mc.BL(self.cpu.realloc_frame)
 
-        # restore a possibly present exception
-        self._restore_exception(mc, None, r.fp)
-
-        # set fp to the new jitframe
+        # set fp to the new jitframe returned from the previous call
         mc.MOV_rr(r.fp.value, r.r0.value)
+
+        # restore a possibly present exception
+        self._restore_exception(mc, None, r.r4)
 
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
         if gcrootmap and gcrootmap.is_shadow_stack:
@@ -828,8 +853,8 @@ class AssemblerARM(ResOpAssembler):
 
     def _load_shadowstack_top(self, mc, reg, gcrootmap):
         rst = gcrootmap.get_root_stack_top_addr()
-        self.mc.gen_load_int(reg.value, rst)
-        self.mc.gen_load_int(reg.value, reg.value)
+        mc.gen_load_int(reg.value, rst)
+        mc.gen_load_int(reg.value, reg.value)
         return rst
 
     def fixup_target_tokens(self, rawstart):
@@ -854,7 +879,7 @@ class AssemblerARM(ResOpAssembler):
 
     def update_frame_depth(self, frame_depth):
         baseofs = self.cpu.get_baseofs_of_frame_field()
-        self.current_clt.frame_info.set_frame_depth(baseofs, frame_depth)
+        self.current_clt.frame_info.update_frame_depth(baseofs, frame_depth)
 
     def write_pending_failure_recoveries(self):
         for tok in self.pending_guards:
@@ -885,47 +910,6 @@ class AssemblerARM(ResOpAssembler):
         if clt.asmmemmgr_blocks is None:
             clt.asmmemmgr_blocks = []
         return clt.asmmemmgr_blocks
-
-    def _prepare_sp_patch_position(self):
-        """Generate NOPs as placeholder to patch the instruction(s) to update
-        the sp according to the number of spilled variables"""
-        size = (self.mc.size_of_gen_load_int + WORD)
-        l = self.mc.currpos()
-        for _ in range(size // WORD):
-            self.mc.NOP()
-        return l
-
-    def _patch_sp_offset(self, pos, frame_depth):
-        cb = OverwritingBuilder(self.mc, pos,
-                                OverwritingBuilder.size_of_gen_load_int + WORD)
-        n = frame_depth * WORD
-
-        # ensure the sp is 8 byte aligned when patching it
-        if n % 8 != 0:
-            n += WORD
-        assert n % 8 == 0
-
-        self._adjust_sp(n, cb, base_reg=r.fp)
-
-    def _adjust_sp(self, n, cb=None, fcond=c.AL, base_reg=r.sp):
-        if cb is None:
-            cb = self.mc
-        if n < 0:
-            n = -n
-            rev = True
-        else:
-            rev = False
-        if n <= 0xFF and fcond == c.AL:
-            if rev:
-                cb.ADD_ri(r.sp.value, base_reg.value, n)
-            else:
-                cb.SUB_ri(r.sp.value, base_reg.value, n)
-        else:
-            cb.gen_load_int(r.ip.value, n, cond=fcond)
-            if rev:
-                cb.ADD_rr(r.sp.value, base_reg.value, r.ip.value, cond=fcond)
-            else:
-                cb.SUB_rr(r.sp.value, base_reg.value, r.ip.value, cond=fcond)
 
     def _walk_operations(self, inputargs, operations, regalloc):
         fcond = c.AL
@@ -1027,7 +1011,7 @@ class AssemblerARM(ResOpAssembler):
             mc.VLDR(target.value, helper.value, cond=cond)
 
     def _load_core_reg(self, mc, target, base, ofs, cond=c.AL, helper=r.ip):
-        if check_imm_arg(ofs):
+        if check_imm_arg(abs(ofs)):
             mc.LDR_ri(target.value, base.value, imm=ofs, cond=cond)
         else:
             mc.gen_load_int(helper.value, ofs, cond=cond)
@@ -1262,17 +1246,21 @@ class AssemblerARM(ResOpAssembler):
         else:
             raise AssertionError('Trying to pop to an invalid location')
 
-    def malloc_cond(self, nursery_free_adr, nursery_top_adr, size):
-        assert size & (WORD-1) == 0     # must be correctly aligned
+    def malloc_cond(self, nursery_free_adr, nursery_top_adr, sizeloc, gcmap):
+        if sizeloc.is_imm():     # must be correctly aligned
+            assert sizeloc.value & (WORD-1) == 0
 
         self.mc.gen_load_int(r.r0.value, nursery_free_adr)
         self.mc.LDR_ri(r.r0.value, r.r0.value)
 
-        if check_imm_arg(size):
-            self.mc.ADD_ri(r.r1.value, r.r0.value, size)
+        if sizeloc.is_imm():
+            if check_imm_arg(sizeloc.value):
+                self.mc.ADD_ri(r.r1.value, r.r0.value, sizeloc.value)
+            else:
+                self.mc.gen_load_int(r.r1.value, sizeloc.value)
+                self.mc.ADD_rr(r.r1.value, r.r0.value, r.r1.value)
         else:
-            self.mc.gen_load_int(r.r1.value, size)
-            self.mc.ADD_rr(r.r1.value, r.r0.value, r.r1.value)
+            self.mc.ADD_rr(r.r1.value, r.r0.value, sizeloc.value)
 
         self.mc.gen_load_int(r.ip.value, nursery_top_adr)
         self.mc.LDR_ri(r.ip.value, r.ip.value)
@@ -1286,28 +1274,29 @@ class AssemblerARM(ResOpAssembler):
         # malloc_slowpath in case we called malloc_slowpath, which returns the
         # new value of nursery_free_adr in r1 and the adr of the new object in
         # r0.
+        self.push_gcmap(self.mc, gcmap, push=True, cond=c.HI)
+
         self.mc.BL(self.malloc_slowpath, c=c.HI)
 
         self.mc.gen_load_int(r.ip.value, nursery_free_adr)
         self.mc.STR_ri(r.r1.value, r.ip.value)
 
-    def push_gcmap(self, mc, gcmap, push=False, mov=False, store=False):
+    def push_gcmap(self, mc, gcmap, push=False, store=False, cond=c.AL):
         ptr = rffi.cast(lltype.Signed, gcmap)
         if push:
-            mc.gen_load_int(r.ip.value, ptr)
-            mc.PUSH([r.ip.value])
-        elif mov:
-            assert 0
-            mc.MOV(RawEspLoc(0, REF), ptr)
+            mc.gen_load_int(r.ip.value, ptr, cond=cond)
+            mc.PUSH([r.ip.value], cond=cond)
         else:
             assert store
             ofs = self.cpu.get_ofs_of_frame_field('jf_gcmap')
-            mc.gen_load_int(r.ip.value, ptr)
-            mc.STR_ri(r.ip.value, r.fp.value, imm=ofs)
+            mc.gen_load_int(r.ip.value, ptr, cond=cond)
+            mc.STR_ri(r.ip.value, r.fp.value, imm=ofs, cond=cond)
 
     def pop_gcmap(self, mc):
         ofs = self.cpu.get_ofs_of_frame_field('jf_gcmap')
-        mc.MOV_bi(ofs, 0)
+        assert check_imm_arg(ofs)
+        mc.gen_load_int(r.ip.value, 0)
+        self.store_reg(mc, r.ip, r.fp, ofs)
 
 
 

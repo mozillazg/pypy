@@ -2,6 +2,7 @@
 """ Tests for register allocation for common constructs
 """
 
+import re
 from rpython.jit.metainterp.history import TargetToken, BasicFinalDescr,\
      JitCellToken, BasicFailDescr, AbstractDescr
 from rpython.jit.backend.llsupport.gc import GcLLDescription, GcLLDescr_boehm,\
@@ -14,9 +15,18 @@ from rpython.rtyper.annlowlevel import llhelper, llhelper_args
 
 from rpython.jit.backend.llsupport.test.test_regalloc_integration import BaseTestRegalloc
 from rpython.jit.codewriter.effectinfo import EffectInfo
+from rpython.jit.codewriter import longlong
 from rpython.rlib.objectmodel import invoke_around_extcall
 
 CPU = getcpuclass()
+
+def getmap(frame):
+    r = ''
+    for elem in frame.jf_gcmap:
+        elem = bin(elem)[2:]
+        elem = '0' * (WORD * 8 - len(elem)) + elem
+        r = elem + r
+    return r[r.find('1'):]
 
 class TestRegallocGcIntegration(BaseTestRegalloc):
     
@@ -66,17 +76,21 @@ class TestRegallocGcIntegration(BaseTestRegalloc):
         frame = lltype.cast_opaque_ptr(jitframe.JITFRAMEPTR, self.deadframe)
         # p0 and p3 should be in registers, p1 not so much
         assert self.getptr(0, lltype.Ptr(self.S)) == s1
-        # this is a fairly CPU specific check
-        assert len(frame.jf_gcmap) == 1
         # the gcmap should contain three things, p0, p1 and p3
         # p3 stays in a register
         # while p0 and p1 are on the frame
-        if self.cpu.IS_64_BIT:
-            nos = [11, 12, 31]
+        b = getmap(frame)
+        nos = [len(b) - 1 - i.start() for i in re.finditer('1', b)]
+        nos.reverse()
+        if self.cpu.backend_name.startswith('x86'):
+            if self.cpu.IS_64_BIT:
+                assert nos == [11, 12, 31]
+            else:
+                assert nos ==  [4, 5, 25]
+        elif self.cpu.backend_name.startswith('arm'):
+            assert nos == [9, 10, 47]
         else:
-            nos = [4, 5, 25]
-        assert frame.jf_gcmap[0] == ((1 << nos[0]) | (1 << nos[1]) |
-                                     (1 << nos[2]))
+            raise Exception("write the data here")
         assert frame.jf_frame[nos[0]]
         assert frame.jf_frame[nos[1]]
         assert frame.jf_frame[nos[2]]
@@ -228,16 +242,22 @@ class TestMallocFastpath(BaseTestRegalloc):
         gc_ll_descr.check_nothing_in_nursery()
         assert gc_ll_descr.addrs[0] == nurs_adr + 64
         # slowpath never called
-        assert gc_ll_descr.calls == []       
+        assert gc_ll_descr.calls == []
 
     def test_malloc_slowpath(self):
         def check(frame):
-            assert len(frame.jf_gcmap) == 1
+            expected_size = 1
+            idx = 0
+            if self.cpu.backend_name.startswith('arm'):
+                # jitframe fixed part is larger here
+                expected_size = 2
+                idx = 1
+            assert len(frame.jf_gcmap) == expected_size
             if self.cpu.IS_64_BIT:
-                assert frame.jf_gcmap[0] == (1<<29) | (1 << 30)
+                assert frame.jf_gcmap[idx] == (1<<29) | (1 << 30)
             else:
-                assert frame.jf_gcmap[0] == (1<<24) | (1 << 23)
-        
+                assert frame.jf_gcmap[idx] == (1<<24) | (1 << 23)
+
         self.cpu = self.getcpu(check)
         ops = '''
         [i0]
@@ -491,6 +511,8 @@ def unpack_gcmap(frame):
     val = 0
     for i in range(len(frame.jf_gcmap)):
         item = frame.jf_gcmap[i]
+        if item == 0:
+            val += WORD * 8
         while item != 0:
             if item & 1:
                 res.append(val)
@@ -530,6 +552,9 @@ class TestGcShadowstackDirect(BaseTestRegalloc):
             gcmap = unpack_gcmap(frame)
             if self.cpu.IS_64_BIT:
                 assert gcmap == [28, 29, 30]
+            elif self.cpu.backend_name.startswith('arm'):
+                assert gcmap == [44, 45, 46]
+                pass
             else:
                 assert gcmap == [22, 23, 24]
             for item, s in zip(gcmap, new_items):
@@ -604,9 +629,11 @@ class TestGcShadowstackDirect(BaseTestRegalloc):
         cpu.gc_ll_descr.init_nursery(20)
         cpu.setup_once()
         cpu.compile_loop(loop.inputargs, loop.operations, token)
-        frame = cpu.execute_token(token, 2.3)
+        arg = longlong.getfloatstorage(2.3)
+        frame = cpu.execute_token(token, arg)
         ofs = cpu.get_baseofs_of_frame_field()
         f = cpu.read_float_at_mem(frame, ofs)
+        f = longlong.getrealfloat(f)
         assert f == 2.3 + 1.2
 
     def test_malloc_1(self):

@@ -3813,7 +3813,7 @@ class LLtypeBackendTest(BaseBackendTest):
         def raising():
             bridge = parse("""
             [i1, i2]
-            guard_exception(ConstClass(xtp), descr=faildescr2) [i1, i2]
+            px = guard_exception(ConstClass(xtp), descr=faildescr2) [i1, i2]
             i3 = int_add(i1, i2)
             i4 = int_add(i1, i3)
             i5 = int_add(i1, i4)
@@ -3861,3 +3861,4 @@ class LLtypeBackendTest(BaseBackendTest):
         frame = self.cpu.execute_token(looptoken, 1, 2, 3)
         descr = self.cpu.get_latest_descr(frame)
         assert descr.identifier == 42
+        assert not self.cpu.grab_exc_value(frame)
