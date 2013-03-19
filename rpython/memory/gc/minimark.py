@@ -1243,25 +1243,12 @@ class MiniMarkGC(MovingGCBase):
         # 'old_objects_pointing_to_young'.
         self.collect_roots_in_nursery()
         #
-        while True:
-            # If we are using card marking, do a partial trace of the arrays
-            # that are flagged with GCFLAG_CARDS_SET.
-            if self.card_page_indices > 0:
-                self.collect_cardrefs_to_nursery()
-            #
-            # Now trace objects from 'old_objects_pointing_to_young'.
-            # All nursery objects they reference are copied out of the
-            # nursery, and again added to 'old_objects_pointing_to_young'.
-            # All young raw-malloced object found are flagged GCFLAG_VISITED.
-            # We proceed until 'old_objects_pointing_to_young' is empty.
-            self.collect_oldrefs_to_nursery()
-            #
-            # We have to loop back if collect_oldrefs_to_nursery caused
-            # new objects to show up in old_objects_with_cards_set
-            if self.card_page_indices > 0:
-                if self.old_objects_with_cards_set.non_empty():
-                    continue
-            break
+        # Now trace objects from 'old_objects_pointing_to_young'.
+        # All nursery objects they reference are copied out of the
+        # nursery, and again added to 'old_objects_pointing_to_young'.
+        # All young raw-malloced object found are flagged GCFLAG_VISITED.
+        # We proceed until 'old_objects_pointing_to_young' is empty.
+        self.collect_oldrefs_to_nursery()
         #
         # Now all live nursery objects should be out.  Update the young
         # weakrefs' targets.
@@ -1367,23 +1354,38 @@ class MiniMarkGC(MovingGCBase):
         # Follow the old_objects_pointing_to_young list and move the
         # young objects they point to out of the nursery.
         oldlist = self.old_objects_pointing_to_young
-        while oldlist.non_empty():
-            obj = oldlist.pop()
+        while True:
+            if oldlist.non_empty():
+                # Common case: we loop here until 'oldlist' is empty.
+                obj = oldlist.pop()
+                #
+                # Check that the flags are correct: we must not have
+                # GCFLAG_TRACK_YOUNG_PTRS so far.
+                ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS == 0,
+                          "old_objects_pointing_to_young contains obj with "
+                          "GCFLAG_TRACK_YOUNG_PTRS")
+                #
+                # Add the flag GCFLAG_TRACK_YOUNG_PTRS.  All live objects
+                # should have this flag set after a nursery collection.
+                self.header(obj).tid |= GCFLAG_TRACK_YOUNG_PTRS
+                #
+                # Trace the 'obj' to replace pointers to nursery with pointers
+                # outside the nursery, possibly forcing nursery objects out
+                # and adding them to 'old_objects_pointing_to_young' as well.
+                self.trace_and_drag_out_of_nursery(obj)
             #
-            # Check that the flags are correct: we must not have
-            # GCFLAG_TRACK_YOUNG_PTRS so far.
-            ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS == 0,
-                      "old_objects_pointing_to_young contains obj with "
-                      "GCFLAG_TRACK_YOUNG_PTRS")
-            #
-            # Add the flag GCFLAG_TRACK_YOUNG_PTRS.  All live objects should
-            # have this flag set after a nursery collection.
-            self.header(obj).tid |= GCFLAG_TRACK_YOUNG_PTRS
-            #
-            # Trace the 'obj' to replace pointers to nursery with pointers
-            # outside the nursery, possibly forcing nursery objects out
-            # and adding them to 'old_objects_pointing_to_young' as well.
-            self.trace_and_drag_out_of_nursery(obj)
+            else:
+                # If we are using card marking, do a partial trace of the
+                # arrays that are flagged with GCFLAG_CARDS_SET.
+                if (self.card_page_indices > 0 and
+                        self.old_objects_with_cards_set.non_empty()):
+                    self.collect_cardrefs_to_nursery()
+                #
+                else:
+                    # Both 'old_objects_pointing_to_young' and
+                    # 'old_objects_with_cards_set' are now empty: done
+                    break
+
 
     def trace_and_drag_out_of_nursery(self, obj):
         """obj must not be in the nursery.  This copies all the
