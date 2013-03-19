@@ -4,7 +4,9 @@ from rpython.jit.metainterp import history
 from rpython.jit.metainterp.virtualizable import TOKEN_NONE
 from rpython.jit.metainterp.virtualizable import TOKEN_TRACING_RESCALL
 from rpython.jit.codewriter import heaptracker
-from rpython.rlib.jit import InvalidVirtualRef
+
+class InvalidVirtualRef(Exception):
+    pass
 
 class VirtualRefInfo:
 

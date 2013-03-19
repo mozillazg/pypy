@@ -17,9 +17,6 @@ class OptSimplify(Optimization):
         op = op.copy_and_change(rop.CALL)
         self.emit_operation(op)
 
-    def optimize_VIRTUAL_REF_FINISH(self, op):
-        pass
-
     def optimize_VIRTUAL_REF(self, op):
         op = ResOperation(rop.SAME_AS, [op.getarg(0)], op.result)
         self.emit_operation(op)
