@@ -18,16 +18,3 @@ class StringMethods(object):
             u_self += d * fillchar
 
         return space.wrap(u_self)
-
-
-def unicode_ljust__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
-    self = w_self._value
-    width = space.int_w(w_width)
-    fillchar = _to_unichar_w(space, w_fillchar)
-    padding = width - len(self)
-    if padding < 0:
-        return w_self.create_if_subclassed()
-    result = [fillchar] * width
-    for i in range(len(self)):
-        result[i] = self[i]
-    return W_UnicodeObject(u''.join(result))
