@@ -8,7 +8,7 @@ class W_AbstractBytearrayObject(W_Object):
     pass
 
 
-class BytearrayInterface(object) :
+class BytearrayInterface(object):
     @unwrap_spec(w_self=W_Root, arg=int, fillchar=str)
     def ljust(w_self, space, arg, fillchar=' '):
         """S.ljust(width[, fillchar]) -> string
