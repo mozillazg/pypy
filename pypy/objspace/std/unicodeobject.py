@@ -8,6 +8,8 @@ from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.objspace.std import slicetype, newformat
 from pypy.objspace.std.tupleobject import W_TupleObject
+from pypy.objspace.std.contiguousstring import StringMethods
+from pypy.objspace.std.unicodeinterface import W_AbstractUnicodeObject
 from rpython.rlib.rarithmetic import intmask, ovfcheck
 from rpython.rlib.objectmodel import compute_hash, specialize
 from rpython.rlib.objectmodel import compute_unique_id
@@ -20,25 +22,8 @@ from rpython.rlib import jit
 from pypy.objspace.std.formatting import mod_format
 from pypy.objspace.std.stringtype import stringstartswith, stringendswith
 
-class W_AbstractUnicodeObject(W_Object):
-    __slots__ = ()
 
-    def is_w(self, space, w_other):
-        if not isinstance(w_other, W_AbstractUnicodeObject):
-            return False
-        if self is w_other:
-            return True
-        if self.user_overridden_class or w_other.user_overridden_class:
-            return False
-        return space.unicode_w(self) is space.unicode_w(w_other)
-
-    def immutable_unique_id(self, space):
-        if self.user_overridden_class:
-            return None
-        return space.wrap(compute_unique_id(space.unicode_w(self)))
-
-
-class W_UnicodeObject(W_AbstractUnicodeObject):
+class W_UnicodeObject(W_AbstractUnicodeObject, StringMethods):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
     _immutable_fields_ = ['_value']
 
@@ -544,18 +529,6 @@ def unicode_center__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     result = [fillchar] * width
     for i in range(len(self)):
         result[leftpad + i] = self[i]
-    return W_UnicodeObject(u''.join(result))
-
-def unicode_ljust__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
-    self = w_self._value
-    width = space.int_w(w_width)
-    fillchar = _to_unichar_w(space, w_fillchar)
-    padding = width - len(self)
-    if padding < 0:
-        return w_self.create_if_subclassed()
-    result = [fillchar] * width
-    for i in range(len(self)):
-        result[i] = self[i]
     return W_UnicodeObject(u''.join(result))
 
 def unicode_rjust__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):

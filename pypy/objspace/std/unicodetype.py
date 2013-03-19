@@ -4,6 +4,7 @@ from pypy.interpreter import unicodehelper
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.basestringtype import basestring_typedef
+from pypy.objspace.std.unicodeinterface import unicode_interface_methods
 from rpython.rlib.runicode import str_decode_utf_8, str_decode_ascii,\
      unicode_encode_utf_8, unicode_encode_ascii
 
@@ -111,11 +112,6 @@ unicode_join       = SMM('join', 2,
                              ' which is the concatenation of the strings in'
                              ' the\nsequence.  The separator between elements'
                              ' is S.')
-unicode_ljust      = SMM('ljust', 3, defaults=(' ',),
-                         doc='S.ljust(width[, fillchar]) -> int\n\nReturn S'
-                             ' left justified in a Unicode string of length'
-                             ' width. Padding is\ndone using the specified'
-                             ' fill character (default is a space).')
 unicode_lower      = SMM('lower', 1,
                          doc='S.lower() -> unicode\n\nReturn a copy of the'
                              ' string S converted to lowercase.')
@@ -343,7 +339,8 @@ unicode_typedef = StdTypeDef("unicode", basestring_typedef,
 
 Create a new Unicode object from the given encoded string.
 encoding defaults to the current default string encoding.
-errors can be 'strict', 'replace' or 'ignore' and defaults to 'strict'.'''
+errors can be 'strict', 'replace' or 'ignore' and defaults to 'strict'.''',
+    **unicode_interface_methods()
     )
 
 unicode_typedef.registermethods(globals())
