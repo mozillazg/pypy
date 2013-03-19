@@ -46,10 +46,6 @@ def joined2(space, str1, str2):
     else:
         return wrapstr(space, str1 + str2)
 
-str_join    = SMM('join', 2,
-                  doc='S.join(sequence) -> string\n\nReturn a string which is'
-                      ' the concatenation of the strings in the\nsequence. '
-                      ' The separator between elements is S.')
 str_split   = SMM('split', 3, defaults=(None,-1),
                   doc='S.split([sep [,maxsplit]]) -> list of strings\n\nReturn'
                       ' a list of the words in the string S, using sep as'
@@ -96,11 +92,6 @@ str_isalnum    = SMM('isalnum', 1,
                      doc='S.isalnum() -> bool\n\nReturn True if all characters'
                          ' in S are alphanumeric\nand there is at least one'
                          ' character in S, False otherwise.')
-str_rjust      = SMM('rjust', 3, defaults=(' ',),
-                     doc='S.rjust(width[, fillchar]) -> string\n\nReturn S'
-                         ' right justified in a string of length width.'
-                         ' Padding is\ndone using the specified fill character'
-                         ' (default is a space)')
 str_upper      = SMM('upper', 1,
                      doc='S.upper() -> string\n\nReturn a copy of the string S'
                          ' converted to uppercase.')

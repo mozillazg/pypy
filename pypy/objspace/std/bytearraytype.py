@@ -11,7 +11,7 @@ from pypy.objspace.std.stringtype import (
     str_isalnum, str_isdigit, str_isspace, str_istitle,
     str_upper, str_lower, str_title, str_swapcase, str_capitalize,
     str_expandtabs, str_center, str_zfill,
-    str_join, str_split, str_rsplit, str_partition, str_rpartition,
+    str_split, str_rsplit, str_partition, str_rpartition,
     str_splitlines, str_translate)
 from pypy.objspace.std.listtype import (
     list_append, list_extend)
@@ -20,6 +20,7 @@ from pypy.objspace.std.bytearrayinterface import bytearray_interface_methods
 
 
 str_ljust = SMM('ljust', 3, defaults=(' ',))
+str_join = SMM('join', 2, defaults=(None,-1))
 
 bytearray_insert  = SMM('insert', 3,
                     doc="B.insert(index, int) -> None\n\n"
