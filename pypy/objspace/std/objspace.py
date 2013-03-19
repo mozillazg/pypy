@@ -31,6 +31,7 @@ from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
 from pypy.objspace.std.tupleobject import W_AbstractTupleObject
 from pypy.objspace.std.typeobject import W_TypeObject
+from pypy.objspace.std.bytearrayobject import W_BytearrayObject
 
 # types
 from pypy.objspace.std.inttype import wrapint
@@ -312,6 +313,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def newseqiter(self, w_obj):
         return W_SeqIterObject(w_obj)
+
+    def newbytearray(self, w_data):
+        return W_BytearrayObject(w_data)
 
     def type(self, w_obj):
         jit.promote(w_obj.__class__)
