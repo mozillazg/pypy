@@ -482,12 +482,6 @@ def str_capitalize__Bytearray(space, w_bytearray):
     w_res = stringobject.str_capitalize__String(space, w_str)
     return String2Bytearray(space, w_res)
 
-def str_rjust__Bytearray_ANY_ANY(space, w_bytearray, w_width, w_fillchar):
-    w_str = str__Bytearray(space, w_bytearray)
-    w_res = stringobject.str_rjust__String_ANY_ANY(space, w_str, w_width,
-                                                   w_fillchar)
-    return String2Bytearray(space, w_res)
-
 def str_center__Bytearray_ANY_ANY(space, w_bytearray, w_width, w_fillchar):
     w_str = str__Bytearray(space, w_bytearray)
     w_res = stringobject.str_center__String_ANY_ANY(space, w_str, w_width,
