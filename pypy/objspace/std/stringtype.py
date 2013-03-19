@@ -2,7 +2,7 @@ from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 from pypy.objspace.std.basestringtype import basestring_typedef
 from pypy.objspace.std.register_all import register_all
-
+from pypy.objspace.std.stringinterface import string_interface_methods
 
 from sys import maxint
 from rpython.rlib.objectmodel import specialize
@@ -96,11 +96,6 @@ str_isalnum    = SMM('isalnum', 1,
                      doc='S.isalnum() -> bool\n\nReturn True if all characters'
                          ' in S are alphanumeric\nand there is at least one'
                          ' character in S, False otherwise.')
-str_ljust      = SMM('ljust', 3, defaults=(' ',),
-                     doc='S.ljust(width[, fillchar]) -> string\n\nReturn S'
-                         ' left justified in a string of length width. Padding'
-                         ' is\ndone using the specified fill character'
-                         ' (default is a space).')
 str_rjust      = SMM('rjust', 3, defaults=(' ',),
                      doc='S.rjust(width[, fillchar]) -> string\n\nReturn S'
                          ' right justified in a string of length width.'
@@ -288,7 +283,8 @@ str_typedef = StdTypeDef("str", basestring_typedef,
     __doc__ = '''str(object) -> string
 
 Return a nice string representation of the object.
-If the argument is a string, the return value is the same object.'''
+If the argument is a string, the return value is the same object.''',
+    **string_interface_methods()
     )
 
 str_typedef.registermethods(globals())

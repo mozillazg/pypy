@@ -10,13 +10,15 @@ from pypy.objspace.std.stringtype import (
     str_startswith, str_endswith, str_islower, str_isupper, str_isalpha,
     str_isalnum, str_isdigit, str_isspace, str_istitle,
     str_upper, str_lower, str_title, str_swapcase, str_capitalize,
-    str_expandtabs, str_ljust, str_rjust, str_center, str_zfill,
+    str_expandtabs, str_rjust, str_center, str_zfill,
     str_join, str_split, str_rsplit, str_partition, str_rpartition,
     str_splitlines, str_translate)
 from pypy.objspace.std.listtype import (
     list_append, list_extend)
 from rpython.rlib.objectmodel import newlist_hint, resizelist_hint
 
+
+str_ljust = SMM('ljust', 3, defaults=(' ',))
 
 bytearray_insert  = SMM('insert', 3,
                     doc="B.insert(index, int) -> None\n\n"
