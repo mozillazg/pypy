@@ -167,6 +167,9 @@ class GCManagedHeap(object):
                 hdr.tid |= self.gc.gcflag_extra
         return (hdr.tid & self.gc.gcflag_extra) != 0
 
+    def register_finalizer(self, llptr, llfn):
+        self.gc.register_finalizer(llptr, llfn)
+
 # ____________________________________________________________
 
 class LLInterpRootWalker:

@@ -815,12 +815,15 @@ class LLFrame(object):
                     self.llinterpreter.finalizer_queue.append((llobj, llfn))
 
     def op_gc_register_finalizer(self, llptr, llfn):
-        llobj = llptr._obj
-        for llobj1, llfn1 in self.llinterpreter.finalizer_queue:
-            if llobj1 == llobj:
-                assert llfn1 == llfn
-                return
-        self.llinterpreter.finalizer_queue.append((llobj, llfn))
+        if self.heap is llheap:
+            llobj = llptr._obj
+            for llobj1, llfn1 in self.llinterpreter.finalizer_queue:
+                if llobj1 == llobj:
+                    assert llfn1 == llfn
+                    return
+            self.llinterpreter.finalizer_queue.append((llobj, llfn))
+        else:
+            self.heap.register_finalizer(llptr, llfn)
 
     def op_gc_heap_stats(self):
         raise NotImplementedError

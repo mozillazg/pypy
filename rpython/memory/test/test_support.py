@@ -105,7 +105,12 @@ class TestAddressDeque:
             assert deque.non_empty() == (len(expected) > 0)
             r = random.random()
             if r < 0.51 and expected:
-                x = deque.popleft()
+                if r < 0.2:
+                    t = deque.peekleft()
+                    x = deque.popleft()
+                    assert t == x
+                else:
+                    x = deque.popleft()
                 y = expected.pop(0)
                 assert x == y
             else:

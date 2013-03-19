@@ -35,8 +35,9 @@ class GCBase(object):
     def setup(self):
         # all runtime mutable values' setup should happen here
         # and in its overriden versions! for the benefit of test_transformed_gc
-        self.finalizer_lock_count = 0
-        self.run_finalizers = self.AddressDeque()
+        self.running_finalizers = False
+        self.run_finalizers_queue = self.AddressDeque()
+        self.registered_finalizers = self.AddressDict()
 
     def post_setup(self):
         # More stuff that needs to be initialized when the GC is already
@@ -141,7 +142,7 @@ class GCBase(object):
         assert not (has_destructor and contains_weakptr)
         if self.is_varsize(typeid):
             assert not contains_weakptr
-            assert not needs_finalizer
+            assert not has_destructor
             itemsize = self.varsize_item_sizes(typeid)
             offset_to_length = self.varsize_offset_to_length(typeid)
             if zero or not hasattr(self, 'malloc_varsize'):
@@ -287,7 +288,7 @@ class GCBase(object):
         callback2, attrname = _convert_callback_formats(callback)    # :-/
         setattr(self, attrname, arg)
         self.root_walker.walk_roots(callback2, callback2, callback2)
-        self.run_finalizers.foreach(callback, arg)
+        self.run_finalizers_queue.foreach(callback, arg)
     enumerate_all_roots._annspecialcase_ = 'specialize:arg(1)'
 
     def debug_check_consistency(self):
@@ -328,18 +329,42 @@ class GCBase(object):
     def debug_check_object(self, obj):
         pass
 
+    def register_finalizer(self, gcobj, llfn):
+        llobj = llmemory.cast_ptr_to_adr(gcobj)
+        llfn1 = self.registered_finalizers.get(llobj)
+        if llfn1 == llmemory.NULL:
+            self.registered_finalizers.setitem(llobj, llfn)
+        else:
+            ll_assert(llfn1 == llfn,
+                      "registering multiple different finalizers")
+        self._register_finalizer_set_flag(llobj)
+
+    def _register_finalizer_set_flag(self, obj):
+        raise NotImplementedError   # must be overridden
+
     def execute_finalizers(self):
-        self.finalizer_lock_count += 1
+        if self.running_finalizers:
+            return    # the outer invocation of execute_finalizers() will do it
+        self.running_finalizers = True
         try:
-            while self.run_finalizers.non_empty():
-                if self.finalizer_lock_count > 1:
-                    # the outer invocation of execute_finalizers() will do it
+            while self.run_finalizers_queue.non_empty():
+                obj = self.run_finalizers_queue.peekleft()
+                finalizer = self.registered_finalizers.get(obj)
+                ll_assert(finalizer != llmemory.NULL, "lost finalizer")
+                finalizer = llmemory.cast_adr_to_ptr(finalizer, FINALIZER)
+                try:
+                    finalizer(obj)
+                except rgc.FinalizeLater:
                     break
-                obj = self.run_finalizers.popleft()
-                finalizer = self.getfinalizer(self.get_type_id(obj))
-                finalizer(obj, llmemory.NULL)
+                except Exception, e:
+                    XXX
+                obj1 = self.run_finalizers_queue.popleft()
+                ll_assert(obj1 == obj, "wrong finalized object")
         finally:
-            self.finalizer_lock_count -= 1
+            self.running_finalizers = False
+
+
+FINALIZER = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
 
 
 class MovingGCBase(GCBase):

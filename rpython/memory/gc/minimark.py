@@ -279,6 +279,10 @@ class MiniMarkGC(MovingGCBase):
         self.prebuilt_root_objects = self.AddressStack()
         #
         self._init_writebarrier_logic()
+        #
+        x = lltype.malloc(lltype.FixedSizeArray(llmemory.Address, 1),
+                          flavor='raw', immortal=True)
+        self.temp_root = llmemory.cast_ptr_to_adr(x)
 
 
     def setup(self):
@@ -296,6 +300,11 @@ class MiniMarkGC(MovingGCBase):
         # Two lists of all objects with destructors
         self.young_objects_with_destructors = self.AddressStack()
         self.old_objects_with_destructors = self.AddressStack()
+        #
+        # Two lists of all objects with finalizers, and a temporary
+        self.young_objects_with_finalizers = self.AddressStack()
+        self.old_objects_with_finalizers = self.AddressStack()
+        self.pending_objects_with_finalizers = self.AddressStack()
         #
         # Two lists of the objects with weakrefs.  No weakref can be an
         # old object weakly pointing to a young object: indeed, weakrefs
@@ -569,6 +578,7 @@ class MiniMarkGC(MovingGCBase):
         self.minor_collection()
         if gen > 0:
             self.major_collection()
+        self.execute_finalizers()
 
     def collect_and_reserve(self, totalsize):
         """To call when nursery_free overflows nursery_top.
@@ -580,12 +590,17 @@ class MiniMarkGC(MovingGCBase):
         #
         if self.get_total_memory_used() > self.next_major_collection_threshold:
             self.major_collection()
-            #
-            # The nursery might not be empty now, because of
-            # execute_finalizers().  If it is almost full again,
-            # we need to fix it with another call to minor_collection().
-            if self.nursery_free + totalsize > self.nursery_top:
-                self.minor_collection()
+        #
+        # At the end, we can execute the finalizers of the objects
+        # listed in 'run_finalizers_queue'.  Note that this will
+        # typically do more allocations.
+        self.execute_finalizers()
+        #
+        # The nursery might not be empty now, because of
+        # execute_finalizers().  If it is almost full again,
+        # we need to fix it with another call to minor_collection().
+        if self.nursery_free + totalsize > self.nursery_top:
+            self.minor_collection()
         #
         result = self.nursery_free
         self.nursery_free = result + totalsize
@@ -637,6 +652,7 @@ class MiniMarkGC(MovingGCBase):
                 self.next_major_collection_threshold):
             self.minor_collection()
             self.major_collection(raw_malloc_usage(totalsize))
+            self.execute_finalizers()
         #
         # Check if the object would fit in the ArenaCollection.
         if raw_malloc_usage(totalsize) <= self.small_request_threshold:
@@ -855,6 +871,12 @@ class MiniMarkGC(MovingGCBase):
                 self.young_rawmalloced_objects.contains(addr))
     appears_to_be_young._always_inline_ = True
 
+    def is_young_object(self, addr):
+        # 'addr' must be a valid object address, not a tagged pointer.
+        ll_assert(self.is_valid_gc_object(addr),
+                  "NULL or tagged pointer invalid in is_young_object()")
+        return self.appears_to_be_young(addr)
+
     def debug_is_old_object(self, addr):
         return (self.is_valid_gc_object(addr)
                 and not self.appears_to_be_young(addr))
@@ -944,6 +966,13 @@ class MiniMarkGC(MovingGCBase):
                 ll_assert(p.char[0] == '\x00',
                           "the card marker bits are not cleared")
                 i -= 1
+
+    def _register_finalizer_set_flag(self, obj):
+        self.header(obj).tid |= GCFLAG_HAS_FINALIZER
+        if self.is_young_object(obj):
+            self.young_objects_with_finalizers.append(obj)
+        else:
+            self.old_objects_with_finalizers.append(obj)
 
     # ----------
     # Write barrier
@@ -1238,6 +1267,8 @@ class MiniMarkGC(MovingGCBase):
         # weakrefs' targets.
         if self.young_objects_with_weakrefs.non_empty():
             self.invalidate_young_weakrefs()
+        #
+        # Call destructors on dying objects
         if self.young_objects_with_destructors.non_empty():
             self.deal_with_young_objects_with_destructors()
         #
@@ -1568,7 +1599,6 @@ class MiniMarkGC(MovingGCBase):
         # Destructor support
         if self.old_objects_with_destructors.non_empty():
             self.deal_with_old_objects_with_destructors()
-
         #
         # Walk all rawmalloced objects and free the ones that don't
         # have the GCFLAG_VISITED flag.
@@ -1621,11 +1651,6 @@ class MiniMarkGC(MovingGCBase):
                                       "Using too much memory, aborting")
             self.max_heap_size_already_raised = True
             raise MemoryError
-        #
-        # At the end, we can execute the finalizers of the objects
-        # listed in 'run_finalizers'.  Note that this will typically do
-        # more allocations.
-        self.execute_finalizers()
 
 
     def _free_if_unvisited(self, hdr):
@@ -1689,9 +1714,9 @@ class MiniMarkGC(MovingGCBase):
             None)   # we don't need the static in all prebuilt gc objects
         #
         # If we are in an inner collection caused by a call to a finalizer,
-        # the 'run_finalizers' objects also need to be kept alive.
-        self.run_finalizers.foreach(self._collect_obj,
-                                    self.objects_to_trace)
+        # the 'run_finalizers_queue' objects also need to be kept alive.
+        self.run_finalizers_queue.foreach(self._collect_obj,
+                                          self.objects_to_trace)
 
     def enumerate_all_roots(self, callback, arg):
         self.prebuilt_root_objects.foreach(callback, arg)
@@ -1742,6 +1767,35 @@ class MiniMarkGC(MovingGCBase):
     # ----------
     # id() and identityhash() support
 
+    def _build_shadow_object(self, obj):
+        if self.header(obj).tid & GCFLAG_HAS_SHADOW:
+            shadow = self.nursery_objects_shadows.get(obj)
+            ll_assert(shadow != NULL,
+                      "GCFLAG_HAS_SHADOW but no shadow found")
+        else:
+            size_gc_header = self.gcheaderbuilder.size_gc_header
+            size = self.get_size(obj)
+            shadowhdr = self._malloc_out_of_nursery(size_gc_header +
+                                                    size)
+            # Initialize the shadow enough to be considered a
+            # valid gc object.  If the original object stays
+            # alive at the next minor collection, it will anyway
+            # be copied over the shadow and overwrite the
+            # following fields.  But if the object dies, then
+            # the shadow will stay around and only be freed at
+            # the next major collection, at which point we want
+            # it to look valid (but ready to be freed).
+            shadow = shadowhdr + size_gc_header
+            self.header(shadow).tid = self.header(obj).tid
+            typeid = self.get_type_id(obj)
+            if self.is_varsize(typeid):
+                lenofs = self.varsize_offset_to_length(typeid)
+                (shadow + lenofs).signed[0] = (obj + lenofs).signed[0]
+            #
+            self.header(obj).tid |= GCFLAG_HAS_SHADOW
+            self.nursery_objects_shadows.setitem(obj, shadow)
+        return shadow
+
     def id_or_identityhash(self, gcobj, is_hash):
         """Implement the common logic of id() and identityhash()
         of an object, given as a GCREF.
@@ -1755,32 +1809,7 @@ class MiniMarkGC(MovingGCBase):
                 # nursery.  Find or allocate a "shadow" object, which is
                 # where the object will be moved by the next minor
                 # collection
-                if self.header(obj).tid & GCFLAG_HAS_SHADOW:
-                    shadow = self.nursery_objects_shadows.get(obj)
-                    ll_assert(shadow != NULL,
-                              "GCFLAG_HAS_SHADOW but no shadow found")
-                else:
-                    size_gc_header = self.gcheaderbuilder.size_gc_header
-                    size = self.get_size(obj)
-                    shadowhdr = self._malloc_out_of_nursery(size_gc_header +
-                                                            size)
-                    # Initialize the shadow enough to be considered a
-                    # valid gc object.  If the original object stays
-                    # alive at the next minor collection, it will anyway
-                    # be copied over the shadow and overwrite the
-                    # following fields.  But if the object dies, then
-                    # the shadow will stay around and only be freed at
-                    # the next major collection, at which point we want
-                    # it to look valid (but ready to be freed).
-                    shadow = shadowhdr + size_gc_header
-                    self.header(shadow).tid = self.header(obj).tid
-                    typeid = self.get_type_id(obj)
-                    if self.is_varsize(typeid):
-                        lenofs = self.varsize_offset_to_length(typeid)
-                        (shadow + lenofs).signed[0] = (obj + lenofs).signed[0]
-                    #
-                    self.header(obj).tid |= GCFLAG_HAS_SHADOW
-                    self.nursery_objects_shadows.setitem(obj, shadow)
+                shadow = self._build_shadow_object(obj)
                 #
                 # The answer is the address of the shadow.
                 obj = shadow
@@ -1815,9 +1844,15 @@ class MiniMarkGC(MovingGCBase):
     def set_extra_threshold(self, reserved_size):
         ll_assert(reserved_size <= self.nonlarge_max,
                   "set_extra_threshold: too big!")
-        diff = reserved_size - self.extra_threshold
-        if diff > 0 and self.nursery_free + diff > self.nursery_top:
+        run_finalizers = True
+        while 1:
+            diff = reserved_size - self.extra_threshold
+            if diff <= 0 or self.nursery_free + diff <= self.nursery_top:
+                break
             self.minor_collection()
+            if run_finalizers:
+                self.execute_finalizers()
+                run_finalizers = False
         self.nursery_size -= diff
         self.nursery_top -= diff
         self.extra_threshold += diff
@@ -1841,12 +1876,76 @@ class MiniMarkGC(MovingGCBase):
                 obj = self.get_forwarding_address(obj)
                 self.old_objects_with_destructors.append(obj)
 
+
+    # ----------
+    # Finalizers
+
+    def collect_roots_from_finalizers(self):
+        self.young_objects_with_finalizers.foreach(
+            self._collect_root_from_finalizer, None)
+
+    def _collect_root_from_finalizer(self, obj, ignored):
+        # idea: every young object with a finalizer xxxxxxxxxxxx
+        self.temp_root.address[0] = obj
+        self._trace_drag_out1(self.temp_root)
+
+    def deal_with_young_objects_with_finalizers(self):
+        """We need to enqueue to run_finalizers_queue all dying young
+        objects with finalizers.  As these survive for a bit longer,
+        we also need to copy them out of the nursery.
+        """
+        xxxxxxxx
+        if self.young_objects_call_finalizers is not None:
+            xxxx
+
+
+        if not self.young_objects_with_finalizers.non_empty():
+            return False
+
+        while self.young_objects_with_finalizers.non_empty():
+            obj = self.young_objects_with_finalizers.pop()
+            if not self.is_forwarded(obj):
+                #
+                # If the object is not forwarded so far, then it is a
+                # newly discovered object that is about to be finalized.
+                ll_assert((self.header(obj).tid & GCFLAG_HAS_FINALIZER) != 0,
+                          "lost the GCFLAG_HAS_FINALIZER")
+                #
+                # The object survives this collection; it must be tracked.
+                #
+                # Add the object in the 'young_objects_call_finalizers'
+                # stack.
+                if self.young_objects_call_finalizers is None:
+                    self.young_objects_call_finalizers = self.AddressStack()
+                self.young_objects_call_finalizers.append(obj)
+                #
+                # We want to ensure topological ordering on the finalizers,
+                # at least assuming that there are no cycles.  So xxxx
+                # 
+                
+                #
+                # The stack will be moved to 'run_finalizers_queue'
+                #  to reverse the order:
+                # 
+                xxx
+
+
+                
+            else:
+                yyy
+                obj = self.get_forwarding_address(obj)
+                self.old_objects_with_finalizers.append(obj)
+
+        return self.young_objects_call_finalizers is not None
+
+
     def deal_with_old_objects_with_finalizers(self):
         """ This is a much simpler version of dealing with finalizers
         and an optimization - we can reasonably assume that those finalizers
         don't do anything fancy and *just* call them. Among other things
         they won't resurrect objects
         """
+        XXXX
         new_objects = self.AddressStack()
         while self.old_objects_with_light_finalizers.non_empty():
             obj = self.old_objects_with_light_finalizers.pop()

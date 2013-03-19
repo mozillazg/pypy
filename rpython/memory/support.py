@@ -235,6 +235,15 @@ def get_address_deque(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
             self.index_in_oldest = index + 1
             return result
 
+        def peekleft(self):
+            ll_assert(self.non_empty(), "peek on empty AddressDeque")
+            old = self.oldest_chunk
+            index = self.index_in_oldest
+            if index == chunk_size:
+                old = old.next
+                index = 0
+            return old.items[index]
+
         def foreach(self, callback, arg):
             """Invoke 'callback(address, arg)' for all addresses in the deque.
             Typically, 'callback' is a bound method and 'arg' can be None.
