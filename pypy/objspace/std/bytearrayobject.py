@@ -26,9 +26,11 @@ from pypy.objspace.std.bytearraytype import (
     new_bytearray
 )
 from rpython.tool.sourcetools import func_with_new_name
+from pypy.objspace.std.contiguousstring import StringMethods
+from pypy.objspace.std.bytearrayinterface import W_AbstractBytearrayObject
 
 
-class W_BytearrayObject(W_Object):
+class W_BytearrayObject(W_AbstractBytearrayObject):
     from pypy.objspace.std.bytearraytype import bytearray_typedef as typedef
 
     def __init__(w_self, data):
@@ -478,12 +480,6 @@ def str_swapcase__Bytearray(space, w_bytearray):
 def str_capitalize__Bytearray(space, w_bytearray):
     w_str = str__Bytearray(space, w_bytearray)
     w_res = stringobject.str_capitalize__String(space, w_str)
-    return String2Bytearray(space, w_res)
-
-def str_ljust__Bytearray_ANY_ANY(space, w_bytearray, w_width, w_fillchar):
-    w_str = str__Bytearray(space, w_bytearray)
-    w_res = stringobject.str_ljust__String_ANY_ANY(space, w_str, w_width,
-                                                   w_fillchar)
     return String2Bytearray(space, w_res)
 
 def str_rjust__Bytearray_ANY_ANY(space, w_bytearray, w_width, w_fillchar):

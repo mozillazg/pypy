@@ -16,6 +16,7 @@ from pypy.objspace.std.stringtype import (
 from pypy.objspace.std.listtype import (
     list_append, list_extend)
 from rpython.rlib.objectmodel import newlist_hint, resizelist_hint
+from pypy.objspace.std.bytearrayinterface import bytearray_interface_methods
 
 
 str_ljust = SMM('ljust', 3, defaults=(' ',))
@@ -165,6 +166,25 @@ def descr_fromhex(space, w_type, w_hexstring):
 
 # ____________________________________________________________
 
+
+class ByteArrayMethods(object):
+    _mixin_ = True
+
+    def ljust(self, space, arg, fillchar=' '):
+        u_self = self._value
+        if len(fillchar) != 1:
+            raise OperationError(space.w_TypeError,
+                space.wrap("ljust() argument 2 must be a single character"))
+
+        d = arg - len(u_self)
+        if d > 0:
+            fillchar = fillchar[0]    # annotator hint: it's a single character
+            u_self += d * fillchar
+
+        return space.wrap(u_self)
+
+# ____________________________________________________________
+
 bytearray_typedef = StdTypeDef("bytearray",
     __doc__ = '''bytearray() -> an empty bytearray
 bytearray(sequence) -> bytearray initialized from sequence\'s items
@@ -173,6 +193,7 @@ If the argument is a bytearray, the return value is the same object.''',
     __new__ = interp2app(descr__new__),
     __hash__ = None,
     __reduce__ = interp2app(descr_bytearray__reduce__),
-    fromhex = interp2app(descr_fromhex, as_classmethod=True)
+    fromhex = interp2app(descr_fromhex, as_classmethod=True),
+    **bytearray_interface_methods()
     )
 bytearray_typedef.registermethods(globals())
