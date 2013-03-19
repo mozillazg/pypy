@@ -423,6 +423,40 @@ class OptVirtualize(optimizer.Optimization):
         self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
         vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
 
+    def optimize_VIRTUAL_REF_FINISH(self, op):
+        # This operation is used in two cases.  In normal cases, it
+        # is the end of the frame, and op.getarg(1) is NULL.  In this
+        # case we just clear the vref.virtual_token, because it contains
+        # a stack frame address and we are about to leave the frame.
+        # In that case vref.forced should still be NULL, and remains
+        # NULL; and accessing the frame through the vref later is
+        # *forbidden* and will raise InvalidVirtualRef.
+        #
+        # In the other (uncommon) case, the operation is produced
+        # earlier, because the vref was forced during tracing already.
+        # In this case, op.getarg(1) is the virtual to force, and we
+        # have to store it in vref.forced.
+        #
+        vrefinfo = self.optimizer.metainterp_sd.virtualref_info
+        seo = self.optimizer.send_extra_operation
+
+        # - set 'forced' to point to the real object
+        objbox = op.getarg(1)
+        if not CONST_NULL.same_constant(objbox):
+            seo(ResOperation(rop.SETFIELD_GC, op.getarglist(), None,
+                             descr = vrefinfo.descr_forced))
+
+        # - set 'virtual_token' to TOKEN_NONE (== NULL)
+        args = [op.getarg(0), CONST_NULL]
+        seo(ResOperation(rop.SETFIELD_GC, args, None,
+                         descr=vrefinfo.descr_virtual_token))
+        # Note that in some cases the virtual in op.getarg(1) has been forced
+        # already.  This is fine.  In that case, and *if* a residual
+        # CALL_MAY_FORCE suddenly turns out to access it, then it will
+        # trigger a ResumeGuardForcedDescr.handle_async_forcing() which
+        # will work too (but just be a little pointless, as the structure
+        # was already forced).
+
     def _optimize_JIT_FORCE_VIRTUAL(self, op):
         vref = self.getvalue(op.getarg(1))
         vrefinfo = self.optimizer.metainterp_sd.virtualref_info

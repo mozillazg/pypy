@@ -332,19 +332,32 @@ def jit_callback(name):
 # VRefs
 
 def virtual_ref(x):
-    """Creates a 'vref' object that contains a reference to 'x'. The idea
-    is that the object 'x' is supposed to be JITted as a virtual after
-    a call to virtual_ref, but the 'vref'
+    """Creates a 'vref' object that contains a reference to 'x'.  Calls
+    to virtual_ref/virtual_ref_finish must be properly nested.  The idea
+    is that the object 'x' is supposed to be JITted as a virtual between
+    the calls to virtual_ref and virtual_ref_finish, but the 'vref'
     object can escape at any point in time.  If at runtime it is
     dereferenced (by the call syntax 'vref()'), it returns 'x', which is
     then forced."""
     return DirectJitVRef(x)
 virtual_ref.oopspec = 'virtual_ref(x)'
 
+def virtual_ref_finish(vref, x):
+    """See docstring in virtual_ref(x)"""
+    keepalive_until_here(x)   # otherwise the whole function call is removed
+    _virtual_ref_finish(vref, x)
+virtual_ref_finish.oopspec = 'virtual_ref_finish(x)'
+
 def non_virtual_ref(x):
     """Creates a 'vref' that just returns x when called; nothing more special.
     Used for None or for frames outside JIT scope."""
     return DirectVRef(x)
+
+class InvalidVirtualRef(Exception):
+    """
+    Raised if we try to call a non-forced virtualref after the call to
+    virtual_ref_finish
+    """
 
 # ---------- implementation-specific ----------
 
@@ -373,6 +386,10 @@ class DirectJitVRef(DirectVRef):
         assert x is not None, "virtual_ref(None) is not allowed"
         DirectVRef.__init__(self, x)
 
+def _virtual_ref_finish(vref, x):
+    assert vref._x is x, "Invalid call to virtual_ref_finish"
+    vref._finish()
+
 class Entry(ExtRegistryEntry):
     _about_ = (non_virtual_ref, DirectJitVRef)
 
@@ -391,6 +408,15 @@ class Entry(ExtRegistryEntry):
         assert isinstance(self.instance, DirectVRef)
         s_obj = self.bookkeeper.immutablevalue(self.instance())
         return _jit_vref.SomeVRef(s_obj)
+
+class Entry(ExtRegistryEntry):
+    _about_ = _virtual_ref_finish
+
+    def compute_result_annotation(self, s_vref, s_obj):
+        pass
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
 
 vref_None = non_virtual_ref(None)
 

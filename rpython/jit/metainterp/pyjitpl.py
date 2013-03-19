@@ -1137,13 +1137,43 @@ class MIFrame(object):
 
     @arguments("box")
     def opimpl_virtual_ref(self, box):
+        # Details on the content of metainterp.virtualref_boxes:
+        #
+        #  * it's a list whose items go two by two, containing first the
+        #    virtual box (e.g. the PyFrame) and then the vref box (e.g.
+        #    the 'virtual_ref(frame)').
+        #
+        #  * if we detect that the virtual box escapes during tracing
+        #    already (by generating a CALL_MAY_FORCE that marks the flags
+        #    in the vref), then we replace the vref in the list with
+        #    ConstPtr(NULL).
+        #
         metainterp = self.metainterp
         vrefinfo = metainterp.staticdata.virtualref_info
         obj = box.getref_base()
         vref = vrefinfo.virtual_ref_during_tracing(obj)
         resbox = history.BoxPtr(vref)
-        metainterp.history.record(rop.VIRTUAL_REF, [box], resbox)
+        cindex = history.ConstInt(len(metainterp.virtualref_boxes) // 2)
+        metainterp.history.record(rop.VIRTUAL_REF, [box, cindex], resbox)
+        # Note: we allocate a JIT_VIRTUAL_REF here
+        # (in virtual_ref_during_tracing()), in order to detect when
+        # the virtual escapes during tracing already.  We record it as a
+        # VIRTUAL_REF operation.  Later, optimizeopt.py should either kill
+        # that operation or replace it with a NEW_WITH_VTABLE followed by
+        # SETFIELD_GCs.
+        metainterp.virtualref_boxes.append(box)
+        metainterp.virtualref_boxes.append(resbox)
         return resbox
+
+    @arguments("box")
+    def opimpl_virtual_ref_finish(self, box):
+        # virtual_ref_finish() assumes that we have a stack-like, last-in
+        # first-out order.
+        metainterp = self.metainterp
+        metainterp.virtualref_boxes.pop()
+        lastbox = metainterp.virtualref_boxes.pop()
+        assert box.getref_base() == lastbox.getref_base()
+        # we just pop it
 
     @arguments()
     def opimpl_ll_read_timestamp(self):
@@ -1224,7 +1254,7 @@ class MIFrame(object):
         if resumepc >= 0:
             self.pc = resumepc
         resume.capture_resumedata(metainterp.framestack, virtualizable_boxes,
-                                  [], resumedescr)
+                                  metainterp.virtualref_boxes, resumedescr)
         self.pc = saved_pc
 
     def implement_guard_value(self, box, orgpc):
