@@ -1,6 +1,6 @@
 """String object interface."""
 
-from pypy.objspace.std.stringmethods import W_AbstractStringObject
+from pypy.objspace.std.contiguousstring import W_AbstractStringObject
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 

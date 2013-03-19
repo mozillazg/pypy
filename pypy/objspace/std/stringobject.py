@@ -11,7 +11,7 @@ from pypy.objspace.std import slicetype, newformat
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.tupleobject import W_TupleObject
-from pypy.objspace.std.stringmethods import StringMethods, W_AbstractStringObject
+from pypy.objspace.std.contiguousstring import StringMethods, W_AbstractStringObject
 from rpython.rlib.rstring import StringBuilder, split
 from pypy.interpreter.buffer import StringBuffer
 from rpython.rlib import jit
