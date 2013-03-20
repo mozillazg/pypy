@@ -10,8 +10,8 @@ from rpython.annotator import policy
 from rpython.annotator.listdef import ListDef, ListChangeUnallowed
 from rpython.annotator.dictdef import DictDef
 from rpython.flowspace.model import *
-from rpython.rlib.rarithmetic import r_uint, base_int, r_longlong, r_ulonglong
-from rpython.rlib.rarithmetic import r_singlefloat
+from rpython.rlib.rarithmetic import (r_uint, base_int, r_longlong,
+        r_ulonglong, r_singlefloat, r_longfloat)
 from rpython.rlib import objectmodel
 from rpython.flowspace.objspace import build_flow, FlowingError
 
@@ -3262,6 +3262,17 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(g, [int])
         assert isinstance(s, annmodel.SomeSingleFloat)
+
+    def test_r_longfloat(self):
+        z = r_longfloat(0.4)
+        def g(n):
+            if n > 0:
+                return r_longfloat(n * 0.1)
+            else:
+                return z
+        a = self.RPythonAnnotator()
+        s = a.build_types(g, [int])
+        assert isinstance(s, annmodel.SomeLongFloat)
 
     def test_unicode_simple(self):
         def f():

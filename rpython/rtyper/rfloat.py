@@ -226,3 +226,18 @@ class LongFloatRepr(Repr):
         # we use cast_primitive to go between Float and LongFloat.
         return hop.genop('cast_primitive', [v],
                          resulttype = lltype.Float)
+
+class __extend__(pairtype(LongFloatRepr, LongFloatRepr)):
+
+    #Arithmetic
+
+    def rtype_add(_, hop):
+        return _rtype_template_long(hop, 'add')
+
+    rtype_inplace_add = rtype_add
+
+
+def _rtype_template_long(hop, func):
+    vlist = hop.inputargs(lltype.LongFloat, lltype.LongFloat)
+    return hop.genop('float_'+func, vlist, resulttype=lltype.LongFloat)
+

@@ -56,11 +56,11 @@ def test_contains():
                                                      (s6, s6)])
 
 def test_commonbase_simple():
-    class A0: 
+    class A0:
         pass
-    class A1(A0): 
+    class A1(A0):
         pass
-    class A2(A0): 
+    class A2(A0):
         pass
     class B1(object):
         pass
@@ -72,10 +72,10 @@ def test_commonbase_simple():
     except TypeError:    # if A0 is also a new-style class, e.g. in PyPy
         class B3(A0, object):
             pass
-    assert commonbase(A1,A2) is A0 
+    assert commonbase(A1,A2) is A0
     assert commonbase(A1,A0) is A0
     assert commonbase(A1,A1) is A1
-    assert commonbase(A2,B2) is object 
+    assert commonbase(A2,B2) is object
     assert commonbase(A2,B3) is A0
 
 def test_list_union():
@@ -124,8 +124,8 @@ def test_annotation_to_lltype():
     s_pos = SomeInteger(nonneg=True)
     s_1 = SomeInteger(nonneg=True); s_1.const = 1
     s_m1 = SomeInteger(nonneg=False); s_m1.const = -1
-    s_u = SomeInteger(nonneg=True, unsigned=True); 
-    s_u1 = SomeInteger(nonneg=True, unsigned=True); 
+    s_u = SomeInteger(nonneg=True, unsigned=True);
+    s_u1 = SomeInteger(nonneg=True, unsigned=True);
     s_u1.const = r_uint(1)
     assert annotation_to_lltype(s_i) == lltype.Signed
     assert annotation_to_lltype(s_pos) == lltype.Signed
@@ -145,7 +145,10 @@ def test_annotation_to_lltype():
     s_singlefloat = SomeSingleFloat()
     s_singlefloat.const = r_singlefloat(0.0)
     assert annotation_to_lltype(s_singlefloat) == lltype.SingleFloat
-    
+    s_longfloat = SomeLongFloat()
+    s_longfloat.const = r_longfloat(0.0)
+    assert annotation_to_lltype(s_longfloat) == lltype.LongFloat
+
 def test_ll_union():
     PS1 = lltype.Ptr(lltype.GcStruct('s'))
     PS2 = lltype.Ptr(lltype.GcStruct('s'))
