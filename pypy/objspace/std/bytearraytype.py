@@ -1,8 +1,9 @@
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.gateway import interp2app
+from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
+from pypy.objspace.std.listobject import get_positive_index
 
 from pypy.objspace.std.stringtype import (
     str_decode,
@@ -21,10 +22,21 @@ from pypy.objspace.std.bytearrayinterface import bytearray_interface_methods
 
 str_join = SMM('join', 2, defaults=(None,-1))
 
-bytearray_insert  = SMM('insert', 3,
-                    doc="B.insert(index, int) -> None\n\n"
-                    "Insert a single item into the bytearray before "
-                    "the given index.")
+
+@unwrap_spec(w_self=W_Root, index=int, val='str_or_int')
+def bytearray_insert(w_self, space, index, val):
+    """B.insert(index, int) -> None
+
+    Insert a single item into the bytearray before the given index.
+    """
+    if isinstance(val, int):
+        val = chr(val)
+    elif len(val) != 1:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("string must be of size 1"))
+    w_self.data.insert(index, val)
+    return space.w_None
+
 
 bytearray_pop  = SMM('pop', 2, defaults=(-1,),
                     doc="B.pop([index]) -> int\n\nRemove and return a "
@@ -175,6 +187,7 @@ If the argument is a bytearray, the return value is the same object.''',
     __hash__ = None,
     __reduce__ = interp2app(descr_bytearray__reduce__),
     fromhex = interp2app(descr_fromhex, as_classmethod=True),
+    insert = interp2app(bytearray_insert),
     **bytearray_interface_methods()
     )
 bytearray_typedef.registermethods(globals())

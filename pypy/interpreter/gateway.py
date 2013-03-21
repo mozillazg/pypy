@@ -129,6 +129,9 @@ class UnwrapSpec_Check(UnwrapSpecRecipe):
     def visit_str_or_None(self, el, app_sig):
         self.checked_space_method(el, app_sig)
 
+    def visit_str_or_int(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
     def visit_str0(self, el, app_sig):
         self.checked_space_method(el, app_sig)
 
@@ -246,6 +249,9 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
 
     def visit_str_or_None(self, typ):
         self.run_args.append("space.str_or_None_w(%s)" % (self.scopenext(),))
+
+    def visit_str_or_int(self, typ):
+        self.run_args.append("space.str_or_int_w(%s)" % (self.scopenext(),))
 
     def visit_str0(self, typ):
         self.run_args.append("space.str0_w(%s)" % (self.scopenext(),))

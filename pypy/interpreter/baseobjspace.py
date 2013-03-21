@@ -1322,6 +1322,11 @@ class ObjSpace(object):
             return None
         return self.str_w(w_obj)
 
+    def str_or_int_w(self, w_obj):
+        if self.is_true(self.isinstance(w_obj, self.w_str)):
+            return self.str_w(w_obj)
+        return self.int_w(w_obj)
+
     def str_w(self, w_obj):
         return w_obj.str_w(self)
 
