@@ -38,10 +38,23 @@ def bytearray_insert(w_self, space, index, val):
     return space.w_None
 
 
-bytearray_pop  = SMM('pop', 2, defaults=(-1,),
-                    doc="B.pop([index]) -> int\n\nRemove and return a "
-                    "single item from B. If no index\nargument is given, "
-                    "will pop the last value.")
+@unwrap_spec(w_self=W_Root, index=int)
+def bytearray_pop(w_self, space, index=-1):
+    """B.pop([index]) -> int
+
+    Remove and return a single item from B. If no index
+    argument is given, will pop the last value.
+    """
+    try:
+        result = w_self.data.pop(index)
+    except IndexError:
+        if not w_self.data:
+            raise OperationError(space.w_IndexError, space.wrap(
+                "pop from empty bytearray"))
+        raise OperationError(space.w_IndexError, space.wrap(
+            "pop index out of range"))
+    return space.wrap(ord(result))
+
 
 bytearray_remove  = SMM('remove', 2,
                     doc="B.remove(int) -> None\n\n"
@@ -188,6 +201,7 @@ If the argument is a bytearray, the return value is the same object.''',
     __reduce__ = interp2app(descr_bytearray__reduce__),
     fromhex = interp2app(descr_fromhex, as_classmethod=True),
     insert = interp2app(bytearray_insert),
+    pop = interp2app(bytearray_pop),
     **bytearray_interface_methods()
     )
 bytearray_typedef.registermethods(globals())
