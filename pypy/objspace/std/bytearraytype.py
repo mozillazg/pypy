@@ -19,7 +19,6 @@ from rpython.rlib.objectmodel import newlist_hint, resizelist_hint
 from pypy.objspace.std.bytearrayinterface import bytearray_interface_methods
 
 
-str_ljust = SMM('ljust', 3, defaults=(' ',))
 str_join = SMM('join', 2, defaults=(None,-1))
 
 bytearray_insert  = SMM('insert', 3,
