@@ -397,18 +397,6 @@ def str_isspace__Bytearray(space, w_bytearray):
     w_str = str__Bytearray(space, w_bytearray)
     return stringobject.str_isspace__String(space, w_str)
 
-def bytearray_pop__Bytearray_Int(space, w_bytearray, w_idx):
-    index = space.int_w(w_idx)
-    try:
-        result = w_bytearray.data.pop(index)
-    except IndexError:
-        if not w_bytearray.data:
-            raise OperationError(space.w_IndexError, space.wrap(
-                "pop from empty bytearray"))
-        raise OperationError(space.w_IndexError, space.wrap(
-            "pop index out of range"))
-    return space.wrap(ord(result))
-
 def bytearray_remove__Bytearray_ANY(space, w_bytearray, w_char):
     char = space.int_w(space.index(w_char))
     try:
