@@ -397,14 +397,6 @@ def str_isspace__Bytearray(space, w_bytearray):
     w_str = str__Bytearray(space, w_bytearray)
     return stringobject.str_isspace__String(space, w_str)
 
-def bytearray_insert__Bytearray_Int_ANY(space, w_bytearray, w_idx, w_other):
-    where = space.int_w(w_idx)
-    length = len(w_bytearray.data)
-    index = get_positive_index(where, length)
-    val = getbytevalue(space, w_other)
-    w_bytearray.data.insert(index, val)
-    return space.w_None
-
 def bytearray_pop__Bytearray_Int(space, w_bytearray, w_idx):
     index = space.int_w(w_idx)
     try:
