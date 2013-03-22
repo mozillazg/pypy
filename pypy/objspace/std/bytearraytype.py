@@ -23,7 +23,7 @@ from pypy.objspace.std.bytearrayinterface import bytearray_interface_methods
 str_join = SMM('join', 2, defaults=(None,-1))
 
 
-@unwrap_spec(w_self=W_Root, index=int, val='str_or_int')
+@unwrap_spec(index=int, val='str_or_int')
 def bytearray_insert(w_self, space, index, val):
     """B.insert(index, int) -> None
 
@@ -38,7 +38,7 @@ def bytearray_insert(w_self, space, index, val):
     return space.w_None
 
 
-@unwrap_spec(w_self=W_Root, index=int)
+@unwrap_spec(index=int)
 def bytearray_pop(w_self, space, index=-1):
     """B.pop([index]) -> int
 
@@ -56,7 +56,7 @@ def bytearray_pop(w_self, space, index=-1):
     return space.wrap(ord(result))
 
 
-@unwrap_spec(w_self=W_Root, value='index')
+@unwrap_spec(value='index')
 def bytearray_remove(w_self, space, value):
     """B.remove(int) -> None
 
