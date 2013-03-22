@@ -397,14 +397,6 @@ def str_isspace__Bytearray(space, w_bytearray):
     w_str = str__Bytearray(space, w_bytearray)
     return stringobject.str_isspace__String(space, w_str)
 
-def bytearray_remove__Bytearray_ANY(space, w_bytearray, w_char):
-    char = space.int_w(space.index(w_char))
-    try:
-        result = w_bytearray.data.remove(chr(char))
-    except ValueError:
-        raise OperationError(space.w_ValueError, space.wrap(
-            "value not found in bytearray"))
-
 def bytearray_reverse__Bytearray(space, w_bytearray):
     w_bytearray.data.reverse()
     return space.w_None

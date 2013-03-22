@@ -56,9 +56,19 @@ def bytearray_pop(w_self, space, index=-1):
     return space.wrap(ord(result))
 
 
-bytearray_remove  = SMM('remove', 2,
-                    doc="B.remove(int) -> None\n\n"
-                    "Remove the first occurance of a value in B.")
+@unwrap_spec(w_self=W_Root)
+def bytearray_remove(w_self, space, w_index):
+    """B.remove(int) -> None
+
+    Remove the first occurance of a value in B.
+    """
+    val = space.int_w(space.index(w_index))
+    try:
+        w_self.data.remove(chr(val))
+    except ValueError:
+        raise OperationError(space.w_ValueError, space.wrap(
+            "value not found in bytearray"))
+
 
 bytearray_reverse  = SMM('reverse', 1,
                     doc="B.reverse() -> None\n\n"
@@ -200,8 +210,9 @@ If the argument is a bytearray, the return value is the same object.''',
     __hash__ = None,
     __reduce__ = interp2app(descr_bytearray__reduce__),
     fromhex = interp2app(descr_fromhex, as_classmethod=True),
-    insert = interp2app(bytearray_insert),
-    pop = interp2app(bytearray_pop),
+    insert=interp2app(bytearray_insert),
+    pop=interp2app(bytearray_pop),
+    remove=interp2app(bytearray_remove),
     **bytearray_interface_methods()
     )
 bytearray_typedef.registermethods(globals())
