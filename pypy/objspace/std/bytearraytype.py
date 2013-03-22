@@ -56,15 +56,14 @@ def bytearray_pop(w_self, space, index=-1):
     return space.wrap(ord(result))
 
 
-@unwrap_spec(w_self=W_Root)
-def bytearray_remove(w_self, space, w_index):
+@unwrap_spec(w_self=W_Root, value='index')
+def bytearray_remove(w_self, space, value):
     """B.remove(int) -> None
 
     Remove the first occurance of a value in B.
     """
-    val = space.int_w(space.index(w_index))
     try:
-        w_self.data.remove(chr(val))
+        w_self.data.remove(chr(value))
     except ValueError:
         raise OperationError(space.w_ValueError, space.wrap(
             "value not found in bytearray"))
