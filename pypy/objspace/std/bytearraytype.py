@@ -1,4 +1,5 @@
-from pypy.interpreter.baseobjspace import ObjSpace, W_Root
+from pypy.interpreter.baseobjspace import W_Root
+from pypy.objspace.std.model import W_Object
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.objspace.std.register_all import register_all
@@ -18,14 +19,66 @@ from pypy.objspace.std.stringtype import (
 from rpython.rlib.objectmodel import newlist_hint, resizelist_hint
 from pypy.objspace.std.bytearrayinterface import bytearray_interface_methods
 
+
+class W_AbstractBytearrayObject(W_Object):
+    pass
+
 str_join = SMM('join', 2, defaults=(None,-1))
 
 bytearray_append  = SMM('append', 2)
 bytearray_extend  = SMM('extend', 2)
-bytearray_insert  = SMM('insert', 3,
-                    doc="B.insert(index, int) -> None\n\n"
-                    "Insert a single item into the bytearray before "
-                    "the given index.")
+
+
+@unwrap_spec(w_self=W_Root, arg=int, fillchar=str)
+def bytearray_ljust(w_self, space, arg, fillchar=' '):
+    """S.ljust(width[, fillchar]) -> string
+
+    Return S left justified in a string of length width. Padding
+    is done using the specified fill character (default is a space).
+    """
+    assert isinstance(w_self, W_AbstractBytearrayObject)
+    u_self = w_self.data
+    if len(fillchar) != 1:
+        raise OperationError(space.w_TypeError,
+            space.wrap("ljust() argument 2 must be a single character"))
+
+    d = arg - len(u_self)
+    if d > 0:
+        lst = [0] * max(arg, len(u_self))
+        fillchar = fillchar[0]    # annotator hint: it's a single character
+        lst[:len(u_self)] = u_self
+        for i in range(d):
+            lst[len(u_self) + i] = fillchar
+    else:
+        lst = u_self.data[:]
+
+    return space.newbytearray(lst)
+
+
+@unwrap_spec(w_self=W_Root, arg=int, fillchar=str)
+def bytearray_rjust(w_self, space, arg, fillchar=' '):
+    """S.rjust(width[, fillchar]) -> string
+
+    Return S right justified in a string of length width. Padding
+    is done using the specified fill character (default is a space).
+    """
+    u_self = w_self.data
+    assert isinstance(w_self, W_AbstractBytearrayObject)
+    if len(fillchar) != 1:
+        raise OperationError(space.w_TypeError,
+            space.wrap("rjust() argument 2 must be a single character"))
+
+    d = arg - len(u_self)
+    if d > 0:
+        lst = [0] * max(arg, len(u_self))
+        fillchar = fillchar[0]    # annotator hint: it's a single character
+        for i in range(d):
+            lst[i] = fillchar
+        lst[len(u_self)-1:] = u_self
+    else:
+        lst = u_self.data[:]
+
+    return space.newbytearray(lst)
 
 
 @unwrap_spec(index=int, val='str_or_int')
@@ -214,9 +267,10 @@ If the argument is a bytearray, the return value is the same object.''',
     __hash__ = None,
     __reduce__ = interp2app(descr_bytearray__reduce__),
     fromhex = interp2app(descr_fromhex, as_classmethod=True),
+    ljust=interp2app(bytearray_ljust),
+    rjust=interp2app(bytearray_rjust),
     insert=interp2app(bytearray_insert),
     pop=interp2app(bytearray_pop),
     remove=interp2app(bytearray_remove),
-    **bytearray_interface_methods()
     )
 bytearray_typedef.registermethods(globals())

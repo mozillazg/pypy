@@ -26,7 +26,7 @@ from pypy.objspace.std.bytearraytype import (
 )
 from rpython.tool.sourcetools import func_with_new_name
 from pypy.objspace.std.contiguousstring import StringMethods
-from pypy.objspace.std.bytearrayinterface import W_AbstractBytearrayObject
+from pypy.objspace.std.bytearraytype import W_AbstractBytearrayObject
 
 
 class W_BytearrayObject(W_AbstractBytearrayObject):
