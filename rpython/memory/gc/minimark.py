@@ -1250,6 +1250,10 @@ class MiniMarkGC(MovingGCBase):
         # We proceed until 'old_objects_pointing_to_young' is empty.
         self.collect_oldrefs_to_nursery()
         #
+        # Also copy out of the nursery the objects with finalizers.
+        if self.young_objects_with_finalizers.non_empty():
+            self.deal_with_young_objects_with_finalizers()
+        #
         # Now all live nursery objects should be out.  Update the young
         # weakrefs' targets.
         if self.young_objects_with_weakrefs.non_empty():
@@ -1882,63 +1886,65 @@ class MiniMarkGC(MovingGCBase):
     # ----------
     # Finalizers
 
-    def collect_roots_from_finalizers(self):
-        self.young_objects_with_finalizers.foreach(
-            self._collect_root_from_finalizer, None)
-
-    def _collect_root_from_finalizer(self, obj, ignored):
-        # idea: every young object with a finalizer xxxxxxxxxxxx
-        self.temp_root.address[0] = obj
-        self._trace_drag_out1(self.temp_root)
-
     def deal_with_young_objects_with_finalizers(self):
-        """We need to enqueue to run_finalizers_queue all dying young
+        """We need to enqueue to 'run_finalizers_queue' all dying young
         objects with finalizers.  As these survive for a bit longer,
-        we also need to copy them out of the nursery.
+        we also need to copy them out of the nursery.  The tricky part
+        here is to enqueue them in topological order, if possible.
         """
-        xxxxxxxx
-        if self.young_objects_call_finalizers is not None:
-            xxxx
-
-
-        if not self.young_objects_with_finalizers.non_empty():
-            return False
-
+        finalizers_scheduled = self.AddressStack()
+        pending = self.old_objects_pointing_to_young
+        #
         while self.young_objects_with_finalizers.non_empty():
             obj = self.young_objects_with_finalizers.pop()
-            if not self.is_forwarded(obj):
-                #
-                # If the object is not forwarded so far, then it is a
-                # newly discovered object that is about to be finalized.
-                ll_assert((self.header(obj).tid & GCFLAG_HAS_FINALIZER) != 0,
-                          "lost the GCFLAG_HAS_FINALIZER")
-                #
-                # The object survives this collection; it must be tracked.
-                #
-                # Add the object in the 'young_objects_call_finalizers'
-                # stack.
-                if self.young_objects_call_finalizers is None:
-                    self.young_objects_call_finalizers = self.AddressStack()
-                self.young_objects_call_finalizers.append(obj)
-                #
-                # We want to ensure topological ordering on the finalizers,
-                # at least assuming that there are no cycles.  So xxxx
-                # 
-                
-                #
-                # The stack will be moved to 'run_finalizers_queue'
-                #  to reverse the order:
-                # 
-                xxx
-
-
-                
-            else:
-                yyy
-                obj = self.get_forwarding_address(obj)
-                self.old_objects_with_finalizers.append(obj)
-
-        return self.young_objects_call_finalizers is not None
+            ll_assert(not pending.non_empty(),
+                      "deal_with_young_objects_with_finalizers: "
+                      "old_objects_pointing_to_young should be empty")
+            #
+            # Un-register the finalizer, because 'obj' will likely move
+            _finalizer = self.registered_finalizers.get(obj)
+            ll_assert(_finalizer != llmemory.NULL, "lost _finalizer")
+            self.registered_finalizers.setitem(obj, NULL)
+            #
+            # The following lines move 'obj' out of the nursery and add it to
+            # 'self.old_objects_pointing_to_young', unless the object was
+            # already seen previously, in which case they have no effect.
+            root = self.temp_root
+            root.address[0] = obj
+            self._trace_drag_out1(root)
+            objcopy = root.address[0]
+            #
+            # Re-regsiter the finalizer
+            self.registered_finalizers.setitem(objcopy, _finalizer)
+            #
+            # Follow all refs
+            while pending.non_empty():
+                assert not self.old_objects_with_cards_set.non_empty(), "XXX"
+                obj = pending.pop()
+                if obj:
+                    #
+                    if self.header(obj).tid & GCFLAG_HAS_FINALIZER:
+                        self.header(obj).tid &= ~GCFLAG_HAS_FINALIZER
+                        pending.append(obj)
+                        pending.append(NULL)   # marker
+                    #
+                    ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS
+                              == 0, "bad flags [deal_young_finalizer]")
+                    self.header(obj).tid |= GCFLAG_TRACK_YOUNG_PTRS
+                    self.trace_and_drag_out_of_nursery(obj)
+                    #
+                else:
+                    # seen a NULL marker
+                    obj = pending.pop()
+                    finalizers_scheduled.append(obj)
+            # End of loop
+        #
+        # Copy the objects scheduled into 'run_finalizers_queue', in
+        # reverse order.
+        while finalizers_scheduled.non_empty():
+            obj = finalizers_scheduled.pop()
+            self.run_finalizers_queue.append(obj)
+        finalizers_scheduled.delete()
 
 
     def deal_with_old_objects_with_finalizers(self):

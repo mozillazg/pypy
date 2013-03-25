@@ -3,6 +3,8 @@ from rpython.rtyper.lltypesystem import rclass
 from rpython.rtyper.lltypesystem.lloperation import llop
 from rpython.rlib.debug import ll_assert
 from rpython.rlib.rarithmetic import intmask
+from rpython.rlib import rgc
+from rpython.rlib.objectmodel import we_are_translated
 from rpython.tool.identity_dict import identity_dict
 
 
@@ -135,6 +137,19 @@ class GCData(object):
         infobits = self.get(typeid).infobits
         return infobits & T_ANY_SLOW_FLAG == 0
 
+    def q_call_finalizer(self, finalizer, obj):
+        XXX
+        FINALIZER = lltype.Ptr(lltype.FuncType([llmemory.Address],
+                                               lltype.Void))
+        finalizer = llmemory.cast_adr_to_ptr(finalizer, FINALIZER)
+        finalizer(obj)
+##                except rgc.FinalizeLater:
+##                    xxx
+##                        except Exception, e:
+##                    XXX
+        return True
+
+
     def set_query_functions(self, gc):
         gc.set_query_functions(
             self.q_is_varsize,
@@ -152,7 +167,8 @@ class GCData(object):
             self.q_is_rpython_class,
             self.q_has_custom_trace,
             self.q_get_custom_trace,
-            self.q_fast_path_tracing)
+            self.q_fast_path_tracing,
+            self.q_call_finalizer)
 
 
 # the lowest 16bits are used to store group member index
@@ -387,8 +403,11 @@ class TypeLayoutBuilder(object):
         # must be overridden for proper custom tracer support
         return None
 
-    def initialize_gc_query_function(self, gc):
-        return GCData(self.type_info_group).set_query_functions(gc)
+    def initialize_gc_query_function(self, gc, call_finalizer=None):
+        gcdata = GCData(self.type_info_group)
+        if call_finalizer is not None:
+            gcdata.q_call_finalizer = call_finalizer   # for tests
+        gcdata.set_query_functions(gc)
 
     def consider_constant(self, TYPE, value, gc):
         if value is not lltype.top_container(value):

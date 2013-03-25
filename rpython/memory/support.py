@@ -114,6 +114,11 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 self.shrink()
             return result
 
+        def peek(self):
+            used = self.used_in_last_chunk - 1
+            ll_assert(used >= 0, "peek on empty AddressStack")
+            return self.chunk.items[used]
+
         def delete(self):
             cur = self.chunk
             while cur:
@@ -270,6 +275,14 @@ def get_address_deque(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 cur = next
             free_non_gc_object(self)
 
+        def tolist(self):
+            """NOT_RPYTHON.  Returns the content as a list."""
+            lst = []
+            def _add(obj, lst):
+                lst.append(obj)
+            self.foreach(_add, lst)
+            return lst
+
     cache[chunk_size] = AddressDeque
     return AddressDeque
 
@@ -331,6 +344,14 @@ class BasicAddressDict(object):
         Typically, 'callback' is a bound method and 'arg' can be None."""
         for key, value in self.data.iteritems():
             callback(self._wrapkey(key), value, arg)
+
+    def tolist(self):
+        """NOT_RPYTHON.  Returns the content as a list."""
+        lst = []
+        def _add(key, value, lst):
+            lst.append((key, value))
+        self.foreach(_add, lst)
+        return lst
 
 
 def copy_and_update(dict, surviving, updated_address):

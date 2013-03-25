@@ -74,7 +74,8 @@ class GCBase(object):
                             is_rpython_class,
                             has_custom_trace,
                             get_custom_trace,
-                            fast_path_tracing):
+                            fast_path_tracing,
+                            call_finalizer):
         self.getdestructor = getdestructor
         self.is_varsize = is_varsize
         self.has_gcptr_in_varsize = has_gcptr_in_varsize
@@ -91,6 +92,7 @@ class GCBase(object):
         self.has_custom_trace = has_custom_trace
         self.get_custom_trace = get_custom_trace
         self.fast_path_tracing = fast_path_tracing
+        self.call_finalizer = call_finalizer
 
     def get_member_index(self, type_id):
         return self.member_index(type_id)
@@ -351,20 +353,14 @@ class GCBase(object):
                 obj = self.run_finalizers_queue.peekleft()
                 finalizer = self.registered_finalizers.get(obj)
                 ll_assert(finalizer != llmemory.NULL, "lost finalizer")
-                finalizer = llmemory.cast_adr_to_ptr(finalizer, FINALIZER)
-                try:
-                    finalizer(obj)
-                except rgc.FinalizeLater:
+                if not self.call_finalizer(finalizer, obj):
                     break
-                except Exception, e:
-                    XXX
                 obj1 = self.run_finalizers_queue.popleft()
                 ll_assert(obj1 == obj, "wrong finalized object")
+                self.registered_finalizers.setitem(obj, NULL)
+                # XXX MISSING: must clean up the dict regularly!
         finally:
             self.running_finalizers = False
-
-
-FINALIZER = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
 
 
 class MovingGCBase(GCBase):

@@ -49,8 +49,9 @@ class TestAddressStack(object):
             print i
             ll.append(addrs[i])
         for i in range(3000)[::-1]:
+            b = ll.peek()
             a = ll.pop()
-            assert a == addrs[i]
+            assert b == a == addrs[i]
         for i in range(3000):
             print i
             ll.append(addrs[i])

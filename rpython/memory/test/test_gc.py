@@ -158,13 +158,14 @@ class GCTest(object):
             pass
         b = B()
         b.nextid = 0
-        b.num_finalized = 0
+        b.num_finalized = -42
         class A(object):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
             def finalizer(self):
                 b.num_finalized += 1
+                print "BIP", b.num_finalized
         def allocate(x):
             i = 0
             while i < x:
@@ -172,9 +173,14 @@ class GCTest(object):
                 a = A()
                 rgc.register_finalizer(a.finalizer)
         def f(x):
+            print 'START'
+            b.num_finalized = 0
             allocate(x)
+            print 'XX', b.num_finalized
             llop.gc__collect(lltype.Void)
+            print 'XX', b.num_finalized
             llop.gc__collect(lltype.Void)
+            print 'XX', b.num_finalized
             return b.num_finalized
         res = self.interpret(f, [6])
         assert res == 6

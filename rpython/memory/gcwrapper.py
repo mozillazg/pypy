@@ -29,7 +29,8 @@ class GCManagedHeap(object):
                                                lltype2vtable,
                                                self.llinterp)
         self.get_type_id = layoutbuilder.get_type_id
-        layoutbuilder.initialize_gc_query_function(self.gc)
+        layoutbuilder.initialize_gc_query_function(
+            self.gc, layoutbuilder._call_finalizer)
 
         constants = collect_constants(flowgraphs)
         for obj in constants:
@@ -237,6 +238,13 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
             return rtti._obj.custom_trace_funcptr
         else:
             return None
+
+    def _call_finalizer(self, finalizer, obj):
+        FUNC = lltype.typeOf(finalizer.ptr).TO
+        obj = llmemory.cast_adr_to_ptr(obj, FUNC.ARGS[0])
+        self.llinterp.eval_graph(finalizer.ptr._obj.graph, [obj],
+                                 recursive=True)
+        return True
 
 
 def collect_constants(graphs):
