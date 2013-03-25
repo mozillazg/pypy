@@ -37,7 +37,7 @@ class GCBase(object):
         # and in its overriden versions! for the benefit of test_transformed_gc
         self.running_finalizers = False
         self.run_finalizers_queue = self.AddressDeque()
-        self.registered_finalizers = self.AddressDict()
+        self.run_finalizers_funcs = self.AddressDeque()
 
     def post_setup(self):
         # More stuff that needs to be initialized when the GC is already
@@ -333,15 +333,9 @@ class GCBase(object):
 
     def register_finalizer(self, gcobj, llfn):
         llobj = llmemory.cast_ptr_to_adr(gcobj)
-        llfn1 = self.registered_finalizers.get(llobj)
-        if llfn1 == llmemory.NULL:
-            self.registered_finalizers.setitem(llobj, llfn)
-        else:
-            ll_assert(llfn1 == llfn,
-                      "registering multiple different finalizers")
-        self._register_finalizer_set_flag(llobj)
+        self._register_finalizer(llobj, llfn)
 
-    def _register_finalizer_set_flag(self, obj):
+    def _register_finalizer(self, obj, llfn):
         raise NotImplementedError   # must be overridden
 
     def execute_finalizers(self):
@@ -350,15 +344,12 @@ class GCBase(object):
         self.running_finalizers = True
         try:
             while self.run_finalizers_queue.non_empty():
+                func = self.run_finalizers_funcs.peekleft()
                 obj = self.run_finalizers_queue.peekleft()
-                finalizer = self.registered_finalizers.get(obj)
-                ll_assert(finalizer != llmemory.NULL, "lost finalizer")
-                if not self.call_finalizer(finalizer, obj):
+                if not self.call_finalizer(func, obj):
                     break
-                obj1 = self.run_finalizers_queue.popleft()
-                ll_assert(obj1 == obj, "wrong finalized object")
-                self.registered_finalizers.setitem(obj, NULL)
-                # XXX MISSING: must clean up the dict regularly!
+                self.run_finalizers_funcs.popleft()
+                self.run_finalizers_queue.popleft()
         finally:
             self.running_finalizers = False
 
