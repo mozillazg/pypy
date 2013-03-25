@@ -1058,3 +1058,10 @@ class TestMiniMarkGC(TestSemiSpaceGC):
 
 class TestMiniMarkGCCardMarking(TestMiniMarkGC):
     GC_PARAMS = {'card_page_indices': 4}
+
+class TestMiniMarkGCLargeNursery(TestMiniMarkGC):
+    GC_PARAMS = {'nursery_size': 1024*WORD}
+    def setup_class(cls):
+        py.test.skip("takes a lot of extra time to run")
+    def teardown_class(cls):
+        pass

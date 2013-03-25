@@ -1492,6 +1492,7 @@ class MiniMarkGC(MovingGCBase):
         # We will fix such references to point to the copy of the young
         # objects when we walk 'old_objects_pointing_to_young'.
         self.old_objects_pointing_to_young.append(newobj)
+        #debug_print("adding", newobj)
     _trace_drag_out._always_inline_ = True
 
     def _visit_young_rawmalloced_object(self, obj):
@@ -1922,11 +1923,11 @@ class MiniMarkGC(MovingGCBase):
         we also need to copy them out of the nursery.  The tricky part
         here is to enqueue them in topological order, if possible.
         """
-        pending = self.old_objects_pointing_to_young
-        ll_assert(not pending.non_empty(),
+        ll_assert(not self.old_objects_pointing_to_young.non_empty(),
                   "deal_with_young_objects_with_finalizers: "
                   "old_objects_pointing_to_young should be empty")
         finalizer_funcs = self.AddressDict()
+        self.finalizers_scheduled = self.AddressStack()
         #
         while self.young_objects_with_finalizers.non_empty():
             func = self.young_objects_with_finalizers.pop()
@@ -1940,19 +1941,44 @@ class MiniMarkGC(MovingGCBase):
             root.address[0] = obj
             self._trace_drag_out1(root)
             objcopy = root.address[0]
+            #debug_print("finalizer for", obj)
+            #debug_print("object moving to", objcopy)
             #
             # Remember the finalizer in the dict
             finalizer_funcs.setitem(objcopy, func)
+            #
+            # Now follow all the refs
+            self._follow_references_from_young_object_with_finalizer()
         #
-        # Now follow all the refs
-        finalizers_scheduled = self.AddressStack()
+        # Copy the objects scheduled into 'run_finalizers_queue', in
+        # reverse order.
+        while self.finalizers_scheduled.non_empty():
+            obj = self.finalizers_scheduled.pop()
+            func = finalizer_funcs.get(obj)
+            ll_assert(func != NULL, "lost finalizer [1]")
+            self.run_finalizers_queue.append(obj)
+            self.run_finalizers_funcs.append(func)
+            finalizer_funcs.setitem(obj, NULL)
+        self.finalizers_scheduled.delete()
+        #
+        # The non-NULL entries remaining in 'finalizer_funcs' correspond
+        # to objects that survived, because they have not been traced by
+        # this function but already before.
+        finalizer_funcs.foreach(self._move_to_old_finalizer,
+                                self.old_objects_with_finalizers)
+        finalizer_funcs.delete()
+
+    def _follow_references_from_young_object_with_finalizer(self):
+        pending = self.old_objects_pointing_to_young
         while pending.non_empty():
             assert not self.old_objects_with_cards_set.non_empty(), "XXX"
             obj = pending.pop()
+            #debug_print("popping", obj)
             if obj:
                 #
                 if self.header(obj).tid & GCFLAG_HAS_FINALIZER:
                     self.header(obj).tid &= ~GCFLAG_HAS_FINALIZER
+                    #debug_print("this object has a finalizer")
                     pending.append(obj)
                     pending.append(NULL)   # marker
                 #
@@ -1964,25 +1990,8 @@ class MiniMarkGC(MovingGCBase):
             else:
                 # seen a NULL marker
                 obj = pending.pop()
-                finalizers_scheduled.append(obj)
-        #
-        # Copy the objects scheduled into 'run_finalizers_queue', in
-        # reverse order.
-        while finalizers_scheduled.non_empty():
-            obj = finalizers_scheduled.pop()
-            func = finalizer_funcs.get(obj)
-            ll_assert(func != NULL, "lost finalizer [1]")
-            self.run_finalizers_queue.append(obj)
-            self.run_finalizers_funcs.append(func)
-            finalizer_funcs.setitem(obj, NULL)
-        finalizers_scheduled.delete()
-        #
-        # The non-NULL entries remaining in 'finalizer_funcs' correspond
-        # to objects that survived, because they have not been traced by
-        # this function but already before.
-        finalizer_funcs.foreach(self._move_to_old_finalizer,
-                                self.old_objects_with_finalizers)
-        finalizer_funcs.delete()
+                #debug_print("adding to scheduled", obj)
+                self.finalizers_scheduled.append(obj)
 
     @staticmethod
     def _move_to_old_finalizer(obj, finalizer, old_objects_with_finalizers):
