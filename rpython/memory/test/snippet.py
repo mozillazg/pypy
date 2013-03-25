@@ -56,6 +56,7 @@ class SemiSpaceGCTestDefines:
             def finalize(self):
                 assert state.age[self.key] == -1
                 state.age[self.key] = state.time
+                state.time += 1
                 state.progress = True
 
         def build_example(input):
@@ -73,7 +74,7 @@ class SemiSpaceGCTestDefines:
             while i < len(examples):
                 input, components, strict = examples[i]
                 build_example(input)
-                while state.time < len(letters):
+                while state.time < 2 * len(letters):
                     state.progress = False
                     llop.gc__collect(lltype.Void)
                     if not state.progress:
