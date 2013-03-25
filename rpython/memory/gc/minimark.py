@@ -1596,8 +1596,8 @@ class MiniMarkGC(MovingGCBase):
         # with a finalizer and all objects reachable from there (and also
         # moves some objects from 'objects_with_finalizers' to
         # 'run_finalizers').
-        #if self.objects_with_finalizers.non_empty():
-        #    self.deal_with_objects_with_finalizers()
+        if self.old_objects_with_finalizers.non_empty():
+            self.deal_with_old_objects_with_finalizers()
         #
         self.objects_to_trace.delete()
         #
@@ -1880,10 +1880,28 @@ class MiniMarkGC(MovingGCBase):
             if not self.is_forwarded(obj):
                 destructor = self.getdestructor(self.get_type_id(obj))
                 ll_assert(bool(destructor), "destructor missing")
-                destructor(obj, llmemory.NULL)
+                destructor(obj, NULL)
             else:
                 obj = self.get_forwarding_address(obj)
                 self.old_objects_with_destructors.append(obj)
+
+    def deal_with_old_objects_with_destructors(self):
+        """Same as deal_with_young_objects_with_destructors(), but for
+        old objects.
+        """
+        new_objects = self.AddressStack()
+        while self.old_objects_with_destructors.non_empty():
+            obj = self.old_objects_with_destructors.pop()
+            if self.header(obj).tid & GCFLAG_VISITED:
+                # surviving
+                new_objects.append(obj)
+            else:
+                # dying
+                destructor = self.getdestructor(self.get_type_id(obj))
+                ll_assert(bool(destructor), "no light finalizer found")
+                destructor(obj, NULL)
+        self.old_objects_with_destructors.delete()
+        self.old_objects_with_destructors = new_objects
 
 
     # ----------
@@ -1906,7 +1924,9 @@ class MiniMarkGC(MovingGCBase):
             obj = self.young_objects_with_finalizers.pop()
             #
             # The following lines move 'obj' out of the nursery and add it to
-            # 'self.old_objects_pointing_to_young'.
+            # 'self.old_objects_pointing_to_young' --- unless the object
+            # survive, in which case it was already seen and the following
+            # lines have no effect.
             root = self.temp_root
             root.address[0] = obj
             self._trace_drag_out1(root)
@@ -1942,36 +1962,27 @@ class MiniMarkGC(MovingGCBase):
         while finalizers_scheduled.non_empty():
             obj = finalizers_scheduled.pop()
             func = finalizer_funcs.get(obj)
-            ll_assert(func != llmemory.NULL, "lost finalizer [1]")
+            ll_assert(func != NULL, "lost finalizer [1]")
             self.run_finalizers_queue.append(obj)
             self.run_finalizers_funcs.append(func)
+            finalizer_funcs.setitem(obj, NULL)
         finalizers_scheduled.delete()
+        #
+        # The non-NULL entries remaining in 'finalizer_funcs' correspond
+        # to objects that survived, because they have not been traced by
+        # this function but already before.
+        finalizer_funcs.foreach(self._move_to_old_finalizer,
+                                self.old_objects_with_finalizers)
         finalizer_funcs.delete()
+
+    @staticmethod
+    def _move_to_old_finalizer(obj, finalizer, old_objects_with_finalizers):
+        if finalizer != NULL:
+            old_objects_with_finalizers.append(obj)
+            old_objects_with_finalizers.append(finalizer)
 
 
     def deal_with_old_objects_with_finalizers(self):
-        """ This is a much simpler version of dealing with finalizers
-        and an optimization - we can reasonably assume that those finalizers
-        don't do anything fancy and *just* call them. Among other things
-        they won't resurrect objects
-        """
-        XXXX
-        new_objects = self.AddressStack()
-        while self.old_objects_with_light_finalizers.non_empty():
-            obj = self.old_objects_with_light_finalizers.pop()
-            if self.header(obj).tid & GCFLAG_VISITED:
-                # surviving
-                new_objects.append(obj)
-            else:
-                # dying
-                finalizer = self.getlightfinalizer(self.get_type_id(obj))
-                ll_assert(bool(finalizer), "no light finalizer found")
-                finalizer(obj, llmemory.NULL)
-        self.old_objects_with_light_finalizers.delete()
-        self.old_objects_with_light_finalizers = new_objects
-
-    def deal_with_objects_with_finalizers(self):
-        XXXXXXXXX
         # Walk over list of objects with finalizers.
         # If it is not surviving, add it to the list of to-be-called
         # finalizers and make it survive, to make the finalizer runnable.
