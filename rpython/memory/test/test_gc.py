@@ -8,6 +8,7 @@ from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.objectmodel import compute_unique_id
+from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib import rgc
 from rpython.rlib.rstring import StringBuilder
 from rpython.rlib.rarithmetic import LONG_BIT
@@ -158,14 +159,13 @@ class GCTest(object):
             pass
         b = B()
         b.nextid = 0
-        b.num_finalized = -42
+        b.num_finalized = 0
         class A(object):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
             def finalizer(self):
                 b.num_finalized += 1
-                print "BIP", b.num_finalized
         def allocate(x):
             i = 0
             while i < x:
@@ -173,14 +173,41 @@ class GCTest(object):
                 a = A()
                 rgc.register_finalizer(a.finalizer)
         def f(x):
-            print 'START'
+            allocate(x)
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            return b.num_finalized
+        res = self.interpret(f, [6])
+        assert res == 6
+
+    def test_finalizer_old(self):
+        class B(object):
+            pass
+        b = B()
+        b.nextid = 0
+        b.num_finalized = 0
+        class A(object):
+            def __init__(self):
+                self.id = b.nextid
+                b.nextid += 1
+            def finalizer(self):
+                b.num_finalized += 1
+        def allocate(x):
+            i = 0
+            next = None
+            while i < x:
+                i += 1
+                a = A()
+                a.next = next
+                next = a
+                rgc.register_finalizer(a.finalizer)
+            llop.gc__collect(lltype.Void)   # all objects are now old
+            keepalive_until_here(next)
+        def f(x):
             b.num_finalized = 0
             allocate(x)
-            print 'XX', b.num_finalized
             llop.gc__collect(lltype.Void)
-            print 'XX', b.num_finalized
             llop.gc__collect(lltype.Void)
-            print 'XX', b.num_finalized
             return b.num_finalized
         res = self.interpret(f, [6])
         assert res == 6

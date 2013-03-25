@@ -940,6 +940,10 @@ class MiniMarkGC(MovingGCBase):
         # the GCFLAG_VISITED should not be set between collections
         ll_assert(self.header(obj).tid & GCFLAG_VISITED == 0,
                   "unexpected GCFLAG_VISITED")
+        # the GCFLAG_NO_HEAP_PTRS and GCFLAG_HAS_FINALIZER must not be both set
+        ll_assert(self.header(obj).tid & GCFLAG_NO_HEAP_PTRS == 0 or
+                  self.header(obj).tid & GCFLAG_HAS_FINALIZER == 0,
+                  "GCFLAG_NO_HEAP_PTRS && GCFLAG_HAS_FINALIZER")
         # the GCFLAG_CARDS_SET should not be set between collections
         ll_assert(self.header(obj).tid & GCFLAG_CARDS_SET == 0,
                   "unexpected GCFLAG_CARDS_SET")
@@ -967,8 +971,10 @@ class MiniMarkGC(MovingGCBase):
                 i -= 1
 
     def _register_finalizer(self, obj, llfn):
-        if self.header(obj).tid & GCFLAG_HAS_FINALIZER:
-            return    # already have one
+        if self.header(obj).tid & (
+            GCFLAG_HAS_FINALIZER |      # obj has already a finalizer
+            GCFLAG_NO_HEAP_PTRS):       # immortal object anyway, and we don't
+            return                      #   want confusion in visit()
         self.header(obj).tid |= GCFLAG_HAS_FINALIZER
         if self.is_young_object(obj):
             lst = self.young_objects_with_finalizers
@@ -1989,90 +1995,60 @@ class MiniMarkGC(MovingGCBase):
         # We try to run the finalizers in a "reasonable" order, like
         # CPython does.  The details of this algorithm are in
         # pypy/doc/discussion/finalizer-order.txt.
-        new_with_finalizer = self.AddressDeque()
-        marked = self.AddressDeque()
-        pending = self.AddressStack()
-        self.tmpstack = self.AddressStack()
-        while self.objects_with_finalizers.non_empty():
-            x = self.objects_with_finalizers.popleft()
-            ll_assert(self._finalization_state(x) != 1,
-                      "bad finalization state 1")
-            if self.header(x).tid & GCFLAG_VISITED:
-                new_with_finalizer.append(x)
-                continue
-            marked.append(x)
-            pending.append(x)
-            while pending.non_empty():
-                y = pending.pop()
-                state = self._finalization_state(y)
-                if state == 0:
-                    self._bump_finalization_state_from_0_to_1(y)
-                    self.trace(y, self._append_if_nonnull, pending)
-                elif state == 2:
-                    self._recursively_bump_finalization_state_from_2_to_3(y)
-            self._recursively_bump_finalization_state_from_1_to_2(x)
-
-        while marked.non_empty():
-            x = marked.popleft()
-            state = self._finalization_state(x)
-            ll_assert(state >= 2, "unexpected finalization state < 2")
-            if state == 2:
-                self.run_finalizers.append(x)
-                # we must also fix the state from 2 to 3 here, otherwise
-                # we leave the GCFLAG_FINALIZATION_ORDERING bit behind
-                # which will confuse the next collection
-                self._recursively_bump_finalization_state_from_2_to_3(x)
+        #
+        ll_assert(not self.objects_to_trace.non_empty(),
+                  "objects_to_trace non empty [deal_old_finalizer]")
+        #
+        old_objs = self.old_objects_with_finalizers
+        self.old_objects_with_finalizers = self.AddressStack()
+        finalizer_funcs = self.AddressDict()
+        #
+        while old_objs.non_empty():
+            func = old_objs.pop()
+            obj = old_objs.pop()
+            ll_assert(bool(self.header(obj).tid & GCFLAG_HAS_FINALIZER),
+                      "lost GCFLAG_HAS_FINALIZER")
+            #
+            if self.header(obj).tid & GCFLAG_VISITED:
+                # surviving
+                self.old_objects_with_finalizers.append(obj)
+                self.old_objects_with_finalizers.append(func)
+                #
             else:
-                new_with_finalizer.append(x)
-
-        self.tmpstack.delete()
-        pending.delete()
-        marked.delete()
-        self.objects_with_finalizers.delete()
-        self.objects_with_finalizers = new_with_finalizer
-
-    def _append_if_nonnull(pointer, stack):
-        stack.append(pointer.address[0])
-    _append_if_nonnull = staticmethod(_append_if_nonnull)
-
-    def _finalization_state(self, obj):
-        tid = self.header(obj).tid
-        if tid & GCFLAG_VISITED:
-            if tid & GCFLAG_FINALIZATION_ORDERING:
-                return 2
-            else:
-                return 3
-        else:
-            if tid & GCFLAG_FINALIZATION_ORDERING:
-                return 1
-            else:
-                return 0
-
-    def _bump_finalization_state_from_0_to_1(self, obj):
-        ll_assert(self._finalization_state(obj) == 0,
-                  "unexpected finalization state != 0")
-        hdr = self.header(obj)
-        hdr.tid |= GCFLAG_FINALIZATION_ORDERING
-
-    def _recursively_bump_finalization_state_from_2_to_3(self, obj):
-        ll_assert(self._finalization_state(obj) == 2,
-                  "unexpected finalization state != 2")
-        pending = self.tmpstack
-        ll_assert(not pending.non_empty(), "tmpstack not empty")
-        pending.append(obj)
+                # dying
+                self.objects_to_trace.append(obj)
+                finalizer_funcs.setitem(obj, func)
+        #
+        # Now follow all the refs
+        finalizers_scheduled = self.AddressStack()
+        pending = self.objects_to_trace
         while pending.non_empty():
-            y = pending.pop()
-            hdr = self.header(y)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
-                hdr.tid &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
-                self.trace(y, self._append_if_nonnull, pending)
-
-    def _recursively_bump_finalization_state_from_1_to_2(self, obj):
-        # recursively convert objects from state 1 to state 2.
-        # The call to visit_all_objects() will add the GCFLAG_VISITED
-        # recursively.
-        self.objects_to_trace.append(obj)
-        self.visit_all_objects()
+            obj = pending.pop()
+            if obj:
+                #
+                if self.header(obj).tid & GCFLAG_HAS_FINALIZER:
+                    self.header(obj).tid &= ~GCFLAG_HAS_FINALIZER
+                    pending.append(obj)
+                    pending.append(NULL)   # marker
+                #
+                self.visit(obj)
+                #
+            else:
+                # seen a NULL marker
+                obj = pending.pop()
+                finalizers_scheduled.append(obj)
+        #
+        # Copy the objects scheduled into 'run_finalizers_queue', in
+        # reverse order.
+        while finalizers_scheduled.non_empty():
+            obj = finalizers_scheduled.pop()
+            func = finalizer_funcs.get(obj)
+            ll_assert(func != NULL, "lost finalizer [2]")
+            self.run_finalizers_queue.append(obj)
+            self.run_finalizers_funcs.append(func)
+        finalizers_scheduled.delete()
+        finalizer_funcs.delete()
+        old_objs.delete()
 
 
     # ----------
