@@ -573,10 +573,13 @@ class MiniMarkGC(MovingGCBase):
 
 
     def collect(self, gen=1):
-        """Do a minor (gen=0) or major (gen>0) collection."""
-        self.minor_collection()
-        if gen > 0:
-            self.major_collection()
+        """Do a minor (gen=0) or major (gen>0) collection,
+        or merely executes pending finalizers (gen<0).
+        """
+        if gen >= 0:
+            self.minor_collection()
+            if gen > 0:
+                self.major_collection()
         self.execute_finalizers()
 
     def collect_and_reserve(self, totalsize):

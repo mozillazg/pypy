@@ -377,6 +377,18 @@ class RegisterFinalizerEntry(ExtRegistryEntry):
         return hop.genop('gc_register_finalizer', [v_self, v_llfn],
                          resulttype=lltype.Void)
 
+class ProgressThroughFinalizerQueueEntry(ExtRegistryEntry):
+    _about_ = progress_through_finalizer_queue
+
+    def compute_result_annotation(self):
+        from rpython.annotator import model as annmodel
+        return annmodel.s_None
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        args_v = [hop.inputconst(lltype.Signed, -1)]
+        return hop.genop('gc__collect', args_v, resulttype=hop.r_result)
+
 
 # ____________________________________________________________
 

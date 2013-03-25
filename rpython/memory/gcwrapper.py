@@ -245,7 +245,9 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         try:
             self.llinterp.eval_graph(finalizer.ptr._obj.graph, [obj],
                                      recursive=True)
-        except llinterp.LLException:
+        except llinterp.LLException, e:
+            if ''.join(e.args[0].name) == 'FinalizeLater\x00':
+                return False
             raise RuntimeError(
                 "a finalizer raised an exception, shouldn't happen")
         return True

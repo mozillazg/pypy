@@ -262,6 +262,7 @@ class GCTest(object):
                 b.nextid += 1
             def finalizer(self):
                 b.num_finalized += 1
+                debug_print("call to finalizer() number", b.num_finalized)
                 if (b.num_finalized % 3) == 0:
                     raise rgc.FinalizeLater
         def f(x):
@@ -271,6 +272,8 @@ class GCTest(object):
             while i < x:
                 i += 1
                 a = A()
+                rgc.register_finalizer(a.finalizer)
+            a = None
             llop.gc__collect(lltype.Void)
             if b.num_finalized == 0:
                 llop.gc__collect(lltype.Void)
@@ -282,7 +285,6 @@ class GCTest(object):
             rgc.progress_through_finalizer_queue()
             assert b.num_finalized == 8
         res = self.interpret(f, [5])
-        assert res == 606
 
     def test_custom_trace(self):
         from rpython.rtyper.annlowlevel import llhelper
