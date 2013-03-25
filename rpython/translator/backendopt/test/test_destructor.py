@@ -127,6 +127,15 @@ class TestLLType(BaseDestructorAnalyzerTests):
         r = self.analyze(g, [], f, backendopt=True)
         assert not r
 
+    def test_setarrayitem(self):
+        x = lltype.malloc(lltype.Array(lltype.Signed), 5, flavor='raw',
+                          immortal=True)
+        def f():
+            x[1] += 1
+
+        r = self.analyze(f, [], f)
+        assert not r
+
     def test_chain(self):
         class B(object):
             def __init__(self):

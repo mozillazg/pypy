@@ -31,12 +31,13 @@ class DestructorAnalyzer(graphanalyze.BoolGraphAnalyzer):
         if (op.opname.startswith('int_') or op.opname.startswith('float_')
             or op.opname.startswith('cast_')):
             return self.bottom_result()
-        if op.opname == 'setfield' or op.opname == 'bare_setfield':
-            TP = op.args[2].concretetype
+        if (op.opname == 'setfield' or op.opname == 'bare_setfield' or
+            op.opname == 'setarrayitem' or op.opname == 'bare_setarrayitem'):
+            TP = op.args[-1].concretetype
             if not isinstance(TP, lltype.Ptr) or TP.TO._gckind == 'raw':
                 # primitive type
                 return self.bottom_result()
-        if op.opname == 'getfield':
+        if op.opname == 'getfield' or op.opname == 'getarrayitem':
             TP = op.result.concretetype
             if not isinstance(TP, lltype.Ptr) or TP.TO._gckind == 'raw':
                 # primitive type
