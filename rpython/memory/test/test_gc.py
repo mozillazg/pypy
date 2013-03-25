@@ -12,6 +12,7 @@ from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib import rgc
 from rpython.rlib.rstring import StringBuilder
 from rpython.rlib.rarithmetic import LONG_BIT
+from rpython.rlib.debug import debug_print
 
 WORD = LONG_BIT // 8
 
@@ -224,7 +225,10 @@ class GCTest(object):
                 self.id = b.nextid
                 b.nextid += 1
             def finalizer(self):
-                assert n.num_deleted <= b.num_finalized
+                if b.num_deleted > b.num_finalized:
+                    debug_print("Oups! num_deleted =", b.num_deleted,
+                                "but num_finalized =", b.num_finalized)
+                    raise AssertionError
                 b.num_finalized += 1
             def __del__(self):
                 b.num_deleted += 1
@@ -235,8 +239,13 @@ class GCTest(object):
             while i < x:
                 i += 1
                 a = A()
+                rgc.register_finalizer(a.finalizer)
+            a = None
+            debug_print("first collection (minor only)...")
+            llop.gc__collect(lltype.Void, 0)
+            debug_print("second collection...")
             llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
+            debug_print("done")
             return b.num_finalized * 100 + b.num_deleted
         res = self.interpret(f, [5])
         assert res == 606

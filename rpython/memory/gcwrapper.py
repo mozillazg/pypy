@@ -220,16 +220,16 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
         t = self.llinterp.typer.annotator.translator
         DestructorAnalyzer(t).check_destructor(destrgraph)
-        def ll_finalizer(addr, dummy):
+        def ll_destructor(addr, dummy):
             assert dummy == llmemory.NULL
             try:
                 v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
                 self.llinterp.eval_graph(destrgraph, [v], recursive=True)
             except llinterp.LLException:
                 raise RuntimeError(
-                    "a finalizer raised an exception, shouldn't happen")
+                    "a destructor raised an exception, shouldn't happen")
             return llmemory.NULL
-        return llhelper(gctypelayout.GCData.DESTRUCTOR_OR_CT, ll_finalizer)
+        return llhelper(gctypelayout.GCData.DESTRUCTOR_OR_CT, ll_destructor)
 
     def make_custom_trace_funcptr_for_type(self, TYPE):
         from rpython.memory.gctransform.support import get_rtti
@@ -242,8 +242,12 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
     def _call_finalizer(self, finalizer, obj):
         FUNC = lltype.typeOf(finalizer.ptr).TO
         obj = llmemory.cast_adr_to_ptr(obj, FUNC.ARGS[0])
-        self.llinterp.eval_graph(finalizer.ptr._obj.graph, [obj],
-                                 recursive=True)
+        try:
+            self.llinterp.eval_graph(finalizer.ptr._obj.graph, [obj],
+                                     recursive=True)
+        except llinterp.LLException:
+            raise RuntimeError(
+                "a finalizer raised an exception, shouldn't happen")
         return True
 
 
