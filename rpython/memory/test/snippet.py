@@ -12,6 +12,7 @@ class SemiSpaceGCTestDefines:
     def definestr_finalizer_order(cls):
         import random
         x = random.randrange(0,10000)
+        x = 2696
         print "R"*1000
         print x
         print '-'*60
@@ -19,7 +20,7 @@ class SemiSpaceGCTestDefines:
         from rpython.tool.algo import graphlib
 
         cls.finalizer_order_examples = examples = []
-        if cls.large_tests_ok:
+        if 1: # cls.large_tests_ok:
             letters = 'abcdefghijklmnopqrstuvwxyz'
             COUNT = 20
         else:
@@ -76,7 +77,7 @@ class SemiSpaceGCTestDefines:
                 vertices[c].refs.append(vertices[d])
 
         def f(_):
-            i = 0
+            i = 2
             while i < len(examples):
                 debug_print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
                 input, components, strict = examples[i]

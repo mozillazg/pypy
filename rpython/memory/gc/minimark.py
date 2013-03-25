@@ -1243,6 +1243,7 @@ class MiniMarkGC(MovingGCBase):
         #
         # Before everything else, remove from 'old_objects_pointing_to_young'
         # the young arrays.
+        self.remember_young_rawmalloced_visited = None
         if self.young_rawmalloced_objects:
             self.remove_young_arrays_from_old_objects_pointing_to_young()
         #
@@ -1492,7 +1493,7 @@ class MiniMarkGC(MovingGCBase):
         # We will fix such references to point to the copy of the young
         # objects when we walk 'old_objects_pointing_to_young'.
         self.old_objects_pointing_to_young.append(newobj)
-        #debug_print("adding", newobj)
+        debug_print("adding", newobj)
     _trace_drag_out._always_inline_ = True
 
     def _visit_young_rawmalloced_object(self, obj):
@@ -1522,6 +1523,10 @@ class MiniMarkGC(MovingGCBase):
             added_somewhere = True
         #
         ll_assert(added_somewhere, "wrong flag combination on young array")
+        #
+        # If 'remember_young_rawmalloced_visited', record it there as well
+        if self.remember_young_rawmalloced_visited:
+            self.remember_young_rawmalloced_visited.append(obj)
 
 
     def _malloc_out_of_nursery(self, totalsize):
@@ -1922,85 +1927,75 @@ class MiniMarkGC(MovingGCBase):
         objects with finalizers.  As these survive for a bit longer,
         we also need to copy them out of the nursery.  The tricky part
         here is to enqueue them in topological order, if possible.
+
+        This is done as three steps: first we find which objects are
+        not reachable at all from 'outside'; then we copy them outside
+        the nursery together with everything they point to; and finally
+        we use on them the generic _deal_with_objects_with_finalizers().
         """
         ll_assert(not self.old_objects_pointing_to_young.non_empty(),
                   "deal_with_young_objects_with_finalizers: "
                   "old_objects_pointing_to_young should be empty")
+        ll_assert(not self.objects_to_trace.non_empty(),
+                  "objects_to_trace non empty [deal_young_finalizer]")
         finalizer_funcs = self.AddressDict()
-        self.finalizers_scheduled = self.AddressStack()
         #
         while self.young_objects_with_finalizers.non_empty():
             func = self.young_objects_with_finalizers.pop()
             obj = self.young_objects_with_finalizers.pop()
             #
-            # The following lines move 'obj' out of the nursery and add it to
-            # 'self.old_objects_pointing_to_young' --- unless the object
-            # survive, in which case it was already seen and the following
-            # lines have no effect.
-            root = self.temp_root
-            root.address[0] = obj
-            self._trace_drag_out1(root)
-            objcopy = root.address[0]
-            #debug_print("finalizer for", obj)
-            #debug_print("object moving to", objcopy)
+            survives = False
             #
-            # Remember the finalizer in the dict
-            finalizer_funcs.setitem(objcopy, func)
+            if self.is_in_nursery(obj):
+                if self.is_forwarded(obj):
+                    obj = self.get_forwarding_address(obj)
+                    survives = True
+                else:
+                    #
+                    # The following lines move 'obj' out of the nursery and
+                    # add it to 'self.old_objects_pointing_to_young'.
+                    root = self.temp_root
+                    root.address[0] = obj
+                    self._trace_drag_out1(root)
+                    obj = root.address[0]
             #
-            # Now follow all the refs
-            self._follow_references_from_young_object_with_finalizer()
-        #
-        # Copy the objects scheduled into 'run_finalizers_queue', in
-        # reverse order.
-        while self.finalizers_scheduled.non_empty():
-            obj = self.finalizers_scheduled.pop()
-            func = finalizer_funcs.get(obj)
-            ll_assert(func != NULL, "lost finalizer [1]")
-            self.run_finalizers_queue.append(obj)
-            self.run_finalizers_funcs.append(func)
-            finalizer_funcs.setitem(obj, NULL)
-        self.finalizers_scheduled.delete()
-        #
-        # The non-NULL entries remaining in 'finalizer_funcs' correspond
-        # to objects that survived, because they have not been traced by
-        # this function but already before.
-        finalizer_funcs.foreach(self._move_to_old_finalizer,
-                                self.old_objects_with_finalizers)
-        finalizer_funcs.delete()
-
-    def _follow_references_from_young_object_with_finalizer(self):
-        pending = self.old_objects_pointing_to_young
-        while pending.non_empty():
-            assert not self.old_objects_with_cards_set.non_empty(), "XXX"
-            obj = pending.pop()
-            #debug_print("popping", obj)
-            if obj:
-                #
-                if self.header(obj).tid & GCFLAG_HAS_FINALIZER:
-                    self.header(obj).tid &= ~GCFLAG_HAS_FINALIZER
-                    #debug_print("this object has a finalizer")
-                    pending.append(obj)
-                    pending.append(NULL)   # marker
-                #
-                ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS
-                          == 0, "bad flags [deal_young_finalizer]")
-                self.header(obj).tid |= GCFLAG_TRACK_YOUNG_PTRS
-                self.trace_and_drag_out_of_nursery(obj)
-                #
+            elif (bool(self.young_rawmalloced_objects) and
+                  self.young_rawmalloced_objects.contains(obj)):
+                if self.header(obj).tid & GCFLAG_VISITED:
+                    survives = True
+            #
+            if survives:
+                self.old_objects_with_finalizers.append(obj)
+                self.old_objects_with_finalizers.append(func)
             else:
-                # seen a NULL marker
-                obj = pending.pop()
-                #debug_print("adding to scheduled", obj)
-                self.finalizers_scheduled.append(obj)
+                # Remember the finalizer in the dict
+                finalizer_funcs.setitem(obj, func)
+                self.objects_to_trace.append(obj)
+        #
+        # Follow all refs
+        self.remember_young_rawmalloced_visited = self.AddressStack()
+        self.collect_oldrefs_to_nursery()
+        #
+        # Reset GCFLAG_VISITED on young rawmalloced objects added just before
+        self.remember_young_rawmalloced_visited.foreach(
+            self._remove_gcflag_visited, None)
+        self.remember_young_rawmalloced_visited.delete()
+        self.remember_young_rawmalloced_visited = None
+        #
+        # At this point all objects reachable from 'finalizer_funcs'
+        # are disconnected from the rest of the world, and none has
+        # the GCFLAG_VISITED set.  Use the generic method.
+        self._deal_with_objects_with_finalizers(finalizer_funcs)
 
-    @staticmethod
-    def _move_to_old_finalizer(obj, finalizer, old_objects_with_finalizers):
-        if finalizer != NULL:
-            old_objects_with_finalizers.append(obj)
-            old_objects_with_finalizers.append(finalizer)
+
+    def _remove_gcflag_visited(self, obj, ignored):
+        # 'obj' has GCFLAG_VISITED; remove it.
+        ll_assert(self.header(obj).tid & GCFLAG_VISITED != 0,
+                  "remove_gcflag_visited: not?")
+        self.header(obj).tid &= ~GCFLAG_VISITED
 
 
-    def deal_with_old_objects_with_finalizers(self):
+    def _deal_with_objects_with_finalizers(self, finalizer_funcs):
         # Walk over list of objects with finalizers.
         # If it is not surviving, add it to the list of to-be-called
         # finalizers and make it survive, to make the finalizer runnable.
@@ -2008,28 +2003,7 @@ class MiniMarkGC(MovingGCBase):
         # CPython does.  The details of this algorithm are in
         # pypy/doc/discussion/finalizer-order.txt.
         #
-        ll_assert(not self.objects_to_trace.non_empty(),
-                  "objects_to_trace non empty [deal_old_finalizer]")
-        #
-        old_objs = self.old_objects_with_finalizers
-        self.old_objects_with_finalizers = self.AddressStack()
-        finalizer_funcs = self.AddressDict()
-        #
-        while old_objs.non_empty():
-            func = old_objs.pop()
-            obj = old_objs.pop()
-            ll_assert(bool(self.header(obj).tid & GCFLAG_HAS_FINALIZER),
-                      "lost GCFLAG_HAS_FINALIZER")
-            #
-            if self.header(obj).tid & GCFLAG_VISITED:
-                # surviving
-                self.old_objects_with_finalizers.append(obj)
-                self.old_objects_with_finalizers.append(func)
-                #
-            else:
-                # dying
-                self.objects_to_trace.append(obj)
-                finalizer_funcs.setitem(obj, func)
+        xxxxxxxxxxx
         #
         # Now follow all the refs
         finalizers_scheduled = self.AddressStack()
@@ -2061,6 +2035,33 @@ class MiniMarkGC(MovingGCBase):
         finalizers_scheduled.delete()
         finalizer_funcs.delete()
         old_objs.delete()
+
+
+    def deal_with_old_objects_with_finalizers(self):
+        ll_assert(not self.objects_to_trace.non_empty(),
+                  "objects_to_trace non empty [deal_old_finalizer]")
+        #
+        old_objs = self.old_objects_with_finalizers
+        self.old_objects_with_finalizers = self.AddressStack()
+        finalizer_funcs = self.AddressDict()
+        #
+        while old_objs.non_empty():
+            func = old_objs.pop()
+            obj = old_objs.pop()
+            ll_assert(bool(self.header(obj).tid & GCFLAG_HAS_FINALIZER),
+                      "lost GCFLAG_HAS_FINALIZER")
+            #
+            if self.header(obj).tid & GCFLAG_VISITED:
+                # surviving
+                self.old_objects_with_finalizers.append(obj)
+                self.old_objects_with_finalizers.append(func)
+                #
+            else:
+                # dying
+                self.objects_to_trace.append(obj)
+                finalizer_funcs.setitem(obj, func)
+        #
+        self._deal_with_objects_with_finalizers(finalizer_funcs)
 
 
     # ----------
