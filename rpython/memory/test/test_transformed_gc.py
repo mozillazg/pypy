@@ -287,7 +287,7 @@ class GenericGCTests(GCTest):
         res = run([])
         assert res == 42
 
-    def define_finalizer(cls):
+    def define_destructor(cls):
         class B(object):
             pass
         b = B()
@@ -312,42 +312,10 @@ class GenericGCTests(GCTest):
 
     def test_finalizer(self):
         run = self.runner("finalizer")
-        res = run([5, 42]) #XXX pure lazyness here too
+        res = run([5, 42])
         assert res == 6
 
-    def define_finalizer_calls_malloc(cls):
-        class B(object):
-            pass
-        b = B()
-        b.nextid = 0
-        b.num_deleted = 0
-        class AAA(object):
-            def __init__(self):
-                self.id = b.nextid
-                b.nextid += 1
-            def __del__(self):
-                b.num_deleted += 1
-                C()
-        class C(AAA):
-            def __del__(self):
-                b.num_deleted += 1
-        def f(x, y):
-            a = AAA()
-            i = 0
-            while i < x:
-                i += 1
-                a = AAA()
-            llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
-            return b.num_deleted
-        return f
-
-    def test_finalizer_calls_malloc(self):
-        run = self.runner("finalizer_calls_malloc")
-        res = run([5, 42]) #XXX pure lazyness here too
-        assert res == 12
-
-    def define_finalizer_resurrects(cls):
+    def define_finalizer(cls):
         class B(object):
             pass
         b = B()
@@ -357,9 +325,9 @@ class GenericGCTests(GCTest):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
                 b.num_deleted += 1
-                b.a = self
         def f(x, y):
             a = A()
             i = 0
@@ -368,18 +336,13 @@ class GenericGCTests(GCTest):
                 a = A()
             llop.gc__collect(lltype.Void)
             llop.gc__collect(lltype.Void)
-            aid = b.a.id
-            b.a = None
-            # check that __del__ is not called again
-            llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
-            return b.num_deleted * 10 + aid + 100 * (b.a is None)
+            return b.num_deleted
         return f
 
-    def test_finalizer_resurrects(self):
-        run = self.runner("finalizer_resurrects")
-        res = run([5, 42]) #XXX pure lazyness here too
-        assert 160 <= res <= 165
+    def test_finalizer(self):
+        run = self.runner("finalizer")
+        res = run([5, 42])
+        assert res == 6
 
     def define_custom_trace(cls):
         from rpython.rtyper.annlowlevel import llhelper
@@ -475,13 +438,16 @@ class GenericGCTests(GCTest):
             def __init__(self):
                 self.id = b.nextid
                 b.nextid += 1
-            def __del__(self):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
+                self.finalizer1()    # possibly-overriden method
+            def finalizer1(self):
                 llop.gc__collect(lltype.Void)
                 b.num_deleted += 1
                 C()
                 C()
         class C(A):
-            def __del__(self):
+            def finalizer1(self):
                 b.num_deleted += 1
                 b.num_deleted_c += 1
         def f(x, y):
@@ -504,7 +470,7 @@ class GenericGCTests(GCTest):
     def test_collect_during_collect(self):
         run = self.runner("collect_during_collect")
         # runs collect recursively 4 times
-        res = run([4, 42]) #XXX pure lazyness here too
+        res = run([4, 42])
         assert res == 12
 
     def define_collect_0(cls):
@@ -782,8 +748,7 @@ class GenericMovingGCTests(GenericGCTests):
                 if op.opname == 'do_malloc_fixedsize_clear':
                     op.args = [Constant(type_id, llgroup.HALFWORD),
                                Constant(llmemory.sizeof(P), lltype.Signed),
-                               Constant(False, lltype.Bool), # has_finalizer
-                               Constant(False, lltype.Bool), # is_finalizer_light
+                               Constant(False, lltype.Bool), # has_destructor
                                Constant(False, lltype.Bool)] # contains_weakptr
                     break
             else:
@@ -819,8 +784,7 @@ class GenericMovingGCTests(GenericGCTests):
                 if op.opname == 'do_malloc_fixedsize_clear':
                     op.args = [Constant(type_id, llgroup.HALFWORD),
                                Constant(llmemory.sizeof(P), lltype.Signed),
-                               Constant(False, lltype.Bool), # has_finalizer
-                               Constant(False, lltype.Bool), # is_finalizer_light
+                               Constant(False, lltype.Bool), # has_destructor
                                Constant(False, lltype.Bool)] # contains_weakptr
                     break
             else:

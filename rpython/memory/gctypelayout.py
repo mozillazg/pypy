@@ -1,11 +1,12 @@
 from rpython.rtyper.lltypesystem import lltype, llmemory, llarena, llgroup
 from rpython.rtyper.lltypesystem import rclass
 from rpython.rtyper.lltypesystem.lloperation import llop
-from rpython.rlib.debug import ll_assert
+from rpython.rlib.debug import ll_assert, debug_print
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib import rgc
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.tool.identity_dict import identity_dict
+
 
 
 class GCData(object):
@@ -28,6 +29,7 @@ class GCData(object):
                                             llmemory.Address],
                                            llmemory.Address)
     DESTRUCTOR_OR_CT = lltype.Ptr(DESTRUCTOR_OR_CT_FUNC)
+    FINALIZER = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
 
     # structure describing the layout of a typeid
     TYPE_INFO = lltype.Struct("type_info",
@@ -138,15 +140,14 @@ class GCData(object):
         return infobits & T_ANY_SLOW_FLAG == 0
 
     def q_call_finalizer(self, finalizer, obj):
-        XXX
-        FINALIZER = lltype.Ptr(lltype.FuncType([llmemory.Address],
-                                               lltype.Void))
-        finalizer = llmemory.cast_adr_to_ptr(finalizer, FINALIZER)
-        finalizer(obj)
-##                except rgc.FinalizeLater:
-##                    xxx
-##                        except Exception, e:
-##                    XXX
+        finalizer = llmemory.cast_adr_to_ptr(finalizer, self.FINALIZER)
+        try:
+            finalizer(obj)
+        except rgc.FinalizeLater:
+            return False
+        except Exception:
+            debug_print("exception from finalizer", finalizer, "of", obj)
+            llop.debug_fatalerror(lltype.Void, "exception from finalizer!")
         return True
 
 

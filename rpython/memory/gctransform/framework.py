@@ -241,7 +241,6 @@ class BaseFrameworkGCTransformer(GCTransformer):
             [s_gc, s_typeid16,
              annmodel.SomeInteger(nonneg=True),
              annmodel.SomeBool(),
-             annmodel.SomeBool(),
              annmodel.SomeBool()], s_gcref,
             inline = False)
         if hasattr(GCClass, 'malloc_fixedsize'):
@@ -250,7 +249,6 @@ class BaseFrameworkGCTransformer(GCTransformer):
                 malloc_fixedsize_meth,
                 [s_gc, s_typeid16,
                  annmodel.SomeInteger(nonneg=True),
-                 annmodel.SomeBool(),
                  annmodel.SomeBool(),
                  annmodel.SomeBool()], s_gcref,
                 inline = False)
@@ -322,7 +320,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
                 malloc_fast,
                 [s_gc, s_typeid16,
                  annmodel.SomeInteger(nonneg=True),
-                 s_False, s_False, s_False], s_gcref,
+                 s_False, s_False], s_gcref,
                 inline = True)
         else:
             self.malloc_fast_ptr = None
@@ -892,7 +890,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
         c_false = rmodel.inputconst(lltype.Bool, False)
         c_has_weakptr = rmodel.inputconst(lltype.Bool, True)
         args = [self.c_const_gc, c_type_id, c_size,
-                c_false, c_false, c_has_weakptr]
+                c_false, c_has_weakptr]
 
         # push and pop the current live variables *including* the argument
         # to the weakref_create operation, which must be kept alive and
