@@ -140,12 +140,13 @@ class SemiSpaceGCTestDefines:
         class B:
             count = 0
         class A:
-            def __del__(self):
+            def finalizer(self):
                 self.b.count += 1
         def g():
             b = B()
             a = A()
             a.b = b
+            rgc.register_finalizer(a.finalizer)
             i = 0
             lst = [None]
             while i < MAX:

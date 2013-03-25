@@ -973,7 +973,7 @@ class MiniMarkGC(MovingGCBase):
                           "the card marker bits are not cleared")
                 i -= 1
 
-    def _register_finalizer(self, obj, llfn):
+    def register_finalizer(self, obj, llfn):
         if self.header(obj).tid & (
             GCFLAG_HAS_FINALIZER |      # obj has already a finalizer
             GCFLAG_NO_HEAP_PTRS):       # immortal object anyway, and we don't

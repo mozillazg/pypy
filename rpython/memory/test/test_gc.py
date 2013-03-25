@@ -373,8 +373,6 @@ class GCTest(object):
             count = 0
         a = A()
         class B(object):
-            def __init__(self, ref):
-                rgc.register_finalizer(self.finalizer)
             def finalizer(self):
                 # when the finalizer is called, the weakref to myself is
                 # still valid in RPython
@@ -383,7 +381,8 @@ class GCTest(object):
             b = B()
             ref = weakref.ref(b)
             b.ref = ref
-            return b
+            rgc.register_finalizer(b.finalizer)
+            return ref
         def f():
             ref = g()
             llop.gc__collect(lltype.Void)
@@ -412,14 +411,12 @@ class GCTest(object):
         res = self.interpret(f, [])
         assert res
 
-    def test_cycle_with_weakref_and_del(self):
+    def test_cycle_with_weakref_and_finalizer(self):
         import weakref
         class A(object):
             count = 0
         a = A()
         class B(object):
-            def __init__(self, ref):
-                rgc.register_finalizer(self.finalizer)
             def finalizer(self):
                 # when the finalizer is called, the weakref to c should be dead
                 if self.ref() is None:
@@ -433,6 +430,7 @@ class GCTest(object):
             c.b = B()
             ref = weakref.ref(c)
             c.b.ref = ref
+            rgc.register_finalizer(c.b.finalizer)
             return ref
         def f():
             ref = g()
@@ -448,13 +446,12 @@ class GCTest(object):
         class A(object):
             pass
         class B(object):
-            def __init__(self, ref):
-                rgc.register_finalizer(self.finalizer)
             def finalizer(self):
                 self.wref().x += 1
         def g(a):
             b = B()
             b.wref = weakref.ref(a)
+            rgc.register_finalizer(b.finalizer)
             # the only way to reach this weakref is via B, which is an
             # object with finalizer (but the weakref itself points to
             # a, which does not go away but will move during the next

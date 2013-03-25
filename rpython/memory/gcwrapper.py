@@ -29,8 +29,7 @@ class GCManagedHeap(object):
                                                lltype2vtable,
                                                self.llinterp)
         self.get_type_id = layoutbuilder.get_type_id
-        layoutbuilder.initialize_gc_query_function(
-            self.gc, layoutbuilder._call_finalizer)
+        layoutbuilder.initialize_gc_query_function(self.gc)
 
         constants = collect_constants(flowgraphs)
         for obj in constants:
@@ -169,7 +168,8 @@ class GCManagedHeap(object):
         return (hdr.tid & self.gc.gcflag_extra) != 0
 
     def register_finalizer(self, llptr, llfn):
-        self.gc.register_finalizer(llptr, llfn)
+        llobj = llmemory.cast_ptr_to_adr(llptr)
+        self.gc.register_finalizer(llobj, llfn)
 
 # ____________________________________________________________
 
@@ -238,19 +238,6 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
             return rtti._obj.custom_trace_funcptr
         else:
             return None
-
-    def _call_finalizer(self, finalizer, obj):
-        FUNC = lltype.typeOf(finalizer.ptr).TO
-        obj = llmemory.cast_adr_to_ptr(obj, FUNC.ARGS[0])
-        try:
-            self.llinterp.eval_graph(finalizer.ptr._obj.graph, [obj],
-                                     recursive=True)
-        except llinterp.LLException, e:
-            if ''.join(e.args[0].name) == 'FinalizeLater\x00':
-                return False
-            raise RuntimeError(
-                "a finalizer raised an exception, shouldn't happen")
-        return True
 
 
 def collect_constants(graphs):

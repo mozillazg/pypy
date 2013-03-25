@@ -331,13 +331,6 @@ class GCBase(object):
     def debug_check_object(self, obj):
         pass
 
-    def register_finalizer(self, gcobj, llfn):
-        llobj = llmemory.cast_ptr_to_adr(gcobj)
-        self._register_finalizer(llobj, llfn)
-
-    def _register_finalizer(self, obj, llfn):
-        raise NotImplementedError   # must be overridden
-
     def execute_finalizers(self):
         if self.running_finalizers:
             return    # the outer invocation of execute_finalizers() will do it

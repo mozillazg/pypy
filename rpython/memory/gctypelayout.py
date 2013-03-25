@@ -1,10 +1,10 @@
 from rpython.rtyper.lltypesystem import lltype, llmemory, llarena, llgroup
 from rpython.rtyper.lltypesystem import rclass
 from rpython.rtyper.lltypesystem.lloperation import llop
-from rpython.rlib.debug import ll_assert, debug_print
+from rpython.rlib.debug import ll_assert, debug_print, llinterpcall
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib import rgc
-from rpython.rlib.objectmodel import we_are_translated
+from rpython.rlib.objectmodel import we_are_translated, running_on_llinterp
 from rpython.tool.identity_dict import identity_dict
 
 
@@ -140,14 +140,36 @@ class GCData(object):
         return infobits & T_ANY_SLOW_FLAG == 0
 
     def q_call_finalizer(self, finalizer, obj):
+        if not we_are_translated():
+            return GCData.p_call_finalizer(finalizer, obj)
+        if running_on_llinterp:
+            return llinterpcall(lltype.Bool, GCData.p_call_finalizer,
+                                finalizer, obj)
         finalizer = llmemory.cast_adr_to_ptr(finalizer, self.FINALIZER)
         try:
             finalizer(obj)
         except rgc.FinalizeLater:
             return False
         except Exception:
-            debug_print("exception from finalizer", finalizer, "of", obj)
-            llop.debug_fatalerror(lltype.Void, "exception from finalizer!")
+            debug_print("WARNING: unhandled exception from finalizer",
+                        finalizer, "of", obj)
+        return True
+
+    @staticmethod
+    def p_call_finalizer(finalizer, obj):
+        "NOT_RPYTHON"
+        from rpython.rtyper.llinterp import LLInterpreter, LLException
+        FUNC = lltype.typeOf(finalizer.ptr).TO
+        obj = llmemory.cast_adr_to_ptr(obj, FUNC.ARGS[0])
+        llinterp = LLInterpreter.current_interpreter
+        try:
+            llinterp.eval_graph(finalizer.ptr._obj.graph, [obj],
+                                recursive=True)
+        except LLException, e:
+            if ''.join(e.args[0].name) == 'FinalizeLater\x00':
+                return False
+            raise RuntimeError(
+                "a finalizer raised an exception, shouldn't happen")
         return True
 
 
@@ -404,11 +426,8 @@ class TypeLayoutBuilder(object):
         # must be overridden for proper custom tracer support
         return None
 
-    def initialize_gc_query_function(self, gc, call_finalizer=None):
-        gcdata = GCData(self.type_info_group)
-        if call_finalizer is not None:
-            gcdata.q_call_finalizer = call_finalizer   # for tests
-        gcdata.set_query_functions(gc)
+    def initialize_gc_query_function(self, gc):
+        GCData(self.type_info_group).set_query_functions(gc)
 
     def consider_constant(self, TYPE, value, gc):
         if value is not lltype.top_container(value):

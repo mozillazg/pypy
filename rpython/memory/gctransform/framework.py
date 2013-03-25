@@ -431,6 +431,12 @@ class BaseFrameworkGCTransformer(GCTransformer):
                                             annmodel.SomeInteger(nonneg=True)],
                                            annmodel.s_None)
 
+        self.register_finalizer_ptr = getfn(GCClass.register_finalizer.im_func,
+                                            [s_gc, 
+                                             annmodel.SomeAddress(),
+                                             annmodel.SomeAddress()],
+                                            annmodel.s_None)
+
         self.write_barrier_ptr = None
         self.write_barrier_from_array_ptr = None
         if GCClass.needs_write_barrier:
@@ -1194,8 +1200,14 @@ class BaseFrameworkGCTransformer(GCTransformer):
     def pop_roots(self, hop, livevars):
         raise NotImplementedError
 
-    def gct_gc_register_finalizer(self, op):
-        xxx
+    def gct_gc_register_finalizer(self, hop):
+        v_obj, v_func = hop.spaceop.args
+        v_obj_addr = hop.genop("cast_ptr_to_adr", [v_obj],
+                               resulttype = llmemory.Address)
+        hop.genop("direct_call", [self.register_finalizer_ptr,
+                                  self.c_const_gc,
+                                  v_obj_addr, v_func],
+                  resultvar = hop.spaceop.result)
 
 
 class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
