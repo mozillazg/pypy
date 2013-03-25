@@ -3,7 +3,8 @@ from rpython.translator.backendopt import graphanalyze
 from rpython.rtyper.lltypesystem import lltype
 
 class DestructorError(Exception):
-    """The __del__() method contains unsupported operations"""
+    """The __del__() method contains unsupported operations.
+    (You may have to use the newer rgc.register_finalizer())"""
 
 class DestructorAnalyzer(graphanalyze.BoolGraphAnalyzer):
     """ Analyzer that checks if a destructor is lightweight enough for
