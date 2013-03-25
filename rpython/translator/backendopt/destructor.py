@@ -19,9 +19,11 @@ class DestructorAnalyzer(graphanalyze.BoolGraphAnalyzer):
                      'raw_free']
 
     def check_destructor(self, graph):
+        self.unsupported_op = None
         result = self.analyze_direct_call(graph)
         if result is self.top_result():
-            raise DestructorError(DestructorError.__doc__, graph)
+            raise DestructorError(DestructorError.__doc__, graph,
+                                  self.unsupported_op)
 
     def analyze_simple_operation(self, op, graphinfo):
         if op.opname in self.ok_operations:
@@ -39,4 +41,5 @@ class DestructorAnalyzer(graphanalyze.BoolGraphAnalyzer):
             if not isinstance(TP, lltype.Ptr) or TP.TO._gckind == 'raw':
                 # primitive type
                 return self.bottom_result()
+        self.unsupported_op = op
         return self.top_result()

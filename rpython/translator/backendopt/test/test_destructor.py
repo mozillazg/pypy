@@ -108,6 +108,25 @@ class TestLLType(BaseDestructorAnalyzerTests):
         r = self.analyze(g, [], f, backendopt=True)
         assert not r
 
+    def test_c_call_2(self):
+        X = lltype.Ptr(lltype.Struct('X'))
+        x = rffi.llexternal('x', [X], lltype.Signed, threadsafe=True)
+        class C(object):
+            lib = rffi.cast(X, -1)
+
+        def g():
+            c = C()
+            c.lib = rffi.cast(X, -2)
+            f(c)
+
+        def f(c):
+            if c.lib != rffi.cast(X, -1):
+                x(c.lib)
+                c.lib = rffi.cast(X, -1)
+
+        r = self.analyze(g, [], f, backendopt=True)
+        assert not r
+
     def test_chain(self):
         class B(object):
             def __init__(self):
