@@ -44,7 +44,8 @@ class UsingFrameworkTest(object):
         t = Translation(main, gc=cls.gcpolicy,
                         taggedpointers=cls.taggedpointers,
                         gcremovetypeptr=cls.removetypeptr)
-        t.disable(['backendopt'])
+        #t.disable(['backendopt']) -- XXX temporary maybe? needed for __del__
+        #                          --     that calls external C functions
         t.set_backend_extra_options(c_debug_defines=True)
         t.rtype()
         if option.view:
@@ -371,7 +372,7 @@ class UsingFrameworkTest(object):
         res = self.run('framework_opaque')
         assert res == -70
 
-    def define_framework_finalizer(cls):
+    def define_framework_destructor(cls):
         class B(object):
             pass
         b = B()
@@ -384,11 +385,41 @@ class UsingFrameworkTest(object):
             def __del__(self):
                 b.num_deleted += 1
         def f():
-            a = A()
+            A()
             i = 0
             while i < 5:
                 i += 1
-                a = A()
+                A()
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            return b.num_deleted
+        return f
+
+    def test_framework_destructor(self):
+        res = self.run('framework_destructor')
+        assert res == 6
+
+    def define_framework_finalizer(cls):
+        class B(object):
+            pass
+        b = B()
+        b.nextid = 0
+        b.num_deleted = 0
+        class A(object):
+            def __init__(self):
+                self.id = b.nextid
+                b.nextid += 1
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
+                b.num_deleted += 1
+                if b.num_deleted == 3:
+                    raise rgc.FinalizeLater
+        def f():
+            A()
+            i = 0
+            while i < 5:
+                i += 1
+                A()
             llop.gc__collect(lltype.Void)
             llop.gc__collect(lltype.Void)
             return b.num_deleted
@@ -440,6 +471,21 @@ class UsingFrameworkTest(object):
 
     def test_del_raises(self):
         self.run('del_raises') # does not raise
+
+    def define_finalizer_raises(cls):
+        class B(object):
+            def finalizer(self):
+                raise TypeError
+        def func():
+            b = B()
+            rgc.register_finalizer(b.finalizer)
+            b = None
+            rgc.collect()
+            return 0
+        return func
+
+    def test_finalizer_raises(self):
+        self.run('finalizer_raises') # does not raise
 
     def define_custom_trace(cls):
         from rpython.rtyper.annlowlevel import llhelper

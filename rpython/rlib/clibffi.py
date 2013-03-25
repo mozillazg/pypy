@@ -646,8 +646,7 @@ class FuncPtr(AbstractFuncPtr):
 
     def __del__(self):
         if self.ll_args:
-            argnum = len(self.argtypes)
-            for i in range(argnum):
+            for i in range(self.argnum):
                 if self.ll_args[i]:
                     lltype.free(self.ll_args[i], flavor='raw')
             lltype.free(self.ll_args, flavor='raw')
