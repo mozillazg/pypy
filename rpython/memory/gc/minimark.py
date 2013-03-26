@@ -1978,6 +1978,9 @@ class MiniMarkGC(MovingGCBase):
     def _follow_references_from_young_object_with_finalizer(self):
         self.record_duplicates = True
         pending = self.old_objects_pointing_to_young
+        while self.old_objects_with_cards_set.non_empty():
+            pending.append(self.old_objects_with_cards_set.pop())
+        #
         while pending.non_empty():
             obj = pending.pop()
             #debug_print("popping", obj)
@@ -1989,16 +1992,24 @@ class MiniMarkGC(MovingGCBase):
                     pending.append(obj)
                     pending.append(NULL)   # marker
                 #
+                if self.header(obj).tid & GCFLAG_CARDS_SET != 0:
+                    self.old_objects_with_cards_set.append(obj)
+                    self.collect_cardrefs_to_nursery()
+                #
                 if self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS == 0:
                     self.header(obj).tid |= GCFLAG_TRACK_YOUNG_PTRS
                     self.trace_and_drag_out_of_nursery(obj)
+                    while self.old_objects_with_cards_set.non_empty():
+                        pending.append(self.old_objects_with_cards_set.pop())
                 #
             else:
                 # seen a NULL marker
                 obj = pending.pop()
                 #debug_print("adding to scheduled", obj)
                 self.finalizers_scheduled.append(obj)
-        assert not self.old_objects_with_cards_set.non_empty(), "XXX"
+        #
+        ll_assert(not self.old_objects_with_cards_set.non_empty(),
+                  "with_finalizer: old_objects_with_cards_set should be empty")
         self.record_duplicates = False
 
     @staticmethod
