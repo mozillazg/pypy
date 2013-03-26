@@ -1061,7 +1061,7 @@ class TestMiniMarkGCCardMarking(TestMiniMarkGC):
 
 class TestMiniMarkGCLargeNursery(TestMiniMarkGC):
     GC_PARAMS = {'nursery_size': 16384*WORD}
-    #def setup_class(cls):
-    #    py.test.skip("takes a lot of extra time to run")
-    #def teardown_class(cls):
-    #    pass
+    def setup_class(cls):
+        py.test.skip("takes a lot of extra time to run")
+    def teardown_class(cls):
+        pass
