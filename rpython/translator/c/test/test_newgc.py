@@ -421,13 +421,15 @@ class UsingFrameworkTest(object):
                 i += 1
                 A()
             llop.gc__collect(lltype.Void)
-            llop.gc__collect(lltype.Void)
-            return b.num_deleted
+            res = b.num_deleted * 100
+            rgc.progress_through_finalizer_queue()
+            return res + b.num_deleted
         return f
 
     def test_framework_finalizer(self):
         res = self.run('framework_finalizer')
-        assert res == 6
+        # 6 objects, plus one for the FinalizeLater == 7
+        assert res == 307
 
     def define_del_catches(cls):
         def g():
