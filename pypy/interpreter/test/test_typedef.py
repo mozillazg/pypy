@@ -74,10 +74,10 @@ class TestTypeDef:
         sources = []
         for hasdict in [False, True]:
             for wants_slots in [False, True]:
-                for needsdel in [False, True]:
+                if 1:    # was: for needsdel in [False, True]:
                     for weakrefable in [False, True]:
                         print 'Testing case', hasdict, wants_slots,
-                        print needsdel, weakrefable
+                        print weakrefable
                         slots = []
                         checks = []
 
@@ -100,16 +100,7 @@ class TestTypeDef:
                         else:
                             checks.append('')
 
-                        if needsdel:
-                            methodname = '__del__'
-                            checks.append('X();X();X();'
-                                          'import gc;gc.collect();'
-                                          'assert seen')
-                        else:
-                            methodname = 'spam'
-                            checks.append('assert "Del" not in irepr')
-
-                        assert len(checks) == 4
+                        assert len(checks) == 3
                         space.appexec([], """():
                             seen = []
                             class X(list):

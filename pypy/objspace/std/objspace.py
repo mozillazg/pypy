@@ -354,14 +354,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     # relationship, if any)
                     assert cls in self.model.typeorder, repr(cls)
             #
-            if (self.config.objspace.std.withmapdict and cls is W_ObjectObject
-                    and not w_subtype.needsdel):
+            if self.config.objspace.std.withmapdict and cls is W_ObjectObject:
                 from pypy.objspace.std.mapdict import get_subclass_of_correct_size
                 subcls = get_subclass_of_correct_size(self, cls, w_subtype)
             else:
                 subcls = get_unique_interplevel_subclass(
                         self.config, cls, w_subtype.hasdict, w_subtype.nslots != 0,
-                        w_subtype.needsdel, w_subtype.weakrefable)
+                        w_subtype.weakrefable)
             instance = instantiate(subcls)
             assert isinstance(instance, cls)
             instance.user_setup(self, w_subtype)

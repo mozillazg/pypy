@@ -94,7 +94,6 @@ class W_TypeObject(W_Object):
     _immutable_fields_ = ["flag_heaptype",
                           "flag_cpytype",
                           "flag_abstract?",
-                          'needsdel',
                           'weakrefable',
                           'hasdict',
                           'nslots',
@@ -124,7 +123,6 @@ class W_TypeObject(W_Object):
         w_self.dict_w = dict_w
         w_self.nslots = 0
         w_self.hasdict = False
-        w_self.needsdel = False
         w_self.weakrefable = False
         w_self.w_doc = space.w_None
         w_self.weak_subclasses = []
@@ -255,7 +253,7 @@ class W_TypeObject(W_Object):
     # compute a tuple that fully describes the instance layout
     def get_full_instance_layout(w_self):
         w_layout = w_self.w_same_layout_as or w_self
-        return (w_layout, w_self.hasdict, w_self.needsdel, w_self.weakrefable)
+        return (w_layout, w_self.hasdict, w_self.weakrefable)
 
     def compute_default_mro(w_self):
         return compute_C3_mro(w_self.space, w_self)
@@ -658,7 +656,6 @@ def copy_flags_from_bases(w_self, w_bestbase):
             hasoldstylebase = True
             continue
         w_self.hasdict = w_self.hasdict or w_base.hasdict
-        w_self.needsdel = w_self.needsdel or w_base.needsdel
         w_self.weakrefable = w_self.weakrefable or w_base.weakrefable
     w_self.nslots = w_bestbase.nslots
     return hasoldstylebase
@@ -699,8 +696,6 @@ def create_all_slots(w_self, hasoldstylebase):
         create_dict_slot(w_self)
     if wantweakref:
         create_weakref_slot(w_self)
-    if '__del__' in dict_w:
-        w_self.needsdel = True
 
 def create_slot(w_self, slot_name):
     space = w_self.space

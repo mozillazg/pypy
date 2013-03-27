@@ -153,11 +153,10 @@ def enum_interplevel_subclasses(config, cls):
     for flag1 in (False, True):
         for flag2 in (False, True):
             for flag3 in (False, True):
-                for flag4 in (False, True):
-                    result.append(get_unique_interplevel_subclass(
-                        config, cls, flag1, flag2, flag3, flag4))
+                result.append(get_unique_interplevel_subclass(
+                    config, cls, flag1, flag2, flag3))
     result = dict.fromkeys(result)
-    assert len(result) <= 6
+    assert len(result) <= 4
     return result.keys()
 
 def _getusercls(config, cls, wants_dict, wants_slots, weakrefable):
@@ -171,8 +170,8 @@ def _getusercls(config, cls, wants_dict, wants_slots, weakrefable):
     if wants_dict:
         if wants_slots:
             # case 3.  Parent class is 1.
-            parentcls = get_unique_interplevel_subclass(config, cls, True, False,
-                                                        False, True)
+            parentcls = get_unique_interplevel_subclass(config, cls,
+                                                        True, False, True)
             return _usersubclswithfeature(config, parentcls, "slots")
         else:
             # case 1 (we need to add weakrefable unless it's already in 'cls')
@@ -183,8 +182,8 @@ def _getusercls(config, cls, wants_dict, wants_slots, weakrefable):
     else:
         if weakrefable and not typedef.weakrefable:
             # case 4.  Parent class is 2.
-            parentcls = get_unique_interplevel_subclass(config, cls, False, True,
-                                                        False, False)
+            parentcls = get_unique_interplevel_subclass(config, cls,
+                                                        False, True, False)
             return _usersubclswithfeature(config, parentcls, "weakref")
         else:
             # case 2 (if the base is already weakrefable, case 2 == case 4)
