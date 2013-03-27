@@ -600,10 +600,6 @@ class FunctionCodeGenerator(object):
         return 'OP_BOEHM_ZERO_MALLOC(%s, %s, void*, 1, 0);' % (self.expr(op.args[0]),
                                                                self.expr(op.result))
 
-    def OP_BOEHM_REGISTER_FINALIZER(self, op):
-        return 'GC_REGISTER_FINALIZER(%s, (GC_finalization_proc)%s, NULL, NULL, NULL);' \
-               % (self.expr(op.args[0]), self.expr(op.args[1]))
-
     def OP_RAW_MALLOC(self, op):
         eresult = self.expr(op.result)
         esize = self.expr(op.args[0])

@@ -148,7 +148,7 @@ class GCData(object):
         finalizer = llmemory.cast_adr_to_ptr(finalizer, self.FINALIZER)
         try:
             finalizer(obj)
-        except rgc.FinalizeLater:
+        except rgc._FinalizeLater:
             return False
         except Exception:
             debug_print("WARNING: unhandled exception from finalizer",
@@ -166,7 +166,7 @@ class GCData(object):
             llinterp.eval_graph(finalizer.ptr._obj.graph, [obj],
                                 recursive=True)
         except LLException, e:
-            if ''.join(e.args[0].name) == 'FinalizeLater\x00':
+            if ''.join(e.args[0].name) == '_FinalizeLater\x00':
                 return False
             raise RuntimeError(
                 "a finalizer raised an exception, shouldn't happen")

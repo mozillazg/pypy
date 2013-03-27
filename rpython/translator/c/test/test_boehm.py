@@ -136,9 +136,9 @@ class TestUsingBoehm(AbstractGCTestClass):
         assert 0 < res1 <= 10
         assert 0 < res2 <= 5
 
-    def test_del_raises(self):
+    def test_finalizer_raises(self):
         class A(object):
-            def __del__(self):
+            def finalizer(self):
                 s.dels += 1
                 raise Exception
         class State:
@@ -147,6 +147,35 @@ class TestUsingBoehm(AbstractGCTestClass):
         s.dels = 0
         def g():
             a = A()
+        def f():
+            s.dels = 0
+            for i in range(10):
+                g()
+            llop.gc__collect(lltype.Void)
+            return s.dels
+        fn = self.getcompiled(f)
+        # we can't demand that boehm has collected all of the objects,
+        # even with the gc__collect call.  calling the compiled
+        # function twice seems to help, though.
+        res = 0
+        res += fn()
+        res += fn()
+        # if res is still 0, then we haven't tested anything so fail.
+        # it might be the test's fault though.
+        assert res > 0
+
+    def test_finalizer_raises(self):
+        class A(object):
+            def finalizer(self):
+                s.dels += 1
+        class State:
+            pass
+        s = State()
+        s.dels = 0
+        def g():
+            a = A()
+            rgc.register_finalizer(a.finalizer)
+            assert not rgc.gc_supports_finalize_later
         def f():
             s.dels = 0
             for i in range(10):

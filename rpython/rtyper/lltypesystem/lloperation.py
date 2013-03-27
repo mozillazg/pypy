@@ -413,7 +413,6 @@ LL_OPERATIONS = {
 
     'boehm_malloc':         LLOp(),
     'boehm_malloc_atomic':  LLOp(),
-    'boehm_register_finalizer': LLOp(),
     'boehm_disappearing_link': LLOp(),
     'raw_malloc':           LLOp(),
     'raw_malloc_usage':     LLOp(sideeffects=False),

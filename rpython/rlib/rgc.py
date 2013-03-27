@@ -6,6 +6,7 @@ import collections
 
 from rpython.rlib import jit
 from rpython.rlib.objectmodel import we_are_translated, enforceargs, specialize
+from rpython.rlib.objectmodel import CDefinedIntSymbolic
 from rpython.rlib.nonconst import NonConstant
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.rtyper.lltypesystem import lltype, llmemory
@@ -270,7 +271,7 @@ def no_collect(func):
 
 # ____________________________________________________________
 
-class FinalizeLater(Exception):
+class _FinalizeLater(Exception):
     pass
 
 _finalizer_queue = collections.deque()
@@ -285,6 +286,12 @@ class _UntranslatedFinalizingObject(object):
         _finalizer_queue.append((g, self.func))
         progress_through_finalizer_queue()
         delattr(g, '__disable_del')
+
+gc_supports_finalize_later = CDefinedIntSymbolic('GC_SUPPORTS_FINALIZE_LATER',
+                                                 default=1)
+def finalize_later():
+    if gc_supports_finalize_later:
+        raise _FinalizeLater
 
 def register_finalizer(method):
     "NOT_RPYTHON"
@@ -336,7 +343,7 @@ def progress_through_finalizer_queue():
         obj, func = _finalizer_queue.popleft()
         try:
             func(obj)
-        except FinalizeLater:
+        except _FinalizeLater:
             _finalizer_queue.appendleft((obj, func))
             break
         except Exception, e:

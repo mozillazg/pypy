@@ -9,12 +9,12 @@ from rpython.rtyper import rmodel
 
 class BoehmGCTransformer(GCTransformer):
     malloc_zero_filled = True
-    FINALIZER_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
+    DESTRUCTOR_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
     HDR = lltype.Struct("header", ("hash", lltype.Signed))
 
     def __init__(self, translator, inline=False):
         super(BoehmGCTransformer, self).__init__(translator, inline=inline)
-        self.finalizer_funcptrs = {}
+        self.destructor_funcptrs = {}
 
         atomic_mh = mallocHelpers()
         atomic_mh.allocate = lambda size: llop.boehm_malloc_atomic(llmemory.Address, size)
@@ -66,10 +66,15 @@ class BoehmGCTransformer(GCTransformer):
         v_raw = hop.genop("direct_call",
                           [funcptr, c_size],
                           resulttype=llmemory.Address)
-        finalizer_ptr = self.finalizer_funcptr_for_type(TYPE)
-        if finalizer_ptr:
-            c_finalizer_ptr = Constant(finalizer_ptr, self.FINALIZER_PTR)
-            hop.genop("boehm_register_finalizer", [v_raw, c_finalizer_ptr])
+        destructor_ptr = self.destructor_funcptr_for_type(TYPE)
+        if destructor_ptr:
+            from rpython.rtyper.annlowlevel import base_ptr_lltype
+            c_destructor_ptr = Constant(destructor_ptr, self.DESTRUCTOR_PTR)
+            v_llfn = hop.genop('cast_ptr_to_adr', [c_destructor_ptr],
+                               resulttype=llmemory.Address)
+            v_self = hop.genop('cast_adr_to_ptr', [v_raw],
+                               resulttype=base_ptr_lltype())
+            hop.genop("gc_register_finalizer", [v_self, v_llfn])
         return v_raw
 
     def gct_fv_gc_malloc_varsize(self, hop, flags, TYPE, v_length, c_const_size, c_item_size,
@@ -87,9 +92,9 @@ class BoehmGCTransformer(GCTransformer):
                                resulttype=llmemory.Address)
         return v_raw
 
-    def finalizer_funcptr_for_type(self, TYPE):
-        if TYPE in self.finalizer_funcptrs:
-            return self.finalizer_funcptrs[TYPE]
+    def destructor_funcptr_for_type(self, TYPE):
+        if TYPE in self.destructor_funcptrs:
+            return self.destructor_funcptrs[TYPE]
 
         rtti = get_rtti(TYPE)
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
@@ -102,16 +107,17 @@ class BoehmGCTransformer(GCTransformer):
         if destrptr:
             EXC_INSTANCE_TYPE = self.translator.rtyper.exceptiondata.lltype_of_exception_value
             typename = TYPE.__name__
-            def ll_finalizer(addr):
+            def ll_destructor(addr):
                 exc_instance = llop.gc_fetch_exception(EXC_INSTANCE_TYPE)
                 v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
                 ll_call_destructor(destrptr, v, typename)
                 llop.gc_restore_exception(lltype.Void, exc_instance)
-            fptr = self.annotate_finalizer(ll_finalizer, [llmemory.Address], lltype.Void)
+            fptr = self.annotate_finalizer(ll_destructor, [llmemory.Address],
+                                           lltype.Void)
         else:
-            fptr = lltype.nullptr(self.FINALIZER_PTR.TO)
+            fptr = lltype.nullptr(self.DESTRUCTOR_PTR.TO)
 
-        self.finalizer_funcptrs[TYPE] = fptr
+        self.destructor_funcptrs[TYPE] = fptr
         return fptr
 
     def gct_weakref_create(self, hop):

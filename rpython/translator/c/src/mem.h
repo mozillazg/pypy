@@ -91,6 +91,10 @@ void pypy_debug_alloc_results(void);
 
 #endif /* RPY_ASSERT */
 
+
+#define GC_SUPPORTS_FINALIZE_LATER   1
+
+
 /* for Boehm GC */
 
 #ifdef PYPY_USING_BOEHM_GC
@@ -123,6 +127,10 @@ void boehm_gc_finalizer_notifier(void);
 #define OP_GC__DISABLE_FINALIZERS(r)  boehm_gc_finalizer_lock++
 #define OP_GC__ENABLE_FINALIZERS(r)  (boehm_gc_finalizer_lock--,	\
 				      boehm_gc_finalizer_notifier())
+#define OP_GC_REGISTER_FINALIZER(x, y, r)                               \
+                   GC_REGISTER_FINALIZER(x, (GC_finalization_proc)y, NULL, NULL, NULL)
+#undef GC_SUPPORTS_FINALIZE_LATER
+#define GC_SUPPORTS_FINALIZE_LATER   0
 
 #endif /* PYPY_USING_BOEHM_GC */
 
@@ -133,6 +141,9 @@ void boehm_gc_finalizer_notifier(void);
 #define OP_BOEHM_DISAPPEARING_LINK(link, obj, r)  /* nothing */
 #define OP_GC__DISABLE_FINALIZERS(r)  /* nothing */
 #define OP_GC__ENABLE_FINALIZERS(r)  /* nothing */
+#define OP_GC_REGISTER_FINALIZER(x, y, r)  /* nothing */
+#undef GC_SUPPORTS_FINALIZE_LATER
+#define GC_SUPPORTS_FINALIZE_LATER   0
 #endif
 
 /************************************************************/

@@ -258,7 +258,7 @@ def test_progress_through_finalizer_queue():
         def finalize(self):
             if len(seen) < 3:
                 seen.append((self.x, self.y))
-                raise rgc.FinalizeLater
+                raise rgc._FinalizeLater
             seen.append(True)
     p = Point(40, 2)
     rgc.register_finalizer(p.finalize)

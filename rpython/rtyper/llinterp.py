@@ -981,9 +981,6 @@ class LLFrame(object):
 
     op_boehm_malloc = op_boehm_malloc_atomic = op_raw_malloc
 
-    def op_boehm_register_finalizer(self, p, finalizer):
-        pass
-
     def op_boehm_disappearing_link(self, link, obj):
         pass
 

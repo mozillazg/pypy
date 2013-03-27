@@ -413,8 +413,9 @@ class UsingFrameworkTest(object):
             def finalizer(self):
                 b.num_deleted += 1
                 if b.num_deleted == 3:
-                    raise rgc.FinalizeLater
+                    rgc.finalize_later()
         def f():
+            assert rgc.gc_supports_finalize_later
             A()
             i = 0
             while i < 5:

@@ -264,7 +264,7 @@ class GCTest(object):
                 b.num_finalized += 1
                 debug_print("call to finalizer() number", b.num_finalized)
                 if (b.num_finalized % 3) == 0:
-                    raise rgc.FinalizeLater
+                    raise rgc._FinalizeLater
         def f(x):
             a = A()
             rgc.register_finalizer(a.finalizer)
