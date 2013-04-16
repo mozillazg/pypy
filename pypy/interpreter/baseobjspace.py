@@ -1367,6 +1367,26 @@ class ObjSpace(object):
                             self.wrap("integer argument expected, got float"))
         return self.int_w(self.int(w_obj))
 
+    def gateway_chr_w(self, w_obj):
+        """Accept string of length 1 or an integer that can be cast to chr
+        """
+        if self.isinstance_w(w_obj, self.w_str):
+            c = self.str_w(w_obj)
+            if len(c) != 1:
+                raise OperationError(self.w_ValueError,
+                                     self.wrap("string must be of size 1"))
+            return c[0]
+        elif self.isinstance_w(w_obj, self.w_int):
+            i = self.int_w(w_obj)
+            if i < 0 or i > 255:
+                raise OperationError(
+                    self.w_ValueError,
+                    self.wrap("byte must be in range(0, 256)"))
+            return chr(i)
+        raise OperationError(
+            self.w_TypeError,
+            self.wrap("an integer or string of size 1 is required"))
+
     def gateway_float_w(self, w_obj):
         return self.float_w(self.float(w_obj))
 
