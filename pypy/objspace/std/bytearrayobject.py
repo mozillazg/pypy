@@ -64,7 +64,6 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
 
     def descr_insert(self, space, index, val):
         self.data.insert(index, val)
-        return space.w_None
 
     def descr_pop(self, space, index=-1):
         try:
@@ -86,7 +85,14 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
 
     def descr_append(self, space, val):
         self.data.append(val)
-        return space.w_None
+
+    def descr_extend(self, space, w_iterable):
+        if isinstance(w_iterable, W_BytearrayObject):
+            self.data.extend(w_iterable.data)
+            return
+        for w_item in space.listview(w_iterable):
+            c = space.gateway_chr_w(w_item)
+            self.data.append(c)
 
     def __repr__(w_self):
         """ representation for debugging purposes """
@@ -575,12 +581,6 @@ def str_rpartition__Bytearray_ANY(space, w_bytearray, w_sub):
 
 # __________________________________________________________
 # Mutability methods
-
-def bytearray_extend__Bytearray_Bytearray(space, w_bytearray, w_other):
-    w_bytearray.data += w_other.data
-
-def bytearray_extend__Bytearray_ANY(space, w_bytearray, w_other):
-    w_bytearray.data += makebytearraydata_w(space, w_other)
 
 def inplace_add__Bytearray_Bytearray(space, w_bytearray1, w_bytearray2):
     bytearray_extend__Bytearray_Bytearray(space, w_bytearray1, w_bytearray2)

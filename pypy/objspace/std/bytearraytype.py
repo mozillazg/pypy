@@ -69,11 +69,15 @@ class W_AbstractBytearrayObject(W_Object):
         """
         raise NotImplementedError
 
+    def descr_extend(self, space, w_iterable):
+        """B.extend(iterable int) -> None
+
+        Append all the elements from the iterator or sequence to the
+        end of B.
+        """
+        raise NotImplementedError
 
 str_join = SMM('join', 2, defaults=(None,-1))
-
-bytearray_extend  = SMM('extend', 2)
-
 
 
 bytearray_reverse  = SMM('reverse', 1,
@@ -222,5 +226,6 @@ If the argument is a bytearray, the return value is the same object.''',
     pop=interpindirect2app(W_AbstractBytearrayObject.descr_pop),
     remove=interpindirect2app(W_AbstractBytearrayObject.descr_remove),
     append=interpindirect2app(W_AbstractBytearrayObject.descr_append),
+    extend=interpindirect2app(W_AbstractBytearrayObject.descr_extend),
     )
 bytearray_typedef.registermethods(globals())
