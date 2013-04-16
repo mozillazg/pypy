@@ -453,10 +453,6 @@ def str_endswith__Bytearray_Tuple_ANY_ANY(space, w_bytearray, w_suffix, w_start,
     return stringobject.str_endswith__String_Tuple_ANY_ANY(space, w_str, w_suffix,
                                                               w_start, w_stop)
 
-def str_decode__Bytearray_ANY_ANY(space, w_bytearray, w_encoding, w_errors):
-    w_str = str__Bytearray(space, w_bytearray)
-    return stringobject.str_decode__String_ANY_ANY(space, w_str, w_encoding, w_errors)
-
 def str_islower__Bytearray(space, w_bytearray):
     w_str = str__Bytearray(space, w_bytearray)
     return stringobject.str_islower__String(space, w_str)

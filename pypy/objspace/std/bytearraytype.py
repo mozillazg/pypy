@@ -5,7 +5,6 @@ from pypy.interpreter.gateway import (
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 
 from pypy.objspace.std.stringtype import (
-    str_decode,
     str_count, str_index, str_rindex, str_find, str_rfind, str_replace,
     str_startswith, str_endswith, str_islower, str_isupper, str_isalpha,
     str_isalnum, str_isdigit, str_isspace, str_istitle,
@@ -115,6 +114,22 @@ class W_AbstractBytearrayObject(W_Object):
         If the argument is omitted, strip trailing ASCII whitespace.
         """
         raise NotImplementedError
+
+    def descr_decode(self, space, w_encoding=None, w_errors=None):
+        """B.decode([encoding[,errors]]) -> object
+
+        Decodes B using the codec registered for encoding. encoding defaults
+        to the default encoding. errors may be given to set a different error
+        handling scheme. Default is 'strict' meaning that encoding errors raise
+        a UnicodeDecodeError. Other possible values are 'ignore' and 'replace'
+        as well as any other name registerd with codecs.register_error that is
+        able to handle UnicodeDecodeErrors.
+        """
+        from pypy.objspace.std.unicodetype import (
+            _get_encoding_and_errors, decode_object)
+        encoding, errors = _get_encoding_and_errors(
+            space, w_encoding, w_errors)
+        return decode_object(space, self, encoding, errors)
 
 
 def getbytevalue(space, w_value):
@@ -250,5 +265,6 @@ If the argument is a bytearray, the return value is the same object.''',
     strip=interpindirect2app(W_AbstractBytearrayObject.descr_strip),
     lstrip=interpindirect2app(W_AbstractBytearrayObject.descr_lstrip),
     rstrip=interpindirect2app(W_AbstractBytearrayObject.descr_rstrip),
+    decode=interpindirect2app(W_AbstractBytearrayObject.descr_decode),
     )
 bytearray_typedef.registermethods(globals())
