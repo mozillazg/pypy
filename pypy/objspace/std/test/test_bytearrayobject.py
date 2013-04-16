@@ -431,8 +431,12 @@ class AppTestBytesArray:
         assert b == 'abcDEFghi'
 
     def test_decode(self):
-        b = bytearray('abcdefghi')
+        b = bytearray(u'abcdefghi\xe1'.encode('utf-8'))
         u = b.decode('utf-8')
+        assert isinstance(u, unicode)
+        assert u == u'abcdefghi\xe1'
+        b = bytearray('abcdefghi')
+        u = b.decode()
         assert isinstance(u, unicode)
         assert u == u'abcdefghi'
 
