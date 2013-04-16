@@ -122,6 +122,27 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
     def descr_reverse(self, space):
         self.data.reverse()
 
+    def descr_strip(self, space, w_chars=None):
+        if space.is_none(w_chars):
+            chars = _space_chars
+        else:
+            chars = space.bufferstr_new_w(w_chars)
+        return _strip(space, self, chars, 1, 1)
+
+    def descr_lstrip(self, space, w_chars=None):
+        if space.is_none(w_chars):
+            chars = _space_chars
+        else:
+            chars = space.bufferstr_new_w(w_chars)
+        return _strip(space, self, chars, 1, 0)
+
+    def descr_rstrip(self, space, w_chars=None):
+        if space.is_none(w_chars):
+            chars = _space_chars
+        else:
+            chars = space.bufferstr_new_w(w_chars)
+        return _strip(space, self, chars, 0, 1)
+
     def __repr__(w_self):
         """ representation for debugging purposes """
         return "%s(%s)" % (w_self.__class__.__name__, ''.join(w_self.data))
@@ -466,23 +487,6 @@ def str_isspace__Bytearray(space, w_bytearray):
 
 _space_chars = ''.join([chr(c) for c in [9, 10, 11, 12, 13, 32]])
 
-def bytearray_strip__Bytearray_None(space, w_bytearray, w_chars):
-    return _strip(space, w_bytearray, _space_chars, 1, 1)
-
-def bytearray_strip__Bytearray_ANY(space, w_bytearray, w_chars):
-    return _strip(space, w_bytearray, space.bufferstr_new_w(w_chars), 1, 1)
-
-def bytearray_lstrip__Bytearray_None(space, w_bytearray, w_chars):
-    return _strip(space, w_bytearray, _space_chars, 1, 0)
-
-def bytearray_lstrip__Bytearray_ANY(space, w_bytearray, w_chars):
-    return _strip(space, w_bytearray, space.bufferstr_new_w(w_chars), 1, 0)
-
-def bytearray_rstrip__Bytearray_None(space, w_bytearray, w_chars):
-    return _strip(space, w_bytearray, _space_chars, 0, 1)
-
-def bytearray_rstrip__Bytearray_ANY(space, w_bytearray, w_chars):
-    return _strip(space, w_bytearray, space.bufferstr_new_w(w_chars), 0, 1)
 
 # These methods could just delegate to the string implementation,
 # but they have to return a bytearray.
