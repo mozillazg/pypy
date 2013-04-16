@@ -119,6 +119,9 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
                     "found", i, space.type(w_s).getname(space))
         return W_BytearrayObject(newdata)
 
+    def descr_reverse(self, space):
+        self.data.reverse()
+
     def __repr__(w_self):
         """ representation for debugging purposes """
         return "%s(%s)" % (w_self.__class__.__name__, ''.join(w_self.data))
@@ -460,10 +463,6 @@ def str_istitle__Bytearray(space, w_bytearray):
 def str_isspace__Bytearray(space, w_bytearray):
     w_str = str__Bytearray(space, w_bytearray)
     return stringobject.str_isspace__String(space, w_str)
-
-def bytearray_reverse__Bytearray(space, w_bytearray):
-    w_bytearray.data.reverse()
-    return space.w_None
 
 _space_chars = ''.join([chr(c) for c in [9, 10, 11, 12, 13, 32]])
 
