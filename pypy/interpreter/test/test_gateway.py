@@ -238,6 +238,28 @@ class TestGateway:
         assert self.space.eq_w(space.call_function(w_app_g, space.wrap(True)),
                                space.wrap(True))
 
+    def test_interp2app_unwrap_spec_chr(self):
+        space = self.space
+
+        def g(space, c):
+            return space.wrap(c)
+
+        app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, 'chr'])
+        w_app_g = space.wrap(app_g)
+        assert space.str_w(
+            space.call_function(w_app_g, space.wrap(1))) == chr(1)
+        assert space.str_w(
+            space.call_function(w_app_g, space.wrap('a'))) == 'a'
+
+        space.raises_w(space.w_ValueError,
+                       space.call_function, w_app_g, space.wrap('ab'))
+        space.raises_w(space.w_ValueError,
+                       space.call_function, w_app_g, space.wrap(256))
+        space.raises_w(space.w_ValueError,
+                       space.call_function, w_app_g, space.wrap(-1))
+        space.raises_w(space.w_TypeError,
+                       space.call_function, w_app_g, space.w_None)
+
     def test_caching_methods(self):
         class Base(gateway.W_Root):
             def f(self):
