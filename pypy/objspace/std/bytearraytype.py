@@ -77,7 +77,13 @@ class W_AbstractBytearrayObject(W_Object):
         """
         raise NotImplementedError
 
-str_join = SMM('join', 2, defaults=(None,-1))
+    def descr_join(self, space, w_iterable):
+        """B.join(iterable_of_bytes) -> bytes
+
+        Concatenates any number of bytearray objects, with B in between each
+        pair.
+        """
+        raise NotImplementedError
 
 
 bytearray_reverse  = SMM('reverse', 1,
@@ -227,5 +233,6 @@ If the argument is a bytearray, the return value is the same object.''',
     remove=interpindirect2app(W_AbstractBytearrayObject.descr_remove),
     append=interpindirect2app(W_AbstractBytearrayObject.descr_append),
     extend=interpindirect2app(W_AbstractBytearrayObject.descr_extend),
+    join=interpindirect2app(W_AbstractBytearrayObject.descr_join),
     )
 bytearray_typedef.registermethods(globals())
