@@ -85,6 +85,12 @@ class BasePosix(Platform):
         # strip compiler flags
         return [entry[2:] for entry in out.split()]
 
+    def gen_cc_command(self, fname, eci, path, shared=False):
+        fullname = str(path.join(fname))
+        objfullname = fullname[:-2] + '.o'
+        return ([self.cc] + self._compile_args_from_eci(eci, not shared) +
+                ['-c', '-o', objfullname, fullname])
+
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None,
                      shared=False):
         cfiles = self._all_cfiles(cfiles, eci)
@@ -250,7 +256,7 @@ class GnuMakefile(object):
         self.defs = {}
         self.lines = []
         self.makefile_dir = py.path.local(path)
-        
+
     def pathrel(self, fpath):
         if fpath.dirpath() == self.makefile_dir:
             return fpath.basename

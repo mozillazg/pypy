@@ -1,6 +1,7 @@
 import contextlib
+from rpython.tool import runsubprocess2
 import py
-import sys, os
+import sys, os, time
 from rpython.rlib import exports
 from rpython.rtyper.typesystem import getfunctionptr
 from rpython.tool import runsubprocess
@@ -112,7 +113,7 @@ class CCompilerDriver(object):
             str(exename), args))
         profdrv.probe(exename, args)
         return profdrv.after()
-    
+
 class CBuilder(object):
     c_source_filename = None
     _compiled = False
@@ -129,6 +130,7 @@ class CBuilder(object):
         self.gcpolicy = gcpolicy    # for tests only, e.g. rpython/memory/
         self.eci = self.get_eci()
         self.secondary_entrypoints = secondary_entrypoints
+        self._files_sent = 0
 
     def get_eci(self):
         pypy_include_dir = py.path.local(__file__).join('..')
@@ -149,7 +151,7 @@ class CBuilder(object):
                               thread_enabled=self.config.translation.thread,
                               sandbox=self.config.translation.sandbox)
         self.db = db
-        
+
         # give the gc a chance to register interest in the start-up functions it
         # need (we call this for its side-effects of db.get())
         list(db.gcpolicy.gc_startup_code())
@@ -260,11 +262,39 @@ class CBuilder(object):
                     export_symbols=["pypy_main_startup"]))
         self.eci, cfile, extra = gen_source(db, modulename, targetdir,
                                             self.eci, defines=defines,
-                                            split=self.split)
+                                            split=self.split,
+                                            invoke_c_callback=self._invoke_c_compiler)
         self.c_source_filename = py.path.local(cfile)
         self.extrafiles = self.eventually_copy(extra)
         self.gen_makefile(targetdir, exe_name=exe_name)
         return cfile
+
+    def _invoke_c_compiler(self, name, eci, directory):
+        if name is None or name.endswith('.h'):
+            return
+        shared = self.config.translation.shared
+        command = self.translator.platform.gen_cc_command(name, directory, eci,
+                                                          shared=shared)
+        for name, rescode, out, err in runsubprocess2.results():
+            self._files_sent -= 1
+            if rescode == 0:
+                print "Compiled", name
+            else:
+                raise Exception("CC failed with", err)
+        self._files_sent += 1
+        runsubprocess2.run(name, *command)
+
+    def _wait_for_c_compiler(self):
+        while True:
+            for name, rescode, out, err in runsubprocess2.results():
+                if rescode == 0:
+                    print "Compiled", name
+                else:
+                    raise Exception("CC failed with", err)
+                self._files_sent -= 1
+                if self._files_sent == 0:
+                    return
+            time.sleep(.1)
 
     def eventually_copy(self, cfiles):
         extrafiles = []
@@ -352,6 +382,7 @@ class CStandaloneBuilder(CBuilder):
             outputfilename=exe_name)
 
     def compile(self, exe_name=None):
+        self._wait_for_c_compiler()
         assert self.c_source_filename
         assert not self._compiled
 
@@ -499,11 +530,14 @@ MARKER = '/*/*/' # provide an easy way to split after generating
 class SourceGenerator:
     one_source_file = True
 
-    def __init__(self, database):
+    def __init__(self, database, eci, invoke_c_callback=None):
         self.database = database
+        self.eci = eci
         self.extrafiles = []
         self.path = None
         self.namespace = NameManager()
+        self._last_file_name = None
+        self.invoke_c_callback = invoke_c_callback
 
     def set_strategy(self, path, split=True):
         all_nodes = list(self.database.globalcontainers())
@@ -526,6 +560,10 @@ class SourceGenerator:
         return self.namespace.uniquename(name[:-2]) + '.c'
 
     def makefile(self, name):
+        if self.invoke_c_callback is not None:
+            self.invoke_c_callback(self._last_file_name, self.path,
+                                   self.eci)
+        self._last_file_name = name
         log.writing(name)
         filepath = self.path.join(name)
         if name.endswith('.c'):
@@ -621,7 +659,7 @@ class SourceGenerator:
             if self.database.gcpolicy.need_no_typeptr():
                 pass    # XXX gcc uses toooooons of memory???
             else:
-                split_criteria_big = SPLIT_CRITERIA * 4 
+                split_criteria_big = SPLIT_CRITERIA * 4
 
         #
         # All declarations
@@ -776,7 +814,7 @@ def add_extra_files(eci):
 
 
 def gen_source(database, modulename, targetdir,
-               eci, defines={}, split=False):
+               eci, defines={}, split=False, invoke_c_callback=False):
     if isinstance(targetdir, str):
         targetdir = py.path.local(targetdir)
 
@@ -803,7 +841,7 @@ def gen_source(database, modulename, targetdir,
     # 1) All declarations
     # 2) Implementation of functions and global structures and arrays
     #
-    sg = SourceGenerator(database)
+    sg = SourceGenerator(database, eci, invoke_c_callback)
     sg.set_strategy(targetdir, split)
     database.prepare_inline_helpers()
     sg.gen_readable_parts_of_source(f)

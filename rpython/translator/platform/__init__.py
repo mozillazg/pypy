@@ -246,6 +246,9 @@ class Platform(object):
     def _library_dirs_for_libffi(self):
         raise NotImplementedError("Needs to be overwritten")
 
+    def gen_cc_command(self, fname, eci, shared=False):
+        raise NotImplementedError("abstract base class")
+
     def check___thread(self):
         return True
 
