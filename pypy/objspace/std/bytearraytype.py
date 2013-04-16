@@ -36,8 +36,8 @@ class W_AbstractBytearrayObject(W_Object):
         """
         raise NotImplementedError
 
-    @unwrap_spec(index=int)
-    def descr_insert(self, space, index, w_val):
+    @unwrap_spec(index=int, val='chr')
+    def descr_insert(self, space, index, val):
         """B.insert(index, int) -> None
 
         Insert a single item into the bytearray before the given index.

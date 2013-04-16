@@ -62,12 +62,7 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
 
         return space.newbytearray(lst)
 
-    def descr_insert(self, space, index, w_val):
-        if isinstance(val, int):
-            val = chr(val)
-        elif len(val) != 1:
-            raise OperationError(space.w_ValueError,
-                                 space.wrap("string must be of size 1"))
+    def descr_insert(self, space, index, val):
         self.data.insert(index, val)
         return space.w_None
 
