@@ -85,10 +85,13 @@ class W_AbstractBytearrayObject(W_Object):
         """
         raise NotImplementedError
 
+    def descr_reverse(self, space):
+        """B.reverse() -> None
 
-bytearray_reverse  = SMM('reverse', 1,
-                    doc="B.reverse() -> None\n\n"
-                    "Reverse the order of the values in B in place.")
+        Reverse the order of the values in B in place.
+        """
+        raise NotImplementedError
+
 
 bytearray_strip  = SMM('strip', 2, defaults=(None,),
                     doc="B.strip([bytes]) -> bytearray\n\nStrip leading "
@@ -234,5 +237,6 @@ If the argument is a bytearray, the return value is the same object.''',
     append=interpindirect2app(W_AbstractBytearrayObject.descr_append),
     extend=interpindirect2app(W_AbstractBytearrayObject.descr_extend),
     join=interpindirect2app(W_AbstractBytearrayObject.descr_join),
+    reverse=interpindirect2app(W_AbstractBytearrayObject.descr_reverse),
     )
 bytearray_typedef.registermethods(globals())
