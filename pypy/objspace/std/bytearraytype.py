@@ -1,10 +1,8 @@
-from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.model import W_Object
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.gateway import interp2app, unwrap_spec
-from pypy.objspace.std.register_all import register_all
+from pypy.interpreter.gateway import (
+    interpindirect2app, interp2app, unwrap_spec)
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
-from pypy.objspace.std.listobject import get_positive_index
 
 from pypy.objspace.std.stringtype import (
     str_decode,
@@ -17,114 +15,58 @@ from pypy.objspace.std.stringtype import (
     str_splitlines, str_translate)
 
 from rpython.rlib.objectmodel import newlist_hint, resizelist_hint
-from pypy.objspace.std.bytearrayinterface import bytearray_interface_methods
 
 
 class W_AbstractBytearrayObject(W_Object):
-    pass
+    @unwrap_spec(arg=int, fillchar=str)
+    def descr_ljust(self, space, arg, fillchar=' '):
+        """S.ljust(width[, fillchar]) -> string
+
+        Return S left justified in a string of length width. Padding
+        is done using the specified fill character (default is a space).
+        """
+        raise NotImplementedError
+
+    @unwrap_spec(arg=int, fillchar=str)
+    def descr_rjust(self, space, arg, fillchar=' '):
+        """S.rjust(width[, fillchar]) -> string
+
+        Return S right justified in a string of length width. Padding
+        is done using the specified fill character (default is a space).
+        """
+        raise NotImplementedError
+
+    @unwrap_spec(index=int)
+    def descr_insert(self, space, index, w_val):
+        """B.insert(index, int) -> None
+
+        Insert a single item into the bytearray before the given index.
+        """
+        raise NotImplementedError
+
+    @unwrap_spec(index=int)
+    def descr_pop(self, space, index=-1):
+        """B.pop([index]) -> int
+
+        Remove and return a single item from B. If no index
+        argument is given, will pop the last value.
+        """
+        raise NotImplementedError
+
+    @unwrap_spec(value='index')
+    def descr_remove(self, space, value):
+        """B.remove(int) -> None
+
+        Remove the first occurance of a value in B.
+        """
+        raise NotImplementedError
+
 
 str_join = SMM('join', 2, defaults=(None,-1))
 
 bytearray_append  = SMM('append', 2)
 bytearray_extend  = SMM('extend', 2)
 
-
-@unwrap_spec(w_self=W_Root, arg=int, fillchar=str)
-def bytearray_ljust(w_self, space, arg, fillchar=' '):
-    """S.ljust(width[, fillchar]) -> string
-
-    Return S left justified in a string of length width. Padding
-    is done using the specified fill character (default is a space).
-    """
-    assert isinstance(w_self, W_AbstractBytearrayObject)
-    u_self = w_self.data
-    if len(fillchar) != 1:
-        raise OperationError(space.w_TypeError,
-            space.wrap("ljust() argument 2 must be a single character"))
-
-    d = arg - len(u_self)
-    if d > 0:
-        lst = [0] * max(arg, len(u_self))
-        fillchar = fillchar[0]    # annotator hint: it's a single character
-        lst[:len(u_self)] = u_self
-        for i in range(d):
-            lst[len(u_self) + i] = fillchar
-    else:
-        lst = u_self.data[:]
-
-    return space.newbytearray(lst)
-
-
-@unwrap_spec(w_self=W_Root, arg=int, fillchar=str)
-def bytearray_rjust(w_self, space, arg, fillchar=' '):
-    """S.rjust(width[, fillchar]) -> string
-
-    Return S right justified in a string of length width. Padding
-    is done using the specified fill character (default is a space).
-    """
-    u_self = w_self.data
-    assert isinstance(w_self, W_AbstractBytearrayObject)
-    if len(fillchar) != 1:
-        raise OperationError(space.w_TypeError,
-            space.wrap("rjust() argument 2 must be a single character"))
-
-    d = arg - len(u_self)
-    if d > 0:
-        lst = [0] * max(arg, len(u_self))
-        fillchar = fillchar[0]    # annotator hint: it's a single character
-        for i in range(d):
-            lst[i] = fillchar
-        lst[len(u_self)-1:] = u_self
-    else:
-        lst = u_self.data[:]
-
-    return space.newbytearray(lst)
-
-
-@unwrap_spec(index=int, val='str_or_int')
-def bytearray_insert(w_self, space, index, val):
-    """B.insert(index, int) -> None
-
-    Insert a single item into the bytearray before the given index.
-    """
-    if isinstance(val, int):
-        val = chr(val)
-    elif len(val) != 1:
-        raise OperationError(space.w_ValueError,
-                             space.wrap("string must be of size 1"))
-    w_self.data.insert(index, val)
-    return space.w_None
-
-
-@unwrap_spec(index=int)
-def bytearray_pop(w_self, space, index=-1):
-    """B.pop([index]) -> int
-
-    Remove and return a single item from B. If no index
-    argument is given, will pop the last value.
-    """
-    try:
-        result = w_self.data.pop(index)
-    except IndexError:
-        if not w_self.data:
-            raise OperationError(space.w_IndexError, space.wrap(
-                "pop from empty bytearray"))
-        raise OperationError(space.w_IndexError, space.wrap(
-            "pop index out of range"))
-    return space.wrap(ord(result))
-
-
-@unwrap_spec(value='index')
-def bytearray_remove(w_self, space, value):
-    """B.remove(int) -> None
-
-    Remove the first occurance of a value in B.
-    """
-    try:
-        w_self.data.remove(chr(value))
-    except ValueError:
-        raise OperationError(space.w_ValueError, space.wrap(
-            "value not found in bytearray"))
 
 
 bytearray_reverse  = SMM('reverse', 1,
@@ -267,10 +209,10 @@ If the argument is a bytearray, the return value is the same object.''',
     __hash__ = None,
     __reduce__ = interp2app(descr_bytearray__reduce__),
     fromhex = interp2app(descr_fromhex, as_classmethod=True),
-    ljust=interp2app(bytearray_ljust),
-    rjust=interp2app(bytearray_rjust),
-    insert=interp2app(bytearray_insert),
-    pop=interp2app(bytearray_pop),
-    remove=interp2app(bytearray_remove),
+    ljust=interpindirect2app(W_AbstractBytearrayObject.descr_ljust),
+    rjust=interpindirect2app(W_AbstractBytearrayObject.descr_rjust),
+    insert=interpindirect2app(W_AbstractBytearrayObject.descr_insert),
+    pop=interpindirect2app(W_AbstractBytearrayObject.descr_pop),
+    remove=interpindirect2app(W_AbstractBytearrayObject.descr_remove),
     )
 bytearray_typedef.registermethods(globals())

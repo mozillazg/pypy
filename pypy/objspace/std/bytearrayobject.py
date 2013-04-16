@@ -1,32 +1,23 @@
 from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.model import registerimplementation
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.multimethod import FailedToImplement
-from pypy.objspace.std.noneobject import W_NoneObject
-from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.rstring import StringBuilder
-from rpython.rlib.debug import check_annotation
 from pypy.objspace.std import stringobject
-from pypy.objspace.std.intobject import W_IntObject
-from pypy.objspace.std.listobject import get_positive_index, get_list_index
-from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
-from pypy.objspace.std.stringobject import W_StringObject
-from pypy.objspace.std.strutil import ParseStringError
-from pypy.objspace.std.strutil import string_to_float
-from pypy.objspace.std.tupleobject import W_TupleObject
-from pypy.objspace.std.unicodeobject import W_UnicodeObject
-from pypy.objspace.std import slicetype
-from pypy.interpreter import gateway
+from pypy.objspace.std.listobject import get_list_index
+from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.buffer import RWBuffer
 from pypy.interpreter.signature import Signature
 from pypy.objspace.std.bytearraytype import (
-    makebytearraydata_w, getbytevalue,
-    new_bytearray
-)
-from rpython.tool.sourcetools import func_with_new_name
-from pypy.objspace.std.contiguousstring import StringMethods
+    makebytearraydata_w, new_bytearray)
 from pypy.objspace.std.bytearraytype import W_AbstractBytearrayObject
+from pypy.objspace.std.unicodeobject import W_UnicodeObject  # XXX: kill this whem SMMs are dead
+from pypy.objspace.std.noneobject import W_NoneObject  # XXX: and this one.
+from pypy.objspace.std.stringobject import W_StringObject  # XXX: and this too.
+from pypy.objspace.std.tupleobject import W_TupleObject  # XXX: ...
+from pypy.objspace.std.intobject import W_IntObject # XXX: ...
+from pypy.objspace.std.sliceobject import W_SliceObject # XXX: WTF.
 
 
 class W_BytearrayObject(W_AbstractBytearrayObject):
@@ -35,9 +26,73 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
     def __init__(w_self, data):
         w_self.data = data
 
+    def descr_ljust(self, space, arg, fillchar=' '):
+        u_self = self.data
+        if len(fillchar) != 1:
+            raise OperationError(space.w_TypeError,
+                space.wrap("ljust() argument 2 must be a single character"))
+
+        d = arg - len(u_self)
+        if d > 0:
+            lst = [0] * max(arg, len(u_self))
+            fillchar = fillchar[0]    # annotator hint: it's a single character
+            lst[:len(u_self)] = u_self
+            for i in range(d):
+                lst[len(u_self) + i] = fillchar
+        else:
+            lst = u_self.data[:]
+
+        return space.newbytearray(lst)
+
+    def bytearray_rjust(self, space, arg, fillchar=' '):
+        u_self = self.data
+        if len(fillchar) != 1:
+            raise OperationError(space.w_TypeError,
+                space.wrap("rjust() argument 2 must be a single character"))
+
+        d = arg - len(u_self)
+        if d > 0:
+            lst = [0] * max(arg, len(u_self))
+            fillchar = fillchar[0]    # annotator hint: it's a single character
+            for i in range(d):
+                lst[i] = fillchar
+            lst[len(u_self) - 1:] = u_self
+        else:
+            lst = u_self.data[:]
+
+        return space.newbytearray(lst)
+
+    def descr_insert(self, space, index, w_val):
+        if isinstance(val, int):
+            val = chr(val)
+        elif len(val) != 1:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("string must be of size 1"))
+        self.data.insert(index, val)
+        return space.w_None
+
+    def descr_pop(self, space, index=-1):
+        try:
+            result = self.data.pop(index)
+        except IndexError:
+            if not self.data:
+                raise OperationError(space.w_IndexError, space.wrap(
+                    "pop from empty bytearray"))
+            raise OperationError(space.w_IndexError, space.wrap(
+                "pop index out of range"))
+        return space.wrap(ord(result))
+
+    def descr_remove(self, space, value):
+        try:
+            self.data.remove(chr(value))
+        except ValueError:
+            raise OperationError(space.w_ValueError, space.wrap(
+                "value not found in bytearray"))
+
     def __repr__(w_self):
         """ representation for debugging purposes """
         return "%s(%s)" % (w_self.__class__.__name__, ''.join(w_self.data))
+
 
 registerimplementation(W_BytearrayObject)
 
