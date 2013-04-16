@@ -94,6 +94,31 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
             c = space.gateway_chr_w(w_item)
             self.data.append(c)
 
+    def descr_join(self, space, w_iterable):
+        list_w = space.listview(w_iterable)
+        if not list_w:
+            return W_BytearrayObject([])
+        newdata = []
+        data = self.data
+        for i in range(len(list_w)):
+            if data and i != 0:
+                newdata.extend(data)
+            w_s = list_w[i]
+            if space.isinstance_w(w_s, space.w_str):
+                for c in space.str_w(w_s):
+                    newdata.append(c)
+            elif isinstance(w_s, W_BytearrayObject):
+                newdata.extend(w_s.data)
+            elif space.isinstance(w_s, space.w_bytearray):
+                assert False, ("Please implement this case if you add a new"
+                               " bytearray implementation.")
+            else:
+                raise operationerrfmt(
+                    space.w_TypeError,
+                    "sequence item %d: expected string, %s "
+                    "found", i, space.type(w_s).getname(space))
+        return W_BytearrayObject(newdata)
+
     def __repr__(w_self):
         """ representation for debugging purposes """
         return "%s(%s)" % (w_self.__class__.__name__, ''.join(w_self.data))
@@ -403,26 +428,6 @@ def str_endswith__Bytearray_Tuple_ANY_ANY(space, w_bytearray, w_suffix, w_start,
                                space.unpackiterable(w_suffix)])
     return stringobject.str_endswith__String_Tuple_ANY_ANY(space, w_str, w_suffix,
                                                               w_start, w_stop)
-
-def str_join__Bytearray_ANY(space, w_self, w_list):
-    list_w = space.listview(w_list)
-    if not list_w:
-        return W_BytearrayObject([])
-    data = w_self.data
-    newdata = []
-    for i in range(len(list_w)):
-        w_s = list_w[i]
-        if not (space.isinstance_w(w_s, space.w_str) or
-                space.isinstance_w(w_s, space.w_bytearray)):
-            raise operationerrfmt(
-                space.w_TypeError,
-                "sequence item %d: expected string, %s "
-                "found", i, space.type(w_s).getname(space))
-
-        if data and i != 0:
-            newdata.extend(data)
-        newdata.extend([c for c in space.bufferstr_new_w(w_s)])
-    return W_BytearrayObject(newdata)
 
 def str_decode__Bytearray_ANY_ANY(space, w_bytearray, w_encoding, w_errors):
     w_str = str__Bytearray(space, w_bytearray)
