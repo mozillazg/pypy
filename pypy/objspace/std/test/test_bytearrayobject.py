@@ -49,7 +49,9 @@ class AppTestBytesArray:
     def test_repr(self):
         assert repr(bytearray()) == "bytearray(b'')"
         assert repr(bytearray('test')) == "bytearray(b'test')"
-        assert repr(bytearray("d'oh")) == r"bytearray(b'd\'oh')"
+        # CPython 2.7.3 produces a different repr for the test below,
+        # namely: 'bytearray(b"d\\\'oh")'
+        assert repr(bytearray("d'oh")) == 'bytearray(b"d\'oh")'
 
     def test_str(self):
         assert str(bytearray()) == ""

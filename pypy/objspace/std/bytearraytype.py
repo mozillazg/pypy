@@ -131,6 +131,10 @@ class W_AbstractBytearrayObject(W_Object):
             space, w_encoding, w_errors)
         return decode_object(space, self, encoding, errors)
 
+    def descr_repr(self, space):
+        """x.__repr__() <==> repr(x)"""
+        raise NotImplementedError
+
 
 def getbytevalue(space, w_value):
     if space.isinstance_w(w_value, space.w_str):
@@ -252,6 +256,7 @@ If the argument is a bytearray, the return value is the same object.''',
     __new__ = interp2app(descr__new__),
     __hash__ = None,
     __reduce__ = interp2app(descr_bytearray__reduce__),
+    __repr__=interpindirect2app(W_AbstractBytearrayObject.descr_repr),
     fromhex = interp2app(descr_fromhex, as_classmethod=True),
     ljust=interpindirect2app(W_AbstractBytearrayObject.descr_ljust),
     rjust=interpindirect2app(W_AbstractBytearrayObject.descr_rjust),

@@ -12,6 +12,7 @@ from pypy.interpreter.signature import Signature
 from pypy.objspace.std.bytearraytype import (
     makebytearraydata_w, new_bytearray)
 from pypy.objspace.std.bytearraytype import W_AbstractBytearrayObject
+from pypy.objspace.std.stringobject import string_escape_encode
 from pypy.objspace.std.unicodeobject import W_UnicodeObject  # XXX: kill this whem SMMs are dead
 from pypy.objspace.std.noneobject import W_NoneObject  # XXX: and this one.
 from pypy.objspace.std.stringobject import W_StringObject  # XXX: and this too.
@@ -142,6 +143,14 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
         else:
             chars = space.bufferstr_new_w(w_chars)
         return _strip(space, self, chars, 0, 1)
+
+    def descr_repr(self, space):
+        s = "".join(self.data)
+        quote = "'"
+        if quote in s and '"' not in s:
+            quote = '"'
+
+        return space.wrap("bytearray(b" + string_escape_encode(s, quote) + ")")
 
     def __repr__(w_self):
         """ representation for debugging purposes """
@@ -359,40 +368,6 @@ def str_translate__Bytearray_ANY_ANY(space, w_bytearray1, w_table, w_deletechars
     w_res = stringobject.str_translate__String_ANY_ANY(space, w_str_copy,
                                                        w_table, w_deletechars)
     return String2Bytearray(space, w_res)
-
-# Mostly copied from repr__String, but without the "smart quote"
-# functionality.
-def repr__Bytearray(space, w_bytearray):
-    s = w_bytearray.data
-
-    # Good default if there are no replacements.
-    buf = StringBuilder(len("bytearray(b'')") + len(s))
-
-    buf.append("bytearray(b'")
-
-    for i in range(len(s)):
-        c = s[i]
-
-        if c == '\\' or c == "'":
-            buf.append('\\')
-            buf.append(c)
-        elif c == '\t':
-            buf.append('\\t')
-        elif c == '\r':
-            buf.append('\\r')
-        elif c == '\n':
-            buf.append('\\n')
-        elif not '\x20' <= c < '\x7f':
-            n = ord(c)
-            buf.append('\\x')
-            buf.append("0123456789abcdef"[n>>4])
-            buf.append("0123456789abcdef"[n&0xF])
-        else:
-            buf.append(c)
-
-    buf.append("')")
-
-    return space.wrap(buf.build())
 
 def str__Bytearray(space, w_bytearray):
     return space.wrap(''.join(w_bytearray.data))
