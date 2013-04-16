@@ -92,21 +92,30 @@ class W_AbstractBytearrayObject(W_Object):
         """
         raise NotImplementedError
 
+    def descr_strip(self, space, w_chars=None):
+        """B.strip([bytes]) -> bytearray
 
-bytearray_strip  = SMM('strip', 2, defaults=(None,),
-                    doc="B.strip([bytes]) -> bytearray\n\nStrip leading "
-                    "and trailing bytes contained in the argument.\nIf "
-                    "the argument is omitted, strip ASCII whitespace.")
+        Strip leading and trailing bytes contained in the argument.
+        If the argument is omitted, strip ASCII whitespace.
+        """
+        raise NotImplementedError
 
-bytearray_lstrip  = SMM('lstrip', 2, defaults=(None,),
-                    doc="B.lstrip([bytes]) -> bytearray\n\nStrip leading "
-                    "bytes contained in the argument.\nIf the argument is "
-                    "omitted, strip leading ASCII whitespace.")
+    def descr_lstrip(self, space, w_chars=None):
+        """B.lstrip([bytes]) -> bytearray
 
-bytearray_rstrip  = SMM('rstrip', 2, defaults=(None,),
-                    doc="'B.rstrip([bytes]) -> bytearray\n\nStrip trailing "
-                    "bytes contained in the argument.\nIf the argument is "
-                    "omitted, strip trailing ASCII whitespace.")
+        Strip leading bytes contained in the argument.
+        If the argument is omitted, strip leading ASCII whitespace.
+        """
+        raise NotImplementedError
+
+    def descr_rstrip(self, space, w_chars=None):
+        """B.rstrip([bytes]) -> bytearray
+
+        Strip trailing bytes contained in the argument.
+        If the argument is omitted, strip trailing ASCII whitespace.
+        """
+        raise NotImplementedError
+
 
 def getbytevalue(space, w_value):
     if space.isinstance_w(w_value, space.w_str):
@@ -238,5 +247,8 @@ If the argument is a bytearray, the return value is the same object.''',
     extend=interpindirect2app(W_AbstractBytearrayObject.descr_extend),
     join=interpindirect2app(W_AbstractBytearrayObject.descr_join),
     reverse=interpindirect2app(W_AbstractBytearrayObject.descr_reverse),
+    strip=interpindirect2app(W_AbstractBytearrayObject.descr_strip),
+    lstrip=interpindirect2app(W_AbstractBytearrayObject.descr_lstrip),
+    rstrip=interpindirect2app(W_AbstractBytearrayObject.descr_rstrip),
     )
 bytearray_typedef.registermethods(globals())
