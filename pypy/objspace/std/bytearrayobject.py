@@ -44,7 +44,7 @@ class W_BytearrayObject(W_AbstractBytearrayObject):
 
         return space.newbytearray(lst)
 
-    def bytearray_rjust(self, space, arg, fillchar=' '):
+    def descr_rjust(self, space, arg, fillchar=' '):
         u_self = self.data
         if len(fillchar) != 1:
             raise OperationError(space.w_TypeError,
