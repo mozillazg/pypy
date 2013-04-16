@@ -42,6 +42,17 @@ Improved RPython typing
 .. branch: rpython-bytearray
 Rudimentary support for bytearray in RPython
 
+.. branch: refactor-call_release_gil
+Fix a bug which casused cffi to return the wrong result when calling a C
+function which calls a Python callback which forces the frames
+
+.. branch: virtual-raw-mallocs
+JIT optimizations which makes cffi calls even faster, by removing the need to
+allocate a temporary buffer where to store the arguments.
+
+.. branch: improve-docs-2
+Improve documents and straighten out links
+
 .. branches we don't care about
 .. branch: autoreds
 .. branch: reflex-support
@@ -97,7 +108,6 @@ Cleanup _numpypy and numpypy namespaces to more closely resemble numpy.
 Random cleanups to hide FlowObjSpace from public view.
 
 .. branch: vendor-rename
-Remove minor verison number from lib-python dirs to simplify stdlib upgrades.
 
 .. branch: jitframe-on-heap
 Moves optimized JIT frames from stack to heap. As a side effect it enables
@@ -110,3 +120,14 @@ Documentation fixes after going through the docs at PyCon 2013 sprint.
 .. branch: extregistry-refactor
 
 .. branch: remove-list-smm
+.. branch: bridge-logging
+.. branch: curses_cffi
+cffi implementation of _curses
+
+.. branch: sqlite-cffi
+cffi implementation of sqlite3
+
+.. branch: release-2.0-beta2
+.. branch: unbreak-freebsd
+
+.. branch: virtualref-virtualizable
