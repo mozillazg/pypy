@@ -191,14 +191,13 @@ In more detail:
   considerably speed up minor collections, because we then only have to
   scan 128 entries of the array instead of all of them.
 
-- As usual, we need special care about weak references, and objects with
-  finalizers.  Weak references are allocated in the nursery, and if they
-  survive they move to the old stage, as usual for all objects; the
-  difference is that the reference they contain must either follow the
-  object, or be set to NULL if the object dies.  And the objects with
-  finalizers, considered rare enough, are immediately allocated old to
-  simplify the design.  In particular their ``__del__`` method can only
-  be called just after a major collection.
+- As usual, we need special care about weak references.  Weak reference
+  objects are allocated in the nursery, and if they survive they move to
+  the old stage, as usual for all objects; the difference is that the
+  reference they contain must either follow the referenced object, or be
+  set to NULL if the object dies.  After a major collection the
+  referenced object cannot move, but the pointer still needs to be
+  checked and set to NULL if it dies.
 
 - The objects move once only, so we can use a trick to implement id()
   and hash().  If the object is not in the nursery, it won't move any
@@ -209,5 +208,51 @@ In more detail:
   next minor collection, we move it there, and so its id() and hash()
   are preserved.  If the object dies then the pre-reserved location
   becomes free garbage, to be collected at the next major collection.
+
+Destructors and finalizers
+--------------------------
+
+A *destructor* is an RPython ``__del__`` method.  Destructors are called
+when the object really dies, directly from the GC.  They cannot do a lot
+of operations; for example they may not perform any operation involving
+following or changing GC pointers.  They are only useful to do things
+like freeing some raw-malloced memory.  (The content of the ``__del__``
+methods is checked during translation.)
+
+On the other hand, a *finalizer* is more flexible.  You can attach a
+finalizer callback to any RPython instance by calling
+``rgc.register_finalizer(method)``, where ``method`` is a bound method
+of the instance.  (You cannot call ``register_finalizer()`` several
+times on the same instance.)  When such an object is about to die, the
+GC keeps it alive, including all objects it points to, and adds it into
+a to-be-called queue.  If there are several objects with finalizers they
+are added in order: if possible, a topological order (so e.g. if, at the
+time of the GC, an object A contains a pointer to an object B, then
+``A.finalizer`` is added into the queue before ``B.finalizer``).  The GC
+then goes through the queue in order and invokes the callbacks.
+
+The objects really die only when they are no longer in the queue (nor
+anywhere else).  They may have both a finalizer and a destructor; the
+latter will be called when the object really dies.
+
+Note subtle differences with CPython: finalizers are called even if
+there is a cycle of objects with finalizers (by randomly ignoring one of
+the references and following the rest in topological order); finalizers
+are called only once; and it is possible for ``A.finalizer()`` to
+resurrect an object ``B`` that was already enqueued, but this is not
+checked: as ``B`` is already in the queue, ``B.finalizer()`` is called
+anyway when it is its turn.  (This is designed to cope with situations
+where there are suddenly a lot of objects with finalizers in a chain,
+which can occur in Python.)
+
+In some cases we want finalizers to be called at precise points in time,
+rather than when the GC randomly kicks in.  To do this, at the start of
+the finalizer callback function, we check if we're called at a correct
+point in time; if not, we call ``rgc.finalize_later()``, which raises an
+exception.  This exception tells the GC to stop calling finalizers,
+keeping the queue at it is (starting from the object whose finalizer
+just raised).  Later, at a safe point, we ask the GC to proceed by
+calling `rgc.progress_through_finalizer_queue()`.  (This safe point is
+in the interpreter main loop between two bytecodes, in PyPy.)
 
 .. include:: _ref.txt
