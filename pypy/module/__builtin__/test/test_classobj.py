@@ -670,6 +670,22 @@ class AppTestOldstyle(object):
         gc.collect()
         gc.collect()
         assert l == [1, 1]
+        class C:
+            pass
+        c = C()
+        c.__del__ = lambda: l.append(2)
+        c = None
+        gc.collect()
+        gc.collect()
+        gc.collect()
+        assert l == [1, 1, 2]
+        d = A()
+        d.__del__ = lambda: l.append(3)
+        d = None
+        gc.collect()
+        gc.collect()
+        gc.collect()
+        assert l == [1, 1, 2, 3]
 
     def test_catch_attributeerror_of_descriptor(self):
         def booh(self):
@@ -745,21 +761,16 @@ class AppTestOldstyle(object):
         assert Y() != X()
 
     def test_assignment_to_del(self):
-        import sys
-        if not hasattr(sys, 'pypy_objspaceclass'):
-            skip("assignment to __del__ doesn't give a warning in CPython")
-
+        # assignment to __del__ no longer gives a warning
         import warnings
-        
         warnings.simplefilter('error', RuntimeWarning)
         try:
             class X:
                 pass
-            raises(RuntimeWarning, "X.__del__ = lambda self: None")
+            X.__del__ = lambda self: None
             class Y:
                 pass
-            raises(RuntimeWarning, "Y().__del__ = lambda self: None")
-            # but the following works
+            Y().__del__ = lambda self: None
             class Z:
                 def __del__(self):
                     pass

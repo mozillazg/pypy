@@ -638,9 +638,6 @@ weakref_descr.name = '__weakref__'
 def make_weakref_descr(cls):
     """Make instances of the Wrappable subclass 'cls' weakrefable.
     This returns the '__weakref__' desctriptor to use for the TypeDef.
-    Note that if the class also defines a custom '__del__', the
-    __del__ should call self.clear_all_weakrefs() before it clears
-    the resources used by the object.
     """
     # force the interface into the given cls
     def getweakref(self):

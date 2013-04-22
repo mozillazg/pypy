@@ -7,6 +7,7 @@ from pypy.interpreter.typedef import TypeDef
 
 from rpython.rtyper.lltypesystem import rffi
 from rpython.rlib.rdynload import DLLHANDLE, dlopen, dlsym, dlclose, DLOpenError
+from rpython.rlib import rgc
 
 from pypy.module._cffi_backend.cdataobj import W_CData
 from pypy.module._cffi_backend.ctypeobj import W_CType
@@ -28,8 +29,9 @@ class W_Library(Wrappable):
                                       "cannot load library %s: %s",
                                       filename, e.msg)
         self.name = filename
+        rgc.register_finalizer(self.finalizer)
 
-    def __del__(self):
+    def finalizer(self):
         h = self.handle
         if h != rffi.cast(DLLHANDLE, 0):
             self.handle = rffi.cast(DLLHANDLE, 0)

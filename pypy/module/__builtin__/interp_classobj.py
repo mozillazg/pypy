@@ -6,7 +6,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import GetSetProperty, descr_get_dict, descr_set_dict
 from rpython.rlib.objectmodel import compute_identity_hash
 from rpython.rlib.debug import make_sure_not_resized
-from rpython.rlib import jit
+from rpython.rlib import rgc, jit
 
 
 def raise_type_err(space, argument, expected, w_obj):
@@ -57,10 +57,7 @@ class W_ClassObject(Wrappable):
 
     def instantiate(self, space):
         cache = space.fromcache(Cache)
-        if self.lookup(space, '__del__') is not None:
-            w_inst = cache.cls_with_del(space, self)
-        else:
-            w_inst = cache.cls_without_del(space, self)
+        w_inst = cache.class_of_instance(space, self)
         return w_inst
 
     def getdict(self, space):
@@ -152,11 +149,6 @@ class W_ClassObject(Wrappable):
             elif name == "__bases__":
                 self.setbases(space, w_value)
                 return
-            elif name == "__del__":
-                if self.lookup(space, name) is None:
-                    msg = ("a __del__ method added to an existing class will "
-                           "not be called")
-                    space.warn(space.wrap(msg), space.w_RuntimeWarning)
         space.setitem(self.w_dict, w_attr, w_value)
 
     def descr_delattr(self, space, w_attr):
@@ -204,11 +196,10 @@ class W_ClassObject(Wrappable):
 class Cache:
     def __init__(self, space):
         from pypy.interpreter.typedef import _usersubclswithfeature
-        # evil
-        self.cls_without_del = _usersubclswithfeature(
+        # evil: "class_of_instance" is a subclass of W_InstanceObject
+        # which has additionally the "dict" and "weakref" capabilities
+        self.class_of_instance = _usersubclswithfeature(
                 space.config, W_InstanceObject, "dict", "weakref")
-        self.cls_with_del = _usersubclswithfeature(
-                space.config, self.cls_without_del, "del")
 
 
 def class_descr_call(space, w_self, __args__):
@@ -321,6 +312,8 @@ class W_InstanceObject(Wrappable):
         self.user_setup(space, space.gettypeobject(self.typedef))
         assert isinstance(w_class, W_ClassObject)
         self.w_class = w_class
+        if self.getattr_from_class(space, '__del__') is not None:
+            rgc.register_finalizer(self.finalizer)
 
     def user_setup(self, space, w_subtype):
         self.space = space
@@ -391,13 +384,8 @@ class W_InstanceObject(Wrappable):
             if name == '__class__':
                 self.set_oldstyle_class(space, w_value)
                 return
-            if name == '__del__' and w_meth is None:
-                cache = space.fromcache(Cache)
-                if (not isinstance(self, cache.cls_with_del)
-                    and self.getdictvalue(space, '__del__') is None):
-                    msg = ("a __del__ method added to an instance with no "
-                           "__del__ in the class will not be called")
-                    space.warn(space.wrap(msg), space.w_RuntimeWarning)
+            if name == '__del__':
+                rgc.register_finalizer(self.finalizer)
         if w_meth is not None:
             space.call_function(w_meth, w_name, w_value)
         else:
@@ -700,9 +688,8 @@ class W_InstanceObject(Wrappable):
                                  space.wrap("instance has no next() method"))
         return space.call_function(w_func)
 
-    def descr_del(self, space):
-        # Note that this is called from executioncontext.UserDelAction
-        # via the space.userdel() method.
+    def finalizer(self):
+        space = self.space
         w_func = self.getdictvalue(space, '__del__')
         if w_func is None:
             w_func = self.getattr_from_class(space, '__del__')
@@ -783,7 +770,6 @@ W_InstanceObject.typedef = TypeDef("instance",
     __pow__ = interp2app(W_InstanceObject.descr_pow),
     __rpow__ = interp2app(W_InstanceObject.descr_rpow),
     next = interp2app(W_InstanceObject.descr_next),
-    __del__ = interp2app(W_InstanceObject.descr_del),
     __exit__ = interp2app(W_InstanceObject.descr_exit),
     __dict__ = dict_descr,
     **rawdict

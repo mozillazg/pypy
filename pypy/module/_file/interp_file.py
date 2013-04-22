@@ -2,7 +2,7 @@ import py
 import os
 import stat
 import errno
-from rpython.rlib import streamio
+from rpython.rlib import streamio, rgc
 from rpython.rlib.rarithmetic import r_longlong
 from rpython.rlib.rstring import StringBuilder
 from pypy.module._file.interp_stream import W_AbstractStream, StreamErrors
@@ -38,7 +38,7 @@ class W_File(W_AbstractStream):
 
     def __init__(self, space):
         self.space = space
-        self.register_finalizer()
+        rgc.register_finalizer(self.finalizer)
 
     def finalizer(self):
         try:

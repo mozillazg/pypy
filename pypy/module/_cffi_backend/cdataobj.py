@@ -318,7 +318,6 @@ class W_CDataMem(W_CData):
         cdata = lltype.malloc(rffi.CCHARP.TO, size, flavor='raw', zero=True)
         W_CData.__init__(self, space, cdata, ctype)
 
-    @rgc.must_be_light_finalizer
     def __del__(self):
         lltype.free(self._cdata, flavor='raw')
 
