@@ -79,6 +79,7 @@ class Address(object):
         self.addrlen = addrlen
 
     def __del__(self):
+        "Lightweight destructor"
         if self.addr_p:
             lltype.free(self.addr_p, flavor='raw')
 
@@ -493,8 +494,15 @@ class RSocket(object):
         self.type = type
         self.proto = proto
         self.timeout = defaults.timeout
-        
-    def __del__(self):
+        self.register_finalizer()
+
+    def register_finalizer(self):
+        """This version is overriden in pypy/module/_socket with the
+        one from W_Root"""
+        from rpython.rlib import rgc
+        rgc.register_finalizer(self.invoke_finalizer)
+
+    def invoke_finalizer(self):
         fd = self.fd
         if fd != _c.INVALID_SOCKET:
             self.fd = _c.INVALID_SOCKET
