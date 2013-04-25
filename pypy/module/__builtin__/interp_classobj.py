@@ -694,7 +694,7 @@ class W_InstanceObject(Wrappable):
         if w_func is None:
             w_func = self.getattr_from_class(space, '__del__')
         if w_func is not None:
-            self.finalizer_perform(self.space, "__del__ of ",
+            self.finalizer_perform(self.space, "__del__ method of ",
                                    space.call_function, w_func)
 
     def descr_exit(self, space, w_type, w_value, w_tb):

@@ -132,9 +132,12 @@ def ipaddr_from_object(space, w_sockaddr):
 
 
 class W_RSocket(Wrappable, RSocket):
+    def __init__(self, family, type, proto):
+        RSocket.__init__(self, family, type, proto)
+        self.register_finalizer()
+
     def invoke_finalizer(self):
-        self.clear_all_weakrefs()
-        RSocket.invoke_finalizer(self)
+        RSocket.invoke_finalizer(self)     # destroy the socket fd
 
     def accept_w(self, space):
         """accept() -> (socket object, address info)

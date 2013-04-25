@@ -94,6 +94,7 @@ class W_TypeObject(W_Object):
     _immutable_fields_ = ["flag_heaptype",
                           "flag_cpytype",
                           "flag_abstract?",
+                          'has_del?',
                           'weakrefable',
                           'hasdict',
                           'nslots',
@@ -292,10 +293,6 @@ class W_TypeObject(W_Object):
         if not w_self.is_heaptype():
             msg = "can't set attributes on type object '%s'"
             raise operationerrfmt(space.w_TypeError, msg, w_self.name)
-        if name == "__del__" and name not in w_self.dict_w:
-            msg = ("a __del__ method added to an existing type will not be "
-                   "called")
-            space.warn(space.wrap(msg), space.w_RuntimeWarning)
         if space.config.objspace.std.withtypeversion:
             version_tag = w_self.version_tag()
             if version_tag is not None:
@@ -783,6 +780,7 @@ def ensure_module_attr(w_self):
                 w_self.dict_w['__module__'] = w_name
 
 def compute_mro(w_self):
+    mro_w = None
     if w_self.is_heaptype():
         space = w_self.space
         w_metaclass = space.type(w_self)
@@ -791,9 +789,11 @@ def compute_mro(w_self):
             w_mro_meth = space.get(w_mro_func, w_self)
             w_mro = space.call_function(w_mro_meth)
             mro_w = space.fixedview(w_mro)
-            w_self.mro_w = validate_custom_mro(space, mro_w)
-            return    # done
-    w_self.mro_w = w_self.compute_default_mro()[:]
+            mro_w = validate_custom_mro(space, mro_w)
+    if mro_w is None:
+        mro_w = w_self.compute_default_mro()[:]
+    w_self.mro_w = mro_w
+    w_self.has_del = (w_self.lookup("__del__") is not None)
 
 def validate_custom_mro(space, mro_w):
     # do some checking here.  Note that unlike CPython, strange MROs

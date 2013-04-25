@@ -237,6 +237,17 @@ def _builduserclswithfeature(config, supercls, *features):
                 self.space = space
                 self.w__class__ = w_subtype
                 self.user_setup_slots(w_subtype.nslots)
+                if w_subtype.has_del:
+                    self.register_finalizer()
+
+            def invoke_finalizer(self):
+                space = self.space
+                w_descr = space.lookup(self, '__del__')
+                if w_descr is None:
+                    return
+                self.finalizer_perform(self.space, "__del__ method of ",
+                                       space.get_and_call_function,
+                                       w_descr, self)
 
             def user_setup_slots(self, nslots):
                 assert nslots == 0
