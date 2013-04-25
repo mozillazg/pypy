@@ -1,7 +1,7 @@
 
 from rpython.rtyper.tool import rffi_platform
 from rpython.rtyper.lltypesystem import rffi, lltype, llmemory
-from rpython.rlib import rposix
+from rpython.rlib import rgc, rposix
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 from rpython.rlib.nonconst import NonConstant
 
@@ -268,6 +268,7 @@ class MMap(object):
         elif _POSIX:
             self.fd = -1
             self.closed = False
+        rgc.register_finalizer(self.close)
 
     def check_valid(self):
         if _MS_WINDOWS:
@@ -314,9 +315,6 @@ class MMap(object):
             if self.size > 0:
                 c_munmap_safe(self.getptr(0), self.size)
                 self.setdata(NODATA, 0)
-
-    def __del__(self):
-        self.close()
 
     def unmapview(self):
         UnmapViewOfFile(self.getptr(0))
