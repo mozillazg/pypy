@@ -1,6 +1,6 @@
 import sys
 from rpython.rlib import _rffi_stacklet as _c
-from rpython.rlib import jit
+from rpython.rlib import rgc, jit
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rtyper.lltypesystem import lltype, llmemory
 
@@ -55,13 +55,14 @@ class StackletThread(object):
 
 
 class StackletThreadDeleter(object):
-    # quick hack: the __del__ is on another object, so that
+    # quick hack: the finalize() is on another object, so that
     # if the main StackletThread ends up in random circular
     # references, on pypy deletethread() is only called
     # when all that circular reference mess is gone.
     def __init__(self, thrd):
         self._thrd = thrd
-    def __del__(self):
+        rgc.register_finalizer(self.finalize)
+    def finalize(self):
         thrd = self._thrd
         if thrd:
             self._thrd = lltype.nullptr(_c.thread_handle.TO)

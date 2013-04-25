@@ -354,7 +354,7 @@ def force(space, proxy):
 
 proxy_typedef_dict = {}
 callable_proxy_typedef_dict = {}
-special_ops = {'repr': True, 'userdel': True, 'hash': True}
+special_ops = {'repr': True, 'hash': True}
 
 for opname, _, arity, special_methods in ObjSpace.MethodTable:
     if opname in special_ops or not special_methods:

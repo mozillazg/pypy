@@ -32,7 +32,7 @@ METHODS_WITH_SHORTCUT = dict.fromkeys(
  ])
 
 KNOWN_MISSING = ['getattr',   # mostly non-builtins or optimized by CALL_METHOD
-                 'setattr', 'delattr', 'userdel',  # mostly for non-builtins
+                 'setattr', 'delattr',     # mostly for non-builtins
                  'get', 'set', 'delete',   # uncommon (except on functions)
                  'getslice', 'setslice', 'delslice',  # see below
                  'delitem', 'trunc',              # rare stuff?

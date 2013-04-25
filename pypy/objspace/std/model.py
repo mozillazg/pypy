@@ -425,7 +425,7 @@ class StdObjSpaceMultiMethod(MultiMethodTable):
 NOT_MULTIMETHODS = dict.fromkeys(
     ['delattr', 'delete', 'get', 'id', 'inplace_div', 'inplace_floordiv',
      'inplace_lshift', 'inplace_mod', 'inplace_pow', 'inplace_rshift',
-     'inplace_truediv', 'is_', 'set', 'setattr', 'type', 'userdel',
+     'inplace_truediv', 'is_', 'set', 'setattr', 'type',
      'isinstance', 'issubtype'])
 # XXX should we just remove those from the method table or we're happy
 #     with just not having multimethods?

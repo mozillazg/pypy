@@ -1622,7 +1622,6 @@ ObjSpace.MethodTable = [
     ('get',             'get',       3, ['__get__']),
     ('set',             'set',       3, ['__set__']),
     ('delete',          'delete',    2, ['__delete__']),
-    ('userdel',         'del',       1, ['__del__']),
     ('buffer',          'buffer',    1, ['__buffer__']),   # see buffer.py
     ]
 
