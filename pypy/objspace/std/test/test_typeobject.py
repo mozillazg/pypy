@@ -58,7 +58,7 @@ class TestTypeObject:
             """)
         finally:
             space.warn = prev_warn
-        assert len(warnings) == 2
+        assert len(warnings) == 0     # should not give warnings any longer
 
     def test_metaclass_typedef(self):
         py.test.skip("Not implemented yet")
@@ -1061,6 +1061,18 @@ class AppTestTypeObject:
         assert A.__dict__["x"] == 1
         A.__dict__['x'] = 5
         assert A.x == 5
+
+    def test_late_del(self):
+        seen = []
+        class A(object):
+            pass
+        A.__del__ = lambda self: seen.append(1)
+        A()
+        for i in range(5):
+            if seen:
+                break
+            import gc; gc.collect()
+        assert seen
 
 
 class AppTestWithMethodCacheCounter:

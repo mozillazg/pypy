@@ -293,6 +293,8 @@ class W_TypeObject(W_Object):
         if not w_self.is_heaptype():
             msg = "can't set attributes on type object '%s'"
             raise operationerrfmt(space.w_TypeError, msg, w_self.name)
+        if name == "__del__":
+            w_self.has_del = True
         if space.config.objspace.std.withtypeversion:
             version_tag = w_self.version_tag()
             if version_tag is not None:
