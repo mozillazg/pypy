@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-import gc, weakref
+import gc, weakref, atexit
 import types
 import collections
 
@@ -347,11 +347,15 @@ def progress_through_finalizer_queue():
             _finalizer_queue.appendleft((obj, func))
             break
         except Exception, e:
-            raise AssertionError("progress_through_finalizer_queue(): "
+            raise FinalizerError("progress_through_finalizer_queue(): "
                                  "%s raised %s: %s" % (func,
                                                        e.__class__.__name__,
                                                        e))
     _finalizer_lock.append(None)
+
+class FinalizerError(Exception):
+    "NOT_RPYTHON"
+atexit.register(_finalizer_queue.clear)
 
 class RegisterFinalizerEntry(ExtRegistryEntry):
     _about_ = register_finalizer
