@@ -435,41 +435,31 @@ class PeriodicAsyncAction(AsyncAction):
 
 
 class UserDelAction(AsyncAction):
-    """An action that invokes all pending app-level __del__() method.
+    """An action that invokes all pending finalizers.
     This is done as an action instead of immediately when the
-    interp-level __del__() is invoked, because the latter can occur more
+    interp-level finalizer is invoked, because the latter can occur more
     or less anywhere in the middle of code that might not be happy with
     random app-level code mutating data structures under its feet.
     """
 
     def __init__(self, space):
         AsyncAction.__init__(self, space)
-        self.dying_objects = []
-        self.finalizers_lock_count = 0
-        self.enabled_at_app_level = True
+        self.in_user_del_action = False
 
-    def register_callback(self, w_obj, callback, descrname):
-        self.dying_objects.append((w_obj, callback, descrname))
-        self.fire()
+    def must_be_between_bytecodes(self):
+        if not self.in_user_del_action:
+            from rpython.rlib import rgc
+            self.fire()
+            rgc.finalize_later()
 
     def perform(self, executioncontext, frame):
-        if self.finalizers_lock_count > 0:
-            return
-        # Each call to perform() first grabs the self.dying_objects
-        # and replaces it with an empty list.  We do this to try to
-        # avoid too deep recursions of the kind of __del__ being called
-        # while in the middle of another __del__ call.
-        pending = self.dying_objects
-        self.dying_objects = []
-        space = self.space
-        for i in range(len(pending)):
-            w_obj, callback, descrname = pending[i]
-            pending[i] = (None, None, None)
+        from rpython.rlib import rgc
+        if not self.in_user_del_action:
+            self.in_user_del_action = True
             try:
-                callback(w_obj)
-            except OperationError, e:
-                e.write_unraisable(space, descrname, w_obj)
-                e.clear(space)   # break up reference cycles
+                rgc.progress_through_finalizer_queue()
+            finally:
+                self.in_user_del_action = False
 
 class FrameTraceAction(AsyncAction):
     """An action that calls the local trace functions (w_f_trace)."""

@@ -6,7 +6,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import GetSetProperty, descr_get_dict, descr_set_dict
 from rpython.rlib.objectmodel import compute_identity_hash
 from rpython.rlib.debug import make_sure_not_resized
-from rpython.rlib import rgc, jit
+from rpython.rlib import jit
 
 
 def raise_type_err(space, argument, expected, w_obj):
@@ -313,7 +313,7 @@ class W_InstanceObject(Wrappable):
         assert isinstance(w_class, W_ClassObject)
         self.w_class = w_class
         if self.getattr_from_class(space, '__del__') is not None:
-            rgc.register_finalizer(self.finalizer)
+            self.register_finalizer()
 
     def user_setup(self, space, w_subtype):
         self.space = space
@@ -385,7 +385,7 @@ class W_InstanceObject(Wrappable):
                 self.set_oldstyle_class(space, w_value)
                 return
             if name == '__del__':
-                rgc.register_finalizer(self.finalizer)
+                self.register_finalizer()
         if w_meth is not None:
             space.call_function(w_meth, w_name, w_value)
         else:
@@ -688,13 +688,14 @@ class W_InstanceObject(Wrappable):
                                  space.wrap("instance has no next() method"))
         return space.call_function(w_func)
 
-    def finalizer(self):
+    def invoke_finalizer(self):
         space = self.space
         w_func = self.getdictvalue(space, '__del__')
         if w_func is None:
             w_func = self.getattr_from_class(space, '__del__')
         if w_func is not None:
-            space.call_function(w_func)
+            self.finalizer_perform(self.space, "__del__ of ",
+                                   space.call_function, w_func)
 
     def descr_exit(self, space, w_type, w_value, w_tb):
         w_func = self.getattr(space, '__exit__', False)

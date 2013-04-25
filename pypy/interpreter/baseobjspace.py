@@ -154,25 +154,38 @@ class W_Root(object):
             self.delweakref()
             lifeline.clear_all_weakrefs()
 
-    __already_enqueued_for_destruction = ()
+    def register_finalizer(self):
+        """Register the fact that this object needs finalization.
+        Can be called several times on the same object with no ill effect."""
+        from rpython.rlib import rgc
+        rgc.register_finalizer(self._invoke_finalizer)
 
-    def enqueue_for_destruction(self, space, callback, descrname):
-        """Put the object in the destructor queue of the space.
-        At a later, safe point in time, UserDelAction will call
-        callback(self).  If that raises OperationError, prints it
-        to stderr with the descrname string.
+    def _invoke_finalizer(self):
+        # The call-back from rgc.register_finalizer(), cannot be overridden
+        self.invoke_finalizer()
 
-        Note that 'callback' will usually need to start with:
-            assert isinstance(self, W_SpecificClass)
+    def invoke_finalizer(self):
+        raise NotImplementedError
+
+    def finalizer_perform(self, space, descrname, callback, *args):
+        """For use in invoke_finalizer().  First check if we're called
+        from the random execution of a __del__ or from UserDelAction,
+        and raise _FinalizeLater in the former case.  Then invoke
+        callback(*args).  If that raises OperationError, prints it to
+        stderr with the descrname string.  The format is:
+
+            Exception XxxError: "error message" in %s%s ignored
+
+        The first %s is descrname (which should thus end with a space
+        character), and the second %s is repr(self).
         """
-        # this function always resurect the object, so when
-        # running on top of CPython we must manually ensure that
-        # we enqueue it only once
-        if not we_are_translated():
-            if callback in self.__already_enqueued_for_destruction:
-                return
-            self.__already_enqueued_for_destruction += (callback,)
-        space.user_del_action.register_callback(self, callback, descrname)
+        space.user_del_action.must_be_between_bytecodes()
+        try:
+            callback(*args)
+        except OperationError, e:
+            e.write_unraisable(space, descrname, self)
+            e.clear(space)   # break up reference cycles
+    finalizer_perform._annspecialcase_ = 'specialize:arg(3)'
 
     # hooks that the mapdict implementations needs:
     def _get_mapdict_map(self):

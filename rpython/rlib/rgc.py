@@ -290,7 +290,7 @@ class _UntranslatedFinalizingObject(object):
 gc_supports_finalize_later = CDefinedIntSymbolic('GC_SUPPORTS_FINALIZE_LATER',
                                                  default=1)
 def finalize_later():
-    if gc_supports_finalize_later:
+    if not we_are_translated() or gc_supports_finalize_later:
         raise _FinalizeLater
 
 def register_finalizer(method):
