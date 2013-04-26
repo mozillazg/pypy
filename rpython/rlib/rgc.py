@@ -277,8 +277,14 @@ _finalizer_objects = weakref.WeakKeyDictionary()
 _finalizer_lock = [None]
 
 class _UntranslatedFinalizingObject(object):
+    import sys
     call_finalizer = None
     def __del__(self):
+        # haaaaaaaaaaaaaaack
+        try:
+            self.sys._getframe(1)
+        except ValueError:     # 'call stack is not deep enough'
+            return  # ignore, very likely called when shutting down
         g = object.__new__(self.original_class)
         g.__dict__ = self.dict
         _finalizer_queue.append((g, self.func))
