@@ -315,7 +315,7 @@ class BasicFrameworkGcPolicy(BasicGcPolicy):
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
             gctransf = self.db.gctransformer
             TYPE = structdefnode.STRUCT
-            kind, fptr = gctransf.special_funcptr_for_type(TYPE)
+            fptrs = gctransf.special_funcptr_for_type(TYPE)
             # make sure this is seen by the database early, i.e. before
             # finish_helpers() on the gctransformer
             destrptr = rtti._obj.destructor_funcptr
@@ -324,7 +324,8 @@ class BasicFrameworkGcPolicy(BasicGcPolicy):
             # helpers.  The get() sees and records a delayed pointer.  It is
             # still important to see it so that it can be followed as soon as
             # the mixlevelannotator resolves it.
-            self.db.get(fptr)
+            for fptr in fptrs.values():
+                self.db.get(fptr)
 
     def array_setup(self, arraydefnode):
         pass
