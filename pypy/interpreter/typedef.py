@@ -223,6 +223,10 @@ def _builduserclswithfeature(config, supercls, *features):
 
     if "user" in features:     # generic feature needed by all subcls
 
+        super_invoke_finalizer = supercls.invoke_finalizer.im_func
+        if super_invoke_finalizer == W_Root.invoke_finalizer.im_func:
+            super_invoke_finalizer = lambda self: None
+
         class Proto(object):
             user_overridden_class = True
 
@@ -243,11 +247,11 @@ def _builduserclswithfeature(config, supercls, *features):
             def invoke_finalizer(self):
                 space = self.space
                 w_descr = space.lookup(self, '__del__')
-                if w_descr is None:
-                    return
-                self.finalizer_perform(self.space, "__del__ method of ",
-                                       space.get_and_call_function,
-                                       w_descr, self)
+                if w_descr is not None:
+                    self.finalizer_perform(self.space, "__del__ method of ",
+                                           space.get_and_call_function,
+                                           w_descr, self)
+                super_invoke_finalizer(self)
 
             def user_setup_slots(self, nslots):
                 assert nslots == 0

@@ -177,15 +177,17 @@ class TestTypeDef:
         class W_Level1(W_Root):
             def __init__(self, space1):
                 assert space1 is space
-            def __del__(self):
+                self.register_finalizer()
+            def invoke_finalizer(self):
                 space.call_method(w_seen, 'append', space.wrap(1))
         class W_Level2(W_Root):
             def __init__(self, space1):
                 assert space1 is space
-            def __del__(self):
-                self.enqueue_for_destruction(space, W_Level2.destructormeth,
-                                             'FOO ')
-            def destructormeth(self):
+                self.register_finalizer()
+            def invoke_finalizer(self):
+                self.finalizer_perform(space, 'FOO', self.destructormeth, 42)
+            def destructormeth(self, forty_two):
+                assert forty_two == 42
                 space.call_method(w_seen, 'append', space.wrap(2))
         W_Level1.typedef = typedef.TypeDef(
             'level1',
