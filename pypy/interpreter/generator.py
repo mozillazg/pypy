@@ -13,6 +13,7 @@ class GeneratorIterator(W_Root):
         self.frame = frame     # turned into None when frame_finished_execution
         self.pycode = frame.pycode
         self.running = False
+        self.register_finalizer()
 
     def descr__repr__(self, space):
         code_name = self.pycode.co_name
@@ -142,7 +143,7 @@ return next yielded value or raise StopIteration."""
         code_name = self.pycode.co_name
         return space.wrap(code_name)
 
-    def __del__(self):
+    def invoke_finalizer(self):
         # Only bother enqueuing self to raise an exception if the frame is
         # still not finished and finally or except blocks are present.
         self.clear_all_weakrefs()
@@ -150,9 +151,9 @@ return next yielded value or raise StopIteration."""
             block = self.frame.lastblock
             while block is not None:
                 if not isinstance(block, LoopBlock):
-                    self.enqueue_for_destruction(self.space,
-                                                 GeneratorIterator.descr_close,
-                                                 "interrupting generator of ")
+                    self.finalizer_perform(self.space,
+                                           "interrupting generator of ",
+                                           self.descr_close)
                     break
                 block = block.previous
 
