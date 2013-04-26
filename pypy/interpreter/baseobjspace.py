@@ -165,7 +165,7 @@ class W_Root(object):
         self.invoke_finalizer()
 
     def invoke_finalizer(self):
-        raise NotImplementedError
+        raise NotImplementedError    # must be overridden
 
     def finalizer_perform(self, space, descrname, callback, *args):
         """For use in invoke_finalizer().  First check if we're called

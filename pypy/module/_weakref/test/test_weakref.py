@@ -1,6 +1,9 @@
 class AppTestWeakref(object):
     spaceconfig = dict(usemodules=('_weakref',))
-                    
+
+    def setup_class(cls):
+        cls.w_appdirect = cls.space.wrap(cls.runappdirect)
+
     def test_simple(self):
         import _weakref, gc
         class A(object):
@@ -287,7 +290,11 @@ class AppTestWeakref(object):
         seen_del = []
         class A(object):
             def __del__(self):
-                seen_del.append(id(self))
+                if self.appdirect:
+                    my_id = id(self)
+                else:
+                    my_id = aid    # might be different when non-translated
+                seen_del.append(my_id)
                 seen_del.append(w1() is None)
                 seen_del.append(w2() is None)
         seen_callback = []
