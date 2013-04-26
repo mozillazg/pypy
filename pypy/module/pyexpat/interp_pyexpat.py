@@ -441,7 +441,9 @@ class W_XMLParserType(W_Root):
             CallbackData(space, self))
         XML_SetUserData(self.itself, rffi.cast(rffi.VOIDP, self.id))
 
-    def __del__(self):
+        self.register_finalizer()
+
+    def invoke_finalizer(self):
         if XML_ParserFree: # careful with CPython interpreter shutdown
             XML_ParserFree(self.itself)
         if global_storage:
