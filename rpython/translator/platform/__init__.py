@@ -2,7 +2,6 @@
 
 import py, os, sys
 
-from rpython.tool.ansi_print import ansi_log
 from rpython.tool.runsubprocess import run_subprocess as _run_subprocess
 from rpython.tool.udir import udir
 
@@ -348,3 +347,6 @@ def set_platform(new_platform, cc):
         global host
         host = platform
 
+
+def is_host_build():
+    return host == platform

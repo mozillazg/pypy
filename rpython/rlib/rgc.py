@@ -7,7 +7,6 @@ import collections
 from rpython.rlib import jit
 from rpython.rlib.objectmodel import we_are_translated, enforceargs, specialize
 from rpython.rlib.objectmodel import CDefinedIntSymbolic
-from rpython.rlib.nonconst import NonConstant
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.rtyper.lltypesystem import lltype, llmemory
 
@@ -102,7 +101,6 @@ class DumpHeapEntry(ExtRegistryEntry):
         return annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP))
 
     def specialize_call(self, hop):
-        from rpython.memory.gc.base import ARRAY_TYPEID_MAP
         hop.exception_is_here()
         return hop.genop('gc_heap_stats', [], resulttype=hop.r_result)
 

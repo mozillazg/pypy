@@ -20,9 +20,7 @@ class GCData(object):
 
     OFFSETS_TO_GC_PTR = lltype.Array(lltype.Signed)
 
-    # When used as a finalizer, the following functions only take one
-    # address and ignore the second, and return NULL.  When used as a
-    # custom tracer (CT), it enumerates the addresses that contain GCREFs.
+    # A custom tracer (CT), enumerates the addresses that contain GCREFs.
     # It is called with the object as first argument, and the previous
     # returned address (or NULL the first time) as the second argument.
     DESTRUCTOR_OR_CT_FUNC = lltype.FuncType([llmemory.Address,
@@ -234,8 +232,7 @@ def encode_type_shape(builder, info, TYPE, index):
             infobits |= T_HAS_DESTRUCTOR
         elif kind == "custom_trace":
             infobits |= T_HAS_CUSTOM_TRACE
-        else:
-            assert 0, kind
+        info.extra = extra
     #
     if not TYPE._is_varsize():
         info.fixedsize = llarena.round_up_for_allocation(
@@ -407,8 +404,7 @@ class TypeLayoutBuilder(object):
             return self._special_funcptrs[TYPE]
         fptr1 = self.make_destructor_funcptr_for_type(TYPE)
         fptr2 = self.make_custom_trace_funcptr_for_type(TYPE)
-        assert not (fptr1 and fptr2), (
-            "type %r needs both a finalizer and a custom tracer" % (TYPE,))
+        result = {}
         if fptr1:
             kind_and_fptr = "destructor", fptr1
         elif fptr2:
