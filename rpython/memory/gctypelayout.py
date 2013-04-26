@@ -23,16 +23,20 @@ class GCData(object):
     # A custom tracer (CT), enumerates the addresses that contain GCREFs.
     # It is called with the object as first argument, and the previous
     # returned address (or NULL the first time) as the second argument.
-    DESTRUCTOR_OR_CT_FUNC = lltype.FuncType([llmemory.Address,
-                                            llmemory.Address],
-                                           llmemory.Address)
-    DESTRUCTOR_OR_CT = lltype.Ptr(DESTRUCTOR_OR_CT_FUNC)
-    FINALIZER = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
+    DESTRUCTOR_FUNC = lltype.FuncType([llmemory.Address], lltype.Void)
+    CUSTOMTRACER_FUNC = lltype.FuncType([llmemory.Address, llmemory.Address],
+                                        llmemory.Address)
+    DESTRUCTOR = lltype.Ptr(DESTRUCTOR_FUNC)
+    FINALIZER = DESTRUCTOR
+    CUSTOMTRACER = lltype.Ptr(CUSTOMTRACER_FUNC)
+    EXTRA = lltype.Struct("type_info_extra",
+                          ('destructor', DESTRUCTOR),
+                          ('customtracer', CUSTOMTRACER))
 
     # structure describing the layout of a typeid
     TYPE_INFO = lltype.Struct("type_info",
         ("infobits",       lltype.Signed),    # combination of the T_xxx consts
-        ("destructor_or_customtrace", DESTRUCTOR_OR_CT),
+        ("extra",          lltype.Ptr(EXTRA)),
         ("fixedsize",      lltype.Signed),
         ("ofstoptrs",      lltype.Ptr(OFFSETS_TO_GC_PTR)),
         hints={'immutable': True},
@@ -82,9 +86,9 @@ class GCData(object):
     def q_getdestructor(self, typeid):
         typeinfo = self.get(typeid)
         if typeinfo.infobits & T_HAS_DESTRUCTOR:
-            return typeinfo.destructor_or_customtrace
+            return typeinfo.extra.destructor
         else:
-            return lltype.nullptr(GCData.DESTRUCTOR_OR_CT_FUNC)
+            return lltype.nullptr(GCData.DESTRUCTOR_FUNC)
 
     def q_offsets_to_gc_pointers(self, typeid):
         return self.get(typeid).ofstoptrs
@@ -126,7 +130,7 @@ class GCData(object):
         ll_assert(self.q_has_custom_trace(typeid),
                   "T_HAS_CUSTOM_TRACE missing")
         typeinfo = self.get(typeid)
-        return typeinfo.destructor_or_customtrace
+        return typeinfo.extra.customtracer
 
     def q_fast_path_tracing(self, typeid):
         # return True if none of the flags T_HAS_GCPTR_IN_VARSIZE,
@@ -224,16 +228,17 @@ def encode_type_shape(builder, info, TYPE, index):
     infobits = index
     info.ofstoptrs = builder.offsets2table(offsets, TYPE)
     #
-    kind_and_fptr = builder.special_funcptr_for_type(TYPE)
-    if kind_and_fptr is not None:
-        kind, fptr = kind_and_fptr
-        info.destructor_or_customtrace = fptr
-        if kind == "destructor":
+    fptrs = builder.special_funcptr_for_type(TYPE)
+    if fptrs:
+        extra = lltype.malloc(GCData.EXTRA, zero=True, immortal=True,
+                              flavor='raw')
+        if "destructor" in fptrs:
+            extra.destructor = fptrs["destructor"]
             infobits |= T_HAS_DESTRUCTOR
-        elif kind == "custom_trace":
+        if "custom_trace" in fptrs:
+            extra.customtracer = fptrs["custom_trace"]
             infobits |= T_HAS_CUSTOM_TRACE
-        else:
-            assert 0, kind
+        info.extra = extra
     #
     if not TYPE._is_varsize():
         info.fixedsize = llarena.round_up_for_allocation(
@@ -407,13 +412,11 @@ class TypeLayoutBuilder(object):
         fptr2 = self.make_custom_trace_funcptr_for_type(TYPE)
         result = {}
         if fptr1:
-            kind_and_fptr = "destructor", fptr1
-        elif fptr2:
-            kind_and_fptr = "custom_trace", fptr2
-        else:
-            kind_and_fptr = None
-        self._special_funcptrs[TYPE] = kind_and_fptr
-        return kind_and_fptr
+            result["destructor"] = fptr1
+        if fptr2:
+            result["custom_trace"] = fptr2
+        self._special_funcptrs[TYPE] = result
+        return result
 
     def make_destructor_funcptr_for_type(self, TYPE):
         # must be overridden for proper finalizer support

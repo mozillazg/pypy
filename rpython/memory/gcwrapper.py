@@ -220,16 +220,14 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
         t = self.llinterp.typer.annotator.translator
         DestructorAnalyzer(t).check_destructor(destrgraph)
-        def ll_destructor(addr, dummy):
-            assert dummy == llmemory.NULL
+        def ll_destructor(addr):
             try:
                 v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
                 self.llinterp.eval_graph(destrgraph, [v], recursive=True)
             except llinterp.LLException:
                 raise RuntimeError(
                     "a destructor raised an exception, shouldn't happen")
-            return llmemory.NULL
-        return llhelper(gctypelayout.GCData.DESTRUCTOR_OR_CT, ll_destructor)
+        return llhelper(gctypelayout.GCData.DESTRUCTOR, ll_destructor)
 
     def make_custom_trace_funcptr_for_type(self, TYPE):
         from rpython.memory.gctransform.support import get_rtti

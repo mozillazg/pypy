@@ -666,9 +666,8 @@ class BaseFrameworkGCTransformer(GCTransformer):
         c_type_id = rmodel.inputconst(TYPE_ID, type_id)
         info = self.layoutbuilder.get_info(type_id)
         c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
-        kind_and_fptr = self.special_funcptr_for_type(TYPE)
-        has_destructor = (kind_and_fptr is not None and
-                          kind_and_fptr[0] == "destructor")
+        fptrs = self.special_funcptr_for_type(TYPE)
+        has_destructor = "destructor" in fptrs
         c_has_destructor = rmodel.inputconst(lltype.Bool, has_destructor)
 
         if not op.opname.endswith('_varsize') and not flags.get('varsize'):
@@ -1241,15 +1240,16 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         destrptr = rtti._obj.destructor_funcptr
         DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]
         typename = TYPE.__name__
-        def ll_destructor(addr, ignored):
+        def ll_destructor(addr):
             v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
             ll_call_destructor(destrptr, v, typename)
-            return llmemory.NULL
         fptr = self.transformer.annotate_finalizer(ll_destructor,
-                [llmemory.Address, llmemory.Address], llmemory.Address)
-        g = destrptr._obj.graph
-        # XXX should catch and ignore DelayedPointer here?
-        DestructorAnalyzer(self.translator).check_destructor(g)
+                [llmemory.Address], lltype.Void)
+        try:
+            g = destrptr._obj.graph
+            DestructorAnalyzer(self.translator).check_destructor(g)
+        except lltype.DelayedPointer:
+            pass             # XXX bah, too bad
         return fptr
 
     def make_custom_trace_funcptr_for_type(self, TYPE):

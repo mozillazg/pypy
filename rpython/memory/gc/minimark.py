@@ -1949,7 +1949,7 @@ class MiniMarkGC(MovingGCBase):
             if not self.is_forwarded(obj):
                 destructor = self.getdestructor(self.get_type_id(obj))
                 ll_assert(bool(destructor), "destructor missing")
-                destructor(obj, NULL)
+                destructor(obj)
             else:
                 obj = self.get_forwarding_address(obj)
                 self.old_objects_with_destructors.append(obj)
@@ -1967,8 +1967,8 @@ class MiniMarkGC(MovingGCBase):
             else:
                 # dying
                 destructor = self.getdestructor(self.get_type_id(obj))
-                ll_assert(bool(destructor), "no light finalizer found")
-                destructor(obj, NULL)
+                ll_assert(bool(destructor), "[2] destructor missing")
+                destructor(obj)
         self.old_objects_with_destructors.delete()
         self.old_objects_with_destructors = new_objects
 
