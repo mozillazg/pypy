@@ -3,7 +3,7 @@ from pypy.interpreter.baseobjspace import Wrappable, W_Root
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app, ObjSpace
 from pypy.interpreter.typedef import TypeDef
-from rpython.rlib import rgc, jit
+from rpython.rlib import jit
 from rpython.rlib.rshrinklist import AbstractShrinkList
 from rpython.rlib.objectmodel import specialize
 import weakref
@@ -14,7 +14,7 @@ class WRefShrinkList(AbstractShrinkList):
         return wref() is not None
 
 
-class WeakrefLifeline(object):
+class WeakrefLifeline(W_Root):
     cached_weakref  = None
     cached_proxy    = None
     other_refs_weak = None
@@ -50,7 +50,7 @@ class WeakrefLifeline(object):
         self.traverse(WeakrefLifeline._clear_wref)
         # Note that for no particular reason other than convenience,
         # weakref callbacks are not invoked eagerly here.  They are
-        # invoked by self.__del__() anyway.
+        # invoked by self.invoke_finalizer() anyway.
 
     def get_or_make_weakref(self, w_subtype, w_obj):
         space = self.space
@@ -102,7 +102,7 @@ class WeakrefLifeline(object):
         w_ref = space.allocate_instance(W_Weakref, w_subtype)
         W_Weakref.__init__(w_ref, space, w_obj, w_callable)
         self.append_wref_to(w_ref)
-        rgc.register_finalizer(self.finalizer)
+        self.register_finalizer()
         return w_ref
 
     def make_proxy_with_callback(self, w_obj, w_callable):
@@ -112,10 +112,10 @@ class WeakrefLifeline(object):
         else:
             w_proxy = W_Proxy(space, w_obj, w_callable)
         self.append_wref_to(w_proxy)
-        rgc.register_finalizer(self.finalizer)
+        self.register_finalizer()
         return w_proxy
 
-    def finalizer(self):
+    def invoke_finalizer(self):
         """This runs when the interp-level object goes away, and allows
         its lifeline to go away.  The purpose of this is to activate the
         callbacks even if there is no __del__ method on the interp-level
