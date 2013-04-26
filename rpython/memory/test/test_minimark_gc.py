@@ -1,3 +1,4 @@
+import py
 from rpython.rlib.rarithmetic import LONG_BIT
 from rpython.rlib import rgc
 from rpython.rtyper.lltypesystem import lltype
@@ -74,3 +75,11 @@ class TestMiniMarkGC(test_semispace_gc.TestSemiSpaceGC):
             return n * 100 + b.num_finalized
         res = self.interpret(f, [])
         assert res == 1
+
+
+class TestMiniMarkGCLargeNursery(TestMiniMarkGC):
+    GC_PARAMS = {'nursery_size': 16384*WORD}
+    def setup_class(cls):
+        py.test.skip("takes a lot of extra time to run")
+    def teardown_class(cls):
+        pass

@@ -1,5 +1,7 @@
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
+from rpython.rlib import rgc
+from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.memory.gc.minimark import WORD
 
 from rpython.memory.test import test_minimark_gc
@@ -33,11 +35,3 @@ class TestMiniMarkGCCardMarking(test_minimark_gc.TestMiniMarkGC):
             return b.num_finalized
         res = self.interpret(f, [2])
         assert res == 2
-
-
-class TestMiniMarkGCLargeNursery(test_minimark_gc.TestMiniMarkGC):
-    GC_PARAMS = {'nursery_size': 16384*WORD}
-    def setup_class(cls):
-        py.test.skip("takes a lot of extra time to run")
-    def teardown_class(cls):
-        pass
