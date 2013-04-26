@@ -33,8 +33,9 @@ class W_BaseConnection(W_Root):
         self.flags = flags
         self.buffer = lltype.malloc(rffi.CCHARP.TO, self.BUFFER_SIZE,
                                     flavor='raw')
+        self.register_finalizer()
 
-    def __del__(self):
+    def invoke_finalizer(self):
         lltype.free(self.buffer, flavor='raw')
         try:
             self.do_close()

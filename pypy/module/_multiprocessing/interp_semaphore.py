@@ -422,6 +422,7 @@ class W_SemLock(W_Root):
         self.kind = kind
         self.count = 0
         self.maxvalue = maxvalue
+        self.register_finalizer()
 
     def kind_get(self, space):
         return space.newint(self.kind)
@@ -505,7 +506,7 @@ class W_SemLock(W_Root):
     def exit(self, space, __args__):
         self.release(space)
 
-    def __del__(self):
+    def invoke_finalizer(self):
         delete_semaphore(self.handle)
 
 @unwrap_spec(kind=int, value=int, maxvalue=int)
