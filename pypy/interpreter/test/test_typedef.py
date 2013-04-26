@@ -102,11 +102,8 @@ class TestTypeDef:
 
                         assert len(checks) == 3
                         space.appexec([], """():
-                            seen = []
                             class X(list):
                                 __slots__ = %r
-                                def %s(self):
-                                    seen.append(1)
                             x = X()
                             import __pypy__
                             irepr = __pypy__.internal_repr(x)
@@ -114,9 +111,7 @@ class TestTypeDef:
                             %s
                             %s
                             %s
-                            %s
-                        """ % (slots, methodname, checks[0], checks[1],
-                               checks[2], checks[3]))
+                        """ % (slots, checks[0], checks[1], checks[2]))
         subclasses = {}
         for key, subcls in typedef._subclass_cache.items():
             if key[0] is not space.config:
