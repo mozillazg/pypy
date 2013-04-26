@@ -1,3 +1,7 @@
+from rpython.rtyper.lltypesystem import lltype
+from rpython.rtyper.lltypesystem.lloperation import llop
+from rpython.memory.gc.minimark import WORD
+
 from rpython.memory.test import test_minimark_gc
 
 class TestMiniMarkGCCardMarking(test_minimark_gc.TestMiniMarkGC):
@@ -31,7 +35,7 @@ class TestMiniMarkGCCardMarking(test_minimark_gc.TestMiniMarkGC):
         assert res == 2
 
 
-class TestMiniMarkGCLargeNursery(TestMiniMarkGC):
+class TestMiniMarkGCLargeNursery(test_minimark_gc.TestMiniMarkGC):
     GC_PARAMS = {'nursery_size': 16384*WORD}
     def setup_class(cls):
         py.test.skip("takes a lot of extra time to run")

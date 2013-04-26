@@ -1,5 +1,6 @@
 from rpython.rlib.rarithmetic import LONG_BIT
 from rpython.rlib import rgc
+from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
 
 from rpython.memory.test import test_semispace_gc
