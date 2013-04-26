@@ -445,16 +445,25 @@ class UserDelAction(AsyncAction):
     def __init__(self, space):
         AsyncAction.__init__(self, space)
         self.in_user_del_action = False
+        self.finalizers_lock_count = 0     # for use by the gc module
+        self.enabled_at_app_level = True   # for use by the gc module
 
     def must_be_between_bytecodes(self):
-        if not self.in_user_del_action:
-            from rpython.rlib import rgc
+        if self.finalizers_lock_count == 0:
+            if self.in_user_del_action:
+                # we are between bytecodes and finalizers are not disabled,
+                # proceed.
+                return
+            # finalizers are not disabled but we are not between bytecodes,
+            # call again later
             self.fire()
-            rgc.finalize_later()
+        # then abort the current execution by raising rgc._FinalizeLater
+        from rpython.rlib import rgc
+        rgc.finalize_later()
 
     def perform(self, executioncontext, frame):
         from rpython.rlib import rgc
-        if not self.in_user_del_action:
+        if not self.in_user_del_action and self.finalizers_lock_count == 0:
             self.in_user_del_action = True
             try:
                 rgc.progress_through_finalizer_queue()
