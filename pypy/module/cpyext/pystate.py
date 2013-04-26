@@ -2,7 +2,7 @@ from pypy.module.cpyext.api import (
     cpython_api, generic_cpy_call, CANNOT_FAIL, CConfig, cpython_struct)
 from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, make_ref, from_ref
 from rpython.rtyper.lltypesystem import rffi, lltype
-from rpython.rlib import rthread
+from rpython.rlib import rthread, rgc
 from pypy.module.thread import os_thread
 
 PyInterpreterStateStruct = lltype.ForwardReference()
@@ -60,7 +60,8 @@ def encapsulator(T, flavor='raw', dealloc=None):
                 self.memory = lltype.malloc(T, flavor=flavor)
             else:
                 self.memory = lltype.nullptr(T)
-        def __del__(self):
+            rgc.register_finalizer(self.finalizer)
+        def finalizer(self):
             if self.memory:
                 if dealloc and self.space:
                     dealloc(self.memory, self.space)

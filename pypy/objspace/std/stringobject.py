@@ -22,7 +22,7 @@ from pypy.objspace.std.stringtype import sliced, wrapstr, wrapchar, \
 from pypy.objspace.std.formatting import mod_format
 
 class W_AbstractStringObject(W_Object):
-    __slots__ = ()
+    _attrs_ = ()
 
     def is_w(self, space, w_other):
         if not isinstance(w_other, W_AbstractStringObject):

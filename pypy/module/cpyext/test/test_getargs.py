@@ -156,11 +156,12 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
         freed = []
         class freestring(str):
             def __del__(self):
-                freed.append('x')
+                freed.append(str(self))
         raises(TypeError, pybuffer,
                freestring("string"), freestring("other string"), 42)
         import gc; gc.collect()
-        assert freed == ['x', 'x']
+        assert len(freed) == 2
+        assert set(freed) == set(['string', 'other string'])
 
 
     def test_pyarg_parse_charbuf_and_length(self):
