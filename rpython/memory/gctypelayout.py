@@ -232,7 +232,8 @@ def encode_type_shape(builder, info, TYPE, index):
             infobits |= T_HAS_DESTRUCTOR
         elif kind == "custom_trace":
             infobits |= T_HAS_CUSTOM_TRACE
-        info.extra = extra
+        else:
+            assert 0, kind
     #
     if not TYPE._is_varsize():
         info.fixedsize = llarena.round_up_for_allocation(
