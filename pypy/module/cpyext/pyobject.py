@@ -10,6 +10,7 @@ from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.objspace.std.objectobject import W_ObjectObject
 from rpython.rlib.objectmodel import specialize, we_are_translated
 from rpython.rlib.rweakref import RWeakKeyDictionary
+from rpython.rlib import rgc
 from rpython.rtyper.annlowlevel import llhelper
 
 #________________________________________________________
@@ -392,8 +393,9 @@ class PyOLifeline(object):
     def __init__(self, space, pyo):
         self.pyo = pyo
         self.space = space
+        rgc.register_finalizer(self.finalizer)
 
-    def __del__(self):
+    def finalizer(self):
         if self.pyo:
             assert self.pyo.c_ob_refcnt == 0
             _Py_Dealloc(self.space, self.pyo)

@@ -14,7 +14,8 @@ class DestructorAnalyzer(graphanalyze.BoolGraphAnalyzer):
     * anything that escapes self
     * anything that can allocate
     """
-    ok_operations = ['ptr_nonzero', 'ptr_eq', 'ptr_ne', 'free', 'same_as',
+    ok_operations = ['ptr_nonzero', 'ptr_iszero', 'ptr_eq', 'ptr_ne',
+                     'free', 'same_as',
                      'direct_ptradd', 'force_cast', 'track_alloc_stop',
                      'raw_free']
 
