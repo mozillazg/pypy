@@ -29,6 +29,8 @@ class W_Connection(W_Root):
         self.w_version = None
         self.release = False
 
+        self.register_finalizer()
+
 
     @unwrap_spec(mode=int, handle=int,
                  threaded=bool, twophase=bool, events=bool,
@@ -80,13 +82,11 @@ class W_Connection(W_Root):
             self.connect(space, mode, twophase)
         return space.wrap(self)
 
-    def __del__(self):
-        self.enqueue_for_destruction(self.environment.space,
-                                     W_Connection.destructor,
-                                     '__del__ method of ')
+    def invoke_finalizer(self):
+        self.finalizer_perform(self.environment.space, '__del__ method of ',
+                               self.destructor)
 
     def destructor(self):
-        assert isinstance(self, W_Connection)
         if self.release:
             roci.OCITransRollback(
                 self.handle, self.environment.errorHandle,

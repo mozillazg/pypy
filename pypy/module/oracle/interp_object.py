@@ -14,14 +14,14 @@ class W_ObjectType(W_Root):
         self.environment = connection.environment
         self.isCollection = False
         self.initialize(connection, param)
+        self.register_finalizer()
 
-    def __del__(self):
-        self.enqueue_for_destruction(self.environment.space,
-                                     W_ObjectType.destructor,
-                                     '__del__ method of ')
+    def invoke_finalizer(self):
+        if self.tdo:
+            self.finalizer_perform(self.environment.space, '__del__ method of ',
+                                   self.destructor)
 
     def destructor(self):
-        assert isinstance(self, W_ObjectType)
         if self.tdo:
             roci.OCIObjectUnpin(
                 self.environment.handle,

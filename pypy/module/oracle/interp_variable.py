@@ -166,13 +166,13 @@ class W_Variable(W_Root):
         # perform extended initialization
         self.initialize(self.environment.space, cursor)
 
-    def __del__(self):
-        self.enqueue_for_destruction(self.environment.space,
-                                     W_Variable.destructor,
-                                     '__del__ method of ')
+        self.register_finalizer()
+
+    def invoke_finalizer(self):
+        self.finalizer_perform(self.environment.space, '__del__ method of ',
+                               self.destructor)
 
     def destructor(self):
-        assert isinstance(self, W_Variable)
         self.finalize()
         lltype.free(self.actualElementsPtr, flavor='raw')
         if self.actualLength:
