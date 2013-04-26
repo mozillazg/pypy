@@ -63,6 +63,10 @@ class W_IOBase(W_Root):
 
     def invoke_finalizer(self):
         self.clear_all_weakrefs()
+        self.finalizer_perform(self.space, 'close() method of ',
+                               self._finalizer_close)
+
+    def _finalizer_close(self):
         space = self.space
         w_closed = space.findattr(self, space.wrap('closed'))
         try:
