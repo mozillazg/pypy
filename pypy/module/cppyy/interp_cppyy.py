@@ -1082,6 +1082,9 @@ class W_CPPInstance(W_Root):
 
     def invoke_finalizer(self):
         if self.python_owns:
+            # Use finalizer_perform() as the safe solution.  We could also
+            # call destruct() directly, but this could have bad effects in
+            # case the C++ destructor invokes more Python code.
             self.finalizer_perform(self.space, '__del__() method of ',
                                    self.destruct)
 
