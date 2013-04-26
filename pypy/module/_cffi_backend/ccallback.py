@@ -54,12 +54,13 @@ class W_CDataCallback(W_CData):
         if rffi.cast(lltype.Signed, res) != clibffi.FFI_OK:
             raise OperationError(space.w_SystemError,
                 space.wrap("libffi failed to build this callback"))
+        #
+        self.register_finalizer()
 
     def get_closure(self):
         return rffi.cast(clibffi.FFI_CLOSUREP, self._cdata)
 
-    #@rgc.must_be_light_finalizer
-    def __del__(self):
+    def invoke_finalizer(self):
         clibffi.closureHeap.free(self.get_closure())
         if self.ll_error:
             lltype.free(self.ll_error, flavor='raw')

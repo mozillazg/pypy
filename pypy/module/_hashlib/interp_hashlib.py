@@ -38,8 +38,9 @@ class W_Hash(W_Root):
         except:
             lltype.free(ctx, flavor='raw')
             raise
+        self.register_finalizer()
 
-    def __del__(self):
+    def invoke_finalizer(self):
         if self.ctx:
             ropenssl.EVP_MD_CTX_cleanup(self.ctx)
             lltype.free(self.ctx, flavor='raw')
