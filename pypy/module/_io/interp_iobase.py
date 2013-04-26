@@ -48,6 +48,7 @@ class W_IOBase(W_Root):
         self.__IOBase_closed = False
         self.streamholder = None # needed by AutoFlusher
         get_autoflushher(space).add(self)
+        self.register_finalizer()
 
     def getdict(self, space):
         return self.w_dict
@@ -60,13 +61,8 @@ class W_IOBase(W_Root):
             return True
         return False
 
-    def __del__(self):
+    def invoke_finalizer(self):
         self.clear_all_weakrefs()
-        self.enqueue_for_destruction(self.space, W_IOBase.destructor,
-                                     'internal __del__ of ')
-
-    def destructor(self):
-        assert isinstance(self, W_IOBase)
         space = self.space
         w_closed = space.findattr(self, space.wrap('closed'))
         try:
