@@ -2,7 +2,6 @@ from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rlib import clibffi
 from rpython.rlib import libffi
 from rpython.rlib import jit
-from rpython.rlib.rgc import must_be_light_finalizer
 from rpython.rlib.rarithmetic import r_uint, r_ulonglong, intmask
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.typedef import TypeDef, interp_attrproperty
@@ -46,7 +45,6 @@ class FFIStructOwner(object):
     def __init__(self, ffistruct):
         self.ffistruct = ffistruct
 
-    @must_be_light_finalizer
     def __del__(self):
         if self.ffistruct:
             lltype.free(self.ffistruct, flavor='raw', track_allocation=True)
@@ -169,7 +167,6 @@ class W__StructInstance(W_Root):
         else:
             self.rawmem = rawmem
 
-    @must_be_light_finalizer
     def __del__(self):
         if self.autofree and self.rawmem:
             lltype.free(self.rawmem, flavor='raw')
