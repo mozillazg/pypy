@@ -969,6 +969,8 @@ class W_CPPInstance(W_Root):
         assert not isref or not python_owns
         self.isref = isref
         self.python_owns = python_owns
+        if python_owns:
+            self.register_finalizer()
 
     def _nullcheck(self):
         if not self._rawobject or (self.isref and not self.get_rawobject()):
@@ -982,6 +984,8 @@ class W_CPPInstance(W_Root):
     @unwrap_spec(value=bool)
     def fset_python_owns(self, space, value):
         self.python_owns = space.is_true(value)
+        if self.python_owns:
+            self.register_finalizer()
 
     def get_cppthis(self, calling_scope):
         return self.cppclass.get_cppthis(self, calling_scope)
@@ -1071,16 +1075,15 @@ class W_CPPInstance(W_Root):
                                (self.cppclass.name, rffi.cast(rffi.ULONG, self.get_rawobject())))
 
     def destruct(self):
-        assert isinstance(self, W_CPPInstance)
         if self._rawobject and not self.isref:
             memory_regulator.unregister(self)
             capi.c_destruct(self.space, self.cppclass, self._rawobject)
             self._rawobject = capi.C_NULL_OBJECT
 
-    def __del__(self):
+    def invoke_finalizer(self):
         if self.python_owns:
-            self.enqueue_for_destruction(self.space, W_CPPInstance.destruct,
-                                         '__del__() method of ')
+            self.finalizer_perform(self.space, '__del__() method of ',
+                                   self.destruct)
 
 W_CPPInstance.typedef = TypeDef(
     'CPPInstance',
