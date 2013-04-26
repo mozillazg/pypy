@@ -165,12 +165,15 @@ class W_Root(object):
 
     def _invoke_finalizer(self):
         # The call-back from rgc.register_finalizer(), cannot be overridden
-        if not we_are_translated():
+        if not we_are_translated() and hasattr(self, 'space'):
             # haaaaaack in case this object is from an older test, to
             # prevent it from blocking the future calls of finalizers...
             from rpython.rlib import rgc
             for x, y in rgc._finalizer_queue:
-                if getattr(x, 'space', None) not in (self, None):
+                if getattr(x, 'space', None) not in (self.space, None):
+                    print '-+- skipping finalizer for %r:' % (self,)
+                    print '    self.space = %r' % (id(self.space),)
+                    print '    later_obj.space = %r' % (id(x.space),)
                     return    # there is a pending object with another space
         self.invoke_finalizer()
 
