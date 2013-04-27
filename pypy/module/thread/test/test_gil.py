@@ -111,5 +111,5 @@ class TestRunDirectly(GILTests):
         return f
 
 class TestUsingFramework(GILTests):
-    gcpolicy = 'generation'
+    gcpolicy = 'minimark'
     bigtest = True

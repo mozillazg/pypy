@@ -209,4 +209,4 @@ class TestUsingBoehm(AbstractThreadTests):
     gcpolicy = 'boehm'
 
 class TestUsingFramework(AbstractThreadTests):
-    gcpolicy = 'generation'
+    gcpolicy = 'minimark'
