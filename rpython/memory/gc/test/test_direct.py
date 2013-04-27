@@ -421,14 +421,6 @@ class TestMiniMarkGCSimple(DirectGCTest):
         res = self.gc.writebarrier_before_copy(addr_src, addr_dst, 0, 0, 10)
         assert res # we optimized it
         assert hdr_dst.tid & minimark.GCFLAG_TRACK_YOUNG_PTRS == 0 # and we copied the flag
-        #
-        hdr_src.tid |= minimark.GCFLAG_TRACK_YOUNG_PTRS
-        hdr_dst.tid |= minimark.GCFLAG_TRACK_YOUNG_PTRS
-        hdr_src.tid |= minimark.GCFLAG_HAS_CARDS
-        hdr_src.tid |= minimark.GCFLAG_CARDS_SET
-        # hdr_dst.tid does not have minimark.GCFLAG_HAS_CARDS
-        res = self.gc.writebarrier_before_copy(addr_src, addr_dst, 0, 0, 10)
-        assert not res # there might be young ptrs, let ll_arraycopy to find them
 
     def test_writebarrier_before_copy_preserving_cards(self):
         from rpython.rtyper.lltypesystem import llarena
@@ -464,6 +456,43 @@ class TestMiniMarkGCSimple(DirectGCTest):
         assert ord(addr_byte.char[0]) == 0x01 | 0x04  # bits 0 and 2
 
     test_writebarrier_before_copy_preserving_cards.GC_PARAMS = {
+        "card_page_indices": 4}
+
+    def test_dst_without_cards(self):
+        from rpython.memory.gc import minimark
+        largeobj_size =  self.gc.nonlarge_max + 1
+        self.gc.next_major_collection_threshold = 99999.0
+        p_src = self.malloc(VAR, largeobj_size)
+        p_dst = self.malloc(VAR, largeobj_size)
+        # make them old
+        self.stackroots.append(p_src)
+        self.stackroots.append(p_dst)
+        self.gc.collect()
+        p_dst = self.stackroots.pop()
+        p_src = self.stackroots.pop()
+        #
+        addr_src = llmemory.cast_ptr_to_adr(p_src)
+        addr_dst = llmemory.cast_ptr_to_adr(p_dst)
+        hdr_src = self.gc.header(addr_src)
+        hdr_dst = self.gc.header(addr_dst)
+        #
+        assert hdr_src.tid & minimark.GCFLAG_TRACK_YOUNG_PTRS
+        assert hdr_dst.tid & minimark.GCFLAG_TRACK_YOUNG_PTRS
+        assert hdr_src.tid & minimark.GCFLAG_HAS_CARDS
+        assert not (hdr_src.tid & minimark.GCFLAG_CARDS_SET)
+        hdr_dst.tid &= ~minimark.GCFLAG_HAS_CARDS
+        res = self.gc.writebarrier_before_copy(addr_src, addr_dst, 0, 0, 10)
+        assert res
+        #
+        assert hdr_src.tid & minimark.GCFLAG_TRACK_YOUNG_PTRS
+        assert hdr_dst.tid & minimark.GCFLAG_TRACK_YOUNG_PTRS
+        assert hdr_src.tid & minimark.GCFLAG_HAS_CARDS
+        hdr_src.tid |= minimark.GCFLAG_CARDS_SET
+        hdr_dst.tid &= ~minimark.GCFLAG_HAS_CARDS
+        res = self.gc.writebarrier_before_copy(addr_src, addr_dst, 0, 0, 10)
+        assert not res # there might be young ptrs, let ll_arraycopy find them
+
+    test_dst_without_cards.GC_PARAMS = {
         "card_page_indices": 4}
 
 

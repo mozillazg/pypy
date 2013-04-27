@@ -38,9 +38,6 @@ class InspectorTest(BaseDirectGCTest):
         assert expected == seen
 
 
-class TestHybridGC(InspectorTest):
-    from rpython.memory.gc.hybrid import HybridGC as GCClass
-
 class TestMiniMarkGCSimple(InspectorTest):
     from rpython.memory.gc.minimark import MiniMarkGC as GCClass
     from rpython.memory.gc.minimarktest import SimpleArenaCollection

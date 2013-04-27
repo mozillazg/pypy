@@ -1020,7 +1020,7 @@ class MiniMarkGC(MovingGCBase):
         ll_assert(self.header(obj).tid & GCFLAG_CARDS_SET == 0,
                   "unexpected GCFLAG_CARDS_SET")
         # if the GCFLAG_HAS_CARDS is set, check that all bits are zero now
-        if self.has_card(self.header(obj)):
+        if self.header(obj).tid & GCFLAG_HAS_CARDS:
             if self.card_page_indices <= 0:
                 ll_assert(False, "GCFLAG_HAS_CARDS but not using card marking")
                 return
