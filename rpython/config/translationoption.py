@@ -57,17 +57,12 @@ translation_optiondescription = OptionDescription(
 
     # gc
     ChoiceOption("gc", "Garbage Collection Strategy",
-                 ["boehm", "ref", "semispace", "statistics",
-                  "generation", "hybrid", "minimark", "none"],
+                 ["boehm", "ref", "minimark", "none"],
                   "ref", requires={
                      "ref": [("translation.rweakref", False), # XXX
                              ("translation.gctransformer", "ref")],
                      "none": [("translation.rweakref", False), # XXX
                              ("translation.gctransformer", "none")],
-                     "semispace": [("translation.gctransformer", "framework")],
-                     "statistics": [("translation.gctransformer", "framework")],
-                     "generation": [("translation.gctransformer", "framework")],
-                     "hybrid": [("translation.gctransformer", "framework")],
                      "boehm": [("translation.continuation", False),  # breaks
                                ("translation.gctransformer", "boehm")],
                      "minimark": [("translation.gctransformer", "framework")],
@@ -103,8 +98,7 @@ translation_optiondescription = OptionDescription(
     BoolOption("sandbox", "Produce a fully-sandboxed executable",
                default=False, cmdline="--sandbox",
                requires=[("translation.thread", False)],
-               suggests=[("translation.gc", "generation"),
-                         ("translation.gcrootfinder", "shadowstack")]),
+               suggests=[("translation.gcrootfinder", "shadowstack")]),
     BoolOption("rweakref", "The backend supports RPython-level weakrefs",
                default=True),
 

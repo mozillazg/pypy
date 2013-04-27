@@ -9,16 +9,17 @@ from rpython.translator.sandbox.sandlib import read_message, write_message
 from rpython.translator.sandbox.sandlib import write_exception
 
 def expect(f, g, fnname, args, result, resulttype=None):
-    msg = read_message(f, timeout=10.0)
-    assert msg == fnname
-    msg = read_message(f, timeout=10.0)
-    assert msg == args
+    msg1 = read_message(f, timeout=10.0)
+    msg2 = read_message(f, timeout=10.0)
+    assert (msg1, msg2) == (fnname, args), (
+        "expected: %r %r\n" % (fnname, args) +
+        " but got: %r %r" % (msg1, msg2))
     if isinstance(result, Exception):
         write_exception(g, result)
     else:
         write_message(g, 0)
         write_message(g, result, resulttype)
-        g.flush()
+    g.flush()
 
 def compile(f, gc='ref'):
     t = Translation(f, backend='c', sandbox=True, gc=gc,
@@ -148,22 +149,31 @@ def test_oserror():
     f.close()
     assert tail == ""
 
-def test_hybrid_gc():
+def test_minimark_gc():
     def entry_point(argv):
         l = []
         for i in range(int(argv[1])):
             l.append("x" * int(argv[2]))
         return int(len(l) > 1000)
 
-    exe = compile(entry_point, gc='hybrid')
+    exe = compile(entry_point, gc='minimark')
     pipe = subprocess.Popen([exe, '10', '10000'], stdout=subprocess.PIPE,
                             stdin=subprocess.PIPE)
     g = pipe.stdin
     f = pipe.stdout
-    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GENERATIONGC_NURSERY",), None)
-    #if sys.platform.startswith('linux'):
-    #    expect(f, g, "ll_os.ll_os_open", ("/proc/cpuinfo", 0, 420),
-    #           OSError(5232, "xyz"))
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_NURSERY",), None)
+    if sys.platform.startswith('linux'):
+        expect(f, g, "ll_os.ll_os_open", ("/proc/cpuinfo", 0, 420),
+               OSError(5232, "xyz"))
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_NURSERY_CLEANUP",), None)
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_MAJOR_COLLECT",), None)
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_GROWTH",), None)
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_MIN",), None)
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_MAX",), None)
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_MAX_DELTA",), None)
+    if sys.platform.startswith('linux'):
+        expect(f, g, "ll_os.ll_os_open", ("/proc/meminfo", 0, 420),
+               OSError(5232, "xyz"))
     expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GC_DEBUG",), None)
     g.close()
     tail = f.read()
