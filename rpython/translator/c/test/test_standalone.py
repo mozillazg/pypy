@@ -1,6 +1,7 @@
 import py
 import sys, os, re
 
+from rpython.rlib import rgc
 from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib.rarithmetic import r_longlong
 from rpython.rlib.debug import ll_assert, have_debug_prints, debug_flush
@@ -1083,7 +1084,9 @@ class TestThread(object):
                 self.tail = tail
 
         class Stuff:
-            def __del__(self):
+            def __init__(self):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
                 os.write(state.write_end, 'd')
 
         def allocate_stuff():

@@ -95,8 +95,7 @@ def test_gctransformed():
     check(f_graph, 'f')    
 
     class GCTransform(shadowstack.ShadowStackFrameworkGCTransformer):
-        from rpython.memory.gc.generation import GenerationGC as \
-                                                          GCClass
+        from rpython.memory.gc.minimark import MiniMarkGC as GCClass
         GC_PARAMS = {}
 
     gctransf = GCTransform(t)
