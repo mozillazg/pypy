@@ -60,11 +60,9 @@ class FakeLLOp(object):
         return x, tid
 
     def do_malloc_fixedsize_clear(self, RESTYPE, type_id, size,
-                                  has_finalizer, has_light_finalizer,
-                                  contains_weakptr):
+                                  has_destructor, contains_weakptr):
         assert not contains_weakptr
-        assert not has_finalizer
-        assert not has_light_finalizer
+        assert not has_destructor
         p, tid = self._malloc(type_id, size)
         p = llmemory.cast_adr_to_ptr(p, RESTYPE)
         self.record.append(("fixedsize", repr(size), tid, p))
