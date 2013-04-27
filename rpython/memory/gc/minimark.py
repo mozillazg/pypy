@@ -1020,7 +1020,7 @@ class MiniMarkGC(MovingGCBase):
         ll_assert(self.header(obj).tid & GCFLAG_CARDS_SET == 0,
                   "unexpected GCFLAG_CARDS_SET")
         # if the GCFLAG_HAS_CARDS is set, check that all bits are zero now
-        if self.header(obj).tid & GCFLAG_HAS_CARDS:
+        if self.has_card(self.header(obj)):
             if self.card_page_indices <= 0:
                 ll_assert(False, "GCFLAG_HAS_CARDS but not using card marking")
                 return
@@ -1085,6 +1085,12 @@ class MiniMarkGC(MovingGCBase):
     def JIT_minimal_size_in_nursery(cls):
         return cls.minimal_size_in_nursery
 
+    def has_card(self, objhdr):
+        if self.card_page_indices <= 0:     # check constant-folded
+            return False
+        else:
+            return (objhdr.tid & GCFLAG_HAS_CARDS) != 0
+
     def write_barrier(self, newvalue, addr_struct):
         if self.header(addr_struct).tid & GCFLAG_TRACK_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
@@ -1109,7 +1115,7 @@ class MiniMarkGC(MovingGCBase):
             #
             if DEBUG:   # note: PYPY_GC_DEBUG=1 does not enable this
                 ll_assert(self.debug_is_old_object(addr_struct) or
-                          self.header(addr_struct).tid & GCFLAG_HAS_CARDS != 0,
+                          self.has_card(self.header(addr_struct)),
                       "young object with GCFLAG_TRACK_YOUNG_PTRS and no cards")
             #
             # If it seems that what we are writing is a pointer to a young obj
@@ -1159,7 +1165,7 @@ class MiniMarkGC(MovingGCBase):
             # We know that 'addr_array' has GCFLAG_TRACK_YOUNG_PTRS so far.
             #
             objhdr = self.header(addr_array)
-            if objhdr.tid & GCFLAG_HAS_CARDS == 0:
+            if not self.has_card(objhdr):
                 #
                 if DEBUG:   # note: PYPY_GC_DEBUG=1 does not enable this
                     ll_assert(self.debug_is_old_object(addr_array),
@@ -1207,7 +1213,7 @@ class MiniMarkGC(MovingGCBase):
             # GCFLAG_CARDS_SET if possible; otherwise, it falls back
             # to jit_remember_young_pointer().
             objhdr = self.header(addr_array)
-            if objhdr.tid & GCFLAG_HAS_CARDS:
+            if self.has_card(objhdr):
                 self.old_objects_with_cards_set.append(addr_array)
                 objhdr.tid |= GCFLAG_CARDS_SET
             else:
@@ -1248,7 +1254,7 @@ class MiniMarkGC(MovingGCBase):
             return True
         # ^^^ a fast path of write-barrier
         #
-        if source_hdr.tid & GCFLAG_HAS_CARDS != 0:
+        if self.has_card(source_hdr):
             #
             if source_hdr.tid & GCFLAG_TRACK_YOUNG_PTRS == 0:
                 # The source object may have random young pointers.
@@ -1259,7 +1265,7 @@ class MiniMarkGC(MovingGCBase):
                 # The source object has no young pointers at all.  Done.
                 return True
             #
-            if dest_hdr.tid & GCFLAG_HAS_CARDS == 0:
+            if not self.has_card(dest_hdr):
                 # The dest object doesn't have cards.  Do it manually.
                 return False
             #
@@ -1593,7 +1599,7 @@ class MiniMarkGC(MovingGCBase):
             self.old_objects_pointing_to_young.append(obj)
             added_somewhere = True
         #
-        if hdr.tid & GCFLAG_HAS_CARDS != 0:
+        if self.has_card(hdr):
             ll_assert(hdr.tid & GCFLAG_CARDS_SET != 0,
                       "young array: GCFLAG_HAS_CARDS without GCFLAG_CARDS_SET")
             self.old_objects_with_cards_set.append(obj)
@@ -1772,8 +1778,7 @@ class MiniMarkGC(MovingGCBase):
             arena = llarena.getfakearenaaddress(obj - size_gc_header)
             #
             # Must also include the card marker area, if any
-            if (self.card_page_indices > 0    # <- this is constant-folded
-                and self.header(obj).tid & GCFLAG_HAS_CARDS):
+            if self.has_card(self.header(obj)):
                 #
                 # Get the length and compute the number of extra bytes
                 typeid = self.get_type_id(obj)
