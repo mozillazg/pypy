@@ -4,12 +4,15 @@ from rpython.rlib import rgc
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
 
-from rpython.memory.test import test_semispace_gc
+from rpython.memory.test import snippet
+from rpython.memory.test.gc_test_base import GCTest
 
 WORD = LONG_BIT // 8
 
-class TestMiniMarkGC(test_semispace_gc.TestSemiSpaceGC):
+class TestMiniMarkGC(GCTest, snippet.SemiSpaceGCTests):
     from rpython.memory.gc.minimark import MiniMarkGC as GCClass
+    GC_CAN_MOVE = True
+    GC_CAN_SHRINK_ARRAY = True
     GC_CAN_SHRINK_BIG_ARRAY = False
     GC_CAN_MALLOC_NONMOVABLE = True
     BUT_HOW_BIG_IS_A_BIG_STRING = 11*WORD

@@ -704,8 +704,7 @@ class GCTest(object):
 
         flag = self.GC_CAN_SHRINK_ARRAY
         assert self.interpret(f, [3, 0, flag]) == 0x62024241
-        # with larger numbers, it gets allocated outside the semispace
-        # with some GCs.
+        # with larger numbers, it gets allocated outside the nursery
         flag = self.GC_CAN_SHRINK_BIG_ARRAY
         bigsize = self.BUT_HOW_BIG_IS_A_BIG_STRING
         assert self.interpret(f, [bigsize, 0, flag]) == 0x62024241

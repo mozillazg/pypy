@@ -425,10 +425,7 @@ def choose_gc_from_config(config):
     if config.translation.gctransformer != "framework":
         raise AssertionError("fix this test")
 
-    classes = {"semispace": "semispace.SemiSpaceGC",
-               "generation": "generation.GenerationGC",
-               "hybrid": "hybrid.HybridGC",
-               "minimark" : "minimark.MiniMarkGC",
+    classes = {"minimark" : "minimark.MiniMarkGC",
                }
     try:
         modulename, classname = classes[config.translation.gc].split('.')

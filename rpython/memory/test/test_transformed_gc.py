@@ -868,32 +868,6 @@ class GenericMovingGCTests(GenericGCTests):
         run = self.runner("writebarrier_before_copy")
         run([])
 
-# ________________________________________________________________
-
-class TestSemiSpaceGC(GenericMovingGCTests):
-    gcname = "semispace"
-    GC_CAN_SHRINK_ARRAY = True
-
-    class gcpolicy(gc.BasicFrameworkGcPolicy):
-        class transformerclass(shadowstack.ShadowStackFrameworkGCTransformer):
-            from rpython.memory.gc.semispace import SemiSpaceGC as GCClass
-            GC_PARAMS = {'space_size': 512*WORD,
-                         'translated_to_c': False}
-            root_stack_depth = 200
-
-class TestGenerationGC(GenericMovingGCTests):
-    gcname = "generation"
-    GC_CAN_SHRINK_ARRAY = True
-
-    class gcpolicy(gc.BasicFrameworkGcPolicy):
-        class transformerclass(shadowstack.ShadowStackFrameworkGCTransformer):
-            from rpython.memory.gc.generation import GenerationGC as \
-                                                          GCClass
-            GC_PARAMS = {'space_size': 512*WORD,
-                         'nursery_size': 32*WORD,
-                         'translated_to_c': False}
-            root_stack_depth = 200
-
     def define_weakref_across_minor_collection(cls):
         import weakref
         class A:
@@ -1065,66 +1039,6 @@ class TestGenerationGC(GenericMovingGCTests):
         run = self.runner("adr_of_nursery")
         res = run([])        
 
-class TestGenerationalNoFullCollectGC(GCTest):
-    # test that nursery is doing its job and that no full collection
-    # is needed when most allocated objects die quickly
-
-    gcname = "generation"
-
-    class gcpolicy(gc.BasicFrameworkGcPolicy):
-        class transformerclass(shadowstack.ShadowStackFrameworkGCTransformer):
-            from rpython.memory.gc.generation import GenerationGC
-            class GCClass(GenerationGC):
-                __ready = False
-                def setup(self):
-                    from rpython.memory.gc.generation import GenerationGC
-                    GenerationGC.setup(self)
-                    self.__ready = True
-                def semispace_collect(self, size_changing=False):
-                    ll_assert(not self.__ready,
-                              "no full collect should occur in this test")
-            def _teardown(self):
-                self.__ready = False # collecting here is expected
-                GenerationGC._teardown(self)
-
-            GC_PARAMS = {'space_size': 512*WORD,
-                         'nursery_size': 128*WORD,
-                         'translated_to_c': False}
-            root_stack_depth = 200
-
-    def define_working_nursery(cls):
-        def f():
-            total = 0
-            i = 0
-            while i < 40:
-                lst = []
-                j = 0
-                while j < 5:
-                    lst.append(i*j)
-                    j += 1
-                total += len(lst)
-                i += 1
-            return total
-        return f
-
-    def test_working_nursery(self):
-        run = self.runner("working_nursery")
-        res = run([])
-        assert res == 40 * 5
-
-class TestHybridGC(TestGenerationGC):
-    gcname = "hybrid"
-    GC_CAN_MALLOC_NONMOVABLE = True
-
-    class gcpolicy(gc.BasicFrameworkGcPolicy):
-        class transformerclass(shadowstack.ShadowStackFrameworkGCTransformer):
-            from rpython.memory.gc.hybrid import HybridGC as GCClass
-            GC_PARAMS = {'space_size': 512*WORD,
-                         'nursery_size': 32*WORD,
-                         'large_object': 8*WORD,
-                         'translated_to_c': False}
-            root_stack_depth = 200
-
     def define_ref_from_rawmalloced_to_regular(cls):
         import gc
         S = lltype.GcStruct('S', ('x', lltype.Signed))
@@ -1177,12 +1091,11 @@ class TestHybridGC(TestGenerationGC):
         res = run([])
         assert res == 42
 
-    def test_malloc_nonmovable_fixsize(self):
-        py.test.skip("not supported")
 
-
-class TestMiniMarkGC(TestHybridGC):
+class TestMiniMarkGC(GenericMovingGCTests):
     gcname = "minimark"
+    GC_CAN_SHRINK_ARRAY = True
+    GC_CAN_MALLOC_NONMOVABLE = True
     GC_CAN_TEST_ID = True
 
     class gcpolicy(gc.BasicFrameworkGcPolicy):
@@ -1299,14 +1212,18 @@ class UnboxedObject(TaggedBase, UnboxedValue):
         return self.smallint + x + 3
 
 
-class TestHybridTaggedPointerGC(TaggedPointerGCTests):
-    gcname = "hybrid"
+class TestMiniMarkTaggedPointerGC(TaggedPointerGCTests):
+    gcname = "minimark"
 
     class gcpolicy(gc.BasicFrameworkGcPolicy):
         class transformerclass(shadowstack.ShadowStackFrameworkGCTransformer):
-            from rpython.memory.gc.generation import GenerationGC as \
-                                                          GCClass
-            GC_PARAMS = {'space_size': 512*WORD,
-                         'nursery_size': 32*WORD,
-                         'translated_to_c': False}
+            from rpython.memory.gc.minimark import MiniMarkGC as GCClass
+            GC_PARAMS = {'nursery_size': 32*WORD,
+                         'page_size': 16*WORD,
+                         'arena_size': 64*WORD,
+                         'small_request_threshold': 5*WORD,
+                         'large_object': 8*WORD,
+                         'card_page_indices': 4,
+                         'translated_to_c': False,
+                         }
             root_stack_depth = 200
