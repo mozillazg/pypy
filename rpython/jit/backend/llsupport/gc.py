@@ -414,7 +414,7 @@ class GcLLDescr_framework(GcLLDescription):
             type_id = rffi.cast(llgroup.HALFWORD, 0)    # missing here
             return llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
                                                    type_id, size,
-                                                   False, False, False)
+                                                   False, False)
 
         self.generate_function('malloc_nursery', malloc_nursery_slowpath,
                                [lltype.Signed])
@@ -481,7 +481,7 @@ class GcLLDescr_framework(GcLLDescription):
             check_typeid(type_id)
             return llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
                                                    type_id, size,
-                                                   False, False, False)
+                                                   False, False)
         self.generate_function('malloc_big_fixedsize', malloc_big_fixedsize,
                                [lltype.Signed] * 2)
 
@@ -492,7 +492,7 @@ class GcLLDescr_framework(GcLLDescription):
         check_typeid(type_id)
         return llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
                                                type_id, sizedescr.size,
-                                               False, False, False)
+                                               False, False)
 
     def _bh_malloc_array(self, num_elem, arraydescr):
         from rpython.memory.gctypelayout import check_typeid
