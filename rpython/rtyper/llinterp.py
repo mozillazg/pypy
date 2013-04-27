@@ -815,6 +815,7 @@ class LLFrame(object):
                     self.llinterpreter.finalizer_queue.append((llobj, llfn))
 
     def op_gc_register_finalizer(self, llptr, llfn):
+        llfn = llmemory.cast_ptr_to_adr(llfn)
         if self.heap is llheap:
             llobj = llptr._obj
             for llobj1, llfn1 in self.llinterpreter.finalizer_queue:

@@ -1204,9 +1204,11 @@ class BaseFrameworkGCTransformer(GCTransformer):
         v_obj, v_func = hop.spaceop.args
         v_obj_addr = hop.genop("cast_ptr_to_adr", [v_obj],
                                resulttype = llmemory.Address)
+        v_func_addr = hop.genop("cast_ptr_to_adr", [v_func],
+                                resulttype = llmemory.Address)
         hop.genop("direct_call", [self.register_finalizer_ptr,
                                   self.c_const_gc,
-                                  v_obj_addr, v_func],
+                                  v_obj_addr, v_func_addr],
                   resultvar = hop.spaceop.result)
 
 

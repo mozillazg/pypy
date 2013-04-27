@@ -482,6 +482,7 @@ class Transformer(object):
     rewrite_op_ullong_mod_zer      = _do_builtin_call
     rewrite_op_gc_identityhash = _do_builtin_call
     rewrite_op_gc_id           = _do_builtin_call
+    rewrite_op_gc_register_finalizer = _do_builtin_call
     rewrite_op_uint_mod        = _do_builtin_call
     rewrite_op_cast_float_to_uint = _do_builtin_call
     rewrite_op_cast_uint_to_float = _do_builtin_call

@@ -11,7 +11,7 @@ from rpython.translator.unsimplify import varoftype
 from rpython.rlib.rarithmetic import ovfcheck, r_uint, r_longlong, r_ulonglong
 from rpython.rlib.jit import dont_look_inside, _we_are_jitted, JitDriver
 from rpython.rlib.objectmodel import keepalive_until_here
-from rpython.rlib import jit
+from rpython.rlib import jit, rgc
 
 
 class FakeRegAlloc:
@@ -998,6 +998,19 @@ class TestFlatten:
             convert_longlong_bytes_to_float %(tmp_var)s -> %(result_var)s
             float_return %(result_var)s
         """ % {"result_var": result_var, "tmp_var": tmp_var}, transform=True)
+
+    def test_register_finalizer(self):
+        class A(object):
+            def finalizer(self):
+                pass
+        glob_a = A()
+        def f():
+            rgc.register_finalizer(glob_a.finalizer)
+        self.encoding_test(f, [], """
+            residual_call_ir_v $<* fn gc_register_finalizer>, I[$<* fn A.finalizer>], R[$<* struct object>], <Descr>
+            -live-
+            void_return
+        """, transform=True)
 
 
 def check_force_cast(FROM, TO, operations, value):

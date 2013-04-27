@@ -384,12 +384,10 @@ class RegisterFinalizerEntry(ExtRegistryEntry):
         r_func, is_method = hop.args_r[0].get_r_implfunc()
         assert is_method
         c_llfn = r_func.get_unique_llfn()
-        v_llfn = hop.genop('cast_ptr_to_adr', [c_llfn],
-                           resulttype=llmemory.Address)
         v_self = hop.genop('cast_pointer', [v_self],
                            resulttype=base_ptr_lltype())
         hop.exception_cannot_occur()
-        return hop.genop('gc_register_finalizer', [v_self, v_llfn],
+        return hop.genop('gc_register_finalizer', [v_self, c_llfn],
                          resulttype=lltype.Void)
 
 class ProgressThroughFinalizerQueueEntry(ExtRegistryEntry):

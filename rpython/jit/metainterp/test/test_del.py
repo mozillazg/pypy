@@ -123,8 +123,34 @@ class DelTests:
         res = self.meta_interp(main, [20])
         assert res == 1001
 
+
 class TestLLtype(DelTests, LLJitMixin):
-    pass
+
+    def test_finalizer(self):
+        mydriver = JitDriver(reds = ['n'], greens = [])
+        class Glob(object):
+            seen = 0
+        glob = Glob()
+        class A(object):
+            def __init__(self):
+                rgc.register_finalizer(self.finalizer)
+            def finalizer(self):
+                glob.seen += 1
+        @dont_look_inside
+        def do_collect():
+            rgc.collect(); rgc.collect()
+        def main(n):
+            glob.seen = 0
+            while n > 0:
+                mydriver.jit_merge_point(n=n)
+                A(); A(); A()
+                n -= 1
+            do_collect()
+            return glob.seen
+        assert main(10) == 30
+        res = self.meta_interp(main, [20])
+        assert res >= 54
+
 
 class TestOOtype(DelTests, OOJitMixin):
     def setup_class(cls):

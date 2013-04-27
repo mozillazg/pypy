@@ -217,13 +217,15 @@ _ll_5_list_ll_arraycopy = rgc.ll_arraycopy
 def _ll_1_gc_identityhash(x):
     return lltype.identityhash(x)
 
-
 # the following function should not be "@elidable": I can think of
 # a corner case in which id(const) is constant-folded, and then 'const'
 # disappears and is collected too early (possibly causing another object
 # with the same id() to appear).
 def _ll_1_gc_id(ptr):
     return llop.gc_id(lltype.Signed, ptr)
+
+def _ll_2_gc_register_finalizer(obj, func):
+    return llop.gc_register_finalizer(lltype.Void, obj, func)
 
 
 @oopspec("jit.force_virtual(inst)")
@@ -839,6 +841,9 @@ def get_identityhash_oopspec(op):
 def get_gcid_oopspec(op):
     return 'gc_id', op.args
 
+def get_gcregisterfinalizer_oopspec(op):
+    return 'gc_register_finalizer', op.args
+
 
 RENAMED_ADT_NAME = {
     'list': {
@@ -871,6 +876,8 @@ def decode_builtin_call(op):
         return get_identityhash_oopspec(op)
     elif op.opname == 'gc_id':
         return get_gcid_oopspec(op)
+    elif op.opname == 'gc_register_finalizer':
+        return get_gcregisterfinalizer_oopspec(op)
     else:
         raise ValueError(op.opname)
 
