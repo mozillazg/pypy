@@ -2,6 +2,7 @@ import sys
 from pypy.interpreter.error import OperationError
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.rlib import jit
+from rpython.rlib.objectmodel import we_are_translated
 
 TICK_COUNTER_STEP = 100
 
@@ -440,14 +441,26 @@ class UserDelAction(AsyncAction):
     or less anywhere in the middle of code that might not be happy with
     random app-level code mutating data structures under its feet.
     """
+    _current_space_between_bytecodes = None
 
     def __init__(self, space):
         AsyncAction.__init__(self, space)
         self.in_user_del_action = False
         self.finalizers_lock_count = 0     # for use by the gc module
         self.enabled_at_app_level = True   # for use by the gc module
+        self.fire()
 
     def must_be_between_bytecodes(self):
+        if not we_are_translated():
+            # when not translated, be careful about multiple spaces for
+            # the tests: we must not keep calling rgc.finalize_later() for
+            # an old object belonging to an old space, when a new space
+            # is ready and between bytecodes.
+            if UserDelAction._current_space_between_bytecodes is not None:
+                space = self.space
+                if UserDelAction._current_space_between_bytecodes is not space:
+                    return
+
         if self.finalizers_lock_count == 0:
             if self.in_user_del_action:
                 # we are between bytecodes and finalizers are not disabled,
@@ -465,7 +478,12 @@ class UserDelAction(AsyncAction):
         if not self.in_user_del_action and self.finalizers_lock_count == 0:
             self.in_user_del_action = True
             try:
+                space = executioncontext.space
+                if not we_are_translated():
+                    UserDelAction._current_space_between_bytecodes = space
                 rgc.progress_through_finalizer_queue()
+                if not we_are_translated():
+                    UserDelAction._current_space_between_bytecodes = None
             finally:
                 self.in_user_del_action = False
 
