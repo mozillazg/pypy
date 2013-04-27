@@ -1038,7 +1038,8 @@ def compute_mro(w_self):
     if mro_w is None:
         mro_w = w_self.compute_default_mro()[:]
     w_self.mro_w = mro_w
-    w_self.has_del = (w_self.lookup("__del__") is not None)
+    # can't use lookup() here, must use _lookup(): see test_methodcache
+    w_self.has_del = (w_self._lookup("__del__") is not None)
 
 def validate_custom_mro(space, mro_w):
     # do some checking here.  Note that unlike CPython, strange MROs
