@@ -72,12 +72,12 @@ class W_CallbackPtr(W_DataInstance):
         except LibFFIError:
             raise got_libffi_error(space)
         self.ll_buffer = rffi.cast(rffi.VOIDP, self.ll_callback.ll_closure)
-        if tracker.DO_TRACING:
+        if tracker.do_tracing():
             addr = rffi.cast(lltype.Signed, self.ll_callback.ll_closure)
             tracker.trace_allocation(addr, self)
 
     def free(self):
-        if tracker.DO_TRACING:
+        if tracker.do_tracing():
             addr = rffi.cast(lltype.Signed, self.ll_callback.ll_closure)
             tracker.trace_free(addr)
         global_counter.remove(self.number)

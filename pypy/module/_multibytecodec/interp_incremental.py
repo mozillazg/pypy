@@ -21,9 +21,6 @@ class MultibyteIncrementalBase(W_Root):
         self.name = codec.name
         self._initialize()
 
-    def __del__(self):
-        self._free()
-
     def reset_w(self):
         self._free()
         self._initialize()
@@ -36,13 +33,14 @@ class MultibyteIncrementalBase(W_Root):
 
 
 class MultibyteIncrementalDecoder(MultibyteIncrementalBase):
+    def __del__(self):
+        self._free()
 
     def _initialize(self):
         self.decodebuf = c_codecs.pypy_cjk_dec_new(self.codec)
         self.pending = ""
 
     def _free(self):
-        self.pending = None
         if self.decodebuf:
             c_codecs.pypy_cjk_dec_free(self.decodebuf)
             self.decodebuf = lltype.nullptr(c_codecs.DECODEBUF_P.TO)
@@ -85,13 +83,14 @@ MultibyteIncrementalDecoder.typedef = TypeDef(
 
 
 class MultibyteIncrementalEncoder(MultibyteIncrementalBase):
+    def __del__(self):
+        self._free()
 
     def _initialize(self):
         self.encodebuf = c_codecs.pypy_cjk_enc_new(self.codec)
         self.pending = u""
 
     def _free(self):
-        self.pending = None
         if self.encodebuf:
             c_codecs.pypy_cjk_enc_free(self.encodebuf)
             self.encodebuf = lltype.nullptr(c_codecs.ENCODEBUF_P.TO)
