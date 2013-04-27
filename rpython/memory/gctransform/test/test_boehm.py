@@ -11,7 +11,7 @@ class TestLLInterpedBoehm(LLInterpedTranformerTests):
     gcpolicy = BoehmGcPolicy
 
 def make_boehm_finalizer(TYPE):
-    return make_deallocator(TYPE, attr="finalizer_funcptr_for_type",
+    return make_deallocator(TYPE, attr="destructor_funcptr_for_type",
                             cls=BoehmGCTransformer)
 
 def test_boehm_simple():
