@@ -527,7 +527,7 @@ class BaseTestRffi:
         fn = self.compile(f, [], gcpolicy='ref')
         assert fn() == len(d)
 
-    def test_nonmovingbuffer_semispace(self):
+    def test_nonmovingbuffer_minimark(self):
         d = 'cool data'
         def f():
             counter = 0
@@ -540,8 +540,8 @@ class BaseTestRffi:
                 finally:
                     free_nonmovingbuffer(d, buf)
             return counter
-        fn = self.compile(f, [], gcpolicy='semispace')
-        # The semispace gc uses raw_malloc for its internal data structs
+        fn = self.compile(f, [], gcpolicy='minimark')
+        # The minimark gc uses raw_malloc for its internal data structs
         # but hopefully less than 30 times.  So we should get < 30 leaks
         # unless the get_nonmovingbuffer()/free_nonmovingbuffer() pair
         # leaks at each iteration.  This is what the following line checks.
