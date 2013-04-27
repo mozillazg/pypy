@@ -1,4 +1,5 @@
 import weakref
+from rpython.rlib import rgc
 from rpython.rlib.debug import debug_start, debug_print, debug_stop
 from rpython.rtyper.lltypesystem import lltype, llmemory
 
@@ -312,6 +313,7 @@ class CompiledLoopToken(object):
         # a list of weakrefs to looptokens that has been redirected to
         # this one
         self.looptokens_redirected_to = []
+        rgc.register_finalizer(self.finalizer)
         debug_start("jit-mem-looptoken-alloc")
         debug_print("allocating Loop #", self.number)
         debug_stop("jit-mem-looptoken-alloc")
@@ -338,7 +340,7 @@ class CompiledLoopToken(object):
         new_loop_tokens.append(weakref.ref(oldlooptoken))
         self.looptokens_redirected_to = new_loop_tokens
 
-    def __del__(self):
+    def finalizer(self):
         #debug_start("jit-mem-looptoken-free")
         #debug_print("freeing Loop #", self.number, 'with',
         #            self.bridges_count, 'attached bridges')
