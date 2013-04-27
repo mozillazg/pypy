@@ -826,6 +826,9 @@ class LLFrame(object):
         else:
             self.heap.register_finalizer(llptr, llfn)
 
+    def op_gc_progress_finalizer_queue(self):
+        raise NotImplementedError
+
     def op_gc_heap_stats(self):
         raise NotImplementedError
 
