@@ -6,7 +6,7 @@ from rpython.rlib.debug import debug_print
 from rpython.rlib import rgc
 
 
-class SemiSpaceGCTestDefines:
+class SnippetTestDefines:
     large_tests_ok = False
 
     def definestr_finalizer_order(cls):
@@ -176,7 +176,7 @@ class SemiSpaceGCTestDefines:
         res = self.run('from_objwithfinalizer_to_youngobj')
         assert res == 1
 
-class SemiSpaceGCTests(SemiSpaceGCTestDefines):
+class SnippetTests(SnippetTestDefines):
     # xxx messy
 
     def run(self, name): # for test_gc.py

@@ -1261,11 +1261,10 @@ class UsingFrameworkTest(object):
         self.run("gcflag_extra")
 
 
-class TestSemiSpaceGC(UsingFrameworkTest, snippet.SemiSpaceGCTestDefines):
-    gcpolicy = "semispace"
+class MovingGCTests(UsingFrameworkTest, snippet.SnippetTestDefines):
     should_be_moving = True
     GC_CAN_MOVE = True
-    GC_CAN_MALLOC_NONMOVABLE = False
+    GC_CAN_MALLOC_NONMOVABLE = True
     GC_CAN_SHRINK_ARRAY = True
 
     # for snippets
@@ -1432,29 +1431,11 @@ class TestSemiSpaceGC(UsingFrameworkTest, snippet.SemiSpaceGCTestDefines):
         assert res >= 195
 
 
-class TestGenerationalGC(TestSemiSpaceGC):
-    gcpolicy = "generation"
-    should_be_moving = True
+# ____________________________________________________________________
 
 
-class TestHybridGC(TestGenerationalGC):
-    gcpolicy = "hybrid"
-    should_be_moving = True
-    GC_CAN_MALLOC_NONMOVABLE = True
-
-    def test_gc_set_max_heap_size(self):
-        py.test.skip("not implemented")
-
-
-class TestHybridGCRemoveTypePtr(TestHybridGC):
-    removetypeptr = True
-
-
-class TestMiniMarkGC(TestSemiSpaceGC):
+class TestMiniMarkGC(MovingGCTests):
     gcpolicy = "minimark"
-    should_be_moving = True
-    GC_CAN_MALLOC_NONMOVABLE = True
-    GC_CAN_SHRINK_ARRAY = True
 
     def test_gc_heap_stats(self):
         py.test.skip("not implemented")
@@ -1517,7 +1498,9 @@ class TestMiniMarkGC(TestSemiSpaceGC):
         res = self.run("nongc_opaque_attached_to_gc")
         assert res == 0
 
+
 # ____________________________________________________________________
+
 
 class TaggedPointersTest(object):
     taggedpointers = True
@@ -1603,9 +1586,6 @@ class UnboxedObject(TaggedBase, UnboxedValue):
         return self.smallint + x + 3
 
 
-class TestHybridTaggedPointers(TaggedPointersTest, TestHybridGC):
-    pass
-
-
-class TestMiniMarkGCMostCompact(TaggedPointersTest, TestMiniMarkGC):
+class TestMiniMarkGCTaggedPointersAndRemoveTypePtr(TaggedPointersTest,
+                                                   TestMiniMarkGC):
     removetypeptr = True

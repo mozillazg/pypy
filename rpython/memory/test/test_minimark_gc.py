@@ -9,7 +9,7 @@ from rpython.memory.test.gc_test_base import GCTest
 
 WORD = LONG_BIT // 8
 
-class TestMiniMarkGC(GCTest, snippet.SemiSpaceGCTests):
+class TestMiniMarkGC(GCTest, snippet.SnippetTests):
     from rpython.memory.gc.minimark import MiniMarkGC as GCClass
     GC_CAN_MOVE = True
     GC_CAN_SHRINK_ARRAY = True
