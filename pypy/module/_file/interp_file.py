@@ -45,7 +45,7 @@ class W_File(W_AbstractStream):
             self.direct_close()
         except StreamErrors, e:
             operr = wrap_streamerror(self.space, e, self.w_name)
-            raise operr
+            operr.write_unraisable(self.space, "close method of ", self)
 
     def fdopenstream(self, stream, fd, mode, w_name=None):
         self.fd = fd
