@@ -11,6 +11,7 @@ from rpython.rlib.rarithmetic import is_emulated_long
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rlib.entrypoint import entrypoint, secondary_entrypoints
 from rpython.rtyper.lltypesystem.lloperation import llop
+from rpython.translator.backendopt.all import backend_optimizations
 
 _MSVC = compiler.name == "msvc"
 _MINGW = compiler.name == "mingw32"
@@ -54,6 +55,7 @@ class AbstractTestAsmGCRoot:
             a.build_types(f, inputtypes, False)
         a.build_types(main, [s_list_of_strings])
         t.buildrtyper().specialize()
+        backend_optimizations(t)
         t.checkgraphs()
 
         cbuilder = CStandaloneBuilder(t, main, config=config,
@@ -130,8 +132,8 @@ class AbstractTestAsmGCRoot:
         def define_callback_with_collect(cls):
             return lambda: 0
 
-class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
-                                   test_newgc.TestSemiSpaceGC):
+class TestAsmGCRootWithMiniMarkGC(AbstractTestAsmGCRoot,
+                                  test_newgc.TestMiniMarkGC):
     # for the individual tests see
     # ====> ../../test/test_newgc.py
     secondary_entrypoints = []
@@ -227,7 +229,7 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
         res = self.run('secondary_entrypoint_callback')
         assert res == 4900
 
-class TestAsmGCRootWithSemiSpaceGC_Mingw32(TestAsmGCRootWithSemiSpaceGC):
+class TestAsmGCRootWithMiniMarkGC_Mingw32(TestAsmGCRootWithMiniMarkGC):
     # for the individual tests see
     # ====> ../../test/test_newgc.py
 
@@ -239,11 +241,11 @@ class TestAsmGCRootWithSemiSpaceGC_Mingw32(TestAsmGCRootWithSemiSpaceGC):
                 'GNU' in os.popen('make --version').read()):
             py.test.skip("mingw32 and MSYS are required for this test")
 
-        test_newgc.TestSemiSpaceGC.setup_class.im_func(cls)
+        test_newgc.TestAsmGCRootWithMiniMarkGC.setup_class.im_func(cls)
 
     @classmethod
     def make_config(cls):
-        config = TestAsmGCRootWithSemiSpaceGC.make_config()
+        config = TestAsmGCRootWithMiniMarkGC.make_config()
         config.translation.cc = 'mingw32'
         return config
 
@@ -254,13 +256,13 @@ class TestAsmGCRootWithSemiSpaceGC_Mingw32(TestAsmGCRootWithSemiSpaceGC):
     def define_callback_with_collect(cls):
         return lambda: 0
 
-class TestAsmGCRootWithSemiSpaceGC_Shared(TestAsmGCRootWithSemiSpaceGC):
+class TestAsmGCRootWithMiniMarkGC_Shared(TestAsmGCRootWithMiniMarkGC):
     @classmethod
     def make_config(cls):
-        config = TestAsmGCRootWithSemiSpaceGC.make_config()
+        config = TestAsmGCRootWithMiniMarkGC.make_config()
         config.translation.shared = True
         return config
 
-class TestAsmGCRootWithHybridTagged(AbstractTestAsmGCRoot,
-                                    test_newgc.TestHybridTaggedPointers):
+class TestAsmGCRootWithMiniMarkTagged(AbstractTestAsmGCRoot,
+                     test_newgc.TestMiniMarkGCTaggedPointersAndRemoveTypePtr):
     pass

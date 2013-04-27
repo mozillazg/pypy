@@ -841,7 +841,7 @@ class TestThread(object):
 
     def compile(self, entry_point):
         t = TranslationContext(self.config)
-        t.config.translation.gc = "semispace"
+        t.config.translation.gc = "minimark"
         t.config.translation.gcrootfinder = self.gcrootfinder
         t.config.translation.thread = True
         t.buildannotator().build_types(entry_point, [s_list_of_strings])
