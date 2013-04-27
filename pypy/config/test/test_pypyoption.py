@@ -24,7 +24,7 @@ def test_conflicting_gcrootfinder():
 
 
 def test_frameworkgc():
-    for name in ["minimark", "semispace"]:
+    for name in ["minimark"]:
         conf = get_pypy_config()
         assert conf.translation.gctransformer != "framework"
         conf.translation.gc = name
