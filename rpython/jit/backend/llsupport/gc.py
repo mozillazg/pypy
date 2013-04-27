@@ -236,7 +236,7 @@ class GcLLDescr_boehm(GcLLDescription):
                                  arraydescr.lendescr.offset)
 
 # ____________________________________________________________
-# All code below is for the hybrid or minimark GC
+# All code below is for the minimark GC
 
 class GcRootMap_asmgcc(object):
     is_shadow_stack = False
@@ -359,9 +359,8 @@ class GcLLDescr_framework(GcLLDescription):
         self.GCClass = None
 
     def _check_valid_gc(self):
-        # we need the hybrid or minimark GC for rgc._make_sure_does_not_move()
-        # to work.  Additionally, 'hybrid' is missing some stuff like
-        # jit_remember_young_pointer() for now.
+        # we need the minimark GC for rgc._make_sure_does_not_move()
+        # to work.
         if self.gcdescr.config.translation.gc not in ('minimark',):
             raise NotImplementedError("--gc=%s not implemented with the JIT" %
                                       (self.gcdescr.config.translation.gc,))

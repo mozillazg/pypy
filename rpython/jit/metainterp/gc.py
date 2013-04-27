@@ -13,15 +13,6 @@ class GC_none(GcDescription):
 class GC_boehm(GcDescription):
     malloc_zero_filled = True
 
-class GC_semispace(GcDescription):
-    malloc_zero_filled = True
-
-class GC_generation(GcDescription):
-    malloc_zero_filled = True
-
-class GC_hybrid(GcDescription):
-    malloc_zero_filled = True
-
 class GC_minimark(GcDescription):
     malloc_zero_filled = True
 

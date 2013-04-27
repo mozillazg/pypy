@@ -649,7 +649,7 @@ class TestWarmspotDirect(object):
         rtyper = annotate(f, [0])
         FakeCPU.rtyper = rtyper
         translator = rtyper.annotator.translator
-        translator.config.translation.gc = 'hybrid'
+        translator.config.translation.gc = 'minimark'
         cls.desc = WarmRunnerDesc(translator, CPUClass=FakeCPU)
         cls.FakeDeadFrame = FakeDeadFrame
 
