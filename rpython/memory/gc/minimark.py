@@ -2049,7 +2049,8 @@ class MiniMarkGC(MovingGCBase):
                     pending.append(obj)
                     pending.append(NULL)   # marker
                 #
-                if self.header(obj).tid & GCFLAG_CARDS_SET != 0:
+                if (self.card_page_indices > 0 and
+                        self.header(obj).tid & GCFLAG_CARDS_SET != 0):
                     self.old_objects_with_cards_set.append(obj)
                     self.collect_cardrefs_to_nursery()
                 #
