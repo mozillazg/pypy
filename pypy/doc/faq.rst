@@ -247,8 +247,11 @@ RPython program restrictions mostly limit the ability
 to mix types in arbitrary ways. RPython does not allow the binding of two
 different types in the same variable. In this respect (and in some others) it
 feels a bit like Java. Other features not allowed in RPython are the use of
-special methods (``__xxx__``) except ``__init__`` and ``__del__``, and the
+special methods (``__xxx__``) except ``__init__`` and ``__del__``
+(see `garbage collection`__), and the
 use of reflection capabilities (e.g. ``__dict__``).
+
+.. __: garbage_collection.html
 
 You cannot use most existing standard library modules from RPython.  The
 exceptions are

@@ -347,7 +347,11 @@ We are using
 **objects**
 
   Normal rules apply. Special methods are not honoured, except ``__init__``,
-  ``__del__`` and ``__iter__``.
+  ``__del__`` and ``__iter__``.  The destructor ``__del__`` must only contain
+  `simple operations`__; for any kind of more complex destructor, see
+  ``rpython.rlib.rgc.register_finalizer()``.
+
+.. __: garbage_collection.html
 
 This layout makes the number of types to take care about quite limited.
 
