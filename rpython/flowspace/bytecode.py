@@ -52,6 +52,7 @@ class HostCode(object):
         self.co_firstlineno = firstlineno
         self.co_lnotab = lnotab
         self.signature = cpython_code_signature(self)
+        self.build_flow()
 
     def disassemble(self):
         contents = []
@@ -68,6 +69,14 @@ class HostCode(object):
             pos = next_pos
             i += 1
         return contents, offsets, jumps
+
+    def build_flow(self):
+        next_pos = pos = 0
+        contents, offsets, jumps = self.disassemble()
+        self.contents = zip(offsets, contents)
+        self.pos_index = dict((offset, i) for i, offset in enumerate(offsets))
+        # add end marker
+        self.contents.append((len(self.co_code), None))
 
 
     @classmethod
@@ -95,10 +104,17 @@ class HostCode(object):
         return self.signature.scope_length()
 
     def read(self, pos):
+        i = self.pos_index[pos]
+        op = self.contents[i][1]
+        next_pos = self.contents[i+1][0]
+        return next_pos, op
+
+
+    def decode(self, pos):
         """
         Decode the instruction starting at position ``next_instr``.
 
-        Returns (next_instr, opname, oparg).
+        Returns (next_instr, op).
         """
         co_code = self.co_code
         opnum = ord(co_code[pos])
