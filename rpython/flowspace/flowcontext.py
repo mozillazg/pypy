@@ -424,7 +424,7 @@ class FlowSpaceFrame(object):
             raise BytecodeCorruption("misplaced bytecode - should not return")
         return block.handle(self, unroller)
 
-    def getstate(self):
+    def getstate(self, next_pos):
         # getfastscope() can return real None, for undefined locals
         data = self.save_locals_stack()
         if self.last_exception is None:
@@ -434,7 +434,7 @@ class FlowSpaceFrame(object):
             data.append(self.last_exception.w_type)
             data.append(self.last_exception.w_value)
         recursively_flatten(self.space, data)
-        return FrameState(data, self.blockstack[:], self.last_instr)
+        return FrameState(data, self.blockstack[:], next_pos)
 
     def setstate(self, state):
         """ Reset the frame to the given state. """
@@ -446,7 +446,6 @@ class FlowSpaceFrame(object):
             self.last_exception = None
         else:
             self.last_exception = FSException(data[-2], data[-1])
-        self.last_instr = state.next_instr
         self.blockstack = state.blocklist[:]
 
     def guessbool(self, w_condition, **kwds):
@@ -490,11 +489,12 @@ class FlowSpaceFrame(object):
 
     def record_block(self, block):
         self.setstate(block.framestate)
+        next_pos = block.framestate.next_instr
         self.recorder = block.make_recorder()
         try:
             while True:
-                self.last_instr = self.handle_bytecode(self.last_instr)
-                self.recorder.final_state = self.getstate()
+                next_pos = self.handle_bytecode(next_pos)
+                self.recorder.final_state = self.getstate(next_pos)
 
         except ImplicitOperationError, e:
             if isinstance(e.w_type, Constant):
@@ -577,6 +577,7 @@ class FlowSpaceFrame(object):
     def handle_bytecode(self, next_instr):
         next_instr, opcode = self.pycode.read(next_instr)
         try:
+            self.last_instr = opcode.offset
             res = opcode.eval(self)
             return res if res is not None else next_instr
         except FSException, operr:
