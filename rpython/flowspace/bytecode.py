@@ -107,7 +107,7 @@ class HostCode(object):
         if opnum in opcode.hasjrel:
             oparg += next_instr
         try:
-            op = Opcode.num2op[opnum](oparg, pos)
+            op = Opcode.num2op[opnum].decode(oparg, pos, self)
         except KeyError:
             op = Opcode(opnum, oparg, pos)
         return next_instr, op
@@ -125,6 +125,10 @@ class Opcode(object):
         self.num = opcode
         self.arg = arg
         self.offset = offset
+
+    @classmethod
+    def decode(cls, arg, offset, code):
+        return cls(arg, offset)
 
     def eval(self, frame):
         return getattr(frame, self.name)(self.arg)
