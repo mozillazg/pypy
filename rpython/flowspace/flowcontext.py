@@ -507,11 +507,11 @@ class FlowSpaceFrame(object):
             link = Link([w_type, w_value], self.graph.exceptblock)
             self.recorder.crnt_block.closeblock(link)
 
-        except FSException, e:
-            if e.w_type is self.space.w_ImportError:
-                msg = 'import statement always raises %s' % e
-                raise ImportError(msg)
-            link = Link([e.w_type, e.w_value], self.graph.exceptblock)
+        except FSException as exc:
+            if exc.w_type == self.space.w_ImportError:
+                msg = 'import statement always raises %s' % exc
+                raise exc.w_value.value
+            link = Link([exc.w_type, exc.w_value], self.graph.exceptblock)
             self.recorder.crnt_block.closeblock(link)
 
         except StopFlowing:
@@ -663,8 +663,8 @@ class FlowSpaceFrame(object):
                 self.last_exception = operr
                 raise operr
             else:
-                raise FSException(space.w_TypeError,
-                    space.wrap("raise: no active exception to re-raise"))
+                raise space.exc_wrap(TypeError(
+                    "raise: no active exception to re-raise"))
 
         w_value = space.w_None
         if nbargs >= 3:
