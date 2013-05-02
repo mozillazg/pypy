@@ -132,3 +132,21 @@ class Opcode(object):
 
     def eval(self, frame):
         return getattr(frame, self.name)(self.arg)
+
+    @classmethod
+    def register_name(cls, name, op_class):
+        try:
+            num = OPNAMES.index(name)
+            cls.num2op[num] = op_class
+            return num
+        except ValueError:
+            return -1
+
+    def __repr__(self):
+        return "%s(%d)" % (self.name, self.arg)
+
+def register_opcode(cls):
+    """Class decorator: register opcode class as real Python opcode"""
+    name = cls.__name__
+    cls.num = Opcode.register_name(name, cls)
+    return cls
