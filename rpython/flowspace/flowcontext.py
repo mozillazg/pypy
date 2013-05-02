@@ -595,9 +595,6 @@ class FlowSpaceFrame(object):
     def getlocalvarname(self, index):
         return self.pycode.co_varnames[index]
 
-    def getconstant_w(self, index):
-        return self.space.wrap(self.pycode.consts[index])
-
     def getname_u(self, index):
         return self.pycode.names[index]
 
@@ -866,8 +863,8 @@ class FlowSpaceFrame(object):
             raise FlowingError(self, "Local variable referenced before assignment")
         self.pushvalue(w_value)
 
-    def LOAD_CONST(self, constindex):
-        w_const = self.getconstant_w(constindex)
+    def LOAD_CONST(self, const):
+        w_const = self.space.wrap(const)
         self.pushvalue(w_const)
 
     def LOAD_GLOBAL(self, nameindex):
