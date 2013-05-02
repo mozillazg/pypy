@@ -139,6 +139,8 @@ class HostCode(object):
 
         if opnum in opcode.hasjrel:
             oparg += next_instr
+        elif opnum in opcode.hasname:
+            oparg = self.names[oparg]
         try:
             op = Opcode.num2op[opnum].decode(oparg, pos, self)
         except KeyError:

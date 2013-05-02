@@ -595,12 +595,6 @@ class FlowSpaceFrame(object):
     def getlocalvarname(self, index):
         return self.pycode.co_varnames[index]
 
-    def getname_u(self, index):
-        return self.pycode.names[index]
-
-    def getname_w(self, index):
-        return Constant(self.pycode.names[index])
-
     def BAD_OPCODE(self, _):
         raise FlowingError(self, "This operation is not RPython")
 
@@ -674,17 +668,16 @@ class FlowSpaceFrame(object):
         operror = space.exc_from_raise(w_type, w_value)
         raise operror
 
-    def IMPORT_NAME(self, nameindex):
+    def IMPORT_NAME(self, modulename):
         space = self.space
-        modulename = self.getname_u(nameindex)
         glob = space.unwrap(self.w_globals)
         fromlist = space.unwrap(self.popvalue())
         level = self.popvalue().value
         w_obj = space.import_name(modulename, glob, None, fromlist, level)
         self.pushvalue(w_obj)
 
-    def IMPORT_FROM(self, nameindex):
-        w_name = self.getname_w(nameindex)
+    def IMPORT_FROM(self, name):
+        w_name = Constant(name)
         w_module = self.peekvalue()
         self.pushvalue(self.space.import_from(w_module, w_name))
 
@@ -867,15 +860,15 @@ class FlowSpaceFrame(object):
         w_const = self.space.wrap(const)
         self.pushvalue(w_const)
 
-    def LOAD_GLOBAL(self, nameindex):
-        w_result = self.space.find_global(self.w_globals, self.getname_u(nameindex))
+    def LOAD_GLOBAL(self, name):
+        w_result = self.space.find_global(self.w_globals, name)
         self.pushvalue(w_result)
     LOAD_NAME = LOAD_GLOBAL
 
-    def LOAD_ATTR(self, nameindex):
+    def LOAD_ATTR(self, name):
         "obj.attributename"
         w_obj = self.popvalue()
-        w_attributename = self.getname_w(nameindex)
+        w_attributename = Constant(name)
         w_value = self.space.getattr(w_obj, w_attributename)
         self.pushvalue(w_value)
     LOOKUP_METHOD = LOAD_ATTR
@@ -888,8 +881,7 @@ class FlowSpaceFrame(object):
         assert w_newvalue is not None
         self.locals_stack_w[varindex] = w_newvalue
 
-    def STORE_GLOBAL(self, nameindex):
-        varname = self.getname_u(nameindex)
+    def STORE_GLOBAL(self, varname):
         raise FlowingError(self,
                 "Attempting to modify global variable  %r." % (varname))
 
@@ -989,9 +981,9 @@ class FlowSpaceFrame(object):
         fn = self.space.newfunction(w_codeobj, self.w_globals, defaults)
         self.pushvalue(fn)
 
-    def STORE_ATTR(self, nameindex):
+    def STORE_ATTR(self, name):
         "obj.attributename = newvalue"
-        w_attributename = self.getname_w(nameindex)
+        w_attributename = Constant(name)
         w_obj = self.popvalue()
         w_newvalue = self.popvalue()
         self.space.setattr(w_obj, w_attributename, w_newvalue)
