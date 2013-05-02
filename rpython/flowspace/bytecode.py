@@ -103,9 +103,19 @@ class HostCode(object):
             next_instr += 3
             oparg = (oparg * 65536) | (hi * 256) | lo
 
-        opname = self.opnames[opcode]
-        return next_instr, opname, oparg
+        return next_instr, Opcode(opcode, oparg, pos)
 
     @property
     def is_generator(self):
         return bool(self.co_flags & CO_GENERATOR)
+
+OPNAMES = host_bytecode_spec.method_names
+
+class Opcode(object):
+    def __init__(self, opcode, arg, offset=-1):
+        self.name = OPNAMES[opcode]
+        self.arg = arg
+        self.offset = offset
+
+    def eval(self, frame, next_instr):
+        return getattr(frame, self.name)(self.arg, next_instr)

@@ -575,9 +575,9 @@ class FlowSpaceFrame(object):
                     break
 
     def handle_bytecode(self, next_instr):
-        next_instr, methodname, oparg = self.pycode.read(next_instr)
+        next_instr, opcode = self.pycode.read(next_instr)
         try:
-            res = getattr(self, methodname)(oparg, next_instr)
+            res = opcode.eval(self, next_instr)
             return res if res is not None else next_instr
         except FSException, operr:
             return self.handle_operation_error(operr)
