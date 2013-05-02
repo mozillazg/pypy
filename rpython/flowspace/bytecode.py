@@ -106,7 +106,11 @@ class HostCode(object):
 
         if opnum in opcode.hasjrel:
             oparg += next_instr
-        return next_instr, Opcode(opnum, oparg, pos)
+        try:
+            op = Opcode.num2op[opnum](oparg, pos)
+        except KeyError:
+            op = Opcode(opnum, oparg, pos)
+        return next_instr, op
 
     @property
     def is_generator(self):
@@ -115,8 +119,10 @@ class HostCode(object):
 OPNAMES = host_bytecode_spec.method_names
 
 class Opcode(object):
+    num2op = {}
     def __init__(self, opcode, arg, offset=-1):
         self.name = OPNAMES[opcode]
+        self.num = opcode
         self.arg = arg
         self.offset = offset
 
