@@ -1047,6 +1047,22 @@ class AppTestTypeObject:
             import gc; gc.collect()
         assert not seen
 
+    def test_change_type_to_add_del(self):
+        seen = []
+        class A(object):
+            def __del__(self):
+                seen.append(1)
+        class B(object):
+            pass
+        b = B()
+        b.__class__ = A
+        b = 42
+        for i in range(5):
+            if seen:
+                break
+            import gc; gc.collect()
+        assert seen
+
 
 class AppTestWithMethodCacheCounter:
     spaceconfig = {"objspace.std.withmethodcachecounter": True}
