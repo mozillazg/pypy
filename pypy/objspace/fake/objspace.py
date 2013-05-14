@@ -63,6 +63,10 @@ class W_MyType(W_MyObject):
     def get_module(self):
         return w_some_obj()
 
+class W_List(W_MyObject):
+    def append(self, item):
+        return self
+
 def w_some_obj():
     if NonConstant(False):
         return W_Root()
@@ -131,7 +135,7 @@ class FakeObjSpace(ObjSpace):
     def newlist(self, list_w):
         for w_x in list_w:
             is_root(w_x)
-        return w_some_obj()
+        return W_List()
 
     def newslice(self, w_start, w_end, w_step):
         is_root(w_start)
