@@ -3,7 +3,7 @@ from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.generator import GeneratorIterator
-from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.intobject import wrapint
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.objspace.std import slicetype
 from pypy.interpreter.gateway import WrappedDefault, unwrap_spec, applevel,\

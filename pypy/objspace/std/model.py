@@ -35,7 +35,7 @@ class StdTypeModel:
         class result:
             from pypy.objspace.std.objecttype import object_typedef
             from pypy.objspace.std.booltype   import bool_typedef
-            from pypy.objspace.std.inttype    import int_typedef
+            from pypy.objspace.std.intobject    import int_typedef
             from pypy.objspace.std.floattype  import float_typedef
             from pypy.objspace.std.complextype  import complex_typedef
             from pypy.objspace.std.tupletype  import tuple_typedef

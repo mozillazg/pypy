@@ -7,7 +7,7 @@ from pypy.objspace.std import stringobject
 from pypy.objspace.std.bytearraytype import (
     getbytevalue, makebytearraydata_w, new_bytearray)
 from pypy.objspace.std.intobject import W_IntObject
-from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.intobject import wrapint
 from pypy.objspace.std.listobject import get_list_index, get_positive_index
 from pypy.objspace.std.model import W_Object, registerimplementation
 from pypy.objspace.std.multimethod import FailedToImplement
