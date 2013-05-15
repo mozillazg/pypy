@@ -1,6 +1,6 @@
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.objspace.std.stdtypedef import StdTypeDef
-from pypy.objspace.std.inttype import int_typedef
+from pypy.objspace.std.intobject import int_typedef
 
 @unwrap_spec(w_obj = WrappedDefault(False))
 def descr__new__(space, w_booltype, w_obj):

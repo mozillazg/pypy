@@ -4,7 +4,7 @@ from pypy.interpreter.buffer import StringBuffer
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.objspace.std import newformat, slicetype
 from pypy.objspace.std.formatting import mod_format
-from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.intobject import wrapint
 from pypy.objspace.std.model import W_Object, registerimplementation
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.noneobject import W_NoneObject
