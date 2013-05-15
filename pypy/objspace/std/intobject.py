@@ -84,29 +84,124 @@ class W_IntObject(W_AbstractIntObject):
         a = self.intval
         return wrapint(space, a)
 
+    @staticmethod
+    @unwrap_spec(w_x = WrappedDefault(0))
+    def descr_new(space, w_inttype, w_x, w_base=None):
+        from pypy.objspace.std.intobject import W_IntObject
+        w_longval = None
+        w_value = w_x     # 'x' is the keyword argument name in CPython
+        value = 0
+        if w_base is None:
+            ok = False
+            # check for easy cases
+            if type(w_value) is W_IntObject:
+                value = w_value.intval
+                ok = True
+            elif space.isinstance_w(w_value, space.w_str):
+                value, w_longval = string_to_int_or_long(space, space.str_w(w_value))
+                ok = True
+            elif space.isinstance_w(w_value, space.w_unicode):
+                from pypy.objspace.std.unicodeobject import unicode_to_decimal_w
+                string = unicode_to_decimal_w(space, w_value)
+                value, w_longval = string_to_int_or_long(space, string)
+                ok = True
+            else:
+                # If object supports the buffer interface
+                try:
+                    w_buffer = space.buffer(w_value)
+                except OperationError, e:
+                    if not e.match(space, space.w_TypeError):
+                        raise
+                else:
+                    buf = space.interp_w(Buffer, w_buffer)
+                    value, w_longval = string_to_int_or_long(space, buf.as_str())
+                    ok = True
+
+            if not ok:
+                # otherwise, use the __int__() or the __trunc__() methods
+                w_obj = w_value
+                if space.lookup(w_obj, '__int__') is None:
+                    w_obj = space.trunc(w_obj)
+                w_obj = space.int(w_obj)
+                # 'int(x)' should return what x.__int__() returned, which should
+                # be an int or long or a subclass thereof.
+                if space.is_w(w_inttype, space.w_int):
+                    return w_obj
+                # int_w is effectively what we want in this case,
+                # we cannot construct a subclass of int instance with an
+                # an overflowing long
+                try:
+                    value = space.int_w(w_obj)
+                except OperationError, e:
+                    if e.match(space, space.w_TypeError):
+                        raise OperationError(space.w_ValueError,
+                            space.wrap("value can't be converted to int"))
+                    raise e
+        else:
+            base = space.int_w(w_base)
+
+            if space.isinstance_w(w_value, space.w_unicode):
+                from pypy.objspace.std.unicodeobject import unicode_to_decimal_w
+                s = unicode_to_decimal_w(space, w_value)
+            else:
+                try:
+                    s = space.str_w(w_value)
+                except OperationError, e:
+                    raise OperationError(space.w_TypeError,
+                                         space.wrap("int() can't convert non-string "
+                                                    "with explicit base"))
+
+            value, w_longval = string_to_int_or_long(space, s, base)
+
+        if w_longval is not None:
+            if not space.is_w(w_inttype, space.w_int):
+                raise OperationError(space.w_OverflowError,
+                                     space.wrap(
+                    "long int too large to convert to int"))
+            return w_longval
+        elif space.is_w(w_inttype, space.w_int):
+            # common case
+            return wrapint(space, value)
+        else:
+            w_obj = space.allocate_instance(W_IntObject, w_inttype)
+            W_IntObject.__init__(w_obj, value)
+            return w_obj
+
+    def descr_conjugate(self, space):
+        "Returns self, the complex conjugate of any int."
+        return space.int(self)
+
+    def descr_bit_length(self, space):
+        """int.bit_length() -> int
+
+        Number of bits necessary to represent self in binary.
+        >>> bin(37)
+        '0b100101'
+        >>> (37).bit_length()
+        6
+        """
+        val = space.int_w(self)
+        if val < 0:
+            val = -val
+        bits = 0
+        while val:
+            bits += 1
+            val >>= 1
+        return space.wrap(bits)
+
+    def descr_get_numerator(self, space):
+        return space.int(self)
+
+    def descr_get_denominator(self, space):
+        return space.wrap(1)
+
+    def descr_get_real(self, space):
+        return space.int(self)
+
+    def descr_get_imag(self, space):
+        return space.wrap(0)
+
 # ____________________________________________________________
-
-def descr_conjugate(space, w_int):
-    "Returns self, the complex conjugate of any int."
-    return space.int(w_int)
-
-def descr_bit_length(space, w_int):
-    """int.bit_length() -> int
-
-    Number of bits necessary to represent self in binary.
-    >>> bin(37)
-    '0b100101'
-    >>> (37).bit_length()
-    6
-    """
-    val = space.int_w(w_int)
-    if val < 0:
-        val = -val
-    bits = 0
-    while val:
-        bits += 1
-        val >>= 1
-    return space.wrap(bits)
 
 
 def wrapint(space, x):
@@ -156,100 +251,6 @@ def retry_to_w_long(space, parser, base=0):
     from pypy.objspace.std.longobject import newlong
     return newlong(space, bigint)
 
-@unwrap_spec(w_x = WrappedDefault(0))
-def descr__new__(space, w_inttype, w_x, w_base=None):
-    from pypy.objspace.std.intobject import W_IntObject
-    w_longval = None
-    w_value = w_x     # 'x' is the keyword argument name in CPython
-    value = 0
-    if w_base is None:
-        ok = False
-        # check for easy cases
-        if type(w_value) is W_IntObject:
-            value = w_value.intval
-            ok = True
-        elif space.isinstance_w(w_value, space.w_str):
-            value, w_longval = string_to_int_or_long(space, space.str_w(w_value))
-            ok = True
-        elif space.isinstance_w(w_value, space.w_unicode):
-            from pypy.objspace.std.unicodeobject import unicode_to_decimal_w
-            string = unicode_to_decimal_w(space, w_value)
-            value, w_longval = string_to_int_or_long(space, string)
-            ok = True
-        else:
-            # If object supports the buffer interface
-            try:
-                w_buffer = space.buffer(w_value)
-            except OperationError, e:
-                if not e.match(space, space.w_TypeError):
-                    raise
-            else:
-                buf = space.interp_w(Buffer, w_buffer)
-                value, w_longval = string_to_int_or_long(space, buf.as_str())
-                ok = True
-
-        if not ok:
-            # otherwise, use the __int__() or the __trunc__() methods
-            w_obj = w_value
-            if space.lookup(w_obj, '__int__') is None:
-                w_obj = space.trunc(w_obj)
-            w_obj = space.int(w_obj)
-            # 'int(x)' should return what x.__int__() returned, which should
-            # be an int or long or a subclass thereof.
-            if space.is_w(w_inttype, space.w_int):
-                return w_obj
-            # int_w is effectively what we want in this case,
-            # we cannot construct a subclass of int instance with an
-            # an overflowing long
-            try:
-                value = space.int_w(w_obj)
-            except OperationError, e:
-                if e.match(space, space.w_TypeError):
-                    raise OperationError(space.w_ValueError,
-                        space.wrap("value can't be converted to int"))
-                raise e
-    else:
-        base = space.int_w(w_base)
-
-        if space.isinstance_w(w_value, space.w_unicode):
-            from pypy.objspace.std.unicodeobject import unicode_to_decimal_w
-            s = unicode_to_decimal_w(space, w_value)
-        else:
-            try:
-                s = space.str_w(w_value)
-            except OperationError, e:
-                raise OperationError(space.w_TypeError,
-                                     space.wrap("int() can't convert non-string "
-                                                "with explicit base"))
-
-        value, w_longval = string_to_int_or_long(space, s, base)
-
-    if w_longval is not None:
-        if not space.is_w(w_inttype, space.w_int):
-            raise OperationError(space.w_OverflowError,
-                                 space.wrap(
-                "long int too large to convert to int"))
-        return w_longval
-    elif space.is_w(w_inttype, space.w_int):
-        # common case
-        return wrapint(space, value)
-    else:
-        w_obj = space.allocate_instance(W_IntObject, w_inttype)
-        W_IntObject.__init__(w_obj, value)
-        return w_obj
-
-def descr_get_numerator(space, w_obj):
-    return space.int(w_obj)
-
-def descr_get_denominator(space, w_obj):
-    return space.wrap(1)
-
-def descr_get_real(space, w_obj):
-    return space.int(w_obj)
-
-def descr_get_imag(space, w_obj):
-    return space.wrap(0)
-
 # ____________________________________________________________
 
 W_IntObject.typedef = StdTypeDef("int",
@@ -261,13 +262,14 @@ representation of a floating point number!)  When converting a string, use
 the optional base.  It is an error to supply a base when converting a
 non-string. If the argument is outside the integer range a long object
 will be returned instead.''',
-    __new__ = interp2app(descr__new__),
-    conjugate = interp2app(descr_conjugate),
-    bit_length = interp2app(descr_bit_length),
-    numerator = typedef.GetSetProperty(descr_get_numerator),
-    denominator = typedef.GetSetProperty(descr_get_denominator),
-    real = typedef.GetSetProperty(descr_get_real),
-    imag = typedef.GetSetProperty(descr_get_imag),
+    __new__ = interp2app(W_IntObject.descr_new),
+
+    conjugate = interp2app(W_IntObject.descr_conjugate),
+    bit_length = interp2app(W_IntObject.descr_bit_length),
+    numerator = typedef.GetSetProperty(W_IntObject.descr_get_numerator),
+    denominator = typedef.GetSetProperty(W_IntObject.descr_get_denominator),
+    real = typedef.GetSetProperty(W_IntObject.descr_get_real),
+    imag = typedef.GetSetProperty(W_IntObject.descr_get_imag),
     __int__ = interpindirect2app(W_AbstractIntObject.int),
 )
 int_typedef = W_IntObject.typedef
