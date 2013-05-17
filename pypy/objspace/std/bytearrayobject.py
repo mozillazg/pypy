@@ -1,18 +1,18 @@
-from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.objspace.std.model import registerimplementation
-from pypy.objspace.std.register_all import register_all
-from pypy.objspace.std.inttype import wrapint
-from pypy.objspace.std.multimethod import FailedToImplement
-from rpython.rlib.rstring import StringBuilder
-from pypy.objspace.std import stringobject
-from pypy.objspace.std.listobject import get_list_index
-from pypy.interpreter.gateway import unwrap_spec
+"""The builtin bytearray implementation"""
+
 from pypy.interpreter.buffer import RWBuffer
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.signature import Signature
+from pypy.objspace.std import stringobject
 from pypy.objspace.std.bytearraytype import (
-    makebytearraydata_w, new_bytearray)
-from pypy.objspace.std.bytearraytype import W_AbstractBytearrayObject
+    makebytearraydata_w, new_bytearray, W_AbstractBytearrayObject)
+from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.listobject import get_list_index
+from pypy.objspace.std.model import registerimplementation
+from pypy.objspace.std.multimethod import FailedToImplement
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stringobject import string_escape_encode
+
 from pypy.objspace.std.unicodeobject import W_UnicodeObject  # XXX: kill this whem SMMs are dead
 from pypy.objspace.std.noneobject import W_NoneObject  # XXX: and this one.
 from pypy.objspace.std.stringobject import W_StringObject  # XXX: and this too.

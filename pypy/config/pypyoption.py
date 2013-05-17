@@ -32,10 +32,11 @@ working_modules.update(dict.fromkeys(
      "rctime" , "select", "zipimport", "_lsprof",
      "crypt", "signal", "_rawffi", "termios", "zlib", "bz2",
      "struct", "_hashlib", "_md5", "_sha", "_minimal_curses", "cStringIO",
-     "thread", "itertools", "pyexpat", "_ssl", "cpyext", "array",
+     "thread", "itertools", "pyexpat", "_ssl", "array",
      "binascii", "_multiprocessing", '_warnings',
      "_collections", "_multibytecodec", "micronumpy", "_ffi",
-     "_continuation", "_cffi_backend", "_csv"]
+     "_continuation", "_cffi_backend", "_csv"] # "cpyext", "cppyy"]
+# disabled until problems are fixed
 ))
 
 translation_modules = default_modules.copy()
@@ -64,6 +65,8 @@ if sys.platform == "win32":
     del working_modules["termios"]
     del working_modules["_minimal_curses"]
 
+    del working_modules["cppyy"]  # not tested on win32
+
     # The _locale module is needed by site.py on Windows
     default_modules["_locale"] = None
 
@@ -75,20 +78,21 @@ if sys.platform == "sunos5":
     del working_modules["_minimal_curses"]
     del working_modules["termios"]
     del working_modules["_multiprocessing"]   # depends on rctime
-
+    del working_modules["cppyy"]  # depends on ctypes
 
 
 module_dependencies = {
     '_multiprocessing': [('objspace.usemodules.rctime', True),
                          ('objspace.usemodules.thread', True)],
     'cpyext': [('objspace.usemodules.array', True)],
+    'cppyy': [('objspace.usemodules.cpyext', True)],
     }
 module_suggests = {
     # the reason you want _rawffi is for ctypes, which
     # itself needs the interp-level struct module
     # because 'P' is missing from the app-level one
     "_rawffi": [("objspace.usemodules.struct", True)],
-    "cpyext": [("translation.secondaryentrypoints", "cpyext"),
+    "cpyext": [("translation.secondaryentrypoints", "cpyext,main"),
                ("translation.shared", sys.platform == "win32")],
 }
 
