@@ -7,7 +7,6 @@ from pypy.objspace.std import stringobject
 from pypy.objspace.std.bytearraytype import (
     makebytearraydata_w, new_bytearray, W_AbstractBytearrayObject)
 from pypy.objspace.std.inttype import wrapint
-from pypy.objspace.std.listobject import get_list_index
 from pypy.objspace.std.model import registerimplementation
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.register_all import register_all
@@ -403,19 +402,25 @@ def str_rfind__Bytearray_ANY_ANY_ANY(space, w_bytearray, w_char, w_start, w_stop
                                                          w_start, w_stop)
 
 def str_startswith__Bytearray_ANY_ANY_ANY(space, w_bytearray, w_prefix, w_start, w_stop):
+    if space.isinstance_w(w_prefix, space.w_tuple):
+        w_str = str__Bytearray(space, w_bytearray)
+        w_prefix = space.newtuple([space.wrap(space.bufferstr_new_w(w_entry)) for w_entry in
+                                   space.fixedview(w_prefix)])
+        return stringobject.str_startswith__String_ANY_ANY_ANY(space, w_str, w_prefix,
+                                                                  w_start, w_stop)
+
     w_prefix = space.wrap(space.bufferstr_new_w(w_prefix))
     w_str = str__Bytearray(space, w_bytearray)
     return stringobject.str_startswith__String_String_ANY_ANY(space, w_str, w_prefix,
                                                               w_start, w_stop)
 
-def str_startswith__Bytearray_Tuple_ANY_ANY(space, w_bytearray, w_prefix, w_start, w_stop):
-    w_str = str__Bytearray(space, w_bytearray)
-    w_prefix = space.newtuple([space.wrap(space.bufferstr_new_w(w_entry)) for w_entry in
-                               space.unpackiterable(w_prefix)])
-    return stringobject.str_startswith__String_Tuple_ANY_ANY(space, w_str, w_prefix,
-                                                              w_start, w_stop)
-
 def str_endswith__Bytearray_ANY_ANY_ANY(space, w_bytearray, w_suffix, w_start, w_stop):
+    if space.isinstance_w(w_suffix, space.w_tuple):
+        w_str = str__Bytearray(space, w_bytearray)
+        w_suffix = space.newtuple([space.wrap(space.bufferstr_new_w(w_entry)) for w_entry in
+                                   space.fixedview(w_suffix)])
+        return stringobject.str_endswith__String_ANY_ANY_ANY(space, w_str, w_suffix,
+                                                                  w_start, w_stop)
     w_suffix = space.wrap(space.bufferstr_new_w(w_suffix))
     w_str = str__Bytearray(space, w_bytearray)
     return stringobject.str_endswith__String_String_ANY_ANY(space, w_str, w_suffix,
@@ -585,7 +590,7 @@ def setitem__Bytearray_Slice_ANY(space, w_bytearray, w_slice, w_other):
     _setitem_slice_helper(space, w_bytearray.data, start, step, slicelength, sequence2, empty_elem='\x00')
 
 def delitem__Bytearray_ANY(space, w_bytearray, w_idx):
-    idx = get_list_index(space, w_idx)
+    idx = space.getindex_w(w_idx, space.w_IndexError, "bytearray index")
     try:
         del w_bytearray.data[idx]
     except IndexError:
