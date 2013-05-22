@@ -12,12 +12,12 @@ from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stringobject import string_escape_encode
 
-from pypy.objspace.std.unicodeobject import W_UnicodeObject  # XXX: kill this whem SMMs are dead
-from pypy.objspace.std.noneobject import W_NoneObject  # XXX: and this one.
-from pypy.objspace.std.stringobject import W_StringObject  # XXX: and this too.
-from pypy.objspace.std.tupleobject import W_TupleObject  # XXX: ...
-from pypy.objspace.std.intobject import W_IntObject # XXX: ...
-from pypy.objspace.std.sliceobject import W_SliceObject # XXX: WTF.
+from pypy.objspace.std.unicodeobject import W_UnicodeObject
+from pypy.objspace.std.noneobject import W_NoneObject
+from pypy.objspace.std.stringobject import W_StringObject
+from pypy.objspace.std.tupleobject import W_TupleObject
+from pypy.objspace.std.intobject import W_IntObject
+from pypy.objspace.std.sliceobject import W_SliceObject
 
 
 class W_BytearrayObject(W_AbstractBytearrayObject):
