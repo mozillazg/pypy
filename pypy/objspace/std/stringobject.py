@@ -6,7 +6,6 @@ from pypy.objspace.std import newformat, slicetype
 from pypy.objspace.std.contiguousstring import StringMethods
 from pypy.objspace.std.formatting import mod_format
 from pypy.objspace.std.inttype import wrapint
-from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.model import registerimplementation
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.noneobject import W_NoneObject
