@@ -93,8 +93,7 @@ module_suggests = {
     # itself needs the interp-level struct module
     # because 'P' is missing from the app-level one
     "_rawffi": [("objspace.usemodules.struct", True)],
-    "cpyext": [("translation.secondaryentrypoints", "cpyext,main"),
-               ("translation.shared", sys.platform == "win32")],
+    "cpyext": [("translation.secondaryentrypoints", "cpyext,main")]
 }
 
 module_import_dependencies = {
@@ -309,6 +308,7 @@ def set_pypy_opt_level(config, level):
     # unspecified and we get None.  It shouldn't occur in translate.py though.
     type_system = config.translation.type_system
     backend = config.translation.backend
+    config.translation.suggest(shared=True)
 
     # all the good optimizations for PyPy should be listed here
     if level in ['2', '3', 'jit']:
