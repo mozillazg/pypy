@@ -23,6 +23,7 @@ from rpython.rtyper.error import TyperError
 from rpython.rtyper.lltypesystem.lltype import (Signed, Void, LowLevelType,
     Ptr, ContainerType, FuncType, functionptr, typeOf, RuntimeTypeInfo,
     attachRuntimeTypeInfo, Primitive)
+from rpython.rtyper.lltypesystem import llmemory
 from rpython.rtyper.ootypesystem import ootype
 from rpython.rtyper.rmodel import Repr, inputconst, BrokenReprTyperError
 from rpython.rtyper.typesystem import LowLevelTypeSystem, ObjectOrientedTypeSystem
@@ -68,6 +69,8 @@ class RPythonTyper(object):
         self.typererror_count = 0
         # make the primitive_to_repr constant mapping
         self.primitive_to_repr = {}
+        self.gcref_repr = self.getrepr(annmodel.lltype_to_annotation(
+            llmemory.GCREF))
         if self.type_system.offers_exceptiondata:
             self.exceptiondata = self.type_system.exceptiondata.ExceptionData(self)
         else:
@@ -918,7 +921,17 @@ class LowLevelOpList(list):
     def convertvar(self, v, r_from, r_to):
         assert isinstance(v, (Variable, Constant))
         if r_from != r_to:
-            v = pair(r_from, r_to).convert_from_to(v, self)
+            # we add a special conversion of opaque pointers
+            if (r_from.lowleveltype == llmemory.GCREF and
+                isinstance(r_to.lowleveltype, Ptr)):
+                v = self.genop('cast_opaque_ptr', [v],
+                               resulttype=r_to.lowleveltype)
+            elif (r_to.lowleveltype == llmemory.GCREF and
+                isinstance(r_from.lowleveltype, Ptr)):
+                v = self.genop('cast_opaque_ptr', [v],
+                               resulttype=r_to.lowleveltype)
+            else:
+                v = pair(r_from, r_to).convert_from_to(v, self)
             if v is NotImplemented:
                 raise TyperError("don't know how to convert from %r to %r" %
                                  (r_from, r_to))

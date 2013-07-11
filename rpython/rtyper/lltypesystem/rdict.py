@@ -1,7 +1,7 @@
 from rpython.tool.pairtype import pairtype
 from rpython.flowspace.model import Constant
 from rpython.rtyper.rdict import AbstractDictRepr, AbstractDictIteratorRepr
-from rpython.rtyper.lltypesystem import lltype
+from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.rlib import objectmodel, jit
 from rpython.rlib.debug import ll_assert
 from rpython.rlib.rarithmetic import r_uint, intmask, LONG_BIT
@@ -50,7 +50,8 @@ class DictRepr(AbstractDictRepr):
             assert callable(key_repr)
             self._key_repr_computer = key_repr
         else:
-            self.external_key_repr, self.key_repr = self.pickkeyrepr(key_repr)
+            self.external_key_repr, self.key_repr = self.pickrepr(key_repr,
+                                                                  is_key=True)
         if not isinstance(value_repr, rmodel.Repr):  # not computed yet, done by setup()
             assert callable(value_repr)
             self._value_repr_computer = value_repr
@@ -63,13 +64,11 @@ class DictRepr(AbstractDictRepr):
         self.force_non_null = force_non_null
         # setup() needs to be called to finish this initialization
 
-    def _externalvsinternal(self, rtyper, item_repr):
-        return rmodel.externalvsinternal(self.rtyper, item_repr)
-
     def _setup_repr(self):
         if 'key_repr' not in self.__dict__:
             key_repr = self._key_repr_computer()
-            self.external_key_repr, self.key_repr = self.pickkeyrepr(key_repr)
+            self.external_key_repr, self.key_repr = self.pickrepr(key_repr,
+                                                                  is_key=True)
         if 'value_repr' not in self.__dict__:
             self.external_value_repr, self.value_repr = self.pickrepr(self._value_repr_computer())
         if isinstance(self.DICT, lltype.GcForwardReference):
@@ -832,6 +831,8 @@ ll_update.oopspec = 'dict.update(dic1, dic2)'
 
 def recast(P, v):
     if isinstance(P, lltype.Ptr):
+        if P == llmemory.GCREF:
+            return lltype.cast_opaque_ptr(P, v)
         return lltype.cast_pointer(P, v)
     else:
         return v

@@ -1,7 +1,7 @@
 from rpython.annotator import model as annmodel, unaryop, binaryop, description
 from rpython.flowspace.model import Constant
 from rpython.rtyper.error import TyperError, MissingRTypeOperation
-from rpython.rtyper.lltypesystem import lltype
+from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.rtyper.lltypesystem.lltype import (Void, Bool, Float, typeOf,
     LowLevelType, isCompatibleType)
 from rpython.tool.pairtype import pairtype, extendabletype, pair
@@ -433,13 +433,17 @@ def getgcflavor(classdef):
                                             Constant('gc')).value
     return alloc_flavor
 
-def externalvsinternal(rtyper, item_repr): # -> external_item_repr, (internal_)item_repr
+def externalvsinternal(rtyper, item_repr, is_key=False): # -> external_item_repr, (internal_)item_repr
     from rpython.rtyper import rclass
-    if (isinstance(item_repr, rclass.AbstractInstanceRepr) and
-        getattr(item_repr, 'gcflavor', 'gc') == 'gc'):
-        return item_repr, rclass.getinstancerepr(rtyper, None)
+    TP = item_repr.lowleveltype
+    if not is_key:
+        if isinstance(TP, lltype.Ptr) and TP.TO._gckind == 'gc':
+            return item_repr, rtyper.gcref_repr
     else:
-        return item_repr, item_repr
+        if (isinstance(item_repr, rclass.AbstractInstanceRepr) and
+            getattr(item_repr, 'gcflavor', 'gc') == 'gc'):
+            return item_repr, rclass.getinstancerepr(rtyper, None)
+    return item_repr, item_repr
 
 
 class DummyValueBuilder(object):

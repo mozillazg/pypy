@@ -32,13 +32,12 @@ class __extend__(annmodel.SomeDict):
 
 class AbstractDictRepr(rmodel.Repr):
 
-    def pickrepr(self, item_repr):
+    def pickrepr(self, item_repr, is_key=False):
         if self.custom_eq_hash:
             return item_repr, item_repr
         else:
-            return self._externalvsinternal(self.rtyper, item_repr)
-
-    pickkeyrepr = pickrepr
+            return rmodel.externalvsinternal(self.rtyper, item_repr,
+                                             is_key=is_key)
 
     def compact_repr(self):
         return 'DictR %s %s' % (self.key_repr.compact_repr(), self.value_repr.compact_repr())

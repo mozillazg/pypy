@@ -1056,18 +1056,6 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
 
 
 
-class TestOOtype(BaseTestRdict, OORtypeMixin):
-
-    def test_recursive(self):
-        def func(i):
-            dic = {i: {}}
-            dic[i] = dic
-            return dic[i]
-        res = self.interpret(func, [5])
-        assert res.ll_get(5) is res
-
-    # ____________________________________________________________
-
 class TestStress:
 
     def test_stress(self):
