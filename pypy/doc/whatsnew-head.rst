@@ -81,3 +81,7 @@ Inline the fast path of id() and hash()
 Adapt package.py script to compile CFFI tk extension. Add a --without-tk switch
 to optionally skip it.
 
+.. branch: distutils-cppldflags
+Copy CPython's implementation of customize_compiler, dont call split on
+environment variables, honour CFLAGS, CPPFLAGS, LDSHARED and LDFLAGS on Unices.
+
