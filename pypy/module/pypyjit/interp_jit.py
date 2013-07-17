@@ -176,7 +176,7 @@ def set_local_threshold(space, w_code, pos, value):
     For testing. Set the threshold for this code object at position pos
     at value given.
     """
-    w_code.jit_cells[pos << 1] = value # we ignore the profiling case
+    w_code.jit_cells[pos << 1] = r_uint(value) # we ignore the profiling case
 
 @unwrap_spec(w_code=PyCode, value=int)
 def set_local_bridge_threshold(space, w_code, value):
