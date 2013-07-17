@@ -18,6 +18,8 @@ class Module(MixedModule):
         'JitLoopInfo': 'interp_resop.W_JitLoopInfo',
         'Box': 'interp_resop.WrappedBox',
         'PARAMETER_DOCS': 'space.wrap(rpython.rlib.jit.PARAMETER_DOCS)',
+        'set_local_threshold': 'interp_jit.set_local_threshold',
+        'set_local_bridge_threshold': 'interp_jit.set_local_bridge_threshold',
     }
 
     def setup_after_space_initialization(self):

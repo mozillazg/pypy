@@ -13,6 +13,7 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.pycode import PyCode, CO_GENERATOR
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.pyopcode import ExitFrame
+from pypy.interpreter.gateway import unwrap_spec
 from opcode import opmap
 
 PyFrame._virtualizable2_ = ['last_instr', 'pycode',
@@ -51,11 +52,15 @@ class PyPyJitDriver(JitDriver):
     greens = ['next_instr', 'is_being_profiled', 'pycode']
     virtualizables = ['frame']
 
+def start_bridge_threshold(next_instr, is_being_profiled, bytecode):
+    return bytecode.bridge_init_threshold
+
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
                               get_jitcell_at = get_jitcell_at,
                               set_jitcell_at = set_jitcell_at,
                               should_unroll_one_iteration =
                               should_unroll_one_iteration,
+                              start_bridge_threshold=start_bridge_threshold,
                               name='pypyjit')
 
 class __extend__(PyFrame):
@@ -117,6 +122,7 @@ class __extend__(PyCode):
     def _initialize(self):
         PyCode__initialize(self)
         self.jit_cells = {}
+        self.bridge_init_threshold = 0
 
     def _cleanup_(self):
         self.jit_cells = {}
@@ -162,3 +168,16 @@ def residual_call(space, w_callable, __args__):
     '''For testing.  Invokes callable(...), but without letting
     the JIT follow the call.'''
     return space.call_args(w_callable, __args__)
+
+@unwrap_spec(w_code=PyCode, pos=int, value=int)
+def set_local_threshold(space, w_code, pos, value):
+    """ set_local_threshold(code, pos, value)
+
+    For testing. Set the threshold for this code object at position pos
+    at value given.
+    """
+    w_code.jit_cells[pos << 1] = value # we ignore the profiling case
+
+@unwrap_spec(w_code=PyCode, value=int)
+def set_local_bridge_threshold(space, w_code, value):
+    w_code.bridge_init_threshold = value
