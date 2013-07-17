@@ -84,3 +84,5 @@ to optionally skip it.
 .. branch: distutils-cppldflags
 Copy CPython's implementation of customize_compiler, dont call split on
 environment variables, honour CFLAGS, CPPFLAGS, LDSHARED and LDFLAGS on Unices.
+
+.. branch: ssl_moving_write_buffer
