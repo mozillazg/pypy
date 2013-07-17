@@ -4,6 +4,7 @@ This is transformed to become a JIT by code elsewhere: pypy/jit/*
 """
 
 from rpython.tool.pairtype import extendabletype
+from rpython.rtyper.annlowlevel import cast_base_ptr_to_instance
 from rpython.rlib.rarithmetic import r_uint, intmask
 from rpython.rlib.jit import JitDriver, hint, we_are_jitted, dont_look_inside
 from rpython.rlib import jit
@@ -169,14 +170,18 @@ def residual_call(space, w_callable, __args__):
     the JIT follow the call.'''
     return space.call_args(w_callable, __args__)
 
-@unwrap_spec(w_code=PyCode, pos=int, value=int)
+@unwrap_spec(w_code=PyCode, pos=r_uint, value=int)
 def set_local_threshold(space, w_code, pos, value):
     """ set_local_threshold(code, pos, value)
 
     For testing. Set the threshold for this code object at position pos
     at value given.
     """
-    w_code.jit_cells[pos << 1] = r_uint(value) # we ignore the profiling case
+    from rpython.jit.metainterp.warmstate import JitCell
+
+    ref = w_code.jit_cells[pos << 1]
+    jitcell = cast_base_ptr_to_instance(JitCell, ref)
+    jitcell.counter = value
 
 @unwrap_spec(w_code=PyCode, value=int)
 def set_local_bridge_threshold(space, w_code, value):
