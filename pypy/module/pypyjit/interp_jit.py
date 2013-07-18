@@ -54,15 +54,12 @@ class PyPyJitDriver(JitDriver):
     greens = ['next_instr', 'is_being_profiled', 'pycode']
     virtualizables = ['frame']
 
-def start_bridge_threshold(next_instr, is_being_profiled, bytecode):
-    return bytecode.bridge_init_threshold
 
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
                               get_jitcell_at = get_jitcell_at,
                               set_jitcell_at = set_jitcell_at,
                               should_unroll_one_iteration =
                               should_unroll_one_iteration,
-                              start_bridge_threshold=start_bridge_threshold,
                               name='pypyjit')
 
 class __extend__(PyFrame):
@@ -181,7 +178,3 @@ def set_local_threshold(space, w_code, pos, value):
     ref = w_code.jit_cells[pos << 1]
     jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
     jitcell.counter = value
-
-@unwrap_spec(w_code=PyCode, value=int)
-def set_local_bridge_threshold(space, w_code, value):
-    w_code.bridge_init_threshold = value
