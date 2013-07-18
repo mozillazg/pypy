@@ -6,7 +6,8 @@ This is transformed to become a JIT by code elsewhere: pypy/jit/*
 from rpython.tool.pairtype import extendabletype
 from rpython.rtyper.annlowlevel import cast_base_ptr_to_instance
 from rpython.rlib.rarithmetic import r_uint, intmask
-from rpython.rlib.jit import JitDriver, hint, we_are_jitted, dont_look_inside
+from rpython.rlib.jit import JitDriver, hint, we_are_jitted, dont_look_inside,\
+     BaseJitCell
 from rpython.rlib import jit
 from rpython.rlib.jit import current_trace_length, unroll_parameters
 import pypy.interpreter.pyopcode   # for side-effects
@@ -177,10 +178,8 @@ def set_local_threshold(space, w_code, pos, value):
     For testing. Set the threshold for this code object at position pos
     at value given.
     """
-    from rpython.jit.metainterp.warmstate import JitCell
-
     ref = w_code.jit_cells[pos << 1]
-    jitcell = cast_base_ptr_to_instance(JitCell, ref)
+    jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
     jitcell.counter = value
 
 @unwrap_spec(w_code=PyCode, value=int)
