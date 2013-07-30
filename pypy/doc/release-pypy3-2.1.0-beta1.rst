@@ -1,17 +1,17 @@
-==================
-PyPy3 2.1.0 beta 1
-==================
+================
+PyPy3 2.1 beta 1
+================
 
-We're pleased to announce the first beta of the upcoming 2.1.0 release of
+We're pleased to announce the first beta of the upcoming 2.1 release of
 PyPy3. This is the first release of PyPy which targets Python 3 (3.2.3)
 compatibility.
 
 We would like to thank all of the people who donated_ to the `py3k proposal`_
 for supporting the work that went into this and future releases.
 
-You can download the PyPy3 2.1.0 beta 1 release here:
+You can download the PyPy3 2.1 beta 1 release here:
 
-    http://pypy.org/download.html
+    http://pypy.org/download.html#pypy3-beta-1
 
 Highlights
 ==========
