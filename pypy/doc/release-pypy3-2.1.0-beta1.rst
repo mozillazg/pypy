@@ -11,7 +11,7 @@ for supporting the work that went into this and future releases.
 
 You can download the PyPy3 2.1 beta 1 release here:
 
-    http://pypy.org/download.html#pypy3-beta-1
+    http://pypy.org/download.html#pypy3-2-1-beta-1
 
 Highlights
 ==========
