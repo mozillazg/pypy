@@ -634,10 +634,10 @@ class TestAnnotateTestCase:
 
     def test_operation_always_raising(self):
         def operation_always_raising(n):
-            lst = []
+            dct = {}
             try:
-                return lst[n]
-            except IndexError:
+                return dct[n]
+            except KeyError:
                 return 24
         a = self.RPythonAnnotator()
         s = a.build_types(operation_always_raising, [int])
@@ -799,13 +799,13 @@ class TestAnnotateTestCase:
         def f(l):
             try:
                 l[0]
-            except (KeyError, IndexError),e:
+            except KeyError, e:    # ignored because 'l' is a list
                 return e
             return None
 
         a = self.RPythonAnnotator()
         s = a.build_types(f, [somelist(annmodel.s_Int)])
-        assert s.classdef is a.bookkeeper.getuniqueclassdef(IndexError)  # KeyError ignored because l is a list
+        assert s == annmodel.s_None
 
     def test_freeze_protocol(self):
         class Stuff:

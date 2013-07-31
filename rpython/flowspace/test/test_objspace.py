@@ -329,7 +329,7 @@ class TestFlowObjSpace(Base):
                         found[link.args[0].value] = True
                     else:
                         found[link.exitcase] = None
-        assert found == {IndexError: True, KeyError: True, Exception: None}
+        assert found == {KeyError: True, Exception: None}
 
     def reraiseAnything(x):
         try:
@@ -372,7 +372,7 @@ class TestFlowObjSpace(Base):
 
     #__________________________________________________________
     def raise1(msg):
-        raise IndexError
+        raise ValueError
 
     def test_raise1(self):
         x = self.codetest(self.raise1)
@@ -381,7 +381,7 @@ class TestFlowObjSpace(Base):
         ops = x.startblock.operations
         assert len(ops) == 2
         assert ops[0].opname == 'simple_call'
-        assert ops[0].args == [Constant(IndexError)]
+        assert ops[0].args == [Constant(ValueError)]
         assert ops[1].opname == 'type'
         assert ops[1].args == [ops[0].result]
         assert x.startblock.exits[0].args == [ops[1].result, ops[0].result]
@@ -389,7 +389,7 @@ class TestFlowObjSpace(Base):
 
     #__________________________________________________________
     def raise2(msg):
-        raise IndexError, msg
+        raise ValueError, msg
 
     def test_raise2(self):
         x = self.codetest(self.raise2)
@@ -397,7 +397,7 @@ class TestFlowObjSpace(Base):
 
     #__________________________________________________________
     def raise3(msg):
-        raise IndexError(msg)
+        raise ValueError(msg)
 
     def test_raise3(self):
         x = self.codetest(self.raise3)
@@ -421,7 +421,7 @@ class TestFlowObjSpace(Base):
     def raise_and_catch_1(exception_instance):
         try:
             raise exception_instance
-        except IndexError:
+        except ValueError:
             return -1
         return 0
 
@@ -432,7 +432,7 @@ class TestFlowObjSpace(Base):
     def catch_simple_call():
         try:
             user_defined_function()
-        except IndexError:
+        except ValueError:
             return -1
         return 0
 
@@ -443,7 +443,7 @@ class TestFlowObjSpace(Base):
     def multiple_catch_simple_call():
         try:
             user_defined_function()
-        except (IndexError, OSError):
+        except (ValueError, OSError):
             return -1
         return 0
 
@@ -455,7 +455,7 @@ class TestFlowObjSpace(Base):
         links = entrymap[graph.returnblock]
         assert len(links) == 3
         assert (dict.fromkeys([link.exitcase for link in links]) ==
-                dict.fromkeys([None, IndexError, OSError]))
+                dict.fromkeys([None, ValueError, OSError]))
         links = entrymap[graph.exceptblock]
         assert len(links) == 1
         assert links[0].exitcase is Exception
@@ -815,7 +815,7 @@ class TestFlowObjSpace(Base):
                 raise
         graph = self.codetest(f)
         simplify_graph(graph)
-        assert self.all_operations(graph) == {'getitem_idx_key': 1}
+        assert self.all_operations(graph) == {'getitem': 1}
 
         g = lambda: None
         def f(c, x):
@@ -825,7 +825,7 @@ class TestFlowObjSpace(Base):
                 g()
         graph = self.codetest(f)
         simplify_graph(graph)
-        assert self.all_operations(graph) == {'getitem_idx_key': 1,
+        assert self.all_operations(graph) == {'getitem': 1,
                                               'simple_call': 2}
 
         def f(c, x):
@@ -833,9 +833,8 @@ class TestFlowObjSpace(Base):
                 return c[x]
             except IndexError:
                 raise
-        graph = self.codetest(f)
-        simplify_graph(graph)
-        assert self.all_operations(graph) == {'getitem_idx': 1}
+        py.test.raises(FlowingError, self.codetest, f)
+        # 'except IndexError' is not RPython any more
 
         def f(c, x):
             try:
@@ -844,7 +843,7 @@ class TestFlowObjSpace(Base):
                 raise
         graph = self.codetest(f)
         simplify_graph(graph)
-        assert self.all_operations(graph) == {'getitem_key': 1}
+        assert self.all_operations(graph) == {'getitem': 1}
 
         def f(c, x):
             try:
@@ -863,16 +862,7 @@ class TestFlowObjSpace(Base):
         graph = self.codetest(f)
         simplify_graph(graph)
         self.show(graph)
-        assert self.all_operations(graph) == {'getitem_idx_key': 1}
-
-        def f(c, x):
-            try:
-                return c[x]
-            except IndexError:
-                return -1
-        graph = self.codetest(f)
-        simplify_graph(graph)
-        assert self.all_operations(graph) == {'getitem_idx': 1}
+        assert self.all_operations(graph) == {'getitem': 1}
 
         def f(c, x):
             try:
@@ -881,7 +871,7 @@ class TestFlowObjSpace(Base):
                 return -1
         graph = self.codetest(f)
         simplify_graph(graph)
-        assert self.all_operations(graph) == {'getitem_key': 1}
+        assert self.all_operations(graph) == {'getitem': 1}
 
         def f(c, x):
             try:

@@ -206,21 +206,6 @@ def simplify_exceptions(graph):
             exits.append(link)
         block.recloseblock(*(preserve + exits))
 
-def transform_xxxitem(graph):
-    # xxx setitem too
-    for block in graph.iterblocks():
-        if block.operations and block.exitswitch == c_last_exception:
-            last_op = block.operations[-1]
-            if last_op.opname == 'getitem':
-                postfx = []
-                for exit in block.exits:
-                    if exit.exitcase is IndexError:
-                        postfx.append('idx')
-                    elif exit.exitcase is KeyError:
-                        postfx.append('key')
-                if postfx:
-                    last_op.opname = last_op.opname + '_' + '_'.join(postfx)
-
 
 def remove_dead_exceptions(graph):
     """Exceptions can be removed if they are unreachable"""
@@ -984,7 +969,6 @@ all_passes = [
     remove_identical_vars,
     transform_ovfcheck,
     simplify_exceptions,
-    transform_xxxitem,
     remove_dead_exceptions,
     ]
 

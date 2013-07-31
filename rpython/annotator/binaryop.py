@@ -32,7 +32,6 @@ BINARY_OPERATIONS = set(['add', 'sub', 'mul', 'div', 'mod',
                          'and_', 'or_', 'xor',
                          'lshift', 'rshift',
                          'getitem', 'setitem', 'delitem',
-                         'getitem_idx', 'getitem_key', 'getitem_idx_key',
                          'inplace_add', 'inplace_sub', 'inplace_mul',
                          'inplace_truediv', 'inplace_floordiv', 'inplace_div',
                          'inplace_mod',
@@ -180,20 +179,6 @@ class __extend__(pairtype(SomeObject, SomeObject)):
             return improvement
         else:
             return obj
-
-    # checked getitems
-
-    def _getitem_can_only_throw(s_c1, s_o2):
-        impl = pair(s_c1, s_o2).getitem
-        return read_can_only_throw(impl, s_c1, s_o2)
-
-    def getitem_idx_key((s_c1, s_o2)):
-        impl = pair(s_c1, s_o2).getitem
-        return impl()
-    getitem_idx_key.can_only_throw = _getitem_can_only_throw
-
-    getitem_idx = getitem_idx_key
-    getitem_key = getitem_idx_key
 
 
 class __extend__(pairtype(SomeType, SomeType)):
@@ -419,9 +404,11 @@ class __extend__(pairtype(SomeByteArray, SomeByteArray)):
 class __extend__(pairtype(SomeByteArray, SomeInteger)):
     def getitem((s_b, s_i)):
         return SomeInteger()
+    getitem.can_only_throw = []
 
     def setitem((s_b, s_i), s_i2):
         assert isinstance(s_i2, SomeInteger)
+    setitem.can_only_throw = []
 
 class __extend__(pairtype(SomeString, SomeByteArray),
                  pairtype(SomeByteArray, SomeString),
@@ -614,11 +601,12 @@ class __extend__(pairtype(SomeTuple, SomeInteger)):
             try:
                 return tup1.items[int2.const]
             except IndexError:
-                return s_ImpossibleValue
+                raise Exception("tuple of %d elements indexed with [%s]" % (
+                    len(tup1.items), int2.const))
         else:
             getbookkeeper().count("tuple_random_getitem", tup1)
             return unionof(*tup1.items)
-    getitem.can_only_throw = [IndexError]
+    getitem.can_only_throw = []
 
 
 class __extend__(pairtype(SomeList, SomeInteger)):
@@ -631,25 +619,16 @@ class __extend__(pairtype(SomeList, SomeInteger)):
         return lst1.listdef.read_item()
     getitem.can_only_throw = []
 
-    getitem_key = getitem
-
-    def getitem_idx((lst1, int2)):
-        getbookkeeper().count("list_getitem", int2)
-        return lst1.listdef.read_item()
-    getitem_idx.can_only_throw = [IndexError]
-
-    getitem_idx_key = getitem_idx
-
     def setitem((lst1, int2), s_value):
         getbookkeeper().count("list_setitem", int2)
         lst1.listdef.mutate()
         lst1.listdef.generalize(s_value)
-    setitem.can_only_throw = [IndexError]
+    setitem.can_only_throw = []
 
     def delitem((lst1, int2)):
         getbookkeeper().count("list_delitem", int2)
         lst1.listdef.resize()
-    delitem.can_only_throw = [IndexError]
+    delitem.can_only_throw = []
 
 class __extend__(pairtype(SomeString, SomeInteger)):
 
@@ -657,15 +636,6 @@ class __extend__(pairtype(SomeString, SomeInteger)):
         getbookkeeper().count("str_getitem", int2)
         return SomeChar(no_nul=str1.no_nul)
     getitem.can_only_throw = []
-
-    getitem_key = getitem
-
-    def getitem_idx((str1, int2)):
-        getbookkeeper().count("str_getitem", int2)
-        return SomeChar(no_nul=str1.no_nul)
-    getitem_idx.can_only_throw = [IndexError]
-
-    getitem_idx_key = getitem_idx
 
     def mul((str1, int2)): # xxx do we want to support this
         getbookkeeper().count("str_mul", str1, int2)
@@ -676,15 +646,6 @@ class __extend__(pairtype(SomeUnicodeString, SomeInteger)):
         getbookkeeper().count("str_getitem", int2)
         return SomeUnicodeCodePoint()
     getitem.can_only_throw = []
-
-    getitem_key = getitem
-
-    def getitem_idx((str1, int2)):
-        getbookkeeper().count("str_getitem", int2)
-        return SomeUnicodeCodePoint()
-    getitem_idx.can_only_throw = [IndexError]
-
-    getitem_idx_key = getitem_idx
 
     def mul((str1, int2)): # xxx do we want to support this
         getbookkeeper().count("str_mul", str1, int2)

@@ -186,6 +186,11 @@ class FlowObjSpace(object):
         if check_class in (NotImplementedError, AssertionError):
             raise FlowingError(self.frame,
                 "Catching %s is not valid in RPython" % check_class.__name__)
+        if check_class == IndexError:
+            raise FlowingError(self.frame,
+                "Catching IndexError is not valid any more in RPython.  "
+                "You should check explicitly that the index is valid "
+                "before you use it")
         if not isinstance(check_class, tuple):
             # the simple case
             return self.exception_issubclass_w(w_exc_type, w_check_class)

@@ -247,18 +247,17 @@ if hasattr(__builtin__, 'next'):
 
 op_appendices = {
     OverflowError: 'ovf',
-    IndexError: 'idx',
     KeyError: 'key',
     ZeroDivisionError: 'zer',
     ValueError: 'val',
     }
 
-# specifying IndexError, and KeyError beyond Exception,
+# specifying KeyError beyond Exception,
 # allows the annotator to be more precise, see test_reraiseAnything/KeyError in
 # the annotator tests
-op.getitem.canraise = [IndexError, KeyError, Exception]
-op.setitem.canraise = [IndexError, KeyError, Exception]
-op.delitem.canraise = [IndexError, KeyError, Exception]
+op.getitem.canraise = [KeyError, Exception]
+op.setitem.canraise = [KeyError, Exception]
+op.delitem.canraise = [KeyError, Exception]
 op.contains.canraise = [Exception]    # from an r_dict
 
 def _add_exceptions(names, exc):
