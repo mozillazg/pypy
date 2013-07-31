@@ -29,12 +29,17 @@ from pypy.objspace.std.tupleobject import W_AbstractTupleObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
 from pypy.objspace.std.util import get_positive_index, negate
 from rpython.rlib import debug, jit, rerased
+from rpython.rlib.rarithmetic import r_uint
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import (
     instantiate, newlist_hint, resizelist_hint, specialize)
 from rpython.tool.sourcetools import func_with_new_name
 
 __all__ = ['W_ListObject', 'make_range_list', 'make_empty_list_with_size']
+
+
+class ListIndexError(Exception):
+    """A custom RPython class, raised by getitem() and similar methods."""
 
 
 UNROLL_CUTOFF = 5
@@ -245,13 +250,13 @@ class W_ListObject(W_Root):
     def getitem(self, index):
         """Returns the wrapped object that is found in the
         list at the given index. The index must be unwrapped.
-        May raise IndexError."""
+        May raise ListIndexError."""
         return self.strategy.getitem(self, index)
 
     def getslice(self, start, stop, step, length):
         """Returns a slice of the list defined by the arguments. Arguments must
         be normalized (i.e. using normalize_simple_slice or W_Slice.indices4).
-        May raise IndexError."""
+        May raise ListIndexError."""
         return self.strategy.getslice(self, start, stop, step, length)
 
     def getitems(self):
@@ -309,7 +314,7 @@ class W_ListObject(W_Root):
 
     def pop(self, index):
         """Pops an item from the list. Index must be normalized.
-        May raise IndexError."""
+        May raise ListIndexError."""
         return self.strategy.pop(self, index)
 
     def pop_end(self):
@@ -318,7 +323,7 @@ class W_ListObject(W_Root):
 
     def setitem(self, index, w_item):
         """Inserts a wrapped item at the given (unwrapped) index.
-        May raise IndexError."""
+        May raise ListIndexError."""
         self.strategy.setitem(self, index, w_item)
 
     def setslice(self, start, step, slicelength, sequence_w):
@@ -491,7 +496,7 @@ class W_ListObject(W_Root):
         try:
             index = space.getindex_w(w_index, space.w_IndexError, "list index")
             return self.getitem(index)
-        except IndexError:
+        except ListIndexError:
             raise OperationError(space.w_IndexError,
                                  space.wrap("list index out of range"))
 
@@ -519,7 +524,7 @@ class W_ListObject(W_Root):
         idx = space.getindex_w(w_index, space.w_IndexError, "list index")
         try:
             self.setitem(idx, w_any)
-        except IndexError:
+        except ListIndexError:
             raise OperationError(space.w_IndexError,
                                  space.wrap("list index out of range"))
 
@@ -546,7 +551,7 @@ class W_ListObject(W_Root):
             idx += self.length()
         try:
             self.pop(idx)
-        except IndexError:
+        except ListIndexError:
             raise OperationError(space.w_IndexError,
                                  space.wrap("list index out of range"))
 
@@ -597,7 +602,7 @@ class W_ListObject(W_Root):
             index += length
         try:
             return self.pop(index)
-        except IndexError:
+        except ListIndexError:
             raise OperationError(space.w_IndexError,
                                  space.wrap("pop index out of range"))
 
@@ -865,7 +870,7 @@ class EmptyListStrategy(ListStrategy):
         return 0
 
     def getitem(self, w_list, index):
-        raise IndexError
+        raise ListIndexError
 
     def getslice(self, w_list, start, stop, step, length):
         # will never be called because the empty list case is already caught in
@@ -913,10 +918,10 @@ class EmptyListStrategy(ListStrategy):
     def pop(self, w_list, index):
         # will not be called because IndexError was already raised in
         # list_pop__List_ANY
-        raise IndexError
+        raise ListIndexError
 
     def setitem(self, w_list, index, w_item):
-        raise IndexError
+        raise ListIndexError
 
     def setslice(self, w_list, start, step, slicelength, w_other):
         strategy = w_other.strategy
@@ -1052,9 +1057,9 @@ class RangeListStrategy(ListStrategy):
         if i < 0:
             i += length
             if i < 0:
-                raise IndexError
+                raise ListIndexError
         elif i >= length:
-            raise IndexError
+            raise ListIndexError
         return start + i * step
 
     def getitems_int(self, w_list):
@@ -1235,13 +1240,21 @@ class AbstractUnwrappedStrategy(object):
     def length(self, w_list):
         return len(self.unerase(w_list.lstorage))
 
+    @staticmethod
+    def _getidx(l, index):
+        ulength = r_uint(len(l))
+        uindex = r_uint(index)
+        if uindex >= ulength:
+            # out of bounds -or- negative index
+            uindex += ulength
+            if uindex >= ulength:
+                raise ListIndexError
+        return uindex
+
     def getitem(self, w_list, index):
         l = self.unerase(w_list.lstorage)
-        try:
-            r = l[index]
-        except IndexError:  # make RPython raise the exception
-            raise
-        return self.wrap(r)
+        uindex = self._getidx(l, index)
+        return self.wrap(l[uindex])
 
     @jit.look_inside_iff(lambda self, w_list:
             jit.loop_unrolling_heuristic(w_list, w_list.length(),
@@ -1276,11 +1289,10 @@ class AbstractUnwrappedStrategy(object):
             subitems_w = [self._none_value] * length
             l = self.unerase(w_list.lstorage)
             for i in range(length):
-                try:
-                    subitems_w[i] = l[start]
-                    start += step
-                except IndexError:
-                    raise
+                # I believe that the following 'l[start]' cannot raise
+                # an IndexError
+                subitems_w[i] = l[start]
+                start += step
             storage = self.erase(subitems_w)
             return W_ListObject.from_storage_and_strategy(
                     self.space, storage, self)
@@ -1319,10 +1331,8 @@ class AbstractUnwrappedStrategy(object):
         l = self.unerase(w_list.lstorage)
 
         if self.is_correct_type(w_item):
-            try:
-                l[index] = self.unwrap(w_item)
-            except IndexError:
-                raise
+            uindex = self._getidx(l, index)
+            l[uindex] = self.unwrap(w_item)
             return
 
         w_list.switch_to_object_strategy()
@@ -1432,15 +1442,8 @@ class AbstractUnwrappedStrategy(object):
 
     def pop(self, w_list, index):
         l = self.unerase(w_list.lstorage)
-        # not sure if RPython raises IndexError on pop
-        # so check again here
-        if index < 0:
-            raise IndexError
-        try:
-            item = l.pop(index)
-        except IndexError:
-            raise
-
+        uindex = self._getidx(l, index)
+        item = l.pop(uindex)
         w_item = self.wrap(item)
         return w_item
 

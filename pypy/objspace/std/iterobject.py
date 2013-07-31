@@ -81,7 +81,7 @@ class W_FastListIterObject(W_AbstractSeqIterObject):
     """Sequence iterator specialized for lists."""
 
     def descr_next(self, space):
-        from pypy.objspace.std.listobject import W_ListObject
+        from pypy.objspace.std.listobject import W_ListObject, ListIndexError
         w_seq = self.w_seq
         if w_seq is None:
             raise OperationError(space.w_StopIteration, space.w_None)
@@ -89,7 +89,7 @@ class W_FastListIterObject(W_AbstractSeqIterObject):
         index = self.index
         try:
             w_item = w_seq.getitem(index)
-        except IndexError:
+        except ListIndexError:
             self.w_seq = None
             raise OperationError(space.w_StopIteration, space.w_None)
         self.index = index + 1
@@ -108,9 +108,10 @@ class W_FastTupleIterObject(W_AbstractSeqIterObject):
         if self.tupleitems is None:
             raise OperationError(space.w_StopIteration, space.w_None)
         index = self.index
-        try:
+        assert index >= 0
+        if index < len(self.tupleitems):
             w_item = self.tupleitems[index]
-        except IndexError:
+        else:
             self.tupleitems = None
             self.w_seq = None
             raise OperationError(space.w_StopIteration, space.w_None)
