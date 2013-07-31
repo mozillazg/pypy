@@ -162,22 +162,22 @@ def test_ifs():
 def test_raise():
     res = interpret(raise_exception, [41])
     assert res == 41
-    interpret_raises(IndexError, raise_exception, [42])
+    interpret_raises(KeyError, raise_exception, [42])
     interpret_raises(ValueError, raise_exception, [43])
 
 def test_call_raise():
     res = interpret(call_raise, [41])
     assert res == 41
-    interpret_raises(IndexError, call_raise, [42])
+    interpret_raises(KeyError, call_raise, [42])
     interpret_raises(ValueError, call_raise, [43])
 
 def test_call_raise_twice():
     res = interpret(call_raise_twice, [6, 7])
     assert res == 13
-    interpret_raises(IndexError, call_raise_twice, [6, 42])
+    interpret_raises(KeyError, call_raise_twice, [6, 42])
     res = interpret(call_raise_twice, [6, 43])
     assert res == 1006
-    interpret_raises(IndexError, call_raise_twice, [42, 7])
+    interpret_raises(KeyError, call_raise_twice, [42, 7])
     interpret_raises(ValueError, call_raise_twice, [43, 7])
 
 def test_call_raise_intercept():
@@ -459,7 +459,7 @@ def while_simple(i):
 
 def raise_exception(i):
     if i == 42:
-        raise IndexError
+        raise KeyError
     elif i == 43:
         raise ValueError
     return i
@@ -478,7 +478,7 @@ def call_raise_twice(i, j):
 def call_raise_intercept(i):
     try:
         return raise_exception(i)
-    except IndexError:
+    except KeyError:
         return i
     except ValueError:
         raise TypeError

@@ -29,26 +29,6 @@ class AbstractTestRstr(BaseRtypingTest):
             assert res == expected
             assert res.__class__ is expected.__class__
 
-    def test_implicit_index_error(self):
-        const = self.const
-        def fn(i):
-            s = const('hello')
-            try:
-                return s[i]
-            except IndexError:
-                return const('*')
-        for i in range(-5, 5):
-            res = self.interpret(fn, [i])
-            expected = fn(i)
-            assert res == expected
-            assert res.__class__ is expected.__class__
-        res = self.interpret(fn, [5])
-        assert res == '*'
-        res = self.interpret(fn, [6])
-        assert res == '*'
-        res = self.interpret(fn, [-42])
-        assert res == '*'
-
     def test_nonzero(self):
         const = self.const
         def fn(i, j):
@@ -902,63 +882,6 @@ class AbstractTestRstr(BaseRtypingTest):
             s = const('abc')
             s.count(s, -10)
         py.test.raises(TyperError, self.interpret, f, ())
-
-    def test_getitem_exc(self):
-        const = self.const
-        def f(x):
-            s = const("z")
-            return s[x]
-
-        res = self.interpret(f, [0])
-        assert res == 'z'
-        try:
-            self.interpret_raises(IndexError, f, [1])
-        except (AssertionError,), e:
-            pass
-        else:
-            assert False
-
-        def f(x):
-            s = const("z")
-            try:
-                return s[x]
-            except IndexError:
-                return const('X')
-            except Exception:
-                return const(' ')
-
-        res = self.interpret(f, [0])
-        assert res == 'z'
-        res = self.interpret(f, [1])
-        assert res == 'X'
-
-        def f(x):
-            s = const("z")
-            try:
-                return s[x]
-            except Exception:
-                return const(' ')
-
-        res = self.interpret(f, [0])
-        assert res == 'z'
-        res = self.interpret(f, [1])
-        assert res == ' '
-
-        def f(x):
-            s = const("z")
-            try:
-                return s[x]
-            except ValueError:
-                return const(' ')
-
-        res = self.interpret(f, [0])
-        assert res == 'z'
-        try:
-            self.interpret_raises(IndexError, f, [1])
-        except (AssertionError,), e:
-            pass
-        else:
-            assert False
 
     def test_fold_concat(self):
         const = self.const
