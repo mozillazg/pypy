@@ -6,7 +6,7 @@ from rpython.rtyper.lltypesystem.lltype import (GcForwardReference, Ptr, GcArray
      GcStruct, Void, Signed, malloc, typeOf, nullptr, typeMethod)
 from rpython.rtyper.rlist import (AbstractBaseListRepr, AbstractListRepr,
     AbstractFixedSizeListRepr, AbstractListIteratorRepr, ll_setitem_nonneg,
-    ADTIList, ADTIFixedList, dum_nocheck)
+    ADTIList, ADTIFixedList)
 from rpython.rtyper.rmodel import Repr, inputconst, externalvsinternal
 from rpython.tool.pairtype import pairtype, pair
 
@@ -394,10 +394,9 @@ def newlist(llops, r_list, items_v, v_sizehint=None):
         assert v_sizehint is None
         cno = inputconst(Signed, len(items_v))
         v_result = llops.gendirectcall(LIST.ll_newlist, cno)
-    v_func = inputconst(Void, dum_nocheck)
     for i, v_item in enumerate(items_v):
         ci = inputconst(Signed, i)
-        llops.gendirectcall(ll_setitem_nonneg, v_func, v_result, ci, v_item)
+        llops.gendirectcall(ll_setitem_nonneg, v_result, ci, v_item)
     return v_result
 
 # special operations for list comprehension optimization

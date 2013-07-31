@@ -32,10 +32,6 @@ ADTIList = ADTInterface(ADTIFixedList, {
 })
 
 
-def dum_checkidx(): pass
-def dum_nocheck(): pass
-
-
 class __extend__(annmodel.SomeList):
     def rtyper_makerepr(self, rtyper):
         listitem = self.listdef.listitem
@@ -206,11 +202,6 @@ class AbstractListRepr(AbstractBaseListRepr):
         hop.gendirectcall(ll_extend, v_lst1, v_lst2)
 
     def rtype_method_pop(self, hop):
-        if hop.has_implicit_exception(IndexError):
-            spec = dum_checkidx
-        else:
-            spec = dum_nocheck
-        v_func = hop.inputconst(Void, spec)
         if hop.nb_args == 2:
             args = hop.inputargs(self, Signed)
             assert hasattr(args[1], 'concretetype')
@@ -226,7 +217,7 @@ class AbstractListRepr(AbstractBaseListRepr):
             args = hop.inputargs(self)
             llfn = ll_pop_default
         hop.exception_is_here()
-        v_res = hop.gendirectcall(llfn, v_func, *args)
+        v_res = hop.gendirectcall(llfn, *args)
         return self.recast(hop.llops, v_res)
 
 
@@ -243,53 +234,31 @@ class __extend__(pairtype(AbstractBaseListRepr, Repr)):
 
 class __extend__(pairtype(AbstractBaseListRepr, IntegerRepr)):
 
-    def rtype_getitem((r_lst, r_int), hop, checkidx=False):
+    def rtype_getitem((r_lst, r_int), hop):
         v_lst, v_index = hop.inputargs(r_lst, Signed)
-        if checkidx:
-            hop.exception_is_here()
-        else:
-            hop.exception_cannot_occur()
-        if hop.args_s[0].listdef.listitem.mutated or checkidx:
+        hop.exception_cannot_occur()
+        if hop.args_s[0].listdef.listitem.mutated:
             if hop.args_s[1].nonneg:
                 llfn = ll_getitem_nonneg
             else:
                 llfn = ll_getitem
-            if checkidx:
-                spec = dum_checkidx
-            else:
-                spec = dum_nocheck
-            c_func_marker = hop.inputconst(Void, spec)
-            v_res = hop.gendirectcall(llfn, c_func_marker, v_lst, v_index)
         else:
-            # this is the 'foldable' version, which is not used when
-            # we check for IndexError
+            # this is the 'foldable' version
             if hop.args_s[1].nonneg:
                 llfn = ll_getitem_foldable_nonneg
             else:
                 llfn = ll_getitem_foldable
-            v_res = hop.gendirectcall(llfn, v_lst, v_index)
+        v_res = hop.gendirectcall(llfn, v_lst, v_index)
         return r_lst.recast(hop.llops, v_res)
 
-    rtype_getitem_key = rtype_getitem
-
-    def rtype_getitem_idx((r_lst, r_int), hop):
-        return pair(r_lst, r_int).rtype_getitem(hop, checkidx=True)
-
-    rtype_getitem_idx_key = rtype_getitem_idx
-
     def rtype_setitem((r_lst, r_int), hop):
-        if hop.has_implicit_exception(IndexError):
-            spec = dum_checkidx
-        else:
-            spec = dum_nocheck
-        v_func = hop.inputconst(Void, spec)
         v_lst, v_index, v_item = hop.inputargs(r_lst, Signed, r_lst.item_repr)
         if hop.args_s[1].nonneg:
             llfn = ll_setitem_nonneg
         else:
             llfn = ll_setitem
         hop.exception_is_here()
-        return hop.gendirectcall(llfn, v_func, v_lst, v_index, v_item)
+        return hop.gendirectcall(llfn, v_lst, v_index, v_item)
 
     def rtype_mul((r_lst, r_int), hop):
         cRESLIST = hop.inputconst(Void, hop.r_result.LIST)
@@ -300,18 +269,13 @@ class __extend__(pairtype(AbstractBaseListRepr, IntegerRepr)):
 class __extend__(pairtype(AbstractListRepr, IntegerRepr)):
 
     def rtype_delitem((r_lst, r_int), hop):
-        if hop.has_implicit_exception(IndexError):
-            spec = dum_checkidx
-        else:
-            spec = dum_nocheck
-        v_func = hop.inputconst(Void, spec)
         v_lst, v_index = hop.inputargs(r_lst, Signed)
         if hop.args_s[1].nonneg:
             llfn = ll_delitem_nonneg
         else:
             llfn = ll_delitem
         hop.exception_is_here()
-        return hop.gendirectcall(llfn, v_func, v_lst, v_index)
+        return hop.gendirectcall(llfn, v_lst, v_index)
 
     def rtype_inplace_mul((r_lst, r_int), hop):
         v_lst, v_factor = hop.inputargs(r_lst, Signed)
@@ -582,22 +546,16 @@ def ll_insert_nonneg(l, index, newitem):
     l.ll_setitem_fast(index, newitem)
 ll_insert_nonneg.oopspec = 'list.insert(l, index, newitem)'
 
-def ll_pop_nonneg(func, l, index):
+def ll_pop_nonneg(l, index):
     ll_assert(index >= 0, "unexpectedly negative list pop index")
-    if func is dum_checkidx:
-        if index >= l.ll_length():
-            raise IndexError
-    else:
-        ll_assert(index < l.ll_length(), "list pop index out of bound")
+    ll_assert(index < l.ll_length(), "list pop index out of bound")
     res = l.ll_getitem_fast(index)
-    ll_delitem_nonneg(dum_nocheck, l, index)
+    ll_delitem_nonneg(l, index)
     return res
 ll_pop_nonneg.oopspec = 'list.pop(l, index)'
 
-def ll_pop_default(func, l):
+def ll_pop_default(l):
     length = l.ll_length()
-    if func is dum_checkidx and (length == 0):
-        raise IndexError
     ll_assert(length > 0, "pop from empty list")
     index = length - 1
     newlength = index
@@ -608,10 +566,8 @@ def ll_pop_default(func, l):
     l._ll_resize_le(newlength)
     return res
 
-def ll_pop_zero(func, l):
+def ll_pop_zero(l):
     length = l.ll_length()
-    if func is dum_checkidx and (length == 0):
-        raise IndexError
     ll_assert(length > 0, "pop(0) from empty list")
     newlength = length - 1
     res = l.ll_getitem_fast(0)
@@ -628,18 +584,14 @@ def ll_pop_zero(func, l):
     return res
 ll_pop_zero.oopspec = 'list.pop(l, 0)'
 
-def ll_pop(func, l, index):
+def ll_pop(l, index):
     length = l.ll_length()
     if index < 0:
         index += length
-    if func is dum_checkidx:
-        if index < 0 or index >= length:
-            raise IndexError
-    else:
-        ll_assert(index >= 0, "negative list pop index out of bound")
-        ll_assert(index < length, "list pop index out of bound")
+    ll_assert(index >= 0, "negative list pop index out of bound")
+    ll_assert(index < length, "list pop index out of bound")
     res = l.ll_getitem_fast(index)
-    ll_delitem_nonneg(dum_nocheck, l, index)
+    ll_delitem_nonneg(l, index)
     return res
 
 @jit.look_inside_iff(lambda l: jit.isvirtual(l))
@@ -654,32 +606,18 @@ def ll_reverse(l):
         i += 1
         length_1_i -= 1
 
-def ll_getitem_nonneg(func, l, index):
+def ll_getitem_nonneg(l, index):
     ll_assert(index >= 0, "unexpectedly negative list getitem index")
-    if func is dum_checkidx:
-        if index >= l.ll_length():
-            raise IndexError
     return l.ll_getitem_fast(index)
 ll_getitem_nonneg._always_inline_ = True
 # no oopspec -- the function is inlined by the JIT
 
-def ll_getitem(func, l, index):
-    if func is dum_checkidx:
-        length = l.ll_length()    # common case: 0 <= index < length
-        if r_uint(index) >= r_uint(length):
-            # Failed, so either (-length <= index < 0), or we have to raise
-            # IndexError.  First add 'length' to get the final index, then
-            # check that we now have (0 <= index < length).
-            index = r_uint(index) + r_uint(length)
-            if index >= r_uint(length):
-                raise IndexError
-            index = intmask(index)
-    else:
-        # We don't want checking, but still want to support index < 0.
-        # Only call ll_length() if needed.
-        if index < 0:
-            index += l.ll_length()
-            ll_assert(index >= 0, "negative list getitem index out of bound")
+def ll_getitem(l, index):
+    # We don't want checking, but still want to support index < 0.
+    # Only call ll_length() if needed.
+    if index < 0:
+        index += l.ll_length()
+        ll_assert(index >= 0, "negative list getitem index out of bound")
     return l.ll_getitem_fast(index)
 # no oopspec -- the function is inlined by the JIT
 
@@ -695,38 +633,23 @@ def ll_getitem_foldable(l, index):
 ll_getitem_foldable._always_inline_ = True
 # no oopspec -- the function is inlined by the JIT
 
-def ll_setitem_nonneg(func, l, index, newitem):
+def ll_setitem_nonneg(l, index, newitem):
     ll_assert(index >= 0, "unexpectedly negative list setitem index")
-    if func is dum_checkidx:
-        if index >= l.ll_length():
-            raise IndexError
     l.ll_setitem_fast(index, newitem)
 ll_setitem_nonneg._always_inline_ = True
 # no oopspec -- the function is inlined by the JIT
 
-def ll_setitem(func, l, index, newitem):
-    if func is dum_checkidx:
-        length = l.ll_length()
-        if r_uint(index) >= r_uint(length):   # see comments in ll_getitem().
-            index = r_uint(index) + r_uint(length)
-            if index >= r_uint(length):
-                raise IndexError
-            index = intmask(index)
-    else:
-        if index < 0:
-            index += l.ll_length()
-            ll_assert(index >= 0, "negative list setitem index out of bound")
+def ll_setitem(l, index, newitem):
+    if index < 0:
+        index += l.ll_length()
+        ll_assert(index >= 0, "negative list setitem index out of bound")
     l.ll_setitem_fast(index, newitem)
 # no oopspec -- the function is inlined by the JIT
 
-def ll_delitem_nonneg(func, l, index):
+def ll_delitem_nonneg(l, index):
     ll_assert(index >= 0, "unexpectedly negative list delitem index")
     length = l.ll_length()
-    if func is dum_checkidx:
-        if index >= length:
-            raise IndexError
-    else:
-        ll_assert(index < length, "list delitem index out of bound")
+    ll_assert(index < length, "list delitem index out of bound")
     newlength = length - 1
     j = index
     j1 = j+1
@@ -741,19 +664,11 @@ def ll_delitem_nonneg(func, l, index):
     l._ll_resize_le(newlength)
 ll_delitem_nonneg.oopspec = 'list.delitem(l, index)'
 
-def ll_delitem(func, l, index):
-    if func is dum_checkidx:
-        length = l.ll_length()
-        if r_uint(index) >= r_uint(length):   # see comments in ll_getitem().
-            index = r_uint(index) + r_uint(length)
-            if index >= r_uint(length):
-                raise IndexError
-            index = intmask(index)
-    else:
-        if index < 0:
-            index += l.ll_length()
-            ll_assert(index >= 0, "negative list delitem index out of bound")
-    ll_delitem_nonneg(dum_nocheck, l, index)
+def ll_delitem(l, index):
+    if index < 0:
+        index += l.ll_length()
+        ll_assert(index >= 0, "negative list delitem index out of bound")
+    ll_delitem_nonneg(l, index)
 # no oopspec -- the function is inlined by the JIT
 
 def ll_extend(l1, l2):
@@ -989,7 +904,7 @@ def ll_listindex(lst, obj, eqfn):
 
 def ll_listremove(lst, obj, eqfn):
     index = ll_listindex(lst, obj, eqfn) # raises ValueError if obj not in lst
-    ll_delitem_nonneg(dum_nocheck, lst, index)
+    ll_delitem_nonneg(lst, index)
 
 def ll_inplace_mul(l, factor):
     if factor == 1:

@@ -14,18 +14,6 @@ from rpython.rtyper.test.tool import BaseRtypingTest
 from rpython.translator.translator import TranslationContext
 
 
-# undo the specialization parameter
-for n1 in 'get set del'.split():
-    for n2 in '', '_nonneg':
-        name = 'll_%sitem%s' % (n1, n2)
-        globals()['_' + name] = globals()[name]
-        exec """if 1:
-            def %s(*args):
-                return _%s(dum_checkidx, *args)
-""" % (name, name)
-del n1, n2, name
-
-
 class BaseTestListImpl:
 
     def check_list(self, l1, expected):

@@ -1,7 +1,6 @@
 from rpython.flowspace.model import Constant
 from rpython.rtyper.error import TyperError
 from rpython.rtyper.lltypesystem.lltype import Signed, Void, Ptr
-from rpython.rtyper.rlist import dum_nocheck, dum_checkidx
 from rpython.rtyper.rmodel import Repr, IntegerRepr, IteratorRepr
 from rpython.tool.pairtype import pairtype
 
@@ -31,11 +30,6 @@ class AbstractRangeRepr(Repr):
 class __extend__(pairtype(AbstractRangeRepr, IntegerRepr)):
 
     def rtype_getitem((r_rng, r_int), hop):
-        if hop.has_implicit_exception(IndexError):
-            spec = dum_checkidx
-        else:
-            spec = dum_nocheck
-        v_func = hop.inputconst(Void, spec)
         v_lst, v_index = hop.inputargs(r_rng, Signed)
         if r_rng.step != 0:
             cstep = hop.inputconst(Signed, r_rng.step)
@@ -46,7 +40,7 @@ class __extend__(pairtype(AbstractRangeRepr, IntegerRepr)):
         else:
             llfn = ll_rangeitem
         hop.exception_is_here()
-        return hop.gendirectcall(llfn, v_func, v_lst, v_index, cstep)
+        return hop.gendirectcall(llfn, v_lst, v_index, cstep)
 
 # ____________________________________________________________
 #
@@ -70,22 +64,13 @@ def ll_rangelen1(l):
         result = 0
     return result
 
-def ll_rangeitem_nonneg(func, l, index, step):
-    if func is dum_checkidx and index >= _ll_rangelen(l.start, l.stop, step):
-        raise IndexError
+def ll_rangeitem_nonneg(l, index, step):
     return l.start + index * step
 
-def ll_rangeitem(func, l, index, step):
-    if func is dum_checkidx:
+def ll_rangeitem(l, index, step):
+    if index < 0:
         length = _ll_rangelen(l.start, l.stop, step)
-        if index < 0:
-            index += length
-        if index < 0 or index >= length:
-            raise IndexError
-    else:
-        if index < 0:
-            length = _ll_rangelen(l.start, l.stop, step)
-            index += length
+        index += length
     return l.start + index * step
 
 # ____________________________________________________________

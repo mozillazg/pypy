@@ -1,5 +1,5 @@
 from rpython.rlib.rarithmetic import intmask
-from rpython.rtyper.rrange import ll_rangelen, ll_rangeitem, ll_rangeitem_nonneg, dum_nocheck
+from rpython.rtyper.rrange import ll_rangelen, ll_rangeitem, ll_rangeitem_nonneg
 from rpython.rtyper.lltypesystem import rrange
 from rpython.rtyper.test.tool import BaseRtypingTest
 
@@ -17,11 +17,11 @@ class TestRrange(BaseRtypingTest):
                 RANGE = rrange.RangeRepr(step).RANGE
                 l = rrange.ll_newrange(RANGE, start, stop)
             assert ll_rangelen(l, step) == length
-            lst = [ll_rangeitem(dum_nocheck, l, i, step) for i in range(length)]
+            lst = [ll_rangeitem(l, i, step) for i in range(length)]
             assert lst == expected
-            lst = [ll_rangeitem_nonneg(dum_nocheck, l, i, step) for i in range(length)]
+            lst = [ll_rangeitem_nonneg(l, i, step) for i in range(length)]
             assert lst == expected
-            lst = [ll_rangeitem(dum_nocheck, l, i-length, step) for i in range(length)]
+            lst = [ll_rangeitem(l, i-length, step) for i in range(length)]
             assert lst == expected
 
         for start in (-10, 0, 1, 10):

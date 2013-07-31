@@ -446,31 +446,15 @@ class __extend__(pairtype(AbstractStringRepr, Repr)):
 
 
 class __extend__(pairtype(AbstractStringRepr, IntegerRepr)):
-    def rtype_getitem((r_str, r_int), hop, checkidx=False):
+    def rtype_getitem((r_str, r_int), hop):
         string_repr = r_str.repr
         v_str, v_index = hop.inputargs(string_repr, Signed)
-        if checkidx:
-            if hop.args_s[1].nonneg:
-                llfn = r_str.ll.ll_stritem_nonneg_checked
-            else:
-                llfn = r_str.ll.ll_stritem_checked
+        if hop.args_s[1].nonneg:
+            llfn = r_str.ll.ll_stritem_nonneg
         else:
-            if hop.args_s[1].nonneg:
-                llfn = r_str.ll.ll_stritem_nonneg
-            else:
-                llfn = r_str.ll.ll_stritem
-        if checkidx:
-            hop.exception_is_here()
-        else:
-            hop.exception_cannot_occur()
+            llfn = r_str.ll.ll_stritem
+        hop.exception_cannot_occur()
         return hop.gendirectcall(llfn, v_str, v_index)
-
-    rtype_getitem_key = rtype_getitem
-
-    def rtype_getitem_idx((r_str, r_int), hop):
-        return pair(r_str, r_int).rtype_getitem(hop, checkidx=True)
-
-    rtype_getitem_idx_key = rtype_getitem_idx
 
     def rtype_mul((r_str, r_int), hop):
         str_repr = r_str.repr
@@ -837,26 +821,11 @@ class AbstractLLHelpers:
         return bool(s) and cls.ll_strlen(s) != 0
     ll_str_is_true = classmethod(ll_str_is_true)
 
-    def ll_stritem_nonneg_checked(cls, s, i):
-        if i >= cls.ll_strlen(s):
-            raise IndexError
-        return cls.ll_stritem_nonneg(s, i)
-    ll_stritem_nonneg_checked = classmethod(ll_stritem_nonneg_checked)
-
     def ll_stritem(cls, s, i):
         if i < 0:
             i += cls.ll_strlen(s)
         return cls.ll_stritem_nonneg(s, i)
     ll_stritem = classmethod(ll_stritem)
-
-    def ll_stritem_checked(cls, s, i):
-        length = cls.ll_strlen(s)
-        if i < 0:
-            i += length
-        if i >= length or i < 0:
-            raise IndexError
-        return cls.ll_stritem_nonneg(s, i)
-    ll_stritem_checked = classmethod(ll_stritem_checked)
 
     def parse_fmt_string(fmt):
         # we support x, d, s, f, [r]
