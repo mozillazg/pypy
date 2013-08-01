@@ -1,3 +1,6 @@
+from rpython.rlib.rarithmetic import r_uint
+
+
 def negate(f):
     """Create a function which calls `f` and negates its result.  When the
     result is ``space.w_NotImplemented``, ``space.w_NotImplemented`` is
@@ -25,3 +28,20 @@ def get_positive_index(where, length):
         where = length
     assert where >= 0
     return where
+
+
+class ListIndexError(Exception):
+    """A custom RPython class, raised by getitem() and similar methods
+    from listobject.py, and from getuindex() below."""
+
+def getuindex(lst, index):
+    ulength = r_uint(len(lst))
+    uindex = r_uint(index)
+    if uindex >= ulength:
+        # Failed, so either (-length <= index < 0), or we have to raise
+        # ListIndexError.  First add 'length' to get the final index, then
+        # check that we now have (0 <= index < length).
+        uindex += ulength
+        if uindex >= ulength:
+            raise ListIndexError
+    return uindex

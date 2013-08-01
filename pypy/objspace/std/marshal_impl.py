@@ -282,9 +282,9 @@ register(TYPE_INTERNED, unmarshal_interned)
 
 def unmarshal_stringref(space, u, tc):
     idx = u.get_int()
-    try:
+    if 0 <= idx < len(u.stringtable_w):
         return u.stringtable_w[idx]
-    except IndexError:
+    else:
         raise_exception(space, 'bad marshal data')
 register(TYPE_STRINGREF, unmarshal_stringref)
 

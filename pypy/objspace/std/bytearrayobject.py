@@ -16,6 +16,7 @@ from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
 from pypy.objspace.std.util import get_positive_index
+from pypy.objspace.std.util import ListIndexError, getuindex
 from rpython.rlib.rstring import StringBuilder
 
 
@@ -93,9 +94,9 @@ def getitem__Bytearray_ANY(space, w_bytearray, w_index):
     except AttributeError:
         w_IndexError = None
     index = space.getindex_w(w_index, w_IndexError, "bytearray index")
-    try:
+    if index < len(w_bytearray.data):
         return space.newint(ord(w_bytearray.data[index]))
-    except IndexError:
+    else:
         raise OperationError(space.w_IndexError,
                              space.wrap("bytearray index out of range"))
 
@@ -394,13 +395,14 @@ def bytearray_insert__Bytearray_Int_ANY(space, w_bytearray, w_idx, w_other):
 def bytearray_pop__Bytearray_Int(space, w_bytearray, w_idx):
     index = space.int_w(w_idx)
     try:
-        result = w_bytearray.data.pop(index)
-    except IndexError:
+        uindex = getuindex(w_bytearray.data, index)
+    except ListIndexError:
         if not w_bytearray.data:
             raise OperationError(space.w_IndexError, space.wrap(
                 "pop from empty bytearray"))
         raise OperationError(space.w_IndexError, space.wrap(
             "pop index out of range"))
+    result = w_bytearray.data.pop(uindex)
     return space.wrap(ord(result))
 
 def bytearray_remove__Bytearray_ANY(space, w_bytearray, w_char):
@@ -570,11 +572,13 @@ def inplace_add__Bytearray_ANY(space, w_bytearray1, w_iterable2):
 def setitem__Bytearray_ANY_ANY(space, w_bytearray, w_index, w_item):
     from pypy.objspace.std.bytearraytype import getbytevalue
     idx = space.getindex_w(w_index, space.w_IndexError, "bytearray index")
+    byte = getbytevalue(space, w_item)
     try:
-        w_bytearray.data[idx] = getbytevalue(space, w_item)
-    except IndexError:
+        uindex = getuindex(w_bytearray.data, idx)
+    except ListIndexError:
         raise OperationError(space.w_IndexError,
                              space.wrap("bytearray index out of range"))
+    w_bytearray.data[uindex] = byte
 
 def setitem__Bytearray_Slice_ANY(space, w_bytearray, w_slice, w_other):
     oldsize = len(w_bytearray.data)
@@ -585,11 +589,11 @@ def setitem__Bytearray_Slice_ANY(space, w_bytearray, w_slice, w_other):
 def delitem__Bytearray_ANY(space, w_bytearray, w_idx):
     idx = space.getindex_w(w_idx, space.w_IndexError, "bytearray index")
     try:
-        del w_bytearray.data[idx]
-    except IndexError:
+        uindex = getuindex(w_bytearray.data, idx)
+    except ListIndexError:
         raise OperationError(space.w_IndexError,
                              space.wrap("bytearray deletion index out of range"))
-    return space.w_None
+    del w_bytearray.data[uindex]
 
 def delitem__Bytearray_Slice(space, w_bytearray, w_slice):
     start, stop, step, slicelength = w_slice.indices4(space,

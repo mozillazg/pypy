@@ -25,15 +25,14 @@ class BaseStringFormatter(object):
 
     def nextinputvalue(self):
         # return the next value in the tuple of input arguments
-        try:
+        if self.values_pos < len(self.values_w):
             w_result = self.values_w[self.values_pos]
-        except IndexError:
+            self.values_pos += 1
+            return w_result
+        else:
             space = self.space
             raise OperationError(space.w_TypeError, space.wrap(
                 'not enough arguments for format string'))
-        else:
-            self.values_pos += 1
-            return w_result
 
     def checkconsumed(self):
         if self.values_pos < len(self.values_w) and self.w_valuedict is None:
@@ -168,9 +167,9 @@ def make_formatter_subclass(do_unicode):
 
         def peekchr(self):
             # return the 'current' character
-            try:
+            if self.fmtpos < len(self.fmt):
                 return self.fmt[self.fmtpos]
-            except IndexError:
+            else:
                 space = self.space
                 raise OperationError(space.w_ValueError,
                                      space.wrap("incomplete format"))
@@ -185,9 +184,9 @@ def make_formatter_subclass(do_unicode):
             i0 = i
             pcount = 1
             while 1:
-                try:
+                if i < len(fmt):
                     c = fmt[i]
-                except IndexError:
+                else:
                     space = self.space
                     raise OperationError(space.w_ValueError,
                                          space.wrap("incomplete format key"))

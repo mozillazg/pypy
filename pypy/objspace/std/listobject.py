@@ -28,18 +28,14 @@ from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.tupleobject import W_AbstractTupleObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
 from pypy.objspace.std.util import get_positive_index, negate
+from pypy.objspace.std.util import ListIndexError, getuindex
 from rpython.rlib import debug, jit, rerased
-from rpython.rlib.rarithmetic import r_uint
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import (
     instantiate, newlist_hint, resizelist_hint, specialize)
 from rpython.tool.sourcetools import func_with_new_name
 
 __all__ = ['W_ListObject', 'make_range_list', 'make_empty_list_with_size']
-
-
-class ListIndexError(Exception):
-    """A custom RPython class, raised by getitem() and similar methods."""
 
 
 UNROLL_CUTOFF = 5
@@ -1240,20 +1236,9 @@ class AbstractUnwrappedStrategy(object):
     def length(self, w_list):
         return len(self.unerase(w_list.lstorage))
 
-    @staticmethod
-    def _getidx(l, index):
-        ulength = r_uint(len(l))
-        uindex = r_uint(index)
-        if uindex >= ulength:
-            # out of bounds -or- negative index
-            uindex += ulength
-            if uindex >= ulength:
-                raise ListIndexError
-        return uindex
-
     def getitem(self, w_list, index):
         l = self.unerase(w_list.lstorage)
-        uindex = self._getidx(l, index)
+        uindex = getuindex(l, index)
         return self.wrap(l[uindex])
 
     @jit.look_inside_iff(lambda self, w_list:
@@ -1331,7 +1316,7 @@ class AbstractUnwrappedStrategy(object):
         l = self.unerase(w_list.lstorage)
 
         if self.is_correct_type(w_item):
-            uindex = self._getidx(l, index)
+            uindex = getuindex(l, index)
             l[uindex] = self.unwrap(w_item)
             return
 
@@ -1442,7 +1427,7 @@ class AbstractUnwrappedStrategy(object):
 
     def pop(self, w_list, index):
         l = self.unerase(w_list.lstorage)
-        uindex = self._getidx(l, index)
+        uindex = getuindex(l, index)
         item = l.pop(uindex)
         w_item = self.wrap(item)
         return w_item

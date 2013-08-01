@@ -10,7 +10,7 @@ from pypy.objspace.std import slicetype
 from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.objspace.std.stdtypedef import StdTypeDef
-from pypy.objspace.std.util import negate
+from pypy.objspace.std.util import negate, getuindex, ListIndexError
 from rpython.rlib import jit
 from rpython.rlib.debug import make_sure_not_resized
 from rpython.rlib.rarithmetic import intmask
@@ -283,10 +283,11 @@ class W_TupleObject(W_AbstractTupleObject):
 
     def getitem(self, space, index):
         try:
-            return self.wrappeditems[index]
-        except IndexError:
+            uindex = getuindex(self.wrappeditems, index)
+        except ListIndexError:
             raise OperationError(space.w_IndexError,
                                  space.wrap("tuple index out of range"))
+        return self.wrappeditems[index]
 
 
 def wraptuple(space, list_w):

@@ -201,7 +201,7 @@ def make_template_formatting_class():
             if empty:
                 index = self.auto_numbering
                 self.auto_numbering += 1
-            if index == -1:
+            if index < 0:
                 kwarg = name[:i]
                 if self.is_unicode:
                     try:
@@ -216,9 +216,9 @@ def make_template_formatting_class():
                 except KeyError:
                     raise OperationError(space.w_KeyError, space.wrap(arg_key))
             else:
-                try:
+                if index < len(self.args):
                     w_arg = self.args[index]
-                except IndexError:
+                else:
                     w_msg = space.wrap("index out of range")
                     raise OperationError(space.w_IndexError, w_msg)
             return self._resolve_lookups(w_arg, name, i, end)

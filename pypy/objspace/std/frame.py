@@ -9,6 +9,7 @@ from pypy.interpreter.error import OperationError
 from pypy.objspace.std import intobject
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.listobject import W_ListObject
+from pypy.objspace.std.util import ListIndexError
 
 
 class BaseFrame(PyFrame):
@@ -43,7 +44,7 @@ def list_BINARY_SUBSCR(f, oparg, next_instr):
     if type(w_1) is W_ListObject and type(w_2) is intobject.W_IntObject:
         try:
             w_result = w_1.getitem(w_2.intval)
-        except IndexError:
+        except ListIndexError:
             raise OperationError(f.space.w_IndexError,
                 f.space.wrap("list index out of range"))
     else:
