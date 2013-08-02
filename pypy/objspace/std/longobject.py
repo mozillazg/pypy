@@ -353,11 +353,20 @@ def rshift__Long_Int(space, w_long1, w_int2):
 def and__Long_Long(space, w_long1, w_long2):
     return newlong(space, w_long1.num.and_(w_long2.num))
 
+def and__Long_Int(space, w_long1, w_int2):
+    return newlong(space, w_long1.num.int_and_(w_int2.intval))
+
 def xor__Long_Long(space, w_long1, w_long2):
     return W_LongObject(w_long1.num.xor(w_long2.num))
 
+def xor__Long_Int(space, w_long1, w_int2):
+    return W_LongObject(w_long1.num.int_xor(w_int2.intval))
+
 def or__Long_Long(space, w_long1, w_long2):
     return W_LongObject(w_long1.num.or_(w_long2.num))
+
+def or__Long_Int(space, w_long1, w_int2):
+    return W_LongObject(w_long1.num.int_or_(w_int2.intval))
 
 def oct__Long(space, w_long1):
     return space.wrap(w_long1.num.oct())

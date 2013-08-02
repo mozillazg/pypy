@@ -631,8 +631,7 @@ class rbigint(object):
         if self.sign == 0:
             return rbigint.fromint(-1 * other)
         if (self.sign > 0 and other > 0) or (self.sign < 0 and other < 0):
-            # Improve
-            result = _x_sub(self, rbigint.fromint(other))
+            result = _x_int_sub(self, abs(other))
         else:
             result = _x_int_add(self, abs(other))
         result.sign *= self.sign
@@ -773,7 +772,7 @@ class rbigint(object):
                     return ONENEGATIVERBIGINT if other.sign == -1 else ONERBIGINT
                 return NULLRBIGINT
             elif digit & (digit - 1) == 0:
-                mod = self.and_(rbigint([_store_digit(digit - 1)], 1, 1))
+                mod = self.int_and_(digit - 1)
             else:
                 # Perform
                 size = self.numdigits() - 1
@@ -811,7 +810,7 @@ class rbigint(object):
                     return ONENEGATIVERBIGINT if other < 0 else ONERBIGINT
                 return NULLRBIGINT
             elif digit & (digit - 1) == 0:
-                mod = self.and_(rbigint([_store_digit(digit - 1)], 1, 1))
+                mod = self.int_and_(digit -1)
             else:
                 # Perform
                 size = self.numdigits() - 1
@@ -1129,12 +1128,24 @@ class rbigint(object):
         return _bitwise(self, '&', other)
 
     @jit.elidable
+    def int_and_(self, other):
+        return _int_bitwise(self, '&', other)
+
+    @jit.elidable
     def xor(self, other):
         return _bitwise(self, '^', other)
 
     @jit.elidable
+    def int_xor(self, other):
+        return _int_bitwise(self, '^', other)
+
+    @jit.elidable
     def or_(self, other):
         return _bitwise(self, '|', other)
+
+    @jit.elidable
+    def int_or_(self, other):
+        return _int_bitwise(self, '|', other)
 
     @jit.elidable
     def oct(self):
@@ -2500,6 +2511,86 @@ def _bitwise(a, op, b): # '&', '|', '^'
 
     return z.invert()
 _bitwise._annspecialcase_ = "specialize:arg(1)"
+
+def _int_bitwise(a, op, b): # '&', '|', '^'
+    """ Bitwise and/or/xor operations with ints. """
+
+    if a.sign < 0:
+        a = a.invert()
+        maska = MASK
+    else:
+        maska = 0
+    if b < 0:
+        b = ~b
+        maskb = MASK
+    else:
+        maskb = 0
+
+    negz = 0
+    if op == '^':
+        if maska != maskb:
+            maska ^= MASK
+            negz = -1
+    elif op == '&':
+        if maska and maskb:
+            op = '|'
+            maska ^= MASK
+            maskb ^= MASK
+            negz = -1
+    elif op == '|':
+        if maska or maskb:
+            op = '&'
+            maska ^= MASK
+            maskb ^= MASK
+            negz = -1
+
+    # JRH: The original logic here was to allocate the result value (z)
+    # as the longer of the two operands.  However, there are some cases
+    # where the result is guaranteed to be shorter than that: AND of two
+    # positives, OR of two negatives: use the shorter number.  AND with
+    # mixed signs: use the positive number.  OR with mixed signs: use the
+    # negative number.  After the transformations above, op will be '&'
+    # iff one of these cases applies, and mask will be non-0 for operands
+    # whose length should be ignored.
+
+    size_a = a.numdigits()
+    if op == '&':
+        if maska:
+            size_z = 1
+        else:
+            if maskb:
+                size_z = size_a
+            else:
+                size_z = 1
+    else:
+        size_z = size_a
+
+    z = rbigint([NULLDIGIT] * size_z, 1, size_z)
+    i = 0
+    while i < size_z:
+        if i < size_a:
+            diga = a.digit(i) ^ maska
+        else:
+            diga = maska
+        if i < 1:
+            digb = b ^ maskb
+        else:
+            digb = maskb
+
+        if op == '&':
+            z.setdigit(i, diga & digb)
+        elif op == '|':
+            z.setdigit(i, diga | digb)
+        elif op == '^':
+            z.setdigit(i, diga ^ digb)
+        i += 1
+
+    z._normalize()
+    if negz == 0:
+        return z
+
+    return z.invert()
+_int_bitwise._annspecialcase_ = "specialize:arg(1)"
 
 
 ULONGLONG_BOUND = r_ulonglong(1L << (r_longlong.BITS-1))
