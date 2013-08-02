@@ -320,6 +320,18 @@ class Test_rbigint(object):
         assert not f1.eq(f2)
         assert not f1.eq(f3)
 
+    def test_int_eq(self):
+        x = 5858
+        y = 58583
+        f1 = rbigint.fromlong(x)
+        f2 = rbigint.fromlong(-x)
+        f3 = rbigint.fromlong(y)
+        assert f1.int_eq(x)
+        assert f2.int_eq(-x)
+        assert f3.int_eq(y)
+        assert not f1.int_eq(-x)
+        assert not f1.int_eq(y)
+
     def test_eq_fastpath(self):
         x = 1234
         y = 1234
@@ -335,6 +347,15 @@ class Test_rbigint(object):
                 f2 = rbigint.fromlong(y)
                 assert (x < y) ==  f1.lt(f2)
 
+    def test_int_lt(self):
+        val = [0, 0x111111111111, 0x111111111112, 0x6FFFFFFF, 2**80]
+        short = [0, 0x111, 0x7FFFFFFF]
+        for x in gen_signs(val):
+            for y in gen_signs(short):
+                f1 = rbigint.fromlong(x)
+                assert (x < y) ==  f1.int_lt(y)
+                print "Pass (%d < %d) = %d" % (x, y, f1.int_lt(y))
+
     def test_order(self):
         f6 = rbigint.fromint(6)
         f7 = rbigint.fromint(7)
@@ -342,6 +363,13 @@ class Test_rbigint(object):
         assert (f6.le(f6), f6.le(f7), f7.le(f6)) == (1,1,0)
         assert (f6.gt(f6), f6.gt(f7), f7.gt(f6)) == (0,0,1)
         assert (f6.ge(f6), f6.ge(f7), f7.ge(f6)) == (1,0,1)
+
+    def test_int_order(self):
+        f6 = rbigint.fromint(6)
+        assert (f6.int_lt(6), f6.int_lt(7)) == (0,1)
+        assert (f6.int_le(6), f6.int_le(7)) == (1,1)
+        assert (f6.int_gt(6), f6.int_gt(7)) == (0,0)
+        assert (f6.int_ge(6), f6.int_ge(7)) == (1,0)
 
     def test_int_conversion(self):
         f1 = rbigint.fromlong(12332)

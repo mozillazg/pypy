@@ -482,6 +482,13 @@ class rbigint(object):
             i += 1
         return True
 
+    @jit.elidable
+    def int_eq(self, other):
+        """ eq with int """
+        if self.numdigits() != 1 or self.digit(0) * self.sign != other:
+            return False
+        return True
+
     @jit.look_inside
     def ne(self, other):
         return not self.eq(other)
@@ -521,17 +528,51 @@ class rbigint(object):
             i -= 1
         return False
 
+    @jit.elidable
+    def int_lt(self, other):
+        """ lt where other is an int """
+        if other >= 0 and self.sign < 0:
+            return True
+        elif other < 0 and self.sign >= 0:
+            return False
+        digits = self.numdigits()
+        if digits > 1:
+            if self.sign == 1 and other >= 0:
+                return False
+            else:
+                return True
+
+        d1 = self.sign * self.digit(0)
+        if d1 < other:
+            return True
+        return False
+
     @jit.look_inside
     def le(self, other):
         return not other.lt(self)
+
+    @jit.look_inside
+    def int_le(self, other):
+        e = self.int_eq(other)
+        if e:
+            return True
+        return self.int_lt(other)
 
     @jit.look_inside
     def gt(self, other):
         return other.lt(self)
 
     @jit.look_inside
+    def int_gt(self, other):
+        return not self.int_le(other)
+
+    @jit.look_inside
     def ge(self, other):
         return not self.lt(other)
+
+    @jit.look_inside
+    def int_ge(self, other):
+        return not self.int_lt(other)
 
     @jit.elidable
     def hash(self):

@@ -155,30 +155,30 @@ def ge__Long_Long(space, w_long1, w_long2):
     return space.newbool(w_long1.num.ge(w_long2.num))
 
 def lt__Long_Int(space, w_long1, w_int2):
-    return space.newbool(w_long1.num.lt(rbigint.fromint(w_int2.intval)))
+    return space.newbool(w_long1.num.int_lt(w_int2.intval))
 def le__Long_Int(space, w_long1, w_int2):
-    return space.newbool(w_long1.num.le(rbigint.fromint(w_int2.intval)))
+    return space.newbool(w_long1.num.int_le(w_int2.intval))
 def eq__Long_Int(space, w_long1, w_int2):
-    return space.newbool(w_long1.num.eq(rbigint.fromint(w_int2.intval)))
+    return space.newbool(w_long1.num.int_eq(w_int2.intval))
 def ne__Long_Int(space, w_long1, w_int2):
-    return space.newbool(w_long1.num.ne(rbigint.fromint(w_int2.intval)))
+    return space.newbool(w_long1.num.int_ne(w_int2.intval))
 def gt__Long_Int(space, w_long1, w_int2):
-    return space.newbool(w_long1.num.gt(rbigint.fromint(w_int2.intval)))
+    return space.newbool(w_long1.num.int_gt(w_int2.intval))
 def ge__Long_Int(space, w_long1, w_int2):
-    return space.newbool(w_long1.num.ge(rbigint.fromint(w_int2.intval)))
+    return space.newbool(w_long1.num.int_ge(w_int2.intval))
 
 def lt__Int_Long(space, w_int1, w_long2):
-    return space.newbool(rbigint.fromint(w_int1.intval).lt(w_long2.num))
+    return space.newbool(w_long2.num.int_gt(w_int1.intval))
 def le__Int_Long(space, w_int1, w_long2):
-    return space.newbool(rbigint.fromint(w_int1.intval).le(w_long2.num))
+    return space.newbool(w_long2.num.int_ge(w_int1.intval))
 def eq__Int_Long(space, w_int1, w_long2):
-    return space.newbool(rbigint.fromint(w_int1.intval).eq(w_long2.num))
+    return space.newbool(w_long2.num.int_ne(w_int1.intval))
 def ne__Int_Long(space, w_int1, w_long2):
-    return space.newbool(rbigint.fromint(w_int1.intval).ne(w_long2.num))
+    return space.newbool(w_long2.num.int_eg(w_int1.intval))
 def gt__Int_Long(space, w_int1, w_long2):
-    return space.newbool(rbigint.fromint(w_int1.intval).gt(w_long2.num))
+    return space.newbool(w_long2.num.int_lt(w_int1.intval))
 def ge__Int_Long(space, w_int1, w_long2):
-    return space.newbool(rbigint.fromint(w_int1.intval).ge(w_long2.num))
+    return space.newbool(w_long2.num.int_le(w_int1.intval))
 
 
 def hash__Long(space, w_value):
