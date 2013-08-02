@@ -174,7 +174,7 @@ def le__Int_Long(space, w_int1, w_long2):
 def eq__Int_Long(space, w_int1, w_long2):
     return space.newbool(w_long2.num.int_ne(w_int1.intval))
 def ne__Int_Long(space, w_int1, w_long2):
-    return space.newbool(w_long2.num.int_eg(w_int1.intval))
+    return space.newbool(w_long2.num.int_eq(w_int1.intval))
 def gt__Int_Long(space, w_int1, w_long2):
     return space.newbool(w_long2.num.int_lt(w_int1.intval))
 def ge__Int_Long(space, w_int1, w_long2):
@@ -192,11 +192,20 @@ def coerce__Long_Long(space, w_long1, w_long2):
 def add__Long_Long(space, w_long1, w_long2):
     return W_LongObject(w_long1.num.add(w_long2.num))
 
+def add__Long_Int(space, w_long1, w_int2):
+    return W_LongObject(w_long1.num.int_add(w_int2.intval))
+
 def sub__Long_Long(space, w_long1, w_long2):
     return W_LongObject(w_long1.num.sub(w_long2.num))
 
+def sub__Long_Int(space, w_long1, w_int2):
+    return W_LongObject(w_long1.num.int_sub(w_int2.intval))
+
 def mul__Long_Long(space, w_long1, w_long2):
     return W_LongObject(w_long1.num.mul(w_long2.num))
+
+def mul__Long_Int(space, w_long1, w_int2):
+    return W_LongObject(w_long1.num.int_mul(w_int2.intval))
 
 def truediv__Long_Long(space, w_long1, w_long2):
     try:
@@ -223,6 +232,14 @@ def div__Long_Long(space, w_long1, w_long2):
 def mod__Long_Long(space, w_long1, w_long2):
     try:
         z = w_long1.num.mod(w_long2.num)
+    except ZeroDivisionError:
+        raise OperationError(space.w_ZeroDivisionError,
+                             space.wrap("long division or modulo by zero"))
+    return newlong(space, z)
+
+def mod__Long_Int(space, w_long1, w_int2):
+    try:
+        z = w_long1.num.int_mod(w_int2.intval)
     except ZeroDivisionError:
         raise OperationError(space.w_ZeroDivisionError,
                              space.wrap("long division or modulo by zero"))
@@ -285,6 +302,14 @@ def lshift__Long_Long(space, w_long1, w_long2):
                              space.wrap("shift count too large"))
     return W_LongObject(w_long1.num.lshift(shift))
 
+def lshift__Long_Int(space, w_long1, w_int2):
+    # XXX need to replicate some of the logic, to get the errors right
+    if w_int2.intval < 0:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("negative shift counnt"))
+
+    return W_LongObject(w_long1.num.lshift(w_int2.intval))
+
 def rshift__Long_Long(space, w_long1, w_long2):
     # XXX need to replicate some of the logic, to get the errors right
     if w_long2.num.sign < 0:
@@ -296,6 +321,14 @@ def rshift__Long_Long(space, w_long1, w_long2):
         raise OperationError(space.w_OverflowError,
                              space.wrap("shift count too large"))
     return newlong(space, w_long1.num.rshift(shift))
+
+def rshift__Long_Int(space, w_long1, w_int2):
+    # XXX need to replicate some of the logic, to get the errors right
+    if w_int2.intval < 0:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("negative shift count"))
+    
+    return newlong(space, w_long1.num.rshift(w_int2.intval))
 
 def and__Long_Long(space, w_long1, w_long2):
     return newlong(space, w_long1.num.and_(w_long2.num))

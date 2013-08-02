@@ -50,6 +50,15 @@ class TestRLong(object):
                 r2 = op1 // op2
                 assert r1.tolong() == r2
 
+    def test_int_floordiv(self):
+        for op1 in [-12, -2, -1, 1, 2, 50]:
+            for op2 in [-4, -2, -1, 1, 2, 8]:
+                rl_op1 = rbigint.fromint(op1)
+                r1 = rl_op1.int_floordiv(op2)
+                r2 = op1 // op2
+                print op1, op2
+                assert r1.tolong() == r2
+
     def test_truediv(self):
         for op1 in [-12, -2, -1, 1, 2, 50]:
             for op2 in [-4, -2, -1, 1, 2, 8]:
@@ -102,6 +111,15 @@ class TestRLong(object):
                 rl_op1 = rbigint.fromint(op1)
                 rl_op2 = rbigint.fromint(op2)
                 r1 = rl_op1.mod(rl_op2)
+                r2 = op1 % op2
+                print op1, op2
+                assert r1.tolong() == r2
+
+    def test_int_mod(self):
+        for op1 in [-50, -12, -2, -1, 1, 2, 50, 52]:
+            for op2 in [-4, -2, -1, 1, 2, 8]:
+                rl_op1 = rbigint.fromint(op1)
+                r1 = rl_op1.int_mod(op2)
                 r2 = op1 % op2
                 print op1, op2
                 assert r1.tolong() == r2
@@ -237,6 +255,17 @@ class Test_rbigint(object):
                 result = f1.add(f2)
                 assert result.tolong() == x * i + y * j
 
+    def test_int_add(self):
+        x = 123456789123456789000000L
+        y = 1238
+        for i in [-1, 1]:
+            for j in [-1, 1]:
+                f1 = rbigint.fromlong(x * i)
+                f2 = y * j
+                result = f1.int_add(f2)
+                assert result.tolong() == x * i + y * j
+
+
     def test_sub(self):
         x = 12378959520302182384345L
         y = 88961284756491823819191823L
@@ -245,6 +274,16 @@ class Test_rbigint(object):
                 f1 = rbigint.fromlong(x * i)
                 f2 = rbigint.fromlong(y * j)
                 result = f1.sub(f2)
+                assert result.tolong() == x * i - y * j
+
+    def test_int_sub(self):
+        x = 12378959520302182384345L
+        y = 8896
+        for i in [-1, 1]:
+            for j in [-1, 1]:
+                f1 = rbigint.fromlong(x * i)
+                f2 = y * j
+                result = f1.int_sub(f2)
                 assert result.tolong() == x * i - y * j
 
     def test_subzz(self):
@@ -261,6 +300,13 @@ class Test_rbigint(object):
         # also test a * a, it has special code
         result = f1.mul(f1)
         assert result.tolong() == x * x
+
+    def test_int_mul(self):
+        x = -1238585838347L
+        y = 585839
+        f1 = rbigint.fromlong(x)
+        result = f1.int_mul(y)
+        assert result.tolong() == x * y
 
     def test_tofloat(self):
         x = 12345678901234567890L ** 10
@@ -664,6 +710,20 @@ class TestInternalFunctions(object):
                 f2 = rbigint.fromlong(sy)
                 div, rem = f1.divmod(f2)
                 _div, _rem = divmod(sx, sy)
+                assert div.tolong() == _div
+                assert rem.tolong() == _rem
+
+    def test_int_divmod(self):
+        x = 12345678901234567890L
+        for i in range(100):
+            y = randint(0, 1 << 60)
+            for sx, sy in (1, 1), (1, -1), (-1, -1), (-1, 1):
+                sx *= x
+                sy *= y
+                f1 = rbigint.fromlong(sx)
+                div, rem = f1.int_divmod(sy)
+                _div, _rem = divmod(sx, sy)
+                print sx, sy
                 assert div.tolong() == _div
                 assert rem.tolong() == _rem
 

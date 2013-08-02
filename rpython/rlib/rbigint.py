@@ -493,6 +493,11 @@ class rbigint(object):
     def ne(self, other):
         return not self.eq(other)
 
+    @jit.look_inside
+    def int_ne(self, other):
+        """ ne with int """
+        return not self.int_eq(other)
+
     @jit.elidable
     def lt(self, other):
         if self.sign > other.sign:
@@ -592,6 +597,21 @@ class rbigint(object):
         return result
 
     @jit.elidable
+    def int_add(self, other):
+        if other == 0:
+            return self
+        if self.sign == 0:
+            return rbigint.fromint(other)
+        if (self.sign > 0 and other > 0) or (self.sign < 0 and other < 0):
+            result = _x_int_add(self, abs(other))
+        else:
+            # XXX: Improve.
+            result = _x_sub(rbigint.fromint(other), self)
+        if other < 0:
+            result.sign *= -1
+        return result
+
+    @jit.elidable
     def sub(self, other):
         if other.sign == 0:
             return self
@@ -601,6 +621,20 @@ class rbigint(object):
             result = _x_sub(self, other)
         else:
             result = _x_add(self, other)
+        result.sign *= self.sign
+        return result
+
+    @jit.elidable
+    def int_sub(self, other):
+        if other == 0:
+            return self
+        if self.sign == 0:
+            return rbigint.fromint(-1 * other)
+        if (self.sign > 0 and other > 0) or (self.sign < 0 and other < 0):
+            # Improve
+            result = _x_sub(self, rbigint.fromint(other))
+        else:
+            result = _x_int_add(self, abs(other))
         result.sign *= self.sign
         return result
 
@@ -650,6 +684,33 @@ class rbigint(object):
         return result
 
     @jit.elidable
+    def int_mul(self, b):
+        """ Mul with int. """
+        asize = self.numdigits()
+
+        if self.sign == 0 or b == 0:
+            return NULLRBIGINT
+
+        if asize == 1:
+            if self._digits[0] == NULLDIGIT:
+                return NULLRBIGINT
+            elif self._digits[0] == ONEDIGIT:
+                return rbigint.fromint(self.sign * b)
+
+            res = self.widedigit(0) * b
+            carry = res >> SHIFT
+            if carry:
+                return rbigint([_store_digit(res & MASK), _store_digit(carry)], self.sign * (-1 if b < 0 else 1), 2)
+            else:
+                return rbigint([_store_digit(res & MASK)], self.sign * (-1 if b < 0 else 1), 1)
+
+        else:
+            result = _x_int_mul(self, abs(b))
+
+        result.sign = self.sign * (-1 if b < 0 else 1)
+        return result
+
+    @jit.elidable
     def truediv(self, other):
         div = _bigint_true_divide(self, other)
         return div
@@ -659,7 +720,7 @@ class rbigint(object):
         if self.sign == 1 and other.numdigits() == 1 and other.sign == 1:
             digit = other.digit(0)
             if digit == 1:
-                return rbigint(self._digits[:self.size], 1, self.size)
+                return self
             elif digit and digit & (digit - 1) == 0:
                 return self.rshift(ptwotable[digit])
 
@@ -667,13 +728,35 @@ class rbigint(object):
         if mod.sign * other.sign == -1:
             if div.sign == 0:
                 return ONENEGATIVERBIGINT
-            div = div.sub(ONERBIGINT)
+            div = div.int_sub(1)
 
+        return div
+
+    @jit.elidable
+    def int_floordiv(self, other):
+        digit = abs(other)
+        if self.sign == 1 and other > 0:
+            if digit == 1:
+                return self
+            elif digit and digit & (digit - 1) == 0:
+                return self.rshift(ptwotable[digit])
+
+        div, mod = _divrem1(self, digit)
+
+        if mod != 0 and self.sign * (-1 if other < 0 else 1) == -1:
+            if div.sign == 0:
+                return ONENEGATIVERBIGINT
+            div = div.int_add(1)
+        div.sign = self.sign * (-1 if other < 0 else 1)
         return div
 
     @jit.look_inside
     def div(self, other):
         return self.floordiv(other)
+
+    @jit.look_inside
+    def int_div(self, other):
+        return self.int_floordiv(other)
 
     @jit.elidable
     def mod(self, other):
@@ -713,6 +796,46 @@ class rbigint(object):
         return mod
 
     @jit.elidable
+    def int_mod(self, other):
+        if self.sign == 0:
+            return NULLRBIGINT
+
+        digit = abs(other)
+
+        if digit != 0:
+            if digit == 1:
+                return NULLRBIGINT
+            elif digit == 2:
+                modm = self.digit(0) & 1
+                if modm:
+                    return ONENEGATIVERBIGINT if other < 0 else ONERBIGINT
+                return NULLRBIGINT
+            elif digit & (digit - 1) == 0:
+                mod = self.and_(rbigint([_store_digit(digit - 1)], 1, 1))
+            else:
+                # Perform
+                size = self.numdigits() - 1
+                if size > 0:
+                    rem = self.widedigit(size)
+                    size -= 1
+                    while size >= 0:
+                        rem = ((rem << SHIFT) + self.widedigit(size)) % digit
+                        size -= 1
+                else:
+                    rem = self.digit(0) % digit
+
+                if rem == 0:
+                    return NULLRBIGINT
+                mod = rbigint([_store_digit(rem)], -1 if self.sign < 0 else 1, 1)
+        else:
+            # Raise
+            raise ZeroDivisionError("long division or modulo by zero")
+
+        if mod.sign * (-1 if other < 0 else 1) == -1:
+            mod = mod.int_add(other)
+        return mod
+
+    @jit.elidable
     def divmod(v, w):
         """
         The / and % operators are now defined in terms of divmod().
@@ -735,7 +858,28 @@ class rbigint(object):
             mod = mod.add(w)
             if div.sign == 0:
                 return ONENEGATIVERBIGINT, mod
-            div = div.sub(ONERBIGINT)
+            div = div.int_sub(1)
+        return div, mod
+
+    @jit.elidable
+    def int_divmod(v, w):
+        """ Divmod with int """
+        if v.sign != (-1 if w < 0 else 1):
+            # TODO, fix.
+            return v.divmod(rbigint.fromint(w))
+        div, mod = _divrem1(v, abs(w))
+        if v.sign != (-1 if w < 0 else 1):
+            mod = rbigint.fromint(mod)
+            mod.sign = -1 if w < 0 else 1
+            mod = mod.int_add(w)
+
+            if div.sign == 0:
+                return ONENEGATIVERBIGINT, mod
+            div = div.int_add(1)
+        else:
+            mod = rbigint.fromint(mod)
+            mod.sign = -1 if w < 0 else 1
+        div.sign = v.sign * (-1 if w < 0 else 1)
         return div, mod
 
     @jit.elidable
@@ -1170,6 +1314,26 @@ def _x_add(a, b):
     z._normalize()
     return z
 
+def _x_int_add(a, b):
+    """ Add the absolute values of one bigint and one int. """
+    size_a = a.numdigits()
+
+    z = rbigint([NULLDIGIT] * (size_a + 1), 1)
+    i = UDIGIT_TYPE(0)
+ 
+    carry = a.udigit(0) + b
+    z.setdigit(0, carry)
+    carry >>= SHIFT
+    i += 1
+    while i < size_a:
+        carry += a.udigit(i)
+        z.setdigit(i, carry)
+        carry >>= SHIFT
+        i += 1
+    z.setdigit(i, carry)
+    z._normalize()
+    return z
+
 def _x_sub(a, b):
     """ Subtract the absolute values of two integers. """
 
@@ -1205,6 +1369,40 @@ def _x_sub(a, b):
         borrow >>= SHIFT
         #borrow &= 1 # Keep only one sign bit
         i += 1
+    while i < size_a:
+        borrow = a.udigit(i) - borrow
+        z.setdigit(i, borrow)
+        borrow >>= SHIFT
+        #borrow &= 1
+        i += 1
+
+    assert borrow == 0
+    z._normalize()
+    return z
+
+def _x_int_sub(a, b):
+    """ Subtract the absolute values of one rbigint and one integer. """
+
+    size_a = a.numdigits()
+    sign = 1
+
+    if size_a == 1:
+        # Find highest digit where a and b differ:
+        if a.digit(0) == b:
+            return NULLRBIGINT
+        elif a.digit(0) < b:
+            sign = -1
+            b *= -1
+        size_a = size_b = 1
+
+    z = rbigint([NULLDIGIT] * size_a, sign, size_a)
+    borrow = UDIGIT_TYPE(0)
+    i = _load_unsigned_digit(1)
+    # The following assumes unsigned arithmetic
+    # works modulo 2**N for some N>SHIFT.
+    borrow = a.udigit(0) - b
+    z.setdigit(0, borrow)
+    borrow >>= SHIFT
     while i < size_a:
         borrow = a.udigit(i) - borrow
         z.setdigit(i, borrow)
@@ -1300,6 +1498,18 @@ def _x_mul(a, b, digit=0):
         i += 1
     z._normalize()
     return z
+
+def _x_int_mul(a, digit):
+    """
+    Grade school multiplication, ignoring the signs.
+    Returns the absolute value of the product, or None if error.
+    """
+
+    if digit & (digit - 1) == 0:
+        return a.lqshift(ptwotable[digit])
+
+    return _muladd1(a, digit)
+
 
 def _kmul_split(n, size):
     """
