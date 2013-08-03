@@ -569,6 +569,15 @@ class Test_rbigint(object):
                     res2 = getattr(operator, mod)(x, y)
                     assert res1 == res2
 
+    def test_int_bitwise(self):
+        for x in gen_signs([0, 1, 5, 11, 42, 43, 3 ** 30]):
+            for y in gen_signs([0, 1, 5, 11, 42, 4]):
+                lx = rbigint.fromlong(x)
+                for mod in "xor and_ or_".split():
+                    res1 = getattr(lx, "int_"+mod)(y).tolong()
+                    res2 = getattr(operator, mod)(x, y)
+                    assert res1 == res2
+
     def test_mul_eq_shift(self):
         p2 = rbigint.fromlong(1).lshift(63)
         f1 = rbigint.fromlong(0).lshift(63)
@@ -716,7 +725,7 @@ class TestInternalFunctions(object):
     def test_int_divmod(self):
         x = 12345678901234567890L
         for i in range(100):
-            y = randint(0, 1 << 60)
+            y = randint(0, 1 << 30)
             for sx, sy in (1, 1), (1, -1), (-1, -1), (-1, 1):
                 sx *= x
                 sy *= y

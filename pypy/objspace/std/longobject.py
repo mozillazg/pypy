@@ -172,9 +172,9 @@ def lt__Int_Long(space, w_int1, w_long2):
 def le__Int_Long(space, w_int1, w_long2):
     return space.newbool(w_long2.num.int_ge(w_int1.intval))
 def eq__Int_Long(space, w_int1, w_long2):
-    return space.newbool(w_long2.num.int_ne(w_int1.intval))
+    return space.newbool(not w_long2.num.int_ne(w_int1.intval))
 def ne__Int_Long(space, w_int1, w_long2):
-    return space.newbool(w_long2.num.int_eq(w_int1.intval))
+    return space.newbool(not w_long2.num.int_eq(w_int1.intval))
 def gt__Int_Long(space, w_int1, w_long2):
     return space.newbool(w_long2.num.int_lt(w_int1.intval))
 def ge__Int_Long(space, w_int1, w_long2):

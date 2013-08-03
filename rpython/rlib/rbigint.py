@@ -485,8 +485,15 @@ class rbigint(object):
     @jit.elidable
     def int_eq(self, other):
         """ eq with int """
-        if self.numdigits() != 1 or self.digit(0) * self.sign != other:
+        
+        if self.numdigits() > 2:
             return False
+        try:
+            if self.toint() != other:
+                return False
+        except OverflowError:
+            return False
+
         return True
 
     @jit.look_inside
@@ -536,13 +543,20 @@ class rbigint(object):
     @jit.elidable
     def int_lt(self, other):
         """ lt where other is an int """
-        if other >= 0 and self.sign < 0:
-            return True
-        elif other < 0 and self.sign >= 0:
+        osign = 1
+        if other == 0:
+            osign = 0
+        elif other < 0:
+            osign = -1
+ 
+        if self.sign > osign:
             return False
+        elif self.sign < osign:
+            return True
+
         digits = self.numdigits()
         if digits > 1:
-            if self.sign == 1 and other >= 0:
+            if self.sign == 1 and other < 0:
                 return False
             else:
                 return True
