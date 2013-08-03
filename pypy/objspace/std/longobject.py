@@ -393,8 +393,7 @@ def %(opname)s_ovr__Int_Int(space, w_int1, w_int2):
         from pypy.objspace.std.smalllongobject import %(opname)s_ovr
         return %(opname)s_ovr(space, w_int1, w_int2)
     w_long1 = delegate_Int2Long(space, w_int1)
-    w_long2 = delegate_Int2Long(space, w_int2)
-    return %(opname)s__Long_Long(space, w_long1, w_long2)
+    return %(opname)s__Long_Int(space, w_long1, w_int2)
 """ % {'opname': opname}, '', 'exec')
 
     getattr(model.MM, opname).register(globals()['%s_ovr__Int_Int' % opname],
