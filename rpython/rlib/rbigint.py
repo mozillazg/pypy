@@ -555,8 +555,9 @@ class rbigint(object):
             return True
 
         digits = self.numdigits()
+        
         if digits > 1:
-            if self.sign == 1 and other < 0:
+            if osign == 1:
                 return False
             else:
                 return True
