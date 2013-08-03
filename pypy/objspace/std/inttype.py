@@ -195,7 +195,7 @@ class W_AbstractIntObject(W_Object):
             return None
         from pypy.objspace.std.model import IDTAG_INT as tag
         b = space.bigint_w(self)
-        b = b.lshift(3).or_(rbigint.fromint(tag))
+        b = b.lshift(3).int_or_(tag)
         return space.newlong_from_rbigint(b)
 
     def int(self, space):

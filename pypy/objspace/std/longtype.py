@@ -130,7 +130,7 @@ class W_AbstractLongObject(W_Object):
             return None
         from pypy.objspace.std.model import IDTAG_LONG as tag
         b = space.bigint_w(self)
-        b = b.lshift(3).or_(rbigint.fromint(tag))
+        b = b.lshift(3).int_or_(tag)
         return space.newlong_from_rbigint(b)
 
     def unwrap(w_self, space): #YYYYYY

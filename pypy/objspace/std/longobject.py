@@ -218,6 +218,17 @@ def truediv__Long_Long(space, w_long1, w_long2):
                              space.wrap("long/long too large for a float"))
     return space.newfloat(f)
 
+def truediv__Long_Int(space, w_long1, w_int2):
+    try:
+        f = w_long1.num.int_truediv(w_int2.intval)
+    except ZeroDivisionError:
+        raise OperationError(space.w_ZeroDivisionError,
+                             space.wrap("long division or modulo by zero"))
+    except OverflowError:
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("long/long too large for a float"))
+    return space.newfloat(f)
+
 def floordiv__Long_Long(space, w_long1, w_long2):
     try:
         z = w_long1.num.floordiv(w_long2.num)

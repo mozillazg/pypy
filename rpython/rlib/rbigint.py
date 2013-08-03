@@ -711,7 +711,7 @@ class rbigint(object):
             elif self._digits[0] == ONEDIGIT:
                 return rbigint.fromint(self.sign * b)
 
-            res = self.widedigit(0) * b
+            res = self.widedigit(0) * abs(b)
             carry = res >> SHIFT
             if carry:
                 return rbigint([_store_digit(res & MASK), _store_digit(carry)], self.sign * (-1 if b < 0 else 1), 2)
@@ -727,6 +727,12 @@ class rbigint(object):
     @jit.elidable
     def truediv(self, other):
         div = _bigint_true_divide(self, other)
+        return div
+
+    @jit.elidable
+    def int_truediv(self, other):
+        # XXX: Not specialized. Just use regular truediv for now.
+        div = _bigint_true_divide(self, rbigint.fromint(other))
         return div
 
     @jit.elidable
@@ -748,6 +754,10 @@ class rbigint(object):
 
     @jit.elidable
     def int_floordiv(self, other):
+
+        if other == 0:
+            raise ZeroDivisionError("long division or modulo by zero")
+
         digit = abs(other)
         if self.sign == 1 and other > 0:
             if digit == 1:
@@ -878,22 +888,22 @@ class rbigint(object):
     @jit.elidable
     def int_divmod(v, w):
         """ Divmod with int """
-        if v.sign != (-1 if w < 0 else 1):
-            # TODO, fix.
-            return v.divmod(rbigint.fromint(w))
-        div, mod = _divrem1(v, abs(w))
-        if v.sign != (-1 if w < 0 else 1):
-            mod = rbigint.fromint(mod)
-            mod.sign = -1 if w < 0 else 1
-            mod = mod.int_add(w)
 
-            if div.sign == 0:
-                return ONENEGATIVERBIGINT, mod
-            div = div.int_add(1)
-        else:
-            mod = rbigint.fromint(mod)
-            mod.sign = -1 if w < 0 else 1
-        div.sign = v.sign * (-1 if w < 0 else 1)
+        if w == 0:
+            raise ZeroDivisionError("long division or modulo by zero")
+
+        wsign = (-1 if w < 0 else 1)
+        if v.sign != wsign:
+            # Divrem1 doesn't deal with the sign difference. Instead of having yet another copy,
+            # Just fallback.
+            return v.divmod(rbigint.fromint(w))
+
+        div, mod = _divrem1(v, abs(w))
+        mod = rbigint.fromint(mod)
+        
+        mod.sign = wsign
+        div.sign = v.sign * wsign
+
         return div, mod
 
     @jit.elidable
@@ -1045,7 +1055,7 @@ class rbigint(object):
         if self.sign == 0:
             return ONENEGATIVERBIGINT
 
-        ret = self.add(ONERBIGINT)
+        ret = self.int_add(1)
         ret.sign = -ret.sign
         return ret
 

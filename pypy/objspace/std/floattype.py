@@ -291,7 +291,7 @@ class W_AbstractFloatObject(W_Object):
         from pypy.objspace.std.model import IDTAG_FLOAT as tag
         val = float2longlong(space.float_w(self))
         b = rbigint.fromrarith_int(val)
-        b = b.lshift(3).or_(rbigint.fromint(tag))
+        b = b.lshift(3).int_or_(tag)
         return space.newlong_from_rbigint(b)
 
     def int(self, space):
