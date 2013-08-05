@@ -918,13 +918,13 @@ class rbigint(object):
         if w == 0:
             raise ZeroDivisionError("long division or modulo by zero")
 
-        digit = abs(w) 
         wsign = (-1 if w < 0 else 1)
-        if digit >= MASK or not (digit > 0) or v.sign != wsign:
+        if w == MIN_VALUE or v.sign != wsign:
             # Divrem1 doesn't deal with the sign difference. Instead of having yet another copy,
             # Just fallback.
             return v.divmod(rbigint.fromint(w))
 
+        digit = abs(w)
         assert digit > 0
 
         div, mod = _divrem1(v, digit)
@@ -1450,13 +1450,15 @@ def _x_int_sub(a, b):
 
     size_a = a.numdigits()
  
+    digit = abs(b) # Not cast to unsigned just yet.
+
     sign = 1
     if size_a == 1:
         adigit = a.digit(0)
-        if adigit == b:
+        if adigit == digit:
             return NULLRBIGINT
-        elif adigit > b:
-            return rbigint.fromint(adigit - b)
+        elif adigit < digit:
+            return rbigint.fromint(adigit - digit)
 
     z = rbigint([NULLDIGIT] * size_a, sign, size_a)
     borrow = UDIGIT_TYPE(0)
@@ -1464,7 +1466,7 @@ def _x_int_sub(a, b):
     # The following assumes unsigned arithmetic
     # works modulo 2**N for some N>SHIFT.
     
-    borrow = a.udigit(0) - UDIGIT_TYPE(abs(b))
+    borrow = a.udigit(0) - UDIGIT_TYPE(digit)
     z.setdigit(0, borrow)
     borrow >>= SHIFT
     while i < size_a:
@@ -1572,8 +1574,8 @@ def _x_int_mul(a, digit):
     Returns the absolute value of the product, or None if error.
     """
 
-    if digit & (digit - 1) == 0:
-        return a.lqshift(ptwotable[digit])
+    #if digit & (digit - 1) == 0:
+    #    return a.lqshift(ptwotable[digit])
 
     return _muladd1(a, digit)
 
