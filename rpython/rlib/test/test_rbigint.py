@@ -41,6 +41,30 @@ class TestRLong(object):
             r2 = r1.neg()
             assert r2.str() == str(-n)
 
+    def test_int_long_catch_div(self):
+        # Basically abs(int) > MASK
+        l = 2**128
+        r1 = rbigint.fromlong(l)
+        assert r1.int_floordiv(-MASK-1).tolong() == (l // (-MASK-1))
+
+    def test_int_long_catch_mul(self):
+        # Basically abs(int) > MASK
+        l = 2**128
+        r1 = rbigint.fromlong(l)
+        assert r1.int_mul(-MASK-1).tolong() == (l * (-MASK-1))
+
+    def test_int_long_catch_add(self):
+        # Basically abs(int) > MASK
+        l = 2**128
+        r1 = rbigint.fromlong(-l)
+        assert r1.int_add(-MASK-1).tolong() == (-l + (-MASK-1))
+
+    def test_int_long_catch_sub(self):
+        # Basically abs(int) > MASK
+        l = 2**128
+        r1 = rbigint.fromlong(-l)
+        assert r1.int_sub(-MASK-1).tolong() == (-l - (-MASK-1))
+
     def test_floordiv(self):
         for op1 in [-12, -2, -1, 1, 2, 50]:
             for op2 in [-4, -2, -1, 1, 2, 8]:
@@ -246,7 +270,7 @@ class Test_rbigint(object):
         assert rbigint._from_numberstring_parser(parser).tolong() == 1231231241
 
     def test_add(self):
-        x = 123456789123456789000000L
+        x = 123456789123456789000000000000000000L
         y = 123858582373821923936744221L
         for i in [-1, 1]:
             for j in [-1, 1]:
@@ -256,8 +280,8 @@ class Test_rbigint(object):
                 assert result.tolong() == x * i + y * j
 
     def test_int_add(self):
-        x = 123456789123456789000000L
-        y = 1238
+        x = 123456789123456789000000000000000000L
+        y = MASK-2
         for i in [-1, 1]:
             for j in [-1, 1]:
                 f1 = rbigint.fromlong(x * i)
@@ -278,7 +302,7 @@ class Test_rbigint(object):
 
     def test_int_sub(self):
         x = 12378959520302182384345L
-        y = 8896
+        y = MASK
         for i in [-1, 1]:
             for j in [-1, 1]:
                 f1 = rbigint.fromlong(x * i)
@@ -303,7 +327,7 @@ class Test_rbigint(object):
 
     def test_int_mul(self):
         x = -1238585838347L
-        y = 585839
+        y = MASK
         f1 = rbigint.fromlong(x)
         result = f1.int_mul(y)
         assert result.tolong() == x * y

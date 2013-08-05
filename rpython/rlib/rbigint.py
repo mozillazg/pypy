@@ -42,6 +42,7 @@ else:
     LONG_TYPE = rffi.LONGLONG
 
 MASK = int((1 << SHIFT) - 1)
+MIN_VALUE = int((-1 << SHIFT))
 FLOAT_MULTIPLIER = float(1 << SHIFT)
 
 # Debugging digit array access.
@@ -615,10 +616,18 @@ class rbigint(object):
     def int_add(self, other):
         if other == 0:
             return self
-        if self.sign == 0:
+        elif self.sign == 0:
             return rbigint.fromint(other)
+        elif other == MIN_VALUE:
+            # Fallback to long.
+            return self.add(rbigint.fromint(other))
+
+        digit = UDIGIT_TYPE(abs(other))
+
+        assert digit > 0 # Required.
+
         if (self.sign > 0 and other > 0) or (self.sign < 0 and other < 0):
-            result = _x_int_add(self, abs(other))
+            result = _x_int_add(self, digit)
         else:
             # XXX: Improve.
             result = _x_sub(rbigint.fromint(other), self)
@@ -643,12 +652,17 @@ class rbigint(object):
     def int_sub(self, other):
         if other == 0:
             return self
-        if self.sign == 0:
+        elif self.sign == 0:
             return rbigint.fromint(-1 * other)
+
+        if other == MIN_VALUE:
+            # Fallback to long.
+            return self.sub(rbigint.fromint(other))
+
         if (self.sign > 0 and other > 0) or (self.sign < 0 and other < 0):
-            result = _x_int_sub(self, abs(other))
+            result = _x_int_sub(self, other)
         else:
-            result = _x_int_add(self, abs(other))
+            result = _x_int_add(self, UDIGIT_TYPE(abs(other)))
         result.sign *= self.sign
         return result
 
@@ -700,6 +714,11 @@ class rbigint(object):
     @jit.elidable
     def int_mul(self, b):
         """ Mul with int. """
+        if b == MIN_VALUE:
+            # Fallback to long.
+            return self.mul(rbigint.fromint(b))
+
+        digit = _widen_digit(b)
         asize = self.numdigits()
 
         if self.sign == 0 or b == 0:
@@ -711,7 +730,7 @@ class rbigint(object):
             elif self._digits[0] == ONEDIGIT:
                 return rbigint.fromint(self.sign * b)
 
-            res = self.widedigit(0) * abs(b)
+            res = self.widedigit(0) * digit
             carry = res >> SHIFT
             if carry:
                 return rbigint([_store_digit(res & MASK), _store_digit(carry)], self.sign * (-1 if b < 0 else 1), 2)
@@ -719,7 +738,7 @@ class rbigint(object):
                 return rbigint([_store_digit(res & MASK)], self.sign * (-1 if b < 0 else 1), 1)
 
         else:
-            result = _x_int_mul(self, abs(b))
+            result = _x_int_mul(self, digit)
 
         result.sign = self.sign * (-1 if b < 0 else 1)
         return result
@@ -741,9 +760,9 @@ class rbigint(object):
             digit = other.digit(0)
             if digit == 1:
                 return self
-            elif digit and digit & (digit - 1) == 0:
+            """elif digit and digit & (digit - 1) == 0:
                 return self.rshift(ptwotable[digit])
-
+            """
         div, mod = _divrem(self, other)
         if mod.sign * other.sign == -1:
             if div.sign == 0:
@@ -754,17 +773,21 @@ class rbigint(object):
 
     @jit.elidable
     def int_floordiv(self, other):
-
         if other == 0:
             raise ZeroDivisionError("long division or modulo by zero")
-
+        elif other == MIN_VALUE:
+            # Fallback to long.
+            return self.floordiv(rbigint.fromint(other))
+        
         digit = abs(other)
+        assert digit > 0
+
         if self.sign == 1 and other > 0:
             if digit == 1:
                 return self
-            elif digit and digit & (digit - 1) == 0:
+            """elif digit & (digit - 1) == 0:
                 return self.rshift(ptwotable[digit])
-
+            """
         div, mod = _divrem1(self, digit)
 
         if mod != 0 and self.sign * (-1 if other < 0 else 1) == -1:
@@ -823,6 +846,9 @@ class rbigint(object):
     def int_mod(self, other):
         if self.sign == 0:
             return NULLRBIGINT
+        elif other == MIN_VALUE:
+            # Fallback to long.
+            self.mod(rbigint.fromint(other))
 
         digit = abs(other)
 
@@ -892,13 +918,16 @@ class rbigint(object):
         if w == 0:
             raise ZeroDivisionError("long division or modulo by zero")
 
+        digit = abs(w) 
         wsign = (-1 if w < 0 else 1)
-        if v.sign != wsign:
+        if digit >= MASK or not (digit > 0) or v.sign != wsign:
             # Divrem1 doesn't deal with the sign difference. Instead of having yet another copy,
             # Just fallback.
             return v.divmod(rbigint.fromint(w))
 
-        div, mod = _divrem1(v, abs(w))
+        assert digit > 0
+
+        div, mod = _divrem1(v, digit)
         mod = rbigint.fromint(mod)
         
         mod.sign = wsign
@@ -1353,14 +1382,11 @@ def _x_add(a, b):
 def _x_int_add(a, b):
     """ Add the absolute values of one bigint and one int. """
     size_a = a.numdigits()
-
     z = rbigint([NULLDIGIT] * (size_a + 1), 1)
-    i = UDIGIT_TYPE(0)
- 
     carry = a.udigit(0) + b
     z.setdigit(0, carry)
     carry >>= SHIFT
-    i += 1
+    i = UDIGIT_TYPE(1)
     while i < size_a:
         carry += a.udigit(i)
         z.setdigit(i, carry)
@@ -1412,6 +1438,9 @@ def _x_sub(a, b):
         #borrow &= 1
         i += 1
 
+    if borrow != 0:
+        print a.str(), " minus ", b.str()
+
     assert borrow == 0
     z._normalize()
     return z
@@ -1420,23 +1449,22 @@ def _x_int_sub(a, b):
     """ Subtract the absolute values of one rbigint and one integer. """
 
     size_a = a.numdigits()
+ 
     sign = 1
-
     if size_a == 1:
-        # Find highest digit where a and b differ:
-        if a.digit(0) == b:
+        adigit = a.digit(0)
+        if adigit == b:
             return NULLRBIGINT
-        elif a.digit(0) < b:
-            sign = -1
-            b *= -1
-        size_a = size_b = 1
+        elif adigit > b:
+            return rbigint.fromint(adigit - b)
 
     z = rbigint([NULLDIGIT] * size_a, sign, size_a)
     borrow = UDIGIT_TYPE(0)
     i = _load_unsigned_digit(1)
     # The following assumes unsigned arithmetic
     # works modulo 2**N for some N>SHIFT.
-    borrow = a.udigit(0) - b
+    
+    borrow = a.udigit(0) - UDIGIT_TYPE(abs(b))
     z.setdigit(0, borrow)
     borrow >>= SHIFT
     while i < size_a:
@@ -1445,6 +1473,9 @@ def _x_int_sub(a, b):
         borrow >>= SHIFT
         #borrow &= 1
         i += 1
+
+    if borrow > 0:
+        print "BORROW IS BAD"
 
     assert borrow == 0
     z._normalize()
@@ -1505,13 +1536,13 @@ def _x_mul(a, b, digit=0):
         z._normalize()
         return z
 
-    elif digit:
+    """elif digit:
         if digit & (digit - 1) == 0:
             return b.lqshift(ptwotable[digit])
 
         # Even if it's not power of two it can still be useful.
         return _muladd1(b, digit)
-
+    """
     z = rbigint([NULLDIGIT] * (size_a + size_b), 1)
     # gradeschool long mult
     i = UDIGIT_TYPE(0)
@@ -1786,6 +1817,9 @@ def _divrem1(a, n):
     and the remainder as a tuple.
     The sign of a is ignored; n should not be zero.
     """
+    if not (n > 0 and n <= MASK):
+        print "Trying to divide %s by %d" % (a.str(), n)
+
     assert n > 0 and n <= MASK
 
     size = a.numdigits()
@@ -1996,6 +2030,10 @@ def _divrem(a, b):
 
     if b.sign == 0:
         raise ZeroDivisionError("long division or modulo by zero")
+
+    # XXX: Temp
+    if b.sign != 0 and b.numdigits() == 1 and b.digit(0) == 0:
+        print "VERY BAD!"
 
     if (size_a < size_b or
         (size_a == size_b and
@@ -2539,6 +2577,13 @@ _bitwise._annspecialcase_ = "specialize:arg(1)"
 
 def _int_bitwise(a, op, b): # '&', '|', '^'
     """ Bitwise and/or/xor operations with ints. """
+
+    digit = abs(b)
+    if digit > MASK or not (digit >= 0):
+        # Fallback to long.
+        return _bitwise(a, op, rbigint.fromint(b))
+
+    assert digit >= 0
 
     if a.sign < 0:
         a = a.invert()
