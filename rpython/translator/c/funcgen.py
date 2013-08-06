@@ -204,8 +204,8 @@ class FunctionCodeGenerator(object):
 
     def cfunction_body(self):
         graph = self.graph
-        yield 'char *shadowstack[9];  /* xxx reduce */'
-        yield 'shadowstack[0] = pypy_r15;'
+        for line in self.shadowstack_prologue():
+            yield line
         yield 'goto block0;'    # to avoid a warning "this label is not used"
 
         # generate the body of each block
@@ -904,31 +904,56 @@ class FunctionCodeGenerator(object):
     def OP_SHADOWSTACK_PUSH(self, op):
         numvars = len(op.args)
         if numvars == 0:
-            return 'pypy_r15 = shadowstack[0];'
+            return 'pypy_r15 = shadowstack1[0];'
         else:
-            assert numvars <= 8
             exprs = []
+            ss = 0
             for i in range(numvars):
-                exprs.append('shadowstack[%d] = (char *)%s;' % (
-                    i + 1, self.expr(op.args[i])))
-            exprs.append('pypy_r15 = ((char *)shadowstack) + %d;' % (
-                numvars - 1,))
+                if i % 8 == 0:
+                    ss += 1
+                exprs.append('shadowstack%d[%d] = (char *)%s;' % (
+                    ss, (i % 8) + 1, self.expr(op.args[i])))
+            exprs.append('pypy_r15 = ((char *)shadowstack%d) + %d;' % (
+                ss, (numvars - 1) % 8,))
             return '\n'.join(exprs)
 
     def OP_SHADOWSTACK_POP(self, op):
         numvars = len(op.args)
-        assert 1 <= numvars <= 8
+        assert numvars >= 1
         exprs = []
-        for i in range(numvars-1, -1, -1):
+        ss = 0
+        for i in range(numvars):
+            if i % 8 == 0:
+                ss += 1
             v = op.args[i]
-            exprs.append('%s = (%s)shadowstack[%d];' % (
-                self.expr(v), cdecl(self.lltypename(v), ''), i + 1))
+            exprs.append('%s = (%s)shadowstack%d[%d];' % (
+                self.expr(v), cdecl(self.lltypename(v), ''), ss, (i % 8) + 1))
         return '\n'.join(exprs)
 
     def OP_SHADOWSTACK_R15(self, op):
         v = op.result
         return '%s = (%s)pypy_r15;' % (self.expr(v),
                                        cdecl(self.lltypename(v), ''))
+
+    def shadowstack_prologue(self):
+        maxlength = -1
+        for block in self.graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'shadowstack_push':
+                    maxlength = max(maxlength, len(op.args))
+        if maxlength < 0:
+            return
+        ss = 1
+        ssprev = 'pypy_r15'
+        while True:
+            sslen = min(maxlength + 1, 9)
+            yield 'char *shadowstack%d[%d];' % (ss, sslen)
+            yield 'shadowstack%d[0] = %s;' % (ss, ssprev)
+            maxlength -= (sslen - 1)
+            if maxlength == 0:
+                break
+            ssprev = '((char *)shadowstack%d) + 7' % ss
+            ss += 1
 
 
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)
