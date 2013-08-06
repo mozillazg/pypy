@@ -26,3 +26,6 @@ typedef unsigned char bool_t;
 
 
 #include "src/align.h"
+
+
+register char *pypy_r15 asm("r15");

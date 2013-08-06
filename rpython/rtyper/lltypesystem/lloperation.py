@@ -561,6 +561,10 @@ LL_OPERATIONS = {
     'debug_print_traceback':   LLOp(),
     'debug_nonnull_pointer':   LLOp(canrun=True),
 
+    'shadowstack_push':     LLOp(),
+    'shadowstack_pop':      LLOp(),
+    'shadowstack_r15':      LLOp(),
+
     # __________ instrumentation _________
     'instrument_count':     LLOp(),
 }

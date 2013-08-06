@@ -784,6 +784,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
         self._gc_adr_of_gc_attr(hop, 'nursery_top')
 
     def _gc_adr_of_gcdata_attr(self, hop, attrname):
+        xxxxxxxxxxxxxx
         op = hop.spaceop
         ofs = llmemory.offsetof(self.c_const_gcdata.concretetype.TO,
                                 'inst_' + attrname)

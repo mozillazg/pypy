@@ -204,6 +204,8 @@ class FunctionCodeGenerator(object):
 
     def cfunction_body(self):
         graph = self.graph
+        yield 'char *shadowstack[9];  /* xxx reduce */'
+        yield 'shadowstack[0] = pypy_r15;'
         yield 'goto block0;'    # to avoid a warning "this label is not used"
 
         # generate the body of each block
@@ -898,5 +900,35 @@ class FunctionCodeGenerator(object):
                 self.expr(op.args[0]))
         else:
             return None    # use the default
+
+    def OP_SHADOWSTACK_PUSH(self, op):
+        numvars = len(op.args)
+        if numvars == 0:
+            return 'pypy_r15 = shadowstack[0];'
+        else:
+            assert numvars <= 8
+            exprs = []
+            for i in range(numvars):
+                exprs.append('shadowstack[%d] = (char *)%s;' % (
+                    i + 1, self.expr(op.args[i])))
+            exprs.append('pypy_r15 = ((char *)shadowstack) + %d;' % (
+                numvars - 1,))
+            return '\n'.join(exprs)
+
+    def OP_SHADOWSTACK_POP(self, op):
+        numvars = len(op.args)
+        assert 1 <= numvars <= 8
+        exprs = []
+        for i in range(numvars-1, -1, -1):
+            v = op.args[i]
+            exprs.append('%s = (%s)shadowstack[%d];' % (
+                self.expr(v), cdecl(self.lltypename(v), ''), i + 1))
+        return '\n'.join(exprs)
+
+    def OP_SHADOWSTACK_R15(self, op):
+        v = op.result
+        return '%s = (%s)pypy_r15;' % (self.expr(v),
+                                       cdecl(self.lltypename(v), ''))
+
 
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)

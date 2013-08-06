@@ -30,14 +30,18 @@ int pypy_main_function(int argc, char *argv[])
     char *errmsg;
     int i, exitcode;
     RPyListOfString *list;
+    char *saved_r15;
 
 #ifdef PYPY_USE_ASMGCC
     pypy_g_rpython_rtyper_lltypesystem_rffi_StackCounter.sc_inst_stacks_counter++;
 #endif
-    pypy_asm_stack_bottom();
+    saved_r15 = pypy_r15;
+    //pypy_asm_stack_bottom();
 #ifdef PYPY_X86_CHECK_SSE2_DEFINED
+    pypy_r15 = (char *)-1;
     pypy_x86_check_sse2();
 #endif
+    pypy_r15 = (char *)-1;
     instrument_setup();
 
 #ifndef MS_WINDOWS
@@ -49,28 +53,37 @@ int pypy_main_function(int argc, char *argv[])
     }
 #endif
 
+    pypy_r15 = (char *)-1;
     errmsg = RPython_StartupCode();
     if (errmsg) goto error;
 
+    pypy_r15 = (char *)-1;
     list = _RPyListOfString_New(argc);
     if (RPyExceptionOccurred()) goto memory_out;
     for (i=0; i<argc; i++) {
+        pypy_r15 = (char *)-1;
         RPyString *s = RPyString_FromString(argv[i]);
         if (RPyExceptionOccurred()) goto memory_out;
+        pypy_r15 = (char *)-1;
         _RPyListOfString_SetItem(list, i, s);
     }
 
+    pypy_r15 = (char *)-1;
     exitcode = STANDALONE_ENTRY_POINT(list);
 
+    pypy_r15 = (char *)-1;
     pypy_debug_alloc_results();
 
+    pypy_r15 = (char *)-1;
     if (RPyExceptionOccurred()) {
         /* print the RPython traceback */
         pypy_debug_catch_fatal_exception();
     }
 
+    pypy_r15 = (char *)-1;
     pypy_malloc_counters_results();
 
+    pypy_r15 = saved_r15;
     return exitcode;
 
  memory_out:
@@ -78,7 +91,7 @@ int pypy_main_function(int argc, char *argv[])
  error:
     fprintf(stderr, "Fatal error during initialization: %s\n", errmsg);
     abort();
-    return 1;
+    return 1;   /* not actually reachable */
 }
 
 int PYPY_MAIN_FUNCTION(int argc, char *argv[])
