@@ -81,6 +81,8 @@ def _widen_digit(x):
     return rffi.cast(LONG_TYPE, x)
 
 def _store_digit(x):
+    # TMP
+    assert x >= 0
     return rffi.cast(STORE_TYPE, x)
 _store_digit._annspecialcase_ = 'specialize:argtype(0)'
 
@@ -717,12 +719,14 @@ class rbigint(object):
         if b == MIN_VALUE:
             # Fallback to long.
             return self.mul(rbigint.fromint(b))
-
-        digit = _widen_digit(b)
-        asize = self.numdigits()
-
-        if self.sign == 0 or b == 0:
+        elif self.sign == 0 or b == 0:
             return NULLRBIGINT
+
+
+        digit = _widen_digit(abs(b))
+
+        assert digit > 0 
+        asize = self.numdigits()
 
         if asize == 1:
             if self._digits[0] == NULLDIGIT:
@@ -2036,6 +2040,7 @@ def _divrem(a, b):
     # XXX: Temp
     if b.sign != 0 and b.numdigits() == 1 and b.digit(0) == 0:
         print "VERY BAD!"
+        raise ZeroDivisionError("long division or modulo by zero")
 
     if (size_a < size_b or
         (size_a == size_b and
