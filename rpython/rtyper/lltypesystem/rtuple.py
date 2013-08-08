@@ -56,7 +56,6 @@ class TupleRepr(AbstractTupleRepr):
         cno = inputconst(Signed, nitems)
         hop.exception_is_here()
         vlist = hop.gendirectcall(LIST.ll_newlist, cno)
-        v_func = hop.inputconst(Void, rlist.dum_nocheck)
         for index in range(nitems):
             name = self.fieldnames[index]
             ritem = self.items_r[index]
@@ -64,7 +63,7 @@ class TupleRepr(AbstractTupleRepr):
             vitem = hop.genop('getfield', [vtup, cname], resulttype = ritem)
             vitem = hop.llops.convertvar(vitem, ritem, hop.r_result.item_repr)
             cindex = inputconst(Signed, index)
-            hop.gendirectcall(rlist.ll_setitem_nonneg, v_func, vlist, cindex, vitem)
+            hop.gendirectcall(rlist.ll_setitem_nonneg, vlist, cindex, vitem)
         return vlist
 
     def getitem_internal(self, llops, v_tuple, index):
