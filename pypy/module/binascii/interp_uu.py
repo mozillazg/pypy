@@ -5,10 +5,9 @@ from pypy.module.binascii.interp_binascii import raise_Error
 # ____________________________________________________________
 
 def _a2b_read(space, s, index):
-    try:
-        c = s[index]
-    except IndexError:
+    if index >= len(s):
         return 0
+    c = s[index]
     # Check the character for legality.  The 64 instead of the expected 63
     # is because there are a few uuencodes out there that use '`' as zero
     # instead of space.
@@ -57,11 +56,10 @@ def a2b_uu(space, ascii):
 # ____________________________________________________________
 
 def _b2a_read(bin, i):
-    try:
-        return ord(bin[i])
-    except IndexError:
+    if i >= len(bin):
         return 0
-_a2b_read._always_inline_ = True
+    return ord(bin[i])
+_b2a_read._always_inline_ = True
 
 @unwrap_spec(bin='bufferstr')
 def b2a_uu(space, bin):
