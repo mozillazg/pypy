@@ -34,6 +34,13 @@ class ListIndexError(Exception):
     """A custom RPython class, raised by getitem() and similar methods
     from listobject.py, and from getuindex() below."""
 
+def getuindex_nonneg(lst, index):
+    ulength = len(lst)
+    uindex = r_uint(index)
+    if uindex >= ulength:
+        raise ListIndexError
+    return uindex
+
 def getuindex(lst, index):
     ulength = r_uint(len(lst))
     uindex = r_uint(index)

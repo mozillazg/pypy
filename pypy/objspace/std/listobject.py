@@ -28,7 +28,7 @@ from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.tupleobject import W_AbstractTupleObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
 from pypy.objspace.std.util import get_positive_index, negate
-from pypy.objspace.std.util import ListIndexError, getuindex
+from pypy.objspace.std.util import ListIndexError, getuindex, getuindex_nonneg
 from rpython.rlib import debug, jit, rerased
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import (
@@ -1427,7 +1427,7 @@ class AbstractUnwrappedStrategy(object):
 
     def pop(self, w_list, index):
         l = self.unerase(w_list.lstorage)
-        uindex = getuindex(l, index)
+        uindex = getuindex_nonneg(l, index)
         item = l.pop(uindex)
         w_item = self.wrap(item)
         return w_item
