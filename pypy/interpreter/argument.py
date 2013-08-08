@@ -506,14 +506,15 @@ class ArgErrUnknownKwds(ArgErr):
                     name = keywords[i]
                     if name is None:
                         # We'll assume it's unicode. Encode it.
-                        # Careful, I *think* it should not be possible to
-                        # get an IndexError here but you never know.
-                        try:
-                            if keyword_names_w is None:
-                                raise IndexError
-                            # note: negative-based indexing from the end
-                            w_name = keyword_names_w[i - len(keywords)]
-                        except IndexError:
+                        w_name = None
+                        if keyword_names_w is not None:
+                            # note: indexing from the end
+                            index = len(keyword_names_w) + (i - len(keywords))
+                            # Careful, I *think* it should not be possible to
+                            # get a negative index here but you never know
+                            if index >= 0:
+                                w_name = keyword_names_w[index]
+                        if w_name is None:
                             name = '?'
                         else:
                             w_enc = space.wrap(space.sys.defaultencoding)
