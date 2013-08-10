@@ -654,6 +654,20 @@ class AppTestWithMapDict(object):
         del a.x
         raises(AttributeError, "a.x")
 
+    def test_del(self):
+        class A(object):
+            def __del__(self):
+                seen.append(1)
+        seen = []
+        a = ()
+        del a
+        for i in range(5):
+            if not seen:
+                import gc
+                gc.collect()
+        assert seen == [1]
+
+
 class AppTestWithMapDictAndCounters(object):
     spaceconfig = {"objspace.std.withmapdict": True,
                    "objspace.std.withmethodcachecounter": True,
