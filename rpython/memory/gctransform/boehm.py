@@ -68,12 +68,11 @@ class BoehmGCTransformer(GCTransformer):
                           resulttype=llmemory.Address)
         destructor_ptr = self.destructor_funcptr_for_type(TYPE)
         if destructor_ptr:
-            from rpython.rtyper.annlowlevel import base_ptr_lltype
+            from rpython.rtyper.lltypesystem.rclass import OBJECTPTR
             c_destructor_ptr = Constant(destructor_ptr, self.DESTRUCTOR_PTR)
             v_llfn = hop.genop('cast_ptr_to_adr', [c_destructor_ptr],
                                resulttype=llmemory.Address)
-            v_self = hop.genop('cast_adr_to_ptr', [v_raw],
-                               resulttype=base_ptr_lltype())
+            v_self = hop.genop('cast_adr_to_ptr', [v_raw], resulttype=OBJECTPTR)
             hop.genop("gc_register_finalizer", [v_self, v_llfn])
         return v_raw
 
