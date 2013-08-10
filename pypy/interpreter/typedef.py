@@ -236,6 +236,8 @@ def _builduserclswithfeature(config, supercls, *features):
             def setclass(self, space, w_subtype):
                 # only used by descr_set___class__
                 self.w__class__ = w_subtype
+                if w_subtype.has_del:
+                    self.register_finalizer()
 
             def user_setup(self, space, w_subtype):
                 self.space = space
@@ -302,10 +304,6 @@ def _builduserclswithfeature(config, supercls, *features):
                 self.w__dict__ = space.newdict(
                     instance=True)
                 base_user_setup(self, space, w_subtype)
-
-            def setclass(self, space, w_subtype):
-                # only used by descr_set___class__
-                self.w__class__ = w_subtype
 
         add(Proto)
 
