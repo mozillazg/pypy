@@ -281,7 +281,7 @@ class MiniMarkGC(MovingGCBase):
         # to this list, but will be removed again at the start of the next
         # minor collection.
         self.old_objects_pointing_to_young = self.AddressStack()
-        self.record_duplicates = False
+        self.record_duplicates = 0
         #
         # Similar to 'old_objects_pointing_to_young', but lists objects
         # that have the GCFLAG_CARDS_SET bit.  For large arrays.  Note
@@ -1539,7 +1539,7 @@ class MiniMarkGC(MovingGCBase):
             #
             # Avoid the following useless append(), unless we are tracing
             # from dying objects with finalizers
-            if self.record_duplicates:
+            if self.record_duplicates == 2:
                 self.old_objects_pointing_to_young.append(newobj)
             return
             #
@@ -1579,7 +1579,7 @@ class MiniMarkGC(MovingGCBase):
         # because it can contain further pointers to other young objects.
         # We will fix such references to point to the copy of the young
         # objects when we walk 'old_objects_pointing_to_young'.
-        if self.has_gcptr(typeid):
+        if self.has_gcptr(typeid) or self.record_duplicates != 0:
             # we only have to do it if we have any gcptrs
             self.old_objects_pointing_to_young.append(newobj)
     _trace_drag_out._always_inline_ = True
@@ -2013,6 +2013,7 @@ class MiniMarkGC(MovingGCBase):
             # 'self.old_objects_pointing_to_young' --- unless the object
             # survive, in which case it was already seen and the following
             # lines have no effect.
+            self.record_duplicates = 1
             root = self.temp_root
             root.address[0] = obj
             self._trace_drag_out1(root)
@@ -2024,7 +2025,10 @@ class MiniMarkGC(MovingGCBase):
             finalizer_funcs.setitem(objcopy, func)
             #
             # Now follow all the refs
+            self.record_duplicates = 2
             self._follow_references_from_young_object_with_finalizer()
+        #
+        self.record_duplicates = 0
         #
         # Copy the objects scheduled into 'run_finalizers_queue', in
         # reverse order.
@@ -2045,7 +2049,6 @@ class MiniMarkGC(MovingGCBase):
         finalizer_funcs.delete()
 
     def _follow_references_from_young_object_with_finalizer(self):
-        self.record_duplicates = True
         pending = self.old_objects_pointing_to_young
         while self.old_objects_with_cards_set.non_empty():
             pending.append(self.old_objects_with_cards_set.pop())
@@ -2080,7 +2083,6 @@ class MiniMarkGC(MovingGCBase):
         #
         ll_assert(not self.old_objects_with_cards_set.non_empty(),
                   "with_finalizer: old_objects_with_cards_set should be empty")
-        self.record_duplicates = False
 
     @staticmethod
     def _move_to_old_finalizer(obj, finalizer, old_objects_with_finalizers):

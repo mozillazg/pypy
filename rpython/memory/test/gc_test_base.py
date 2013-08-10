@@ -225,6 +225,7 @@ class GCTest(object):
                 self.id = b.nextid
                 b.nextid += 1
             def finalizer(self):
+                debug_print("finalize!")
                 if b.num_deleted > b.num_finalized:
                     debug_print("Oups! num_deleted =", b.num_deleted,
                                 "but num_finalized =", b.num_finalized)
