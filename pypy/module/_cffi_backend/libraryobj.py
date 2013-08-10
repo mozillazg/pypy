@@ -4,6 +4,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef
+from pypy.module._rawffi.interp_rawffi import wrap_dlopenerror
 
 from rpython.rtyper.lltypesystem import rffi
 from rpython.rlib.rdynload import DLLHANDLE, dlopen, dlsym, dlclose, DLOpenError
@@ -25,9 +26,7 @@ class W_Library(W_Root):
             try:
                 self.handle = dlopen(ll_libname, flags)
             except DLOpenError, e:
-                raise operationerrfmt(space.w_OSError,
-                                      "cannot load library %s: %s",
-                                      filename, e.msg)
+                raise wrap_dlopenerror(space, e, filename)
         self.name = filename
         rgc.register_finalizer(self.finalizer)
 

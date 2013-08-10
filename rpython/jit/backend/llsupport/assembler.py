@@ -2,7 +2,7 @@ from rpython.jit.backend.llsupport import jitframe
 from rpython.jit.backend.llsupport.memcpy import memcpy_fn
 from rpython.jit.backend.llsupport.symbolic import WORD
 from rpython.jit.metainterp.history import (INT, REF, FLOAT, JitCellToken,
-    ConstInt, BoxInt)
+    ConstInt, BoxInt, AbstractFailDescr)
 from rpython.jit.metainterp.resoperation import ResOperation, rop
 from rpython.rlib import rgc
 from rpython.rlib.debug import (debug_start, debug_stop, have_debug_prints,
@@ -24,6 +24,7 @@ DEBUG_COUNTER = lltype.Struct('DEBUG_COUNTER',
 class GuardToken(object):
     def __init__(self, cpu, gcmap, faildescr, failargs, fail_locs, exc,
                  frame_depth, is_guard_not_invalidated, is_guard_not_forced):
+        assert isinstance(faildescr, AbstractFailDescr)
         self.cpu = cpu
         self.faildescr = faildescr
         self.failargs = failargs
@@ -47,7 +48,7 @@ class GuardToken(object):
             input_i += 1
             if arg.type == REF:
                 loc = fail_locs[i]
-                if loc.is_reg():
+                if loc.is_core_reg():
                     val = self.cpu.all_reg_indexes[loc.value]
                 else:
                     val = loc.get_position() + self.cpu.JITFRAME_FIXED_SIZE
@@ -106,10 +107,13 @@ class BaseAssembler(object):
                 kind='unicode')
         else:
             self.malloc_slowpath_unicode = None
+        self.cond_call_slowpath = [self._build_cond_call_slowpath(False, False),
+                                   self._build_cond_call_slowpath(False, True),
+                                   self._build_cond_call_slowpath(True, False),
+                                   self._build_cond_call_slowpath(True, True)]
 
         self._build_stack_check_slowpath()
-        if gc_ll_descr.gcrootmap:
-            self._build_release_gil(gc_ll_descr.gcrootmap)
+        self._build_release_gil(gc_ll_descr.gcrootmap)
         if not self._debug:
             # if self._debug is already set it means that someone called
             # set_debug by hand before initializing the assembler. Leave it
@@ -229,11 +233,8 @@ class BaseAssembler(object):
 
         jmp_location = self._call_assembler_patch_je(result_loc, je_location)
 
-        # Path B: fast path.  Must load the return value, and reset the token
+        # Path B: fast path.  Must load the return value
 
-        # Reset the vable token --- XXX really too much special logic here:-(
-        if jd.index_of_virtualizable >= 0:
-            self._call_assembler_reset_vtoken(jd, vloc)
         #
         self._call_assembler_load_result(op, result_loc)
         #
@@ -348,12 +349,19 @@ class BaseAssembler(object):
         if after:
             after()
 
+    @staticmethod
+    def _no_op():
+        pass
+
     _NOARG_FUNC = lltype.Ptr(lltype.FuncType([], lltype.Void))
     _CLOSESTACK_FUNC = lltype.Ptr(lltype.FuncType([rffi.LONGP],
                                                   lltype.Void))
 
     def _build_release_gil(self, gcrootmap):
-        if gcrootmap.is_shadow_stack:
+        if gcrootmap is None:
+            releasegil_func = llhelper(self._NOARG_FUNC, self._no_op)
+            reacqgil_func = llhelper(self._NOARG_FUNC, self._no_op)
+        elif gcrootmap.is_shadow_stack:
             releasegil_func = llhelper(self._NOARG_FUNC,
                                        self._release_gil_shadowstack)
             reacqgil_func = llhelper(self._NOARG_FUNC,
@@ -366,6 +374,9 @@ class BaseAssembler(object):
         self.releasegil_addr  = self.cpu.cast_ptr_to_int(releasegil_func)
         self.reacqgil_addr = self.cpu.cast_ptr_to_int(reacqgil_func)
 
+    def _is_asmgcc(self):
+        gcrootmap = self.cpu.gc_ll_descr.gcrootmap
+        return bool(gcrootmap) and not gcrootmap.is_shadow_stack
 
 
 def debug_bridge(descr_number, rawstart, codeendpos):

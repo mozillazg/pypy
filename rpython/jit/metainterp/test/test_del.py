@@ -2,7 +2,7 @@ import py
 from rpython.rlib.jit import JitDriver, dont_look_inside
 from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib import rgc
-from rpython.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from rpython.jit.metainterp.test.support import LLJitMixin
 
 
 class DelTests:
@@ -150,9 +150,3 @@ class TestLLtype(DelTests, LLJitMixin):
         assert main(10) == 30
         res = self.meta_interp(main, [20])
         assert res >= 54
-
-
-class TestOOtype(DelTests, OOJitMixin):
-    def setup_class(cls):
-        py.test.skip("XXX dels are not implemented in the"
-                     " static CLI or JVM backend")

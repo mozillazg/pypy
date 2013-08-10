@@ -75,6 +75,7 @@ class GCBase(object):
                             has_custom_trace,
                             get_custom_trace,
                             fast_path_tracing,
+                            has_gcptr,
                             call_finalizer):
         self.getdestructor = getdestructor
         self.is_varsize = is_varsize
@@ -92,6 +93,7 @@ class GCBase(object):
         self.has_custom_trace = has_custom_trace
         self.get_custom_trace = get_custom_trace
         self.fast_path_tracing = fast_path_tracing
+        self.has_gcptr = has_gcptr
         self.call_finalizer = call_finalizer
 
     def get_member_index(self, type_id):

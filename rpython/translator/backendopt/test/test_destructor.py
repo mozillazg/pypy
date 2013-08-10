@@ -10,18 +10,16 @@ from rpython.conftest import option
 from rpython.rlib import rgc
 
 
-class BaseDestructorAnalyzerTests(object):
+class TestDestructorAnalyzer(object):
     """ Below are typical destructors that we encounter in pypy
     """
 
-    type_system = None
-    
     def analyze(self, func, sig, func_to_analyze=None, backendopt=False):
         if func_to_analyze is None:
             func_to_analyze = func
         t = TranslationContext()
         t.buildannotator().build_types(func, sig)
-        t.buildrtyper(type_system=self.type_system).specialize()
+        t.buildrtyper().specialize()
         if backendopt:
             backend_optimizations(t)
         if option.view:
@@ -61,14 +59,10 @@ def test_various_ops():
                                                           v3], None))
     assert not f.analyze(SpaceOperation('bare_setfield', [v1, Constant('z'),
                                                           v4], None))
-    
-        
-class TestLLType(BaseDestructorAnalyzerTests):
-    type_system = 'lltype'
 
     def test_malloc(self):
         S = lltype.GcStruct('S')
-        
+
         def f():
             return lltype.malloc(S)
 
@@ -77,7 +71,7 @@ class TestLLType(BaseDestructorAnalyzerTests):
 
     def test_raw_free_getfield(self):
         S = lltype.Struct('S')
-        
+
         class A(object):
             def __init__(self):
                 self.x = lltype.malloc(S, flavor='raw')
@@ -100,7 +94,7 @@ class TestLLType(BaseDestructorAnalyzerTests):
         def g():
             p = lltype.malloc(C, 3, flavor='raw')
             f(p)
-        
+
         def f(p):
             c(rffi.ptradd(p, 0))
             lltype.free(p, flavor='raw')
@@ -140,7 +134,7 @@ class TestLLType(BaseDestructorAnalyzerTests):
         class B(object):
             def __init__(self):
                 self.counter = 1
-        
+
         class A(object):
             def __init__(self):
                 self.x = B()
@@ -153,7 +147,3 @@ class TestLLType(BaseDestructorAnalyzerTests):
 
         r = self.analyze(f, [], A.__del__.im_func)
         assert r
-
-
-class TestOOType(BaseDestructorAnalyzerTests):
-    type_system = 'ootype'
