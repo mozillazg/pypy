@@ -247,12 +247,7 @@ def _builduserclswithfeature(config, supercls, *features):
                     self.register_finalizer()
 
             def invoke_finalizer(self):
-                space = self.space
-                w_descr = space.lookup(self, '__del__')
-                if w_descr is not None:
-                    self.finalizer_perform(self.space, "__del__ method of ",
-                                           space.get_and_call_function,
-                                           w_descr, self)
+                self._finalizer_perform_del(self.space)
                 super_invoke_finalizer(self)
 
             def user_setup_slots(self, nslots):

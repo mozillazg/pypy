@@ -415,6 +415,12 @@ class BaseMapdictObject:
         assert (not self.typedef.hasdict or
                 self.typedef is W_InstanceObject.typedef)
         self._init_empty(w_subtype.terminator)
+        if w_subtype.has_del:
+            self.register_finalizer()
+
+    def invoke_finalizer(self):
+        self._finalizer_perform_del(self.space)
+        self._super_invoke_finalizer()
 
     def getslotvalue(self, index):
         key = ("slot", SLOTS_STARTING_FROM + index)
@@ -517,7 +523,12 @@ def _make_subclass_size_n(supercls, n):
     rangen = unroll.unrolling_iterable(range(n))
     nmin1 = n - 1
     rangenmin1 = unroll.unrolling_iterable(range(nmin1))
+
     class subcls(BaseMapdictObject, supercls):
+        _super_invoke_finalizer = supercls.invoke_finalizer.im_func
+        if _super_invoke_finalizer == W_Root.invoke_finalizer.im_func:
+            _super_invoke_finalizer = lambda self: None
+
         def _init_empty(self, map):
             from rpython.rlib.debug import make_sure_not_resized
             for i in rangen:

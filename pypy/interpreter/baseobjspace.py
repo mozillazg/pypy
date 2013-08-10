@@ -167,6 +167,14 @@ class W_Root(object):
     def invoke_finalizer(self):
         raise NotImplementedError    # must be overridden
 
+    def _finalizer_perform_del(self, space):
+        """Invoke the app-level __del__."""
+        w_descr = space.lookup(self, '__del__')
+        if w_descr is not None:
+            self.finalizer_perform(space, "__del__ method of ",
+                                   space.get_and_call_function,
+                                   w_descr, self)
+
     def finalizer_perform(self, space, descrname, callback, *args):
         """For use in invoke_finalizer().  First check if we're called
         from the random execution of a __del__ or from UserDelAction,

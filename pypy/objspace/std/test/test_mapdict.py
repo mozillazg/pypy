@@ -14,6 +14,7 @@ space = FakeSpace()
 space.config = Config
 
 class Class(object):
+    has_del = False
     def __init__(self, hasdict=True):
         self.hasdict = True
         if hasdict:
