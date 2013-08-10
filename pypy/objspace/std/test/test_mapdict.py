@@ -659,8 +659,7 @@ class AppTestWithMapDict(object):
             def __del__(self):
                 seen.append(1)
         seen = []
-        a = ()
-        del a
+        A()
         for i in range(5):
             if not seen:
                 import gc
