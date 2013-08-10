@@ -214,18 +214,20 @@ def _builduserclswithfeature(config, supercls, *features):
                     value = func_with_new_name(value, value.func_name)
                 body[key] = value
 
+    super_invoke_finalizer = supercls.invoke_finalizer.im_func
+    if super_invoke_finalizer == W_Root.invoke_finalizer.im_func:
+        super_invoke_finalizer = lambda self: None
+
     if (config.objspace.std.withmapdict and "dict" in features):
         from pypy.objspace.std.mapdict import BaseMapdictObject, ObjectMixin
         add(BaseMapdictObject)
         add(ObjectMixin)
         body["user_overridden_class"] = True
+        body["_super_invoke_finalizer"] = super_invoke_finalizer
+        assert not hasattr(supercls, '_super_invoke_finalizer')
         features = ()
 
     if "user" in features:     # generic feature needed by all subcls
-
-        super_invoke_finalizer = supercls.invoke_finalizer.im_func
-        if super_invoke_finalizer == W_Root.invoke_finalizer.im_func:
-            super_invoke_finalizer = lambda self: None
 
         class Proto(object):
             user_overridden_class = True

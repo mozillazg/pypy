@@ -478,7 +478,8 @@ class ObjectMixin(object):
         self.map = map
 
 class Object(ObjectMixin, BaseMapdictObject, W_Root):
-    pass # mainly for tests
+    # mainly for tests
+    _super_invoke_finalizer = lambda self: None
 
 def get_subclass_of_correct_size(space, cls, w_type):
     assert space.config.objspace.std.withmapdict
