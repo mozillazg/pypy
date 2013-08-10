@@ -382,13 +382,12 @@ class RegisterFinalizerEntry(ExtRegistryEntry):
         return annmodel.s_None
 
     def specialize_call(self, hop):
-        from rpython.rtyper.annlowlevel import base_ptr_lltype
+        from rpython.rtyper.lltypesystem.rclass import OBJECTPTR
         [v_self] = hop.inputargs(hop.args_r[0])
         r_func, is_method = hop.args_r[0].get_r_implfunc()
         assert is_method
         c_llfn = r_func.get_unique_llfn()
-        v_self = hop.genop('cast_pointer', [v_self],
-                           resulttype=base_ptr_lltype())
+        v_self = hop.genop('cast_pointer', [v_self], resulttype=OBJECTPTR)
         hop.exception_cannot_occur()
         return hop.genop('gc_register_finalizer', [v_self, c_llfn],
                          resulttype=lltype.Void)
