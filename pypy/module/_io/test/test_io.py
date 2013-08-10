@@ -88,7 +88,7 @@ class AppTestIoModule:
         class MyIO(io.IOBase):
             def __del__(self):
                 record.append(1)
-                super(MyIO, self).__del__()
+                #super(MyIO, self).__del__() --- does not exist
             def close(self):
                 record.append(2)
                 super(MyIO, self).close()
