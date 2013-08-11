@@ -13,6 +13,22 @@ class TestMiniMarkGC(test_semispace_gc.TestSemiSpaceGC):
     GC_CAN_MALLOC_NONMOVABLE = True
     BUT_HOW_BIG_IS_A_BIG_STRING = 11*WORD
 
+    def test_finalizer_young_obj(self):
+        class A:
+            def __del__(self):
+                state.seen += 1
+        class State:
+            pass
+        state = State()
+
+        def f():
+            state.seen = 0
+            A(); A()
+            rgc.collect(0)    # minor collection only
+            return state.seen
+
+        assert self.interpret(f, []) == 2
+
     def test_finalizer_chain_minor_collect(self):
         class A:
             def __init__(self, n, next):
