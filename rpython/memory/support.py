@@ -143,6 +143,30 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 count = chunk_size
         foreach._annspecialcase_ = 'specialize:arg(1)'
 
+        def filter(self, callback, arg):
+            """Invoke 'callback(address, arg)' for all addresses in the stack.
+            When it returns False, remove the item from the stack (by
+            replacing it with self.pop(), so the order is destroyed).
+            Typically, 'callback' is a bound method and 'arg' can be None.
+            """
+            chunk = self.chunk
+            count = self.used_in_last_chunk
+            while chunk:
+                nextchunk = chunk.next
+                while count > 0:
+                    count -= 1
+                    if not callback(chunk.items[count], arg):
+                        # a version of pop-and-put-back-at-chunk.items[count]
+                        used = self.used_in_last_chunk - 1
+                        ll_assert(used >= 0, "pop on empty AddressStack [2]")
+                        chunk.items[count] = self.chunk.items[used]
+                        self.used_in_last_chunk = used
+                        if used == 0 and self.chunk.next:
+                            self.shrink()
+                chunk = nextchunk
+                count = chunk_size
+        filter._annspecialcase_ = 'specialize:arg(1)'
+
         def stack2dict(self):
             result = AddressDict(self._length_estimate())
             self.foreach(_add_in_dict, result)

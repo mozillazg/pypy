@@ -1602,17 +1602,11 @@ class MiniMarkGC(MovingGCBase):
         self.free_rawmalloced_object_if_unvisited(obj)
 
     def remove_young_arrays_from_old_objects_pointing_to_young(self):
-        old = self.old_objects_pointing_to_young
-        new = self.AddressStack()
-        while old.non_empty():
-            obj = old.pop()
-            if not self.young_rawmalloced_objects.contains(obj):
-                new.append(obj)
-        # an extra copy, to avoid assignments to
-        # 'self.old_objects_pointing_to_young'
-        while new.non_empty():
-            old.append(new.pop())
-        new.delete()
+        self.old_objects_pointing_to_young.filter(self._filter_young_array,
+                                                  None)
+
+    def _filter_young_array(self, obj, ignored):
+        return not self.young_rawmalloced_objects.contains(obj)
 
     # ----------
     # Full collection

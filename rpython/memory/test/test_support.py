@@ -78,6 +78,32 @@ class TestAddressStack(object):
         ll.foreach(callback, 42)
         assert seen == addrs or seen[::-1] == addrs   # order not guaranteed
 
+    def test_filter(self):
+        import random
+        AddressStack = get_address_stack()
+        addrs = [raw_malloc(llmemory.sizeof(lltype.Signed))
+                 for i in range(1500)]
+        addrset = set(addrs)
+
+        for kept in [0.0, 0.5, 1.0]:
+            ll = AddressStack()
+            for i in range(1500):
+                ll.append(addrs[i])
+
+            keep = set([a for a in addrs if random.random() < kept])
+
+            def filter(addr, fortytwo):
+                assert fortytwo == 42
+                assert addr in addrset
+                return addr in keep
+
+            ll.filter(filter, 42)
+
+            seen = set()
+            while ll.non_empty():
+                seen.add(ll.pop())
+            assert seen == keep
+
     def test_remove(self):
         AddressStack = get_address_stack()
         addrs = [raw_malloc(llmemory.sizeof(lltype.Signed))
