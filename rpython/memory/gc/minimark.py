@@ -124,7 +124,13 @@ GCFLAG_CARDS_SET    = first_gcflag << 7     # <- at least one card bit is set
 # note that GCFLAG_CARDS_SET is the most significant bit of a byte:
 # this is required for the JIT (x86)
 
-_GCFLAG_FIRST_UNUSED = first_gcflag << 8    # the first unused bit
+# The following flag is used to distinguish the two categories of objects
+# in 'young_objects_not_in_nursery'.  Set on a new object that is young and
+# raw-malloced.  It may be set or not on old raw-malloced objects.  It must
+# never be set on objects in the minimarkpage arena.
+GCFLAG_YOUNG_RAW_MALLOCED = first_gcflag << 8
+
+_GCFLAG_FIRST_UNUSED = first_gcflag << 9    # the first unused bit
 
 
 FORWARDSTUB = lltype.GcStruct('forwarding_stub',
@@ -304,10 +310,16 @@ class MiniMarkGC(MovingGCBase):
         # we implement differently anyway.  So directly call GCBase.setup().
         GCBase.setup(self)
         #
-        # Two lists of all raw_malloced objects (the objects too large)
-        self.young_rawmalloced_objects = self.null_address_dict()
+        # A list of the old raw_malloced objects (the objects too large)
         self.old_rawmalloced_objects = self.AddressStack()
         self.rawmalloced_total_size = r_uint(0)
+        #
+        # A dict that contains all young objects not in the nursery.  These
+        # are often young big objects allocated directly with raw_malloc,
+        # but may also contain objects from the minimarkpage arena: if they
+        # are found to be only reachable from unreferenced objects with
+        # finalizers, they are made young again.
+        self.young_objects_not_in_nursery = self.null_address_dict()
         #
         # A list of all objects with finalizers (these are never young).
         self.objects_with_finalizers = self.AddressDeque()
@@ -788,9 +800,10 @@ class MiniMarkGC(MovingGCBase):
             # The object is young or old depending on the argument.
             self.rawmalloced_total_size += r_uint(allocsize)
             if can_make_young:
-                if not self.young_rawmalloced_objects:
-                    self.young_rawmalloced_objects = self.AddressDict()
-                self.young_rawmalloced_objects.add(result + size_gc_header)
+                if not self.young_objects_not_in_nursery:
+                    self.young_objects_not_in_nursery = self.AddressDict()
+                self.young_objects_not_in_nursery.add(result + size_gc_header)
+                extra_flags |= GCFLAG_YOUNG_RAW_MALLOCED
             else:
                 self.old_rawmalloced_objects.append(result + size_gc_header)
                 extra_flags |= GCFLAG_TRACK_YOUNG_PTRS
@@ -923,9 +936,9 @@ class MiniMarkGC(MovingGCBase):
         if self.nursery <= addr < self.nursery_real_top:
             return True      # addr is in the nursery
         #
-        # Else, it may be in the set 'young_rawmalloced_objects'
-        return (bool(self.young_rawmalloced_objects) and
-                self.young_rawmalloced_objects.contains(addr))
+        # Else, it may be in the set 'young_objects_not_in_nursery'
+        return (bool(self.young_objects_not_in_nursery) and
+                self.young_objects_not_in_nursery.contains(addr))
     appears_to_be_young._always_inline_ = True
 
     def debug_is_old_object(self, addr):
@@ -981,8 +994,8 @@ class MiniMarkGC(MovingGCBase):
 
     def debug_check_consistency(self):
         if self.DEBUG:
-            ll_assert(not self.young_rawmalloced_objects,
-                      "young raw-malloced objects in a major collection")
+            ll_assert(not self.young_objects_not_in_nursery,
+                      "young objects not in nursery in a major collection")
             ll_assert(not self.young_objects_with_weakrefs.non_empty(),
                       "young objects with weakrefs in a major collection")
             MovingGCBase.debug_check_consistency(self)
@@ -1286,7 +1299,7 @@ class MiniMarkGC(MovingGCBase):
         #
         # Before everything else, remove from 'old_objects_pointing_to_young'
         # the young arrays.
-        if self.young_rawmalloced_objects:
+        if self.young_objects_not_in_nursery:
             self.remove_young_arrays_from_old_objects_pointing_to_young()
         #
         # First, find the roots that point to young objects.  All nursery
@@ -1331,8 +1344,8 @@ class MiniMarkGC(MovingGCBase):
         #
         # Walk the list of young raw-malloced objects, and either free
         # them or make them old.
-        if self.young_rawmalloced_objects:
-            self.free_young_rawmalloced_objects()
+        if self.young_objects_not_in_nursery:
+            self.free_young_objects_not_in_nursery()
         #
         # All live nursery objects are out, and the rest dies.  Fill
         # the nursery up to the cleanup point with zeros
@@ -1468,13 +1481,13 @@ class MiniMarkGC(MovingGCBase):
         # that we must set GCFLAG_VISITED on young raw-malloced objects.
         if not self.is_in_nursery(obj):
             # cache usage trade-off: I think that it is a better idea to
-            # check if 'obj' is in young_rawmalloced_objects with an access
+            # check if 'obj' is in young_objects_not_in_nursery with an access
             # to this (small) dictionary, rather than risk a lot of cache
             # misses by reading a flag in the header of all the 'objs' that
             # arrive here.
-            if (bool(self.young_rawmalloced_objects)
-                and self.young_rawmalloced_objects.contains(obj)):
-                self._visit_young_rawmalloced_object(obj)
+            if (bool(self.young_objects_not_in_nursery)
+                and self.young_objects_not_in_nursery.contains(obj)):
+                self._visit_young_object_not_in_nursery(obj)
             return
         #
         size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -1535,7 +1548,7 @@ class MiniMarkGC(MovingGCBase):
             self.old_objects_pointing_to_young.append(newobj)
     _trace_drag_out._always_inline_ = True
 
-    def _visit_young_rawmalloced_object(self, obj):
+    def _visit_young_object_not_in_nursery(self, obj):
         # 'obj' points to a young, raw-malloced object.
         # Any young rawmalloced object never seen by the code here
         # will end up without GCFLAG_VISITED, and be freed at the
@@ -1590,23 +1603,26 @@ class MiniMarkGC(MovingGCBase):
         self.old_rawmalloced_objects.append(arena + size_gc_header)
         return arena
 
-    def free_young_rawmalloced_objects(self):
-        self.young_rawmalloced_objects.foreach(
-            self._free_young_rawmalloced_obj, None)
-        self.young_rawmalloced_objects.delete()
-        self.young_rawmalloced_objects = self.null_address_dict()
+    def free_young_objects_not_in_nursery(self):
+        self.young_objects_not_in_nursery.foreach(
+            self._free_young_object_not_in_nursery, None)
+        self.young_objects_not_in_nursery.delete()
+        self.young_objects_not_in_nursery = self.null_address_dict()
 
-    def _free_young_rawmalloced_obj(self, obj, ignored1, ignored2):
+    def _free_young_object_not_in_nursery(self, obj, ignored1, ignored2):
         # If 'obj' has GCFLAG_VISITED, it was seen by _trace_drag_out
         # and survives.  Otherwise, it dies.
-        self.free_rawmalloced_object_if_unvisited(obj)
+        if self.header(obj).tid & GCFLAG_YOUNG_RAW_MALLOCED:
+            self.free_rawmalloced_object_if_unvisited(obj)
+        else:
+            xxxxx
 
     def remove_young_arrays_from_old_objects_pointing_to_young(self):
         self.old_objects_pointing_to_young.filter(self._filter_young_array,
                                                   None)
 
     def _filter_young_array(self, obj, ignored):
-        return not self.young_rawmalloced_objects.contains(obj)
+        return not self.young_objects_not_in_nursery.contains(obj)
 
     # ----------
     # Full collection
@@ -2062,8 +2078,8 @@ class MiniMarkGC(MovingGCBase):
                     (obj + offset).address[0] = llmemory.NULL
                     continue    # no need to remember this weakref any longer
             #
-            elif (bool(self.young_rawmalloced_objects) and
-                  self.young_rawmalloced_objects.contains(pointing_to)):
+            elif (bool(self.young_objects_not_in_nursery) and
+                  self.young_objects_not_in_nursery.contains(pointing_to)):
                 # young weakref to a young raw-malloced object
                 if self.header(pointing_to).tid & GCFLAG_VISITED:
                     pass    # survives, but does not move
