@@ -21,9 +21,13 @@ class TestMiniMarkGC(test_semispace_gc.TestSemiSpaceGC):
             pass
         state = State()
 
+        def make():
+            A()
+            A()
+
         def f():
             state.seen = 0
-            A(); A()
+            make()
             rgc.collect(0)    # minor collection only
             return state.seen
 
