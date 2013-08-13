@@ -1599,6 +1599,7 @@ class RegisterOs(BaseLazyRegistering):
                                   _nowrapper = True)
 
         def fork_llimpl():
+            # NB. keep forkpty() up-to-date, too
             opaqueaddr = rthread.gc_thread_before_fork()
             childpid = rffi.cast(lltype.Signed, os_fork())
             rthread.gc_thread_after_fork(childpid, opaqueaddr)
@@ -1634,6 +1635,7 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'forkpty')
     def register_os_forkpty(self):
+        from rpython.rlib import rthread
         os_forkpty = self.llexternal(
             'forkpty',
             [rffi.INTP, rffi.VOIDP, rffi.VOIDP, rffi.VOIDP],
@@ -1641,7 +1643,10 @@ class RegisterOs(BaseLazyRegistering):
             compilation_info=ExternalCompilationInfo(libraries=['util']))
         def forkpty_llimpl():
             master_p = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
-            childpid = os_forkpty(master_p, None, None, None)
+            opaqueaddr = rthread.gc_thread_before_fork()
+            childpid = rffi.cast(lltype.Signed,
+                                 os_forkpty(master_p, None, None, None))
+            rthread.gc_thread_after_fork(childpid, opaqueaddr)
             master_fd = master_p[0]
             lltype.free(master_p, flavor='raw')
             if childpid == -1:
