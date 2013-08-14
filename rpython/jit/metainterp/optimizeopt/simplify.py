@@ -10,6 +10,7 @@ class OptSimplify(Optimization):
 
     def emit_operation(self, op):
         if op.is_guard():
+            # XXX WTF is that?
             if self.optimizer.pendingfields is None:
                 self.optimizer.pendingfields = []
         Optimization.emit_operation(self, op)
@@ -45,7 +46,7 @@ class OptSimplify(Optimization):
                 return self.optimize_JUMP(op.copy_and_change(rop.JUMP))
             self.last_label_descr = op.getdescr()
         self.emit_operation(op)
-        
+
     def optimize_JUMP(self, op):
         if not self.unroll:
             descr = op.getdescr()
@@ -61,6 +62,5 @@ class OptSimplify(Optimization):
                 op.setdescr(descr.target_tokens[0])
         self.emit_operation(op)
 
-dispatch_opt = make_dispatcher_method(OptSimplify, 'optimize_',
-        default=OptSimplify.emit_operation)
+dispatch_opt = make_dispatcher_method(OptSimplify, 'optimize_', emit_op=True)
 OptSimplify.propagate_forward = dispatch_opt

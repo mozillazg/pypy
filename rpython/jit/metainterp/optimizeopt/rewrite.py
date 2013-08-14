@@ -526,5 +526,5 @@ class OptRewrite(Optimization):
         self.make_equal_to(op.result, self.getvalue(op.getarg(0)))
 
 dispatch_opt = make_dispatcher_method(OptRewrite, 'optimize_',
-        default=OptRewrite.emit_operation)
+        emit_op=True)
 optimize_guards = _findall(OptRewrite, 'optimize_', 'GUARD')

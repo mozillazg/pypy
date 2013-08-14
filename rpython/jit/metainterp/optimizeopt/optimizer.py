@@ -372,6 +372,7 @@ class Optimizer(Optimization):
             for i in range(1, len(optimizations)):
                 optimizations[i - 1].next_optimization = optimizations[i]
             optimizations[-1].next_optimization = self
+
             for o in optimizations:
                 o.optimizer = self
                 o.last_emitted_operation = None
@@ -514,6 +515,22 @@ class Optimizer(Optimization):
             self.clear_newoperations()
         for op in self.loop.operations:
             self.first_optimization.propagate_forward(op)
+            #            for opt in self.optimizations:
+            #    func = getattr(opt, 'optimize_' + op.getopname().upper(), None)
+            #    if func is not None:
+            #        op = func(op)
+            #        if op is None:
+            #            break
+            #        op = opt.emitted_operation(op)
+            #        if op is None:
+            #            break
+            #else:
+            #    self._emit_operation(op)
+            #for opt in self.optimizations:
+            #    func = getattr(opt, 'postprocess_' + op.getopname().upper(),
+            #                   None)
+            #    if func:
+            #       func(op)
         self.loop.operations = self.get_newoperations()
         self.loop.quasi_immutable_deps = self.quasi_immutable_deps
         # accumulate counters
@@ -623,9 +640,6 @@ class Optimizer(Optimization):
         args[n + 1] = op.getdescr()
         return args
 
-    def optimize_default(self, op):
-        self.emit_operation(op)
-
     def constant_fold(self, op):
         argboxes = [self.get_constant_box(op.getarg(i))
                     for i in range(op.numargs())]
@@ -647,21 +661,21 @@ class Optimizer(Optimization):
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
             arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(), indexvalue.box.getint())
-        self.optimize_default(op)
+        self.emit_operation(op)
 
     def optimize_STRGETITEM(self, op):
         indexvalue = self.getvalue(op.getarg(1))
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
             arrayvalue.make_len_gt(MODE_STR, op.getdescr(), indexvalue.box.getint())
-        self.optimize_default(op)
+        self.emit_operation(op)
 
     def optimize_UNICODEGETITEM(self, op):
         indexvalue = self.getvalue(op.getarg(1))
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
             arrayvalue.make_len_gt(MODE_UNICODE, op.getdescr(), indexvalue.box.getint())
-        self.optimize_default(op)
+        self.emit_operation(op)
 
     # These are typically removed already by OptRewrite, but it can be
     # dissabled and unrolling emits some SAME_AS ops to setup the
@@ -673,8 +687,7 @@ class Optimizer(Optimization):
         value = self.getvalue(op.getarg(0))
         self.optimizer.opaque_pointers[value] = True
 
-dispatch_opt = make_dispatcher_method(Optimizer, 'optimize_',
-        default=Optimizer.optimize_default)
+dispatch_opt = make_dispatcher_method(Optimizer, 'optimize_', emit_op=True)
 
 
 

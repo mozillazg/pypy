@@ -19,10 +19,6 @@ class OptIntBounds(Optimization):
     def propagate_forward(self, op):
         dispatch_opt(self, op)
 
-    def opt_default(self, op):
-        assert not op.is_ovf()
-        self.emit_operation(op)
-
     def propagate_bounds_backward(self, box):
         # FIXME: This takes care of the instruction where box is the reuslt
         #        but the bounds produced by all instructions where box is
@@ -473,6 +469,5 @@ class OptIntBounds(Optimization):
     propagate_bounds_INT_MUL_OVF = propagate_bounds_INT_MUL
 
 
-dispatch_opt = make_dispatcher_method(OptIntBounds, 'optimize_',
-        default=OptIntBounds.opt_default)
+dispatch_opt = make_dispatcher_method(OptIntBounds, 'optimize_', emit_op=True)
 dispatch_bounds_ops = make_dispatcher_method(OptIntBounds, 'propagate_bounds_')

@@ -26,7 +26,8 @@ def _findall(Class, name_prefix, op_prefix=None):
             result.append((value, opclass, getattr(Class, name_prefix + name)))
     return unrolling_iterable(result)
 
-def make_dispatcher_method(Class, name_prefix, op_prefix=None, default=None):
+def make_dispatcher_method(Class, name_prefix, op_prefix=None, emit_op=False,
+                           default=None):
     ops = _findall(Class, name_prefix, op_prefix)
     def dispatch(self, op, *args):
         if we_are_translated():
@@ -37,12 +38,16 @@ def make_dispatcher_method(Class, name_prefix, op_prefix=None, default=None):
                     return func(self, op, *args)
             if default:
                 return default(self, op, *args)
+            elif emit_op:
+                return self.emit_operation(op, *args)
         else:
             func = getattr(Class, name_prefix + op.getopname().upper(), None)
             if func is not None:
                 return func(self, op, *args)
             if default:
                 return default(self, op, *args)
+            elif emit_op:
+                return self.emit_operation(op, *args)
     dispatch.func_name = "dispatch_" + name_prefix
     return dispatch
 

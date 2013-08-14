@@ -826,7 +826,6 @@ class OptVirtualize(optimizer.Optimization):
         self.emit_operation(op)
 
 
-dispatch_opt = make_dispatcher_method(OptVirtualize, 'optimize_',
-        default=OptVirtualize.emit_operation)
+dispatch_opt = make_dispatcher_method(OptVirtualize, 'optimize_', emit_op=True)
 
 OptVirtualize.propagate_forward = dispatch_opt

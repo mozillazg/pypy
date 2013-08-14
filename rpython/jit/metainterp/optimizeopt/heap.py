@@ -510,5 +510,5 @@ class OptHeap(Optimization):
 
 
 dispatch_opt = make_dispatcher_method(OptHeap, 'optimize_',
-        default=OptHeap.emit_operation)
+        emit_op=True)
 OptHeap.propagate_forward = dispatch_opt

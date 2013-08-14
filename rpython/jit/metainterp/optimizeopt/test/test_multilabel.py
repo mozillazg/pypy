@@ -490,7 +490,7 @@ class OptRenameStrlen(Optimization):
         self.make_equal_to(op.result, self.getvalue(newop.result))
 
 dispatch_opt = make_dispatcher_method(OptRenameStrlen, 'optimize_',
-                                      default=OptRenameStrlen.emit_operation)
+                                      emit_op=True)
 
 class BaseTestOptimizerRenamingBoxes(BaseTestMultiLabel):
 
