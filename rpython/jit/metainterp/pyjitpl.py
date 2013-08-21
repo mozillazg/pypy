@@ -6,6 +6,7 @@ from rpython.jit.codewriter import heaptracker
 from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 from rpython.jit.metainterp import history, compile, resume, executor, jitexc
+from rpython.jit.metainterp import resume2
 from rpython.jit.metainterp.heapcache import HeapCache
 from rpython.jit.metainterp.history import (Const, ConstInt, ConstPtr,
     ConstFloat, Box, TargetToken)
@@ -1467,9 +1468,10 @@ class MetaInterpStaticData(object):
     logger_noopt = None
     logger_ops = None
 
-    def __init__(self, cpu, options,
+    def __init__(self, cpu, options, alljitcodes,
                  ProfilerClass=EmptyProfiler, warmrunnerdesc=None):
         self.cpu = cpu
+        self.alljitcodes = alljitcodes
         self.stats = self.cpu.stats
         self.options = options
         self.logger_noopt = Logger(self)
@@ -1675,6 +1677,13 @@ class MetaInterp(object):
         return self.jitdriver_sd is not None and jitcode is self.jitdriver_sd.mainjitcode
 
     def newframe(self, jitcode, greenkey=None):
+        if not self.framestack:
+            pc = 0
+            boxlist = []
+        else:
+            pc = self.framestack[-1].pc
+            boxlist = self.framestack[-1].get_list_of_active_boxes(True)
+        self.resume_bc.enter_function(jitcode, pc, boxlist)
         if jitcode.is_portal:
             self.portal_call_depth += 1
             self.call_ids.append(self.current_call_id)
@@ -1691,6 +1700,7 @@ class MetaInterp(object):
         return f
 
     def popframe(self):
+        self.resume_bc.leave_function()
         frame = self.framestack.pop()
         jitcode = frame.jitcode
         if jitcode.is_portal:
@@ -1808,8 +1818,14 @@ class MetaInterp(object):
             saved_pc = frame.pc
             if resumepc >= 0:
                 frame.pc = resumepc
-        resume.capture_resumedata(self.framestack, virtualizable_boxes,
-                                  self.virtualref_boxes, resumedescr)
+            else:
+                resumepc = frame.pc
+            boxlist = self.framestack[-1].get_list_of_active_boxes(False)
+        else:
+            boxlist = []
+        #resume.capture_resumedata(self.framestack, virtualizable_boxes,
+        #                      self.virtualref_boxes, resumedescr)
+        self.resume_bc.capture_resumedata(resumedescr, resumepc, boxlist)
         if self.framestack:
             self.framestack[-1].pc = saved_pc
 
@@ -2223,6 +2239,7 @@ class MetaInterp(object):
                      resume_at_jump_descr, try_disabling_unroll=False):
         num_green_args = self.jitdriver_sd.num_green_args
         greenkey = original_boxes[:num_green_args]
+        self.resume_bc.finish(self, start)
         if not self.partial_trace:
             ptoken = self.get_procedure_token(greenkey)
             if ptoken is not None and ptoken.target_tokens is not None:
@@ -2356,6 +2373,7 @@ class MetaInterp(object):
         # ----- make a new frame -----
         self.portal_call_depth = -1 # always one portal around
         self.framestack = []
+        self.resume_bc = resume2.ResumeBytecodeBuilder(self.staticdata)
         f = self.newframe(self.jitdriver_sd.mainjitcode)
         f.setup_call(original_boxes)
         assert self.portal_call_depth == 0
@@ -2371,6 +2389,9 @@ class MetaInterp(object):
         try:
             self.portal_call_depth = -1 # always one portal around
             self.history = history.History()
+            self.resume_bc = resume2.ResumeBytecodeBuilder(self.staticdata)
+            self.resume_bc.start_from_descr(resumedescr)
+            xxx
             inputargs_and_holes = self.rebuild_state_after_failure(resumedescr,
                                                                    deadframe)
             self.history.inputargs = [box for box in inputargs_and_holes if box]

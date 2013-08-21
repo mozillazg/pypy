@@ -1,12 +1,13 @@
 from rpython.jit.metainterp import jitprof, resume, compile
 from rpython.jit.metainterp.executor import execute_nonspec
-from rpython.jit.metainterp.history import BoxInt, BoxFloat, Const, ConstInt, REF
+from rpython.jit.metainterp.history import BoxInt, BoxFloat, Const, ConstInt, REF, AbstractFailDescr
 from rpython.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from rpython.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from rpython.jit.metainterp.resoperation import rop, ResOperation, AbstractResOp
 from rpython.jit.metainterp.typesystem import llhelper
+from rpython.jit.metainterp.resume2 import OptimizerResumeInterpreter
 from rpython.tool.pairtype import extendabletype
 from rpython.rlib.debug import debug_print
 from rpython.rlib.objectmodel import specialize
@@ -340,7 +341,21 @@ class Optimization(object):
 
 class Optimizer(Optimization):
 
-    def __init__(self, metainterp_sd, loop, optimizations=None):
+    def __init__(self, metainterp_sd, loop, allboxes, optimizations=None):
+        self.allboxes = {}
+        for k, v in allboxes.iteritems():
+            self.allboxes[v] = k
+        # we fish bytecode from the loop
+        for op in loop.operations:
+            if op.is_guard():
+                descr = op.getdescr()
+                assert isinstance(descr, AbstractFailDescr)
+                bc = descr.rd_bytecode
+                jitcodes = metainterp_sd.alljitcodes
+                self.resume_bc = OptimizerResumeInterpreter(bc, jitcodes)
+                break
+        else:
+            self.resume_bc = None # trivial case
         self.metainterp_sd = metainterp_sd
         self.cpu = metainterp_sd.cpu
         self.loop = loop
@@ -570,6 +585,9 @@ class Optimizer(Optimization):
                 del self.replaces_guard[op]
                 return
             else:
+                descr = op.getdescr()
+                assert isinstance(descr, AbstractFailDescr)
+                self.resume_bc.interpret_until(descr.rd_bytecode_position)
                 op = self.store_final_boxes_in_guard(op, pendingfields)
         elif op.can_raise():
             self.exception_might_have_happened = True
@@ -594,9 +612,10 @@ class Optimizer(Optimization):
         assert pendingfields is not None
         descr = op.getdescr()
         assert isinstance(descr, compile.ResumeGuardDescr)
-        modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
+        #modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
         try:
-            newboxes = modifier.finish(self, pendingfields)
+            #newboxes = modifier.finish(self, pendingfields)
+            newboxes = self.resume_bc.get_current_boxes(self.allboxes)
             if len(newboxes) > self.metainterp_sd.options.failargs_limit:
                 raise resume.TagOverflow
         except resume.TagOverflow:

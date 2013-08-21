@@ -1,5 +1,6 @@
 import os
 
+from rpython.rlib.objectmodel import specialize
 from rpython.jit.metainterp.history import Const
 from rpython.jit.metainterp.jitexc import JitException
 from rpython.jit.metainterp.optimizeopt.optimizer import Optimization, MODE_ARRAY, LEVEL_KNOWNCLASS

@@ -22,6 +22,7 @@ class CallControl(object):
         self.cpu = cpu
         self.jitdrivers_sd = jitdrivers_sd
         self.jitcodes = {}             # map {graph: jitcode}
+        self.alljitcodes = []          # list of all jitcodes
         self.unfinished_graphs = []    # list of graphs with pending jitcodes
         self.callinfocollection = CallInfoCollection()
         if hasattr(cpu, 'rtyper'):     # for tests
@@ -167,8 +168,9 @@ class CallControl(object):
                     '%s has _gctransformer_hint_close_stack_' % (graph,))
             #
             fnaddr, calldescr = self.get_jitcode_calldescr(graph)
-            jitcode = JitCode(graph.name, fnaddr, calldescr,
+            jitcode = JitCode(graph.name, len(self.jitcodes), fnaddr, calldescr,
                               called_from=called_from)
+            self.alljitcodes.append(jitcode)
             self.jitcodes[graph] = jitcode
             self.unfinished_graphs.append(graph)
             return jitcode

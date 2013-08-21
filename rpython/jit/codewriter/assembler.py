@@ -36,7 +36,7 @@ class Assembler(object):
         self.fix_labels()
         self.check_result()
         if jitcode is None:
-            jitcode = JitCode(ssarepr.name)
+            jitcode = JitCode(ssarepr.name, self._count_jitcodes)
         jitcode._ssarepr = ssarepr
         self.make_jitcode(jitcode)
         if self._count_jitcodes < 20:    # stop if we have a lot of them

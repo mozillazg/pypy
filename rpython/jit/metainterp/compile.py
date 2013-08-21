@@ -133,7 +133,8 @@ def compile_loop(metainterp, greenkey, start,
                       [ResOperation(rop.LABEL, jumpargs, None, descr=jitcell_token)]
 
     try:
-        optimize_trace(metainterp_sd, part, enable_opts)
+        optimize_trace(metainterp_sd, metainterp.resume_bc.boxes, part,
+                       enable_opts)
     except InvalidLoop:
         return None
     target_token = part.operations[0].getdescr()
@@ -160,7 +161,7 @@ def compile_loop(metainterp, greenkey, start,
         jumpargs = part.operations[-1].getarglist()
 
         try:
-            optimize_trace(metainterp_sd, part, enable_opts)
+            optimize_trace(metainterp_sd, allboxes, part, enable_opts)
         except InvalidLoop:
             return None
 
@@ -212,7 +213,7 @@ def compile_retrace(metainterp, greenkey, start,
     orignial_label = label.clone()
     assert label.getopnum() == rop.LABEL
     try:
-        optimize_trace(metainterp_sd, part, jitdriver_sd.warmstate.enable_opts)
+        optimize_trace(metainterp_sd, allboxes, part, jitdriver_sd.warmstate.enable_opts)
     except InvalidLoop:
         # Fall back on jumping to preamble
         target_token = label.getdescr()
@@ -222,7 +223,8 @@ def compile_retrace(metainterp, greenkey, start,
                           [ResOperation(rop.JUMP, inputargs[:],
                                         None, descr=loop_jitcell_token)]
         try:
-            optimize_trace(metainterp_sd, part, jitdriver_sd.warmstate.enable_opts,
+            optimize_trace(metainterp_sd, allboxes, part,
+                           jitdriver_sd.warmstate.enable_opts,
                            inline_short_preamble=False)
         except InvalidLoop:
             return None
@@ -630,6 +632,7 @@ class ResumeGuardDescr(ResumeDescr):
 
     def copy_all_attributes_into(self, res):
         # XXX a bit ugly to have to list them all here
+        # XXX kill that
         res.rd_snapshot = self.rd_snapshot
         res.rd_frame_info_list = self.rd_frame_info_list
         res.rd_numb = self.rd_numb
@@ -637,6 +640,8 @@ class ResumeGuardDescr(ResumeDescr):
         res.rd_virtuals = self.rd_virtuals
         res.rd_pendingfields = self.rd_pendingfields
         res.rd_count = self.rd_count
+        res.rd_bytecode = self.rd_bytecode
+        res.rd_bytecode_position = self.rd_bytecode_position
 
     def _clone_if_mutable(self):
         res = ResumeGuardDescr()
@@ -851,7 +856,8 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     else:
         inline_short_preamble = True
     try:
-        optimize_trace(metainterp_sd, new_trace, state.enable_opts, inline_short_preamble)
+        optimize_trace(metainterp_sd, allboxes,
+                       new_trace, state.enable_opts, inline_short_preamble)
     except InvalidLoop:
         debug_print("compile_new_bridge: got an InvalidLoop")
         # XXX I am fairly convinced that optimize_bridge cannot actually raise

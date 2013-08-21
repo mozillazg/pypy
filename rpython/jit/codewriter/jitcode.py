@@ -8,8 +8,10 @@ class JitCode(AbstractDescr):
     _empty_r = []
     _empty_f = []
 
-    def __init__(self, name, fnaddr=None, calldescr=None, called_from=None):
+    def __init__(self, name, number=-1, fnaddr=None, calldescr=None,
+                 called_from=None):
         self.name = name
+        self.number = number
         self.fnaddr = fnaddr
         self.calldescr = calldescr
         self.is_portal = False
