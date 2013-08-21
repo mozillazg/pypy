@@ -16,6 +16,7 @@ class TestMiniMarkGC(test_semispace_gc.TestSemiSpaceGC):
     def test_finalizer_young_obj(self):
         class A:
             def __del__(self):
+                State()  # so that it is not a light finalizer
                 state.seen += 1
         class State:
             pass
@@ -72,7 +73,7 @@ class TestMiniMarkGC(test_semispace_gc.TestSemiSpaceGC):
             def __init__(self, n, next):
                 self.n = n
                 self.next = next
-            def __del__(self):
+            def __del__(self):    # not a light finalizer
                 state.freed.append(self.n)
         class State:
             pass
