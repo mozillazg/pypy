@@ -43,7 +43,7 @@ def get_jitcell_at(next_instr, is_being_profiled, bytecode):
 
 def set_jitcell_at(newcell, next_instr, is_being_profiled, bytecode):
     key = (next_instr << 1) | r_uint(intmask(is_being_profiled))
-    bytecode.jit_cells[key] = newcell
+    bytecode.jit_cells[key] = cast_instance_to_base_ptr(newcell)
 
 
 def should_unroll_one_iteration(next_instr, is_being_profiled, bytecode):
@@ -178,6 +178,6 @@ def set_local_threshold(space, w_code, pos, value):
     ref = w_code.jit_cells[pos << 1]
     if not ref:
         ref = jit_hooks.new_jitcell()
-        w_code.jit_cells[pos << 1] = ref
+        w_code.jit_cells[pos << 1] = cast_base_ptr_to_instance(BaseJitCell, ref)
     jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
     jitcell.counter = value

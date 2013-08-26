@@ -4,6 +4,7 @@ from rpython.rtyper.annlowlevel import (cast_instance_to_base_ptr,
     cast_base_ptr_to_instance, llstr)
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.rtyper.lltypesystem import llmemory, lltype, rclass
+from rpython.rtyper.lltypesystem.rclass import OBJECTPTR
 
 
 def register_helper(s_result):
@@ -135,7 +136,7 @@ def box_isconst(llbox):
     from rpython.jit.metainterp.history import Const
     return isinstance(_cast_to_box(llbox), Const)
 
-@register_helper(annmodel.SomePtr(llmemory.GCREF))
+@register_helper(annmodel.SomePtr(OBJECTPTR))
 def new_jitcell():
     from rpython.jit.metainterp.warmstate import JitCell
 
