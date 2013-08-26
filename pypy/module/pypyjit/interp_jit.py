@@ -175,9 +175,9 @@ def set_local_threshold(space, w_code, pos, value):
     For testing. Set the threshold for this code object at position pos
     at value given.
     """
-    ref = w_code.jit_cells[pos << 1]
-    if not ref:
+    jitcell = w_code.jit_cells[pos << 1]
+    if not jitcell:
         ref = jit_hooks.new_jitcell()
-        w_code.jit_cells[pos << 1] = cast_base_ptr_to_instance(BaseJitCell, ref)
-    jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
+        jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
+        w_code.jit_cells[pos << 1] = jitcell
     jitcell.counter = value
