@@ -140,7 +140,7 @@ def box_isconst(llbox):
 def new_jitcell():
     from rpython.jit.metainterp.warmstate import JitCell
 
-    return _cast_to_gcref(JitCell)
+    return cast_instance_to_base_ptr(JitCell())
 
 # ------------------------- stats interface ---------------------------
 
