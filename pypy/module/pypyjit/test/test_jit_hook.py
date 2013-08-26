@@ -5,6 +5,7 @@ from pypy.interpreter.pycode import PyCode
 from rpython.jit.metainterp.history import JitCellToken, ConstInt, ConstPtr,\
      BasicFailDescr
 from rpython.jit.metainterp.resoperation import rop
+from rpython.jit.metainterp.compile import ResumeGuardDescr
 from rpython.jit.metainterp.logger import Logger
 from rpython.rtyper.annlowlevel import (cast_instance_to_base_ptr,
                                       cast_base_ptr_to_instance)
@@ -52,13 +53,14 @@ class AppTestJitHook(object):
         code_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, ll_code)
         logger = Logger(MockSD())
 
+        descr = ResumeGuardDescr()
         oplist = parse("""
         [i1, i2, p2]
         i3 = int_add(i1, i2)
         debug_merge_point(0, 0, 0, 0, 0, ConstPtr(ptr0))
         guard_nonnull(p2) []
-        guard_true(i3) []
-        """, namespace={'ptr0': code_gcref}).operations
+        guard_true(i3, descr=descr) []
+        """, namespace={'ptr0': code_gcref, 'descr': descr}).operations
         greenkey = [ConstInt(0), ConstInt(0), ConstPtr(code_gcref)]
         offset = {}
         for i, op in enumerate(oplist):
@@ -67,24 +69,24 @@ class AppTestJitHook(object):
 
         token = JitCellToken()
         token.number = 0
-        di_loop = JitDebugInfo(MockJitDriverSD, logger, token, oplist, 'loop',
-                   greenkey)
-        di_loop_optimize = JitDebugInfo(MockJitDriverSD, logger, JitCellToken(),
-                                        oplist, 'loop', greenkey)
-        di_loop.asminfo = AsmInfo(offset, 0, 0)
         di_bridge = JitDebugInfo(MockJitDriverSD, logger, JitCellToken(),
                                  oplist, 'bridge', fail_descr=BasicFailDescr())
         di_bridge.asminfo = AsmInfo(offset, 0, 0)
 
         def interp_on_compile():
-            di_loop.oplist = cls.oplist
+            di_loop = JitDebugInfo(MockJitDriverSD, logger, token, oplist[:],
+                                   'loop', greenkey)
+            di_loop.asminfo = AsmInfo(offset, 0, 0)
             pypy_hooks.after_compile(di_loop)
 
         def interp_on_compile_bridge():
             pypy_hooks.after_compile_bridge(di_bridge)
 
         def interp_on_optimize():
-            di_loop_optimize.oplist = cls.oplist
+            di_loop_optimize = JitDebugInfo(MockJitDriverSD, logger,
+                                            JitCellToken(),
+                                            oplist[:], 'loop', greenkey)
+            di_loop_optimize.oplist = oplist[:]
             pypy_hooks.before_compile(di_loop_optimize)
 
         def interp_on_abort():
@@ -98,11 +100,8 @@ class AppTestJitHook(object):
         cls.w_int_add_num = space.wrap(rop.INT_ADD)
         cls.w_dmp_num = space.wrap(rop.DEBUG_MERGE_POINT)
         cls.w_on_optimize = space.wrap(interp2app(interp_on_optimize))
-        cls.orig_oplist = oplist
+        cls.oplist = property(lambda : oplist[:])
         cls.w_sorted_keys = space.wrap(sorted(Counters.counter_names))
-
-    def setup_method(self, meth):
-        self.__class__.oplist = self.orig_oplist[:]
 
     def test_on_compile(self):
         import pypyjit
@@ -247,6 +246,22 @@ class AppTestJitHook(object):
         op = DebugMergePoint([Box(0)], 'repr', 'notmain', 5, 4, ('str',))
         raises(AttributeError, 'op.pycode')
         assert op.call_depth == 5
+
+    def test_descr_set_threshold(self):
+        import pypyjit
+        all = []
+
+        def hook(info):
+            all.append(info)
+
+        pypyjit.set_compile_hook(hook)
+        assert not all
+        self.on_compile()
+        raises(TypeError, "all[0].operations[0].descr")
+        descr = all[0].operations[-1].descr
+        assert descr.threshold == 0
+        descr.threshold = 1
+        assert descr.threshold == 1
 
     def test_get_stats_snapshot(self):
         skip("a bit no idea how to test it")

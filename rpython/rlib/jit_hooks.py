@@ -42,6 +42,18 @@ def _cast_to_resop(llref):
     ptr = lltype.cast_opaque_ptr(rclass.OBJECTPTR, llref)
     return cast_base_ptr_to_instance(AbstractResOp, ptr)
 
+def _cast_to_descr(lldescr):
+    from rpython.jit.metainterp.history import AbstractDescr
+    from rpython.jit.metainterp.compile import ResumeGuardDescr
+
+    ptr = lltype.cast_opaque_ptr(rclass.OBJECTPTR, lldescr)
+    if not ptr:
+        return None
+    obj = cast_base_ptr_to_instance(AbstractDescr, ptr)
+    if not isinstance(obj, ResumeGuardDescr):
+        return None
+    return obj
+
 @specialize.argtype(0)
 def _cast_to_gcref(obj):
     return lltype.cast_opaque_ptr(llmemory.GCREF,
@@ -85,6 +97,18 @@ def resop_setarg(llop, no, llbox):
 @register_helper(annmodel.SomePtr(llmemory.GCREF))
 def resop_getresult(llop):
     return _cast_to_gcref(_cast_to_resop(llop).result)
+
+@register_helper(annmodel.SomePtr(llmemory.GCREF))
+def resop_getdescr(llop):
+    return _cast_to_gcref(_cast_to_resop(llop).getdescr())
+
+@register_helper(annmodel.SomeInteger())
+def descr_getthreshold(lldescr):
+    return _cast_to_descr(lldescr)._counter
+
+@register_helper(annmodel.s_None)
+def descr_setthreshold(lldescr, threshold):
+    _cast_to_descr(lldescr)._counter = threshold
 
 @register_helper(annmodel.s_None)
 def resop_setresult(llop, llbox):

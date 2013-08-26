@@ -4,7 +4,7 @@ from pypy.interpreter.typedef import (TypeDef, GetSetProperty,
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import unwrap_spec, interp2app
 from pypy.interpreter.pycode import PyCode
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.annlowlevel import cast_base_ptr_to_instance, hlstr
 from rpython.rtyper.lltypesystem.rclass import OBJECT
@@ -180,6 +180,13 @@ class WrappedOp(W_Root):
     def descr_name(self, space):
         return space.wrap(hlstr(jit_hooks.resop_getopname(self.op)))
 
+    def descr_getdescr(self, space):
+        lldescr = jit_hooks.resop_getdescr(self.op)
+        if not lldescr:
+            raise operationerrfmt(space.w_TypeError,
+                "%s is not a guard", self.repr_of_resop)
+        return WrappedDescr(lldescr)
+
     @unwrap_spec(no=int)
     def descr_getarg(self, space, no):
         return WrappedBox(jit_hooks.resop_getarg(self.op, no))
@@ -194,6 +201,24 @@ class WrappedOp(W_Root):
     def descr_setresult(self, space, w_box):
         box = space.interp_w(WrappedBox, w_box)
         jit_hooks.resop_setresult(self.op, box.llbox)
+
+class WrappedDescr(W_Root):
+    """ A class representing a single descr for a ResOperation
+    """
+    def __init__(self, lldescr):
+        self.lldescr = lldescr
+
+    def get_threshold(self, space):
+        return space.wrap(jit_hooks.descr_getthreshold(self.lldescr))
+
+    @unwrap_spec(v=int)
+    def set_threshold(self, space, v):
+        jit_hooks.descr_setthreshold(self.lldescr, v)
+
+WrappedDescr.typedef = TypeDef("Descr",
+    threshold = GetSetProperty(WrappedDescr.get_threshold,
+                               WrappedDescr.set_threshold)
+)
 
 class DebugMergePoint(WrappedOp):
     """ A class representing Debug Merge Point - the entry point
@@ -232,7 +257,8 @@ WrappedOp.typedef = TypeDef(
     getarg = interp2app(WrappedOp.descr_getarg),
     setarg = interp2app(WrappedOp.descr_setarg),
     result = GetSetProperty(WrappedOp.descr_getresult,
-                            WrappedOp.descr_setresult)
+                            WrappedOp.descr_setresult),
+    descr = GetSetProperty(WrappedOp.descr_getdescr)
 )
 WrappedOp.acceptable_as_base_class = False
 
