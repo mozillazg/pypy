@@ -272,3 +272,11 @@ class AppTestJitHook(object):
         assert isinstance(stats.w_counters, dict)
         assert sorted(stats.w_counters.keys()) == self.sorted_keys
 
+    def test_set_local_threshold(self):
+        import pypyjit
+
+        def f():
+            pass
+
+        pypyjit.set_local_threshold(f.__code__, 0, 0)
+        # assert did not crash
