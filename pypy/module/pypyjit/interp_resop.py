@@ -293,13 +293,6 @@ class W_JitLoopInfo(W_Root):
     bridge_no   = 0
     asmaddr     = 0
     asmlen      = 0
-    checksum = 0
-
-    def _compute_checksum(self, ops):
-        s = 5381
-        for op in ops:
-            s = intmask(((s << 5) + s) + op.getopnum())
-        return s
 
     def __init__(self, space, debug_info, is_bridge=False):
         logops = debug_info.logger._make_log_operations()
@@ -309,8 +302,6 @@ class W_JitLoopInfo(W_Root):
             ofs = {}
         self.w_ops = space.newlist(
             wrap_oplist(space, logops, debug_info.operations, ofs))
-        self.checksum = self._compute_checksum(debug_info.operations)
-
         self.jd_name = debug_info.get_jitdriver().name
         self.type = debug_info.type
         if is_bridge:
@@ -377,7 +368,6 @@ W_JitLoopInfo.typedef = TypeDef(
                                doc="bridge number (if a bridge)"),
     type = interp_attrproperty('type', cls=W_JitLoopInfo,
                                doc="Loop type"),
-    checksum = interp_attrproperty('checksum', cls=W_JitLoopInfo),
     __repr__ = interp2app(W_JitLoopInfo.descr_repr),
 )
 W_JitLoopInfo.acceptable_as_base_class = False

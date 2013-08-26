@@ -262,7 +262,6 @@ class AppTestJitHook(object):
         assert descr.threshold == 0
         descr.threshold = 1
         assert descr.threshold == 1
-        assert all[0].checksum == 6382428994
 
     def test_get_stats_snapshot(self):
         skip("a bit no idea how to test it")
