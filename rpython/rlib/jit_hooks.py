@@ -135,6 +135,12 @@ def box_isconst(llbox):
     from rpython.jit.metainterp.history import Const
     return isinstance(_cast_to_box(llbox), Const)
 
+@register_helper(annmodel.SomePtr(llmemory.GCREF))
+def new_jitcell():
+    from rpython.jit.metainterp.warmstate import JitCell
+
+    return _cast_to_gcref(JitCell)
+
 # ------------------------- stats interface ---------------------------
 
 @register_helper(annmodel.SomeBool())

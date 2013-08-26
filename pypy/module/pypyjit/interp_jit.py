@@ -8,7 +8,7 @@ from rpython.rtyper.annlowlevel import cast_base_ptr_to_instance
 from rpython.rlib.rarithmetic import r_uint, intmask
 from rpython.rlib.jit import JitDriver, hint, we_are_jitted, dont_look_inside,\
      BaseJitCell
-from rpython.rlib import jit
+from rpython.rlib import jit, jit_hooks
 from rpython.rlib.jit import current_trace_length, unroll_parameters
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -176,5 +176,8 @@ def set_local_threshold(space, w_code, pos, value):
     at value given.
     """
     ref = w_code.jit_cells[pos << 1]
+    if not ref:
+        ref = jit_hooks.new_jitcell()
+        w_code.jit_cells[pos << 1] = ref
     jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
     jitcell.counter = value
