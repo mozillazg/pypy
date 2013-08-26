@@ -13,6 +13,7 @@ from rpython.rlib.nonconst import NonConstant
 from rpython.rlib import jit_hooks
 from rpython.rlib.jit import Counters
 from rpython.rlib.objectmodel import compute_unique_id
+from rpython.rlib.rarithmetic import intmask
 from pypy.module.pypyjit.interp_jit import pypyjitdriver
 
 class Cache(object):
@@ -211,8 +212,8 @@ class WrappedDescr(W_Root):
     def get_threshold(self, space):
         return space.wrap(jit_hooks.descr_getthreshold(self.lldescr))
 
-    @unwrap_spec(v=int)
-    def set_threshold(self, space, v):
+    def set_threshold(self, space, w_v):
+        v = space.int_w(w_v)
         jit_hooks.descr_setthreshold(self.lldescr, v)
 
 WrappedDescr.typedef = TypeDef("Descr",
@@ -292,6 +293,13 @@ class W_JitLoopInfo(W_Root):
     bridge_no   = 0
     asmaddr     = 0
     asmlen      = 0
+    checksum = 0
+
+    def _compute_checksum(self, ops):
+        s = 5381
+        for op in ops:
+            s = intmask(((s << 5) + s) + op.getopnum())
+        return s
 
     def __init__(self, space, debug_info, is_bridge=False):
         logops = debug_info.logger._make_log_operations()
@@ -301,6 +309,7 @@ class W_JitLoopInfo(W_Root):
             ofs = {}
         self.w_ops = space.newlist(
             wrap_oplist(space, logops, debug_info.operations, ofs))
+        self.checksum = self._compute_checksum(debug_info.operations)
 
         self.jd_name = debug_info.get_jitdriver().name
         self.type = debug_info.type
@@ -368,6 +377,7 @@ W_JitLoopInfo.typedef = TypeDef(
                                doc="bridge number (if a bridge)"),
     type = interp_attrproperty('type', cls=W_JitLoopInfo,
                                doc="Loop type"),
+    checksum = interp_attrproperty('checksum', cls=W_JitLoopInfo),
     __repr__ = interp2app(W_JitLoopInfo.descr_repr),
 )
 W_JitLoopInfo.acceptable_as_base_class = False
