@@ -168,6 +168,7 @@ def residual_call(space, w_callable, __args__):
     the JIT follow the call.'''
     return space.call_args(w_callable, __args__)
 
+@jit.dont_look_inside
 @unwrap_spec(w_code=PyCode, pos=r_uint, value=int)
 def set_local_threshold(space, w_code, pos, value):
     """ set_local_threshold(code, pos, value)
