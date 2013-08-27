@@ -5,7 +5,7 @@ if the guard fails it can be compressed into a starting point.
 
 opcodes:
 
-UPDATE_PC <pc> [list-of-alive-boxes]
+CAPTURE_POINT <pc> [list-of-alive-boxes]
 ENTER_FRAME <func no> <pc> [list-of-alive-boxes]
 LEAVE_FRAME
 
@@ -19,11 +19,34 @@ CAPTURE_POINT = chr(2)
 
 BC_NAMES = ['ENTER_FRAME', 'LEAVE_FRAME', 'CAPTURE_POINT']
 
+MODEL_FRONTEND = 0
+MODEL_FAILARGS = 1
+MODEL_BACKEND = 2
+
+class Bytecode(object):
+    """ an object representing a single bytecode. We keep it on faildescrs,
+    however it would be more efficient to keep it on a loop token.
+
+    XXX fix that
+
+    model can be one of the above, it means the numbers in numberings
+    are relative to:
+
+    frontend - means the index is an index into list of allboxes
+    failargs - means it's index in the list of failargs
+    backend - a backend specific number
+
+    """
+    def __init__(self, bc_repr, model):
+        self.bc_repr = bc_repr
+        self.model = model
+
 class ResumeBytecodeBuilder(object):
-    def __init__(self, metainterp_sd):
+    def __init__(self, metainterp_sd, model=MODEL_FRONTEND):
         self.bc = []
         self.boxes = {}
         self.metainterp_sd = metainterp_sd
+        self.model = model
 
     def enumerate_box(self, box):
         if box in self.boxes:
@@ -73,12 +96,12 @@ class ResumeBytecodeBuilder(object):
             if op.is_guard():
                 descr = op.getdescr()
                 assert isinstance(descr, AbstractFailDescr)
-                descr.rd_bytecode = finished_bc
-        print_bc(finished_bc, self.metainterp_sd.alljitcodes)
+                descr.rd_bytecode = Bytecode(finished_bc, self.model)
+        #print_bc(finished_bc, self.metainterp_sd.alljitcodes)
 
 class AbstractBytecodeInterpreter(object):
     def __init__(self, bc, alljitcodes):
-        self.bc = bc
+        self.bc = bc.bc_repr
         self.alljitcodes = alljitcodes
         self.init()
 
@@ -144,6 +167,14 @@ class DirectResumeBuilder(AbstractBytecodeInterpreter):
         self.framestack.pop()
 
 class OptimizerResumeInterpreter(AbstractBytecodeInterpreter):
+    """ This resume interpreter reads the resume and writes the new one
+    in resume_bc_writer
+    """
+
+    def __init__(self, bc, jitcode, resume_bc_writer):
+        AbstractBytecodeInterpreter.__init__(self, bc, jitcode)
+        self.resume_bc_writer = resume_bc_writer
+
     def init(self):
         self.pos = 0
         self.framestack = []
@@ -151,6 +182,7 @@ class OptimizerResumeInterpreter(AbstractBytecodeInterpreter):
         self.cur_boxlist = None
 
     def get_current_boxes(self, allboxes):
+        xxx
         newboxes = [None] * (self.cur_len + len(self.cur_boxlist))
         i = 0
         j = 0

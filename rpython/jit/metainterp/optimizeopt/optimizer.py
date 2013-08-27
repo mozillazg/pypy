@@ -7,7 +7,8 @@ from rpython.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, 
 from rpython.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from rpython.jit.metainterp.resoperation import rop, ResOperation, AbstractResOp
 from rpython.jit.metainterp.typesystem import llhelper
-from rpython.jit.metainterp.resume2 import OptimizerResumeInterpreter
+from rpython.jit.metainterp.resume2 import OptimizerResumeInterpreter,\
+     ResumeBytecodeBuilder, MODEL_FAILARGS
 from rpython.tool.pairtype import extendabletype
 from rpython.rlib.debug import debug_print
 from rpython.rlib.objectmodel import specialize
@@ -345,17 +346,22 @@ class Optimizer(Optimization):
         self.allboxes = {}
         for k, v in allboxes.iteritems():
             self.allboxes[v] = k
-        # we fish bytecode from the loop
+        # XXX make this be fished from loop, not from a descr, sounds a bit
+        #     obscure
         for op in loop.operations:
             if op.is_guard():
                 descr = op.getdescr()
                 assert isinstance(descr, AbstractFailDescr)
                 bc = descr.rd_bytecode
                 jitcodes = metainterp_sd.alljitcodes
-                self.resume_bc = OptimizerResumeInterpreter(bc, jitcodes)
+                self.resume_bc_writer = ResumeBytecodeBuilder(metainterp_sd,
+                                              MODEL_FAILARGS)
+                self.resume_bc = OptimizerResumeInterpreter(bc, jitcodes,
+                                                    self.resume_bc_writer)
                 break
         else:
             self.resume_bc = None # trivial case
+            self.resume_bc_writer = None
         self.metainterp_sd = metainterp_sd
         self.cpu = metainterp_sd.cpu
         self.loop = loop
