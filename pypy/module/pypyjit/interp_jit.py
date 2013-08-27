@@ -168,6 +168,15 @@ def residual_call(space, w_callable, __args__):
     the JIT follow the call.'''
     return space.call_args(w_callable, __args__)
 
+def _jitcell_at(w_code, pos):
+    try:
+        jitcell = w_code.jit_cells[pos << 1]
+    except KeyError:
+        ref = jit_hooks.new_jitcell()
+        jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
+        w_code.jit_cells[pos << 1] = jitcell
+    return jitcell
+
 @jit.dont_look_inside
 @unwrap_spec(w_code=PyCode, pos=r_uint, value=int)
 def set_local_threshold(space, w_code, pos, value):
@@ -176,10 +185,19 @@ def set_local_threshold(space, w_code, pos, value):
     For testing. Set the threshold for this code object at position pos
     at value given.
     """
-    try:
-        jitcell = w_code.jit_cells[pos << 1]
-    except KeyError:
-        ref = jit_hooks.new_jitcell()
-        jitcell = cast_base_ptr_to_instance(BaseJitCell, ref)
-        w_code.jit_cells[pos << 1] = jitcell
+    jitcell = _jitcell_at(w_code, pos)
     jitcell.counter = value
+
+@jit.dont_look_inside
+@unwrap_spec(w_code=PyCode)
+def dont_trace_inside(space, w_code):
+    """ dont trace inside this function
+    """
+    from rpython.rlib.nonconst import NonConstant
+
+    flag = True
+    if NonConstant(0):
+        flag = False # annotation hack to annotate it as real bool
+    jitcell = _jitcell_at(w_code, 0)
+    jitcell.dont_trace_here = flag
+

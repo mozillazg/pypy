@@ -682,7 +682,7 @@ set_user_param._annspecialcase_ = 'specialize:arg(0)'
 # Annotation and rtyping of some of the JitDriver methods
 
 class BaseJitCell(object):
-    __slots__ = ('counter')
+    __slots__ = ('counter', 'dont_trace_here')
 
 
 class ExtEnterLeaveMarker(ExtRegistryEntry):

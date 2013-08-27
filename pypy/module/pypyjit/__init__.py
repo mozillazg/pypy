@@ -19,6 +19,7 @@ class Module(MixedModule):
         'Box': 'interp_resop.WrappedBox',
         'PARAMETER_DOCS': 'space.wrap(rpython.rlib.jit.PARAMETER_DOCS)',
         'set_local_threshold': 'interp_jit.set_local_threshold',
+        'dont_trace_inside': 'interp_jit.dont_trace_inside',
     }
 
     def setup_after_space_initialization(self):

@@ -279,4 +279,5 @@ class AppTestJitHook(object):
             pass
 
         pypyjit.set_local_threshold(f.__code__, 0, 0)
+        pypyjit.dont_trace_inside(f.__code__)
         # assert did not crash
