@@ -198,6 +198,6 @@ def dont_trace_inside(space, w_code):
     flag = True
     if NonConstant(0):
         flag = False # annotation hack to annotate it as real bool
-    jitcell = _jitcell_at(w_code, 0)
+    jitcell = _jitcell_at(w_code, r_uint(0))
     jitcell.dont_trace_here = flag
 
