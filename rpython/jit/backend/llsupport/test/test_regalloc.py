@@ -3,6 +3,7 @@ from rpython.jit.metainterp.history import BoxInt, ConstInt, BoxFloat, INT, FLOA
      BoxPtr
 from rpython.jit.backend.llsupport.regalloc import FrameManager, LinkedList
 from rpython.jit.backend.llsupport.regalloc import RegisterManager as BaseRegMan
+from rpython.jit.backend.llsupport.regalloc import compute_vars_longevity
 
 def newboxes(*values):
     return [BoxInt(v) for v in values]
@@ -68,7 +69,7 @@ class TFrameManager(FrameManager):
 class MockAsm(object):
     def __init__(self):
         self.moves = []
-    
+
     def regalloc_mov(self, from_loc, to_loc):
         self.moves.append((from_loc, to_loc))
 
@@ -98,7 +99,7 @@ class TestRegalloc(object):
         rm._check_invariants()
         assert len(rm.free_regs) == 4
         assert len(rm.reg_bindings) == 0
-        
+
     def test_register_exhaustion(self):
         boxes, longevity = boxes_and_longevity(5)
         rm = RegisterManager(longevity)
@@ -114,7 +115,7 @@ class TestRegalloc(object):
 
         class XRegisterManager(RegisterManager):
             no_lower_byte_regs = [r2, r3]
-        
+
         rm = XRegisterManager(longevity)
         rm.next_instruction()
         loc0 = rm.try_allocate_reg(b0, need_lower_byte=True)
@@ -149,7 +150,7 @@ class TestRegalloc(object):
 
         class XRegisterManager(RegisterManager):
             no_lower_byte_regs = [r2, r3]
-        
+
         rm = XRegisterManager(longevity,
                               frame_manager=fm,
                               assembler=MockAsm())
@@ -172,7 +173,7 @@ class TestRegalloc(object):
         assert isinstance(loc, FakeReg)
         assert loc not in [r2, r3]
         rm._check_invariants()
-    
+
     def test_make_sure_var_in_reg(self):
         boxes, longevity = boxes_and_longevity(5)
         fm = TFrameManager()
@@ -186,7 +187,7 @@ class TestRegalloc(object):
         loc = rm.make_sure_var_in_reg(b0)
         assert isinstance(loc, FakeReg)
         rm._check_invariants()
-        
+
     def test_force_result_in_reg_1(self):
         b0, b1 = newboxes(0, 0)
         longevity = {b0: (0, 1), b1: (1, 3)}
@@ -341,7 +342,7 @@ class TestRegalloc(object):
         rm.after_call(boxes[-1])
         assert len(rm.reg_bindings) == 1
         rm._check_invariants()
-        
+
 
     def test_different_frame_width(self):
         class XRegisterManager(RegisterManager):
@@ -358,7 +359,7 @@ class TestRegalloc(object):
         xrm.loc(f0)
         rm.loc(b0)
         assert fm.get_frame_depth() == 3
-                
+
     def test_spilling(self):
         b0, b1, b2, b3, b4, b5 = newboxes(0, 1, 2, 3, 4, 5)
         longevity = {b0: (0, 3), b1: (0, 3), b3: (0, 5), b2: (0, 2), b4: (1, 4), b5: (1, 3)}
@@ -592,3 +593,31 @@ class TestRegalloc(object):
         assert fm.get_loc_index(floc) == 0
         for box in fm.bindings.keys():
             fm.mark_as_free(box)
+
+def test_vars_longevity():
+    from rpython.jit.tool.oparser import parse
+    from rpython.jit.codewriter.jitcode import JitCode
+
+    class MockJitcode(JitCode):
+        def __init__(self, no):
+            self.no = no
+
+        def num_regs(self):
+            return self.no
+
+    loop = parse("""
+    [i0, i1]
+    enter_frame(0, descr=jitcode)
+    resume_put(i0, 0, 1)
+    guard_true(1)
+    i5 = int_add(1, 2)
+    resume_put(i1, 0, 1)
+    i4 = int_add(1, 2)
+    guard_false(1)
+    i3 = int_add(1, 2)
+    leave_frame()
+    """, namespace={'jitcode': MockJitcode(3)})
+    longevity, _ = compute_vars_longevity(loop.inputargs, loop.operations)
+    assert longevity[loop.inputargs[0]] == (0, 2)
+    assert longevity[loop.inputargs[1]] == (0, 6)
+

@@ -47,6 +47,9 @@ class JitCode(AbstractDescr):
     def num_regs_f(self):
         return ord(self.c_num_regs_f)
 
+    def num_regs(self):
+        return self.num_regs_i() + self.num_regs_r() + self.num_regs_f()
+
     def has_liveness_info(self, pc):
         return pc in self.liveness
 

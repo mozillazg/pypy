@@ -1719,9 +1719,8 @@ class Assembler386(BaseAssembler):
         is_guard_not_invalidated = guard_opnum == rop.GUARD_NOT_INVALIDATED
         is_guard_not_forced = guard_opnum == rop.GUARD_NOT_FORCED
         gcmap = allocate_gcmap(self, frame_depth, JITFRAME_FIXED_SIZE)
-        XXX
-        return GuardToken(self.cpu, gcmap, faildescr, failargs,
-                          fail_locs, exc, frame_depth,
+        return GuardToken(self.cpu, gcmap, faildescr,
+                          exc, frame_depth,
                           is_guard_not_invalidated, is_guard_not_forced)
 
     def generate_propagate_error_64(self):

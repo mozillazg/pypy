@@ -2,6 +2,7 @@ import os
 from rpython.jit.metainterp.history import Const, Box, REF, JitCellToken
 from rpython.rlib.objectmodel import we_are_translated, specialize
 from rpython.jit.metainterp.resoperation import rop
+from rpython.jit.backend.llsupport.resumebuilder import LivenessAnalyzer
 
 try:
     from collections import OrderedDict
@@ -689,6 +690,22 @@ def compute_vars_longevity(inputargs, operations):
     produced = {}
     last_used = {}
     last_real_usage = {}
+    liveness_analyzer = LivenessAnalyzer()
+    for position, op in enumerate(operations):
+        if op.getopnum() == rop.ENTER_FRAME:
+            liveness_analyzer.enter_frame(op.getdescr())
+        elif op.getopnum() == rop.LEAVE_FRAME:
+            liveness_analyzer.leave_frame()
+        elif op.getopnum() == rop.RESUME_PUT:
+            liveness_analyzer.put(op.getarg(0), op.getarg(1).getint(),
+                                  op.getarg(2).getint())
+        elif op.is_guard():
+            framestack = liveness_analyzer.get_live_info()
+            for frame in framestack:
+                for item in frame:
+                    if item is not None:
+                        last_used[item] = position
+
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]
         if op.result:
@@ -703,6 +720,8 @@ def compute_vars_longevity(inputargs, operations):
                 continue
             if arg not in last_used:
                 last_used[arg] = i
+            else:
+                last_used[arg] = max(last_used[arg], i)
             if opnum != rop.JUMP and opnum != rop.LABEL:
                 if arg not in last_real_usage:
                     last_real_usage[arg] = i
