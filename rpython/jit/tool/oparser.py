@@ -49,7 +49,7 @@ class FORCE_SPILL(UnaryOp, PlainResOp):
         return newop
 
 
-def default_fail_descr(model, opnum, fail_args=None):
+def default_fail_descr(model, opnum):
     if opnum == rop.FINISH:
         return model.BasicFinalDescr()
     return model.BasicFailDescr()
@@ -217,38 +217,22 @@ class OpParser(object):
         if endnum == -1:
             raise ParseError("invalid line: %s" % line)
         args, descr = self.parse_args(opname, line[num + 1:endnum])
+        if '[' in line:
+            raise Exception("failargs are dead")
         if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST:
-            i = line.find('[', endnum) + 1
-            j = line.find(']', i)
-            if (i <= 0 or j <= 0) and not self.nonstrict:
-                raise ParseError("missing fail_args for guard operation")
-            fail_args = []
-            if i < j:
-                for arg in line[i:j].split(','):
-                    arg = arg.strip()
-                    if arg == 'None':
-                        fail_arg = None
-                    else:
-                        try:
-                            fail_arg = self.vars[arg]
-                        except KeyError:
-                            raise ParseError(
-                                "Unknown var in fail_args: %s" % arg)
-                    fail_args.append(fail_arg)
             if descr is None and self.invent_fail_descr:
-                descr = self.invent_fail_descr(self.model, opnum, fail_args)
+                descr = self.invent_fail_descr(self.model, opnum)
             if hasattr(descr, '_oparser_uses_descr_of_guard'):
-                descr._oparser_uses_descr_of_guard(self, fail_args)
+                descr._oparser_uses_descr_of_guard(self)
         else:
-            fail_args = None
             if opnum == rop.FINISH:
                 if descr is None and self.invent_fail_descr:
-                    descr = self.invent_fail_descr(self.model, opnum, fail_args)
+                    descr = self.invent_fail_descr(self.model, opnum)
             elif opnum == rop.JUMP:
                 if descr is None and self.invent_fail_descr:
                     descr = self.original_jitcell_token
 
-        return opnum, args, descr, fail_args
+        return opnum, args, descr
 
     def create_op(self, opnum, args, result, descr):
         if opnum == ESCAPE_OP.OPNUM:
@@ -268,21 +252,17 @@ class OpParser(object):
         res, op = line.split("=", 1)
         res = res.strip()
         op = op.strip()
-        opnum, args, descr, fail_args = self.parse_op(op)
+        opnum, args, descr = self.parse_op(op)
         if res in self.vars:
             raise ParseError("Double assign to var %s in line: %s" % (res, line))
         rvar = self.box_for_var(res)
         self.vars[res] = rvar
         res = self.create_op(opnum, args, rvar, descr)
-        if fail_args is not None:
-            res.setfailargs(fail_args)
         return res
 
     def parse_op_no_result(self, line):
-        opnum, args, descr, fail_args = self.parse_op(line)
+        opnum, args, descr = self.parse_op(line)
         res = self.create_op(opnum, args, None, descr)
-        if fail_args is not None:
-            res.setfailargs(fail_args)
         return res
 
     def parse_next_op(self, line):

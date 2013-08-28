@@ -51,15 +51,6 @@ class AbstractResOp(object):
     def numargs(self):
         raise NotImplementedError
 
-    # methods implemented by GuardResOp
-    # ---------------------------------
-
-    def getfailargs(self):
-        return None
-
-    def setfailargs(self, fail_args):
-        raise NotImplementedError
-
     # methods implemented by ResOpWithDescr
     # -------------------------------------
 
@@ -145,10 +136,15 @@ class AbstractResOp(object):
                 self.getopnum() == rop.GUARD_NO_OVERFLOW)
 
     def is_always_pure(self):
-        return rop._ALWAYS_PURE_FIRST <= self.getopnum() <= rop._ALWAYS_PURE_LAST
+        return (rop._ALWAYS_PURE_FIRST <= self.getopnum()
+                <= rop._ALWAYS_PURE_LAST)
 
     def has_no_side_effect(self):
-        return rop._NOSIDEEFFECT_FIRST <= self.getopnum() <= rop._NOSIDEEFFECT_LAST
+        return (rop._NOSIDEEFFECT_FIRST <= self.getopnum()
+                <= rop._NOSIDEEFFECT_LAST)
+
+    def is_resume(self):
+        return rop._RESUME_FIRST <= self.getopnum() <= rop._RESUME_LAST
 
     def can_raise(self):
         return rop._CANRAISE_FIRST <= self.getopnum() <= rop._CANRAISE_LAST
@@ -211,24 +207,7 @@ class ResOpWithDescr(AbstractResOp):
 
 
 class GuardResOp(ResOpWithDescr):
-
-    _fail_args = None
-
-    def getfailargs(self):
-        return self._fail_args
-
-    def setfailargs(self, fail_args):
-        self._fail_args = fail_args
-
-    def copy_and_change(self, opnum, args=None, result=None, descr=None):
-        newop = AbstractResOp.copy_and_change(self, opnum, args, result, descr)
-        newop.setfailargs(self.getfailargs())
-        return newop
-
-    def clone(self):
-        newop = AbstractResOp.clone(self)
-        newop.setfailargs(self.getfailargs())
-        return newop
+    pass
 
 # ============
 # arity mixins
@@ -489,8 +468,11 @@ _oplist = [
     'VIRTUAL_REF/2',         # removed before it's passed to the backend
     'READ_TIMESTAMP/0',
     'MARK_OPAQUE_PTR/1b',
-    # this one has no *visible* side effect, since the virtualizable
-    # must be forced, however we need to execute it anyway
+    '_RESUME_FIRST',
+    'ENTER_FRAME/1d',
+    'LEAVE_FRAME/0',
+    'RESUME_PUT/3',
+    '_RESUME_LAST',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
     'SETARRAYITEM_GC/3d',

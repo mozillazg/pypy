@@ -51,6 +51,7 @@ class AssemblerLocation(object):
     def get_position(self):
         raise NotImplementedError # only for stack
 
+
 class RawEbpLoc(AssemblerLocation):
     """ The same as stack location, but does not know it's position.
     Mostly usable for raw frame access
@@ -112,7 +113,7 @@ class RawEspLoc(AssemblerLocation):
 
 class FrameLoc(RawEbpLoc):
     _immutable_ = True
-    
+
     def __init__(self, position, ebp_offset, type):
         # _getregkey() returns self.value; the value returned must not
         # conflict with RegLoc._getregkey().  It doesn't a bit by chance,
@@ -342,7 +343,7 @@ xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, xmm8, xmm9, xmm10, xmm11, xmm12,
 # we actually do:
 #     mov r11, 0xDEADBEEFDEADBEEF
 #     mov rax, [r11]
-# 
+#
 # NB: You can use the scratch register as a temporary register in
 # assembler.py, but care must be taken when doing so. A call to a method in
 # LocationCodeBuilder could clobber the scratch register when certain
@@ -638,7 +639,7 @@ class LocationCodeBuilder(object):
     CVTTSD2SI = _binaryop('CVTTSD2SI')
     CVTSD2SS = _binaryop('CVTSD2SS')
     CVTSS2SD = _binaryop('CVTSS2SD')
-    
+
     SQRTSD = _binaryop('SQRTSD')
 
     ANDPD = _binaryop('ANDPD')

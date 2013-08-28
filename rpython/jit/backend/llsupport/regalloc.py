@@ -706,13 +706,6 @@ def compute_vars_longevity(inputargs, operations):
             if opnum != rop.JUMP and opnum != rop.LABEL:
                 if arg not in last_real_usage:
                     last_real_usage[arg] = i
-        if op.is_guard():
-            for arg in op.getfailargs():
-                if arg is None: # hole
-                    continue
-                assert isinstance(arg, Box)
-                if arg not in last_used:
-                    last_used[arg] = i
     #
     longevity = {}
     for arg in produced:

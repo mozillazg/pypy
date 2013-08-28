@@ -911,15 +911,14 @@ class Assembler386(BaseAssembler):
         oopspecindex = effectinfo.oopspecindex
         genop_math_list[oopspecindex](self, op, arglocs, resloc)
 
-    def regalloc_perform_with_guard(self, op, guard_op, faillocs,
+    def regalloc_perform_with_guard(self, op, guard_op,
                                     arglocs, resloc, frame_depth):
         faildescr = guard_op.getdescr()
         assert isinstance(faildescr, AbstractFailDescr)
-        failargs = guard_op.getfailargs()
         guard_opnum = guard_op.getopnum()
         guard_token = self.implement_guard_recovery(guard_opnum,
-                                                    faildescr, failargs,
-                                                    faillocs, frame_depth)
+                                                    faildescr,
+                                                    frame_depth)
         if op is None:
             dispatch_opnum = guard_opnum
         else:
@@ -930,9 +929,9 @@ class Assembler386(BaseAssembler):
             # must be added by the genop_guard_list[]()
             assert guard_token is self.pending_guard_tokens[-1]
 
-    def regalloc_perform_guard(self, guard_op, faillocs, arglocs, resloc,
+    def regalloc_perform_guard(self, guard_op, arglocs, resloc,
                                frame_depth):
-        self.regalloc_perform_with_guard(None, guard_op, faillocs, arglocs,
+        self.regalloc_perform_with_guard(None, guard_op, arglocs,
                                          resloc, frame_depth)
 
     def load_effective_addr(self, sizereg, baseofs, scale, result, frm=imm0):
@@ -1712,14 +1711,15 @@ class Assembler386(BaseAssembler):
         #
         self.implement_guard(guard_token, 'NE')
 
-    def implement_guard_recovery(self, guard_opnum, faildescr, failargs,
-                                 fail_locs, frame_depth):
+    def implement_guard_recovery(self, guard_opnum, faildescr,
+                                 frame_depth):
         exc = (guard_opnum == rop.GUARD_EXCEPTION or
                guard_opnum == rop.GUARD_NO_EXCEPTION or
                guard_opnum == rop.GUARD_NOT_FORCED)
         is_guard_not_invalidated = guard_opnum == rop.GUARD_NOT_INVALIDATED
         is_guard_not_forced = guard_opnum == rop.GUARD_NOT_FORCED
         gcmap = allocate_gcmap(self, frame_depth, JITFRAME_FIXED_SIZE)
+        XXX
         return GuardToken(self.cpu, gcmap, faildescr, failargs,
                           fail_locs, exc, frame_depth,
                           is_guard_not_invalidated, is_guard_not_forced)

@@ -33,14 +33,13 @@ class BaseTestOparser(object):
     def test_const_ptr_subops(self):
         x = """
         [p0]
-        guard_class(p0, ConstClass(vtable)) []
+        guard_class(p0, ConstClass(vtable))
         """
         S = lltype.Struct('S')
         vtable = lltype.nullptr(S)
         loop = self.parse(x, None, locals())
         assert len(loop.operations) == 1
         assert loop.operations[0].getdescr()
-        assert loop.operations[0].getfailargs() == []
 
     def test_descr(self):
         class Xyz(AbstractDescr):
@@ -57,7 +56,7 @@ class BaseTestOparser(object):
     def test_after_fail(self):
         x = """
         [i0]
-        guard_value(i0, 3) []
+        guard_value(i0, 3)
         i1 = int_add(1, 2)
         """
         loop = self.parse(x, None, {})
@@ -174,7 +173,7 @@ class BaseTestOparser(object):
     i4 = int_add(i0, 2)
     i6 = int_sub(i1, 1)
     i8 = int_gt(i6, 3)
-    guard_true(i8, descr=<Guard15>) [i4, i6]
+    guard_true(i8, descr=<Guard15>)
     debug_merge_point('(no jitdriver.get_printable_location!)', 0)
     jump(i6, i4, descr=<Loop0>)
     '''
@@ -194,14 +193,6 @@ class BaseTestOparser(object):
         '''
         loop = self.parse(x)
         assert loop.operations[0].getopname() == 'new'
-
-    def test_no_fail_args(self):
-        x = '''
-        [i0]
-        guard_true(i0, descr=<Guard0>)
-        '''
-        loop = self.parse(x, nonstrict=True)
-        assert loop.operations[0].getfailargs() == []
 
     def test_no_inputargs(self):
         x = '''

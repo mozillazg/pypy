@@ -7,6 +7,7 @@ from rpython.jit.backend.llsupport import symbolic
 from rpython.jit.backend.llsupport.descr import (ArrayDescr, CallDescr,
     unpack_arraydescr, unpack_fielddescr, unpack_interiorfielddescr)
 from rpython.jit.backend.llsupport.gcmap import allocate_gcmap
+from rpython.jit.backend.llsupport.resumebuilder import ResumeBuilder
 from rpython.jit.backend.llsupport.regalloc import (FrameManager, BaseRegalloc,
      RegisterManager, TempBox, compute_vars_longevity, is_comparison_or_ovf_op)
 from rpython.jit.backend.x86 import rx86
@@ -22,7 +23,7 @@ from rpython.jit.codewriter import longlong
 from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
     ConstFloat, BoxInt, BoxFloat, INT, REF, FLOAT, TargetToken)
-from rpython.jit.metainterp.resoperation import rop, ResOperation
+from rpython.jit.metainterp.resoperation import rop
 from rpython.rlib import rgc
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.rarithmetic import r_longlong, r_uint
@@ -124,6 +125,7 @@ class RegAlloc(BaseRegalloc):
 
     def __init__(self, assembler, translate_support_code=False):
         assert isinstance(translate_support_code, bool)
+        self.resumebuilder = ResumeBuilder(self)
         # variables that have place in register
         self.assembler = assembler
         self.translate_support_code = translate_support_code
@@ -276,30 +278,23 @@ class RegAlloc(BaseRegalloc):
             self.assembler.dump('%s <- %s(%s)' % (result_loc, op, arglocs))
         self.assembler.regalloc_perform_math(op, arglocs, result_loc)
 
-    def locs_for_fail(self, guard_op):
-        return [self.loc(v) for v in guard_op.getfailargs()]
-
     def perform_with_guard(self, op, guard_op, arglocs, result_loc):
-        faillocs = self.locs_for_fail(guard_op)
         self.rm.position += 1
         self.xrm.position += 1
-        self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
+        self.assembler.regalloc_perform_with_guard(op, guard_op,
                                                    arglocs, result_loc,
                                                    self.fm.get_frame_depth())
-        self.possibly_free_vars(guard_op.getfailargs())
 
     def perform_guard(self, guard_op, arglocs, result_loc):
-        faillocs = self.locs_for_fail(guard_op)
         if not we_are_translated():
             if result_loc is not None:
                 self.assembler.dump('%s <- %s(%s)' % (result_loc, guard_op,
                                                       arglocs))
             else:
                 self.assembler.dump('%s(%s)' % (guard_op, arglocs))
-        self.assembler.regalloc_perform_guard(guard_op, faillocs, arglocs,
+        self.assembler.regalloc_perform_guard(guard_op, arglocs,
                                               result_loc,
                                               self.fm.get_frame_depth())
-        self.possibly_free_vars(guard_op.getfailargs())
 
     def perform_discard(self, op, arglocs):
         if not we_are_translated():
@@ -314,6 +309,10 @@ class RegAlloc(BaseRegalloc):
             self.assembler.mc.mark_op(op)
             self.rm.position = i
             self.xrm.position = i
+            if op.is_resume():
+                self.resumebuilder.process(op)
+                i += 1
+                continue
             if op.has_no_side_effect() and op.result not in self.longevity:
                 i += 1
                 self.possibly_free_vars_for_op(op)
@@ -1333,6 +1332,7 @@ class RegAlloc(BaseRegalloc):
         #    self._compute_hint_frame_locations_from_descr(descr)
 
     def consider_guard_not_forced_2(self, op):
+        xxx
         self.rm.before_call(op.getfailargs(), save_all_regs=True)
         fail_locs = [self.loc(v) for v in op.getfailargs()]
         self.assembler.store_force_descr(op, fail_locs,

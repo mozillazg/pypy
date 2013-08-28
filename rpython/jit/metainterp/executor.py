@@ -289,7 +289,8 @@ def _make_execute_list():
     for key, value in rop.__dict__.items():
         if not key.startswith('_'):
             if (rop._FINAL_FIRST <= value <= rop._FINAL_LAST or
-                rop._GUARD_FIRST <= value <= rop._GUARD_LAST):
+                rop._GUARD_FIRST <= value <= rop._GUARD_LAST or
+                rop._RESUME_FIRST <= value <= rop._RESUME_LAST):
                 continue
             # find which list to store the operation in, based on num_args
             num_args = resoperation.oparity[value]
