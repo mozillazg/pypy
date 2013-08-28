@@ -100,7 +100,7 @@ class TestLogger(object):
         inp = '''
         [i0]
         i1 = int_add(i0, 1)
-        guard_true(i0) [i0, i1]
+        guard_true(i0)
         finish(i1)
         '''
         self.reparse(inp)
@@ -108,7 +108,7 @@ class TestLogger(object):
     def test_guard_not_invalidated(self):
         inp = '''
         []
-        guard_not_invalidated(descr=descr) []
+        guard_not_invalidated(descr=descr)
         finish(descr=finaldescr)
         '''
         loop = pure_parse(inp, namespace={'descr': Descr(),
@@ -116,15 +116,6 @@ class TestLogger(object):
         logger = Logger(self.make_metainterp_sd())
         output = logger.log_loop(loop, {'descr': Descr()})
         assert 'guard_not_invalidated(descr=' in output
-
-    def test_guard_w_hole(self):
-        inp = '''
-        [i0]
-        i1 = int_add(i0, 1)
-        guard_true(i0) [i0, None, i1]
-        finish(i1)
-        '''
-        self.reparse(inp)
 
     def test_debug_merge_point(self):
         inp = '''
@@ -161,12 +152,12 @@ class TestLogger(object):
         namespace = {'fdescr': BasicFailDescr()}
         inp = '''
         [i0]
-        guard_true(i0, descr=fdescr) [i0]
+        guard_true(i0, descr=fdescr)
         '''
         loop = pure_parse(inp, namespace=namespace)
         logger = Logger(self.make_metainterp_sd(), guard_number=True)
         output = logger.log_loop(loop)
-        assert re.match("guard_true\(i0, descr=<Guard0x[\da-f]+>\) \[i0\]", output.splitlines()[-1])
+        assert re.match("guard_true\(i0, descr=<Guard0x[\da-f]+>\)", output.splitlines()[-1])
         pure_parse(output)
 
         logger = Logger(self.make_metainterp_sd(), guard_number=False)

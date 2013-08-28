@@ -147,12 +147,7 @@ class LogOperations(object):
                 args += ', descr=' + r
             else:
                 args = "descr=" + r
-        if is_guard and op.getfailargs() is not None:
-            fail_args = ' [' + ", ".join([self.repr_of_arg(arg)
-                                          for arg in op.getfailargs()]) + ']'
-        else:
-            fail_args = ''
-        return s_offset + res + op.getopname() + '(' + args + ')' + fail_args
+        return s_offset + res + op.getopname() + '(' + args + ')'
 
     def _log_inputarg_setup_ops(self, op):
         target_token = op.getdescr()
