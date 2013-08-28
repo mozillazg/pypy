@@ -29,7 +29,7 @@ class MockCPU(object):
         return 13
 
 class TestResumeDirect(object):
-    def test_direct_resume_reader(self):
+    def test_box_resume_reader(self):
         jitcode = JitCode("jitcode")
         jitcode.setup(num_regs_i=13)
         resume_loop = parse("""
@@ -48,3 +48,4 @@ class TestResumeDirect(object):
         assert len(metainterp.framestack) == 1
         f = metainterp.framestack[-1]
         assert f.registers_i[1].getint() == 13
+
