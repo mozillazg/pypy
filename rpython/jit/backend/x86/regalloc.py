@@ -898,12 +898,12 @@ class RegAlloc(BaseRegalloc):
             if box.type == REF and self.rm.is_still_alive(box):
                 assert not noregs
                 assert isinstance(loc, RegLoc)
-                val = gpr_reg_mgr_cls.all_reg_indexes[loc.value]
+                val = loc.get_jitframe_position()
                 gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
         for box, loc in self.fm.bindings.iteritems():
             if box.type == REF and self.rm.is_still_alive(box):
                 assert isinstance(loc, FrameLoc)
-                val = loc.position + JITFRAME_FIXED_SIZE
+                val = loc.get_jitframe_position()
                 gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
         return gcmap
 

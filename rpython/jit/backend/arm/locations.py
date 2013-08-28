@@ -33,6 +33,9 @@ class AssemblerLocation(object):
     def get_position(self):
         raise NotImplementedError # only for stack
 
+    def get_jitframe_position(self):
+        raise NotImplementedError
+
 class RegisterLocation(AssemblerLocation):
     _immutable_ = True
     width = WORD

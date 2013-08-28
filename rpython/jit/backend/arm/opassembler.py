@@ -46,6 +46,26 @@ class ArmGuardToken(GuardToken):
         self.fcond = fcond
         self.offset = offset
 
+    def compute_gcmap(self, gcmap, failargs, fail_locs, frame_depth):
+        # note that this is an old version that should not be here in
+        # the first place. Implement get_jitframe_position on ARM locations
+        # in order to make it work, then kill this function
+        input_i = 0
+        for i in range(len(failargs)):
+            arg = failargs[i]
+            if arg is None:
+                continue
+            loc = fail_locs[input_i]
+            input_i += 1
+            if arg.type == REF:
+                loc = fail_locs[i]
+                if loc.is_core_reg():
+                    val = self.cpu.all_reg_indexes[loc.value]
+                else:
+                    val = loc.get_position() + self.cpu.JITFRAME_FIXED_SIZE
+                gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
+        return gcmap
+
 
 class ResOpAssembler(BaseAssembler):
 
