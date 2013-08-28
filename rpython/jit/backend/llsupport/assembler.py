@@ -22,26 +22,16 @@ DEBUG_COUNTER = lltype.Struct('DEBUG_COUNTER',
 
 
 class GuardToken(object):
-    def __init__(self, cpu, gcmap, faildescr, exc,
+    def __init__(self, cpu, gcmap, faildescr, has_floats, exc,
                  frame_depth, is_guard_not_invalidated, is_guard_not_forced):
         assert isinstance(faildescr, AbstractFailDescr)
         self.cpu = cpu
+        self.has_floats = has_floats
         self.faildescr = faildescr
-        #self.gcmap = self.compute_gcmap(gcmap, failargs,
-        #                                fail_locs, frame_depth)
         self.exc = exc
+        self.gcmap = gcmap
         self.is_guard_not_invalidated = is_guard_not_invalidated
         self.is_guard_not_forced = is_guard_not_forced
-
-    def compute_gcmap(self, gcmap, failargs, fail_locs, frame_depth):
-        for i in range(len(failargs)):
-            arg = failargs[i]
-            if arg is None:
-                continue
-            if arg.type == REF:
-                val = fail_locs[i].get_jitframe_position()
-                gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
-        return gcmap
 
 
 class BaseAssembler(object):
@@ -146,11 +136,7 @@ class BaseAssembler(object):
         return locs
 
     def store_info_on_descr(self, startspos, guardtok):
-        withfloats = False
-        for box in guardtok.failargs:
-            if box is not None and box.type == FLOAT:
-                withfloats = True
-                break
+        withfloats = guardtok.has_floats
         exc = guardtok.exc
         target = self.failure_recovery_code[exc + 2 * withfloats]
         fail_descr = cast_instance_to_gcref(guardtok.faildescr)

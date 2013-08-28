@@ -1718,8 +1718,11 @@ class Assembler386(BaseAssembler):
                guard_opnum == rop.GUARD_NOT_FORCED)
         is_guard_not_invalidated = guard_opnum == rop.GUARD_NOT_INVALIDATED
         is_guard_not_forced = guard_opnum == rop.GUARD_NOT_FORCED
-        gcmap = allocate_gcmap(self, frame_depth, JITFRAME_FIXED_SIZE)
+        gcmap = self._regalloc.get_gcmap()
+        pos = self._regalloc.resumebuilder.get_position()
+        faildescr.rd_bytecode_position = pos
         return GuardToken(self.cpu, gcmap, faildescr,
+                          self._regalloc.uses_floats(),
                           exc, frame_depth,
                           is_guard_not_invalidated, is_guard_not_forced)
 

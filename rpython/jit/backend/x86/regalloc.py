@@ -334,6 +334,7 @@ class RegAlloc(BaseRegalloc):
         self.assembler.mc.mark_op(None) # end of the loop
         for arg in inputargs:
             self.possibly_free_var(arg)
+        self.assembler.current_clt.rd_bytecode = self.resumebuilder.newops
 
     def flush_loop(self):
         # rare case: if the loop is too short, or if we are just after
@@ -906,6 +907,14 @@ class RegAlloc(BaseRegalloc):
                 val = loc.get_jitframe_position()
                 gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
         return gcmap
+
+    def uses_floats(self):
+        if self.xrm.reg_bindings:
+            return True
+        for box in self.fm.bindings:
+            if box.type == FLOAT:
+                return True
+        return False
 
     def consider_setfield_gc(self, op):
         ofs, size, _ = unpack_fielddescr(op.getdescr())

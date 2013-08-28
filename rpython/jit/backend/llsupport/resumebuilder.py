@@ -47,6 +47,9 @@ class ResumeBuilder(object):
         self.framestack.pop()
         self.newops.append(op)
 
+    def get_position(self):
+        return len(self.newops)
+
     def not_implemented_op(self, op):
         print "Not implemented", op.getopname()
         raise NotImplementedError(op.getopname())
