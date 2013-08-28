@@ -700,12 +700,6 @@ class TreeLoop(object):
                 if hasattr(op.getdescr(), '_debug_suboperations'):
                     ops = op.getdescr()._debug_suboperations
                     TreeLoop.check_consistency_of_branch(ops, seen.copy())
-                for box in op.getfailargs() or []:
-                    if box is not None:
-                        assert isinstance(box, Box)
-                        assert box in seen
-            else:
-                assert op.getfailargs() is None
             box = op.result
             if box is not None:
                 assert isinstance(box, Box)

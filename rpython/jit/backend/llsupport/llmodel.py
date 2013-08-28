@@ -339,27 +339,17 @@ class AbstractLLCPU(AbstractCPU):
         assert isinstance(res, history.AbstractFailDescr)
         return res
 
-    def _decode_pos(self, deadframe, index):
-        descr = self.get_latest_descr(deadframe)
-        if descr.final_descr:
-            assert index == 0
-            return 0
-        return descr.rd_locs[index]
-
-    def get_int_value(self, deadframe, index):
-        pos = self._decode_pos(deadframe, index)
+    def get_int_value(self, deadframe, pos):
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr
         ofs = self.unpack_arraydescr(descr)
         return self.read_int_at_mem(deadframe, pos + ofs, WORD, 1)
 
-    def get_ref_value(self, deadframe, index):
-        pos = self._decode_pos(deadframe, index)
+    def get_ref_value(self, deadframe, pos):
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr
         ofs = self.unpack_arraydescr(descr)
         return self.read_ref_at_mem(deadframe, pos + ofs)
 
-    def get_float_value(self, deadframe, index):
-        pos = self._decode_pos(deadframe, index)
+    def get_float_value(self, deadframe, pos):
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr
         ofs = self.unpack_arraydescr(descr)
         return self.read_float_at_mem(deadframe, pos + ofs)

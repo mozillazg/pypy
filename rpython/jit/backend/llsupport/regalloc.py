@@ -664,8 +664,7 @@ class BaseRegalloc(object):
             return False
         if operations[i + 1].getarg(0) is not op.result:
             return False
-        if (self.longevity[op.result][1] > i + 1 or
-            op.result in operations[i + 1].getfailargs()):
+        if self.longevity[op.result][1] > i + 1:
             return False
         return True
 

@@ -168,38 +168,12 @@ class BaseBackendTest(Runner):
             ResOperation(rop.JUMP, [i1], None, descr=targettoken),
             ]
         inputargs = [i0]
-        operations[3].setfailargs([i1])
 
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 2
         res = self.cpu.get_int_value(deadframe, 0)
-        assert res == 10
-
-    def test_compile_with_holes_in_fail_args(self):
-        i0 = BoxInt()
-        i1 = BoxInt()
-        i2 = BoxInt()
-        i3 = BoxInt()
-        looptoken = JitCellToken()
-        targettoken = TargetToken()
-        operations = [
-            ResOperation(rop.INT_SUB, [i3, ConstInt(42)], i0),
-            ResOperation(rop.LABEL, [i0], None, descr=targettoken),
-            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
-            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
-            ResOperation(rop.GUARD_TRUE, [i2], None, descr=BasicFailDescr(2)),
-            ResOperation(rop.JUMP, [i1], None, descr=targettoken),
-            ]
-        inputargs = [i3]
-        operations[4].setfailargs([None, None, i1, None])
-
-        self.cpu.compile_loop(None, inputargs, operations, looptoken)
-        deadframe = self.cpu.execute_token(looptoken, 44)
-        fail = self.cpu.get_latest_descr(deadframe)
-        assert fail.identifier == 2
-        res = self.cpu.get_int_value(deadframe, 2)
         assert res == 10
 
     def test_backends_dont_keep_loops_alive(self):
@@ -218,7 +192,6 @@ class BaseBackendTest(Runner):
             ResOperation(rop.JUMP, [i1], None, descr=targettoken),
             ]
         inputargs = [i0]
-        operations[3].setfailargs([i1])
         wr_i1 = weakref.ref(i1)
         wr_guard = weakref.ref(operations[2])
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
@@ -248,7 +221,6 @@ class BaseBackendTest(Runner):
             ResOperation(rop.JUMP, [i1], None, descr=targettoken),
             ]
         inputargs = [i0]
-        operations[3].setfailargs([i1])
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
 
         i1b = BoxInt()
@@ -258,7 +230,6 @@ class BaseBackendTest(Runner):
             ResOperation(rop.GUARD_TRUE, [i3], None, descr=faildescr2),
             ResOperation(rop.JUMP, [i1b], None, descr=targettoken),
         ]
-        bridge[1].setfailargs([i1b])
 
         self.cpu.compile_bridge(None, faildescr1, [i1b], bridge, looptoken)
 
