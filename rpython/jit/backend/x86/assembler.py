@@ -1772,17 +1772,13 @@ class Assembler386(BaseAssembler):
             regs = gpr_reg_mgr_cls.all_regs
         for gpr in regs:
             if gpr not in ignored_regs:
-                v = gpr_reg_mgr_cls.all_reg_indexes[gpr.value]
+                v = gpr.get_jitframe_position()
                 mc.MOV_br(v * WORD + base_ofs, gpr.value)
         if withfloats:
-            if IS_X86_64:
-                coeff = 1
-            else:
-                coeff = 2
             # Push all XMM regs
-            ofs = len(gpr_reg_mgr_cls.all_regs)
-            for i in range(len(xmm_reg_mgr_cls.all_regs)):
-                mc.MOVSD_bx((ofs + i * coeff) * WORD + base_ofs, i)
+            for reg in xmm_reg_mgr_cls.all_regs:
+                v = reg.get_jitframe_position()
+                mc.MOVSD_bx(v * WORD + base_ofs, reg.value)
 
     def _pop_all_regs_from_frame(self, mc, ignored_regs, withfloats,
                                  callee_only=False):

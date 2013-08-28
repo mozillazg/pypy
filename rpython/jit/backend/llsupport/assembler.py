@@ -36,22 +36,12 @@ class GuardToken(object):
         self.is_guard_not_forced = is_guard_not_forced
 
     def compute_gcmap(self, gcmap, failargs, fail_locs, frame_depth):
-        # note that regalloc has a very similar compute, but
-        # one that does iteration over all bindings, so slightly different,
-        # eh
-        input_i = 0
         for i in range(len(failargs)):
             arg = failargs[i]
             if arg is None:
                 continue
-            loc = fail_locs[input_i]
-            input_i += 1
             if arg.type == REF:
-                loc = fail_locs[i]
-                if loc.is_core_reg():
-                    val = self.cpu.all_reg_indexes[loc.value]
-                else:
-                    val = loc.get_position() + self.cpu.JITFRAME_FIXED_SIZE
+                val = fail_locs[i].get_jitframe_position()
                 gcmap[val // WORD // 8] |= r_uint(1) << (val % (WORD * 8))
         return gcmap
 

@@ -1,5 +1,6 @@
 from rpython.jit.metainterp.history import ConstInt
 from rpython.jit.backend.x86 import rx86
+from rpython.jit.backend.x86.arch import JITFRAME_FIXED_SIZE
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.jit.backend.x86.arch import WORD, IS_X86_32, IS_X86_64
 from rpython.tool.sourcetools import func_with_new_name
@@ -50,6 +51,9 @@ class AssemblerLocation(object):
 
     def get_position(self):
         raise NotImplementedError # only for stack
+
+    def get_jitframe_position(self):
+        raise NotImplementedError
 
 class RawEbpLoc(AssemblerLocation):
     """ The same as stack location, but does not know it's position.
@@ -112,7 +116,7 @@ class RawEspLoc(AssemblerLocation):
 
 class FrameLoc(RawEbpLoc):
     _immutable_ = True
-    
+
     def __init__(self, position, ebp_offset, type):
         # _getregkey() returns self.value; the value returned must not
         # conflict with RegLoc._getregkey().  It doesn't a bit by chance,
@@ -127,6 +131,9 @@ class FrameLoc(RawEbpLoc):
 
     def get_position(self):
         return self.position
+
+    def get_jitframe_position(self):
+        return self.position + JITFRAME_FIXED_SIZE
 
 class RegLoc(AssemblerLocation):
     _immutable_ = True
@@ -171,6 +178,18 @@ class RegLoc(AssemblerLocation):
 
     def is_core_reg(self):
         return True
+
+    def get_jitframe_position(self):
+        from rpython.jit.backend.x86 import regalloc
+
+        if self.is_xmm:
+            ofs = len(regalloc.gpr_reg_mgr_cls.all_regs)
+            if IS_X86_64:
+                return ofs + self.value
+            else:
+                return ofs + 2 * self.value
+        else:
+            return regalloc.gpr_reg_mgr_cls.all_reg_indexes[self.value]
 
 class ImmediateAssemblerLocation(AssemblerLocation):
     _immutable_ = True
@@ -342,7 +361,7 @@ xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, xmm8, xmm9, xmm10, xmm11, xmm12,
 # we actually do:
 #     mov r11, 0xDEADBEEFDEADBEEF
 #     mov rax, [r11]
-# 
+#
 # NB: You can use the scratch register as a temporary register in
 # assembler.py, but care must be taken when doing so. A call to a method in
 # LocationCodeBuilder could clobber the scratch register when certain
@@ -638,7 +657,7 @@ class LocationCodeBuilder(object):
     CVTTSD2SI = _binaryop('CVTTSD2SI')
     CVTSD2SS = _binaryop('CVTSD2SS')
     CVTSS2SD = _binaryop('CVTSS2SD')
-    
+
     SQRTSD = _binaryop('SQRTSD')
 
     ANDPD = _binaryop('ANDPD')
