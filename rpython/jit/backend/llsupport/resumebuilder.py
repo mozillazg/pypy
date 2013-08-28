@@ -59,3 +59,4 @@ for name, value in ResumeBuilder.__dict__.iteritems():
     if name.startswith('process_'):
         num = getattr(rop, name[len('process_'):].upper())
         oplist[num] = value
+
