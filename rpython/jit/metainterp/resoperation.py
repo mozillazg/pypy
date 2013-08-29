@@ -472,6 +472,9 @@ _oplist = [
     'ENTER_FRAME/1d',
     'LEAVE_FRAME/0',
     'RESUME_PUT/3',
+    'BACKEND_PUT/3',
+    # same as resume_put, but the first arg is backend-dependent,
+    # instead of a box
     '_RESUME_LAST',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 

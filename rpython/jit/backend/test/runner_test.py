@@ -164,6 +164,8 @@ class BaseBackendTest(Runner):
             ResOperation(rop.LABEL, [i0], None, descr=targettoken),
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.RESUME_PUT, [i2, ConstInt(0), ConstInt(0)],
+                         None),
             ResOperation(rop.GUARD_TRUE, [i2], None, descr=BasicFailDescr(2)),
             ResOperation(rop.JUMP, [i1], None, descr=targettoken),
             ]
@@ -2240,7 +2242,7 @@ class LLtypeBackendTest(BaseBackendTest):
 
         for i in range(5):
             called = []
-        
+
             FUNC = self.FuncType([lltype.Signed] * i, lltype.Void)
             func_ptr = llhelper(lltype.Ptr(FUNC), func_void)
             calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,

@@ -53,9 +53,6 @@ class MIFrame(object):
         self.copy_constants(self.registers_r, jitcode.constants_r, ConstPtr)
         self.copy_constants(self.registers_f, jitcode.constants_f, ConstFloat)
         self._result_argcode = 'v'
-        # for resume.py operation
-        self.parent_resumedata_snapshot = None
-        self.parent_resumedata_frame_info_list = None
         # counter for unrolling inlined loops
         self.unroll_iterations = 1
 
@@ -1047,7 +1044,7 @@ class MIFrame(object):
             saved_pc = self.pc
             self.pc = orgpc
             resumedescr = compile.ResumeAtPositionDescr()
-            self.metainterp.capture_resumedata(resumedescr, orgpc)
+            #self.metainterp.capture_resumedata(resumedescr, orgpc)
 
             self.metainterp.reached_loop_header(greenboxes, redboxes, resumedescr)
             self.pc = saved_pc
@@ -1791,7 +1788,7 @@ class MetaInterp(object):
             resumedescr = compile.ResumeGuardDescr()
         guard_op = self.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
-        self.capture_resumedata(resumedescr, resumepc)
+        #self.capture_resumedata(resumedescr, resumepc)
         self.staticdata.profiler.count_ops(opnum, Counters.GUARDS)
         # count
         self.attach_debug_info(guard_op)

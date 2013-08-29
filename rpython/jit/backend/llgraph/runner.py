@@ -45,8 +45,6 @@ class LLTrace(object):
                                        map(mapping, op.getarglist()),
                                        mapping(op.result),
                                        newdescr)
-            if op.getfailargs() is not None:
-                newop.setfailargs(map(mapping, op.getfailargs()))
             self.operations.append(newop)
 
 class WeakrefDescr(AbstractDescr):
@@ -694,19 +692,11 @@ class LLFrame(object):
     # -----------------------------------------------------
 
     def fail_guard(self, descr, saved_data=None):
-        values = []
-        for box in self.current_op.getfailargs():
-            if box is not None:
-                value = self.env[box]
-            else:
-                value = None
-            values.append(value)
         if hasattr(descr, '_llgraph_bridge'):
             target = (descr._llgraph_bridge, -1)
-            values = [value for value in values if value is not None]
-            raise Jump(target, values)
+            raise Jump(target, self.frontend_env)
         else:
-            raise ExecutionFinished(LLDeadFrame(descr, values,
+            raise ExecutionFinished(LLDeadFrame(descr, self.frontend_env,
                                                 self.last_exception,
                                                 saved_data))
 
@@ -826,6 +816,9 @@ class LLFrame(object):
 
     def execute_jump(self, descr, *args):
         raise Jump(descr._llgraph_target, args)
+
+    def execute_resume_put(self, descr, box, depth, position):
+        xxx
 
     def _do_math_sqrt(self, value):
         import math
