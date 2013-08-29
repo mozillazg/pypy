@@ -38,7 +38,7 @@ class ResumeBuilder(object):
         v = op.getarg(0)
         loc = self.regalloc.loc(v)
         pos = loc.get_jitframe_position()
-        self.newops.append(op.copy_and_change(rop.RESUME_PUT,
+        self.newops.append(op.copy_and_change(rop.BACKEND_PUT,
                                               args=[ConstInt(pos),
                                                     op.getarg(1),
                                                     op.getarg(2)]))

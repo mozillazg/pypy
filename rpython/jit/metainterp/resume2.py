@@ -23,7 +23,7 @@ class AbstractResumeReader(object):
                 self.enter_frame(op.getarg(0).getint(), descr)
             elif op.getopnum() == rop.LEAVE_FRAME:
                 self.leave_frame()
-            elif op.getopnum() == rop.RESUME_PUT:
+            elif op.getopnum() == rop.BACKEND_PUT:
                 self.put(op.getarg(0).getint(), op.getarg(1).getint(),
                          op.getarg(2).getint())
             else:

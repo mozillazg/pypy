@@ -40,7 +40,7 @@ class TestResumeDirect(object):
         resume_loop = parse("""
         []
         enter_frame(-1, descr=jitcode1)
-        resume_put(10, 0, 1)
+        backend_put(10, 0, 1)
         leave_frame()
         """, namespace={'jitcode1': jitcode})
         descr = Descr()
@@ -62,12 +62,12 @@ class TestResumeDirect(object):
         resume_loop = parse("""
         []
         enter_frame(-1, descr=jitcode1)
-        resume_put(11, 0, 2)
+        backend_put(11, 0, 2)
         enter_frame(12, descr=jitcode2)
-        resume_put(12, 0, 3)
-        resume_put(8, 1, 4)
+        backend_put(12, 0, 3)
+        backend_put(8, 1, 4)
         leave_frame()
-        resume_put(10, 0, 1)
+        backend_put(10, 0, 1)
         leave_frame()
         """, namespace={'jitcode1': jitcode1, 'jitcode2': jitcode2})
         metainterp = MockMetaInterp()
