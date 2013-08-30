@@ -71,10 +71,29 @@ class BoxResumeReader(AbstractResumeReader):
 
 class ReconstructingResumeReader(AbstractResumeReader):
     def __init__(self):
-        pass
+        self.framestack = []
+
+    def enter_frame(self, pc, jitcode):
+        self.framestack.append([-1] * jitcode.num_regs())
+
+    def put(self, jitframe_index, depth, frontend_position):
+        self.framestack[- depth - 1][frontend_position] = jitframe_index
+
+    def leave_frame(self):
+        self.framestack.pop()
 
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     BoxResumeReader(metainterp, deadframe).rebuild(faildescr)
 
 def rebuild_locs_from_resumedata(faildescr):
-    ReconstructingResumeReader().rebuild(faildescr)
+    reader = ReconstructingResumeReader()
+    reader.rebuild(faildescr)
+    size = 0
+    for frame in reader.framestack:
+        size += len(frame)
+    res = [-1] * size
+    i = 0
+    for frame in reader.framestack:
+        res[i : i + len(frame)] = frame
+        i += len(frame)
+    return res

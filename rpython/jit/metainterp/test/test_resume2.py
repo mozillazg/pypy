@@ -126,20 +126,23 @@ class TestResumeDirect(object):
 
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")
-        jitcode1.setup(num_regs_i=13)
+        jitcode1.setup(num_regs_i=3, num_regs_f=0, num_regs_r=0)
         jitcode2 = JitCode("jitcode2")
-        jitcode2.setup(num_regs_i=9)
+        jitcode2.setup(num_regs_i=3, num_regs_f=0, num_regs_r=0)
         resume_loop = parse("""
         []
         enter_frame(-1, descr=jitcode1)
-        backend_put(11, 0, 2)
+        backend_put(11, 0, 1)
         enter_frame(12, descr=jitcode2)
-        backend_put(12, 0, 3)
-        backend_put(8, 1, 4)
+        backend_put(12, 0, 2)
+        backend_put(8, 1, 0)
         leave_frame()
-        backend_put(10, 0, 1)
+        backend_put(10, 0, 0)
         leave_frame()
         """, namespace={'jitcode1': jitcode1,
                         'jitcode2': jitcode2})
         descr = Descr()
-        #rebuild_locs_from_resumedata(descr)
+        descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
+        descr.rd_bytecode_position = 5
+        locs = rebuild_locs_from_resumedata(descr)
+        assert locs == [8, 11, -1, -1, -1, 12]
