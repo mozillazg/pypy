@@ -111,6 +111,7 @@ class BaseAssembler(object):
         return r
 
     def rebuild_faillocs_from_descr(self, descr, inputargs):
+        xxx
         locs = []
         GPR_REGS = len(self.cpu.gen_regs)
         XMM_REGS = len(self.cpu.float_regs)

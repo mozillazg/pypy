@@ -1,6 +1,7 @@
 import py, weakref
 from rpython.jit.backend import model
 from rpython.jit.backend.llgraph import support
+from rpython.jit.backend.llsupport import resumebuilder
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.history import Const, getkind
 from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID
@@ -33,6 +34,7 @@ class LLTrace(object):
         #
         self.inputargs = map(mapping, inputargs)
         self.operations = []
+        self.liveness = resumebuilder.LivenessAnalyzer()
         for op in operations:
             if op.getdescr() is not None:
                 if op.is_guard() or op.getopnum() == rop.FINISH:
