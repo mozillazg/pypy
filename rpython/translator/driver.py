@@ -246,8 +246,7 @@ class TranslationDriver(object):
             expose_task(self.task_pyjitpl)
         if not self.config.translation.backendopt.none:
             expose_task(self.task_backendopt)
-        if self.config.translation.type_system == 'lltype':
-            expose_task(self.task_stackcheckinsertion_lltype)
+        expose_task(self.task_stackcheckinsertion)
         for task in backends[self.config.translation.backend](self).get_tasks():
             expose_task(task)
 
@@ -414,13 +413,13 @@ class TranslationDriver(object):
         backend_optimizations(self.translator)
 
     @taskdef("inserting stack checks")
-    def task_stackcheckinsertion_lltype(self):
+    def task_stackcheckinsertion(self):
         from rpython.translator.transform import insert_ll_stackcheck
         count = insert_ll_stackcheck(self.translator)
         self.log.info("inserted %d stack checks." % (count,))
 
     @taskdef("LLInterpreting")
-    def task_llinterpret_lltype(self):
+    def task_llinterpret(self):
         from rpython.rtyper.llinterp import LLInterpreter
         py.log.setconsumer("llinterp operation", None)
 
