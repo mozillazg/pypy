@@ -2,7 +2,9 @@
 from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr
-from rpython.jit.metainterp.resume2 import rebuild_from_resumedata
+from rpython.jit.metainterp.resume2 import rebuild_from_resumedata,\
+     rebuild_locs_from_resumedata, ResumeBytecode
+
 
 class Descr(AbstractDescr):
     pass
@@ -44,8 +46,7 @@ class TestResumeDirect(object):
         leave_frame()
         """, namespace={'jitcode1': jitcode})
         descr = Descr()
-        descr.rd_loop = MockLoop()
-        descr.rd_loop.rd_bytecode = resume_loop.operations
+        descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
         descr.rd_bytecode_position = 2
         metainterp = MockMetaInterp()
         metainterp.cpu = MockCPU()
@@ -73,8 +74,7 @@ class TestResumeDirect(object):
         metainterp = MockMetaInterp()
         metainterp.cpu = MockCPU()
         descr = Descr()
-        descr.rd_loop = MockLoop()
-        descr.rd_loop.rd_bytecode = resume_loop.operations
+        descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
         descr.rd_bytecode_position = 5
         rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 2
@@ -96,9 +96,39 @@ class TestResumeDirect(object):
         assert f.registers_i[2].getint() == 11 + 3
         assert f.registers_i[4].getint() == 8 + 3
 
+    def test_bridge(self):
+        jitcode1 = JitCode("jitcode")
+        jitcode1.setup(num_regs_i=13)
+        base = parse("""
+        []
+        enter_frame(-1, descr=jitcode1)
+        backend_put(42, 0, 0)
+        # here is the split caused by a guard
+        backend_put(1, 0, 1)
+        """, namespace={'jitcode1': jitcode1})
+        bridge = parse("""
+        []
+        backend_put(2, 0, 1)
+        """)
+        descr = Descr()
+        descr.rd_bytecode_position = 1
+        parent = ResumeBytecode(base.operations)
+        b = ResumeBytecode(bridge.operations, parent=parent,
+                           parent_position=2)
+        descr.rd_resume_bytecode = b
+        metainterp = MockMetaInterp()
+        metainterp.cpu = MockCPU()
+        rebuild_from_resumedata(metainterp, "myframe", descr)
+        f = metainterp.framestack[-1]
+        assert f.num_nonempty_regs() == 2
+        assert f.registers_i[0].getint() == 42 + 3
+        assert f.registers_i[1].getint() == 2 + 3
+
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=13)
+        jitcode2 = JitCode("jitcode2")
+        jitcode2.setup(num_regs_i=9)
         resume_loop = parse("""
         []
         enter_frame(-1, descr=jitcode1)
@@ -109,5 +139,7 @@ class TestResumeDirect(object):
         leave_frame()
         backend_put(10, 0, 1)
         leave_frame()
-        """)
-        xxx
+        """, namespace={'jitcode1': jitcode1,
+                        'jitcode2': jitcode2})
+        descr = Descr()
+        #rebuild_locs_from_resumedata(descr)

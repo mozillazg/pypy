@@ -4,20 +4,21 @@ from rpython.jit.metainterp.history import BoxInt
 from rpython.jit.codewriter.jitcode import JitCode
 
 class ResumeBytecode(object):
-    def __init__(self, bc, parent=None, loop=None):
-        self.bc = bc
-        self.branches = {}
+    def __init__(self, opcodes, parent=None, parent_position=-1, loop=None):
+        self.opcodes = opcodes
         self.parent = parent
+        self.parent_position = parent_position
         self.loop = loop
-
-    def add_branch(self, pos, bc):
-        self.branches[pos] = ResumeBytecode(bc, self)
 
 class AbstractResumeReader(object):
     def rebuild(self, faildescr):
-        bytecode = faildescr.rd_loop.rd_bytecode
-        pos = faildescr.rd_bytecode_position
-        self.interpret_until(bytecode, pos)
+        self._rebuild_until(faildescr.rd_resume_bytecode,
+                            faildescr.rd_bytecode_position)
+
+    def _rebuild_until(self, rb, position):
+        if rb.parent is not None:
+            self._rebuild_until(rb.parent, rb.parent_position)
+        self.interpret_until(rb.opcodes, position)
 
     def interpret_until(self, bytecode, until):
         pos = 0
@@ -74,3 +75,6 @@ class ReconstructingResumeReader(AbstractResumeReader):
 
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     BoxResumeReader(metainterp, deadframe).rebuild(faildescr)
+
+def rebuild_locs_from_resumedata(faildescr):
+    ReconstructingResumeReader().rebuild(faildescr)
