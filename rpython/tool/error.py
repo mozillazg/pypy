@@ -2,11 +2,15 @@
 """ error handling features, just a way of displaying errors
 """
 
-from rpython.tool.ansi_print import ansi_log
-from rpython.flowspace.model import Variable
 import sys
 
 import py
+
+from rpython.flowspace.model import Variable
+from rpython.rlib import jit
+from rpython.tool.ansi_print import ansi_log
+
+
 log = py.log.Producer("error")
 py.log.setconsumer("error", ansi_log)
 
@@ -14,7 +18,8 @@ SHOW_TRACEBACK = False
 SHOW_ANNOTATIONS = True
 SHOW_DEFAULT_LINES_OF_CODE = 0
 
-def source_lines1(graph, block, operindex=None, offset=None, long=False, \
+
+def source_lines1(graph, block, operindex=None, offset=None, long=False,
     show_lines_of_code=SHOW_DEFAULT_LINES_OF_CODE):
     if block is not None:
         if block is graph.returnblock:
@@ -32,23 +37,24 @@ def source_lines1(graph, block, operindex=None, offset=None, long=False, \
         else:
             if block is None or not block.operations:
                 return []
+
             def toline(operindex):
                 return offset2lineno(graph.func.func_code, block.operations[operindex].offset)
             if operindex is None:
-                linerange =  (toline(0), toline(-1))
+                linerange = (toline(0), toline(-1))
                 if not long:
                     return ['?']
                 here = None
             else:
                 operline = toline(operindex)
                 if long:
-                    linerange =  (toline(0), toline(-1))
+                    linerange = (toline(0), toline(-1))
                     here = operline
                 else:
                     linerange = (operline, operline)
                     here = None
         lines = ["Happened at file %s line %d" % (graph.filename, here or linerange[0]), ""]
-        for n in range(max(0, linerange[0]-show_lines_of_code), \
+        for n in range(max(0, linerange[0]-show_lines_of_code),
             min(linerange[1]+1+show_lines_of_code, len(graph_lines)+graph.startline)):
             if n == here:
                 prefix = '==> '
@@ -62,19 +68,6 @@ def source_lines(graph, *args, **kwds):
     lines = source_lines1(graph, *args, **kwds)
     return ['In %r:' % (graph,)] + lines
 
-class AnnotatorError(Exception):
-    pass
-
-class NoSuchAttrError(Exception):
-    pass
-
-class ErrorWrapper(object):
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __repr__(self):
-        return '<%s>' % (self.msg,)
-
 def gather_error(annotator, graph, block, operindex):
     msg = [""]
 
@@ -84,23 +77,28 @@ def gather_error(annotator, graph, block, operindex):
             format_simple_call(annotator, oper, msg)
     else:
         oper = None
-    msg.append(" " + str(oper))
+    msg.append("    %s\n" % str(oper))
     msg += source_lines(graph, block, operindex, long=True)
     if oper is not None:
         if SHOW_ANNOTATIONS:
-            msg.append("Known variable annotations:")
-            for arg in oper.args + [oper.result]:
-                if isinstance(arg, Variable):
-                    try:
-                        msg.append(" " + str(arg) + " = " + str(annotator.binding(arg)))
-                    except KeyError:
-                        pass
+            msg += format_annotations(annotator, oper)
+            msg += ['']
     return "\n".join(msg)
+
+def format_annotations(annotator, oper):
+    msg = []
+    msg.append("Known variable annotations:")
+    for arg in oper.args + [oper.result]:
+        if isinstance(arg, Variable):
+            try:
+                msg.append(" " + str(arg) + " = " + str(annotator.binding(arg)))
+            except KeyError:
+                pass
+    return msg
 
 def format_blocked_annotation_error(annotator, blocked_blocks):
     text = []
     for block, (graph, index) in blocked_blocks.items():
-        text.append('-+' * 30)
         text.append("Blocked block -- operation cannot succeed")
         text.append(gather_error(annotator, graph, block, index))
     return '\n'.join(text)
@@ -136,6 +134,7 @@ def debug(drv, use_pdb=True):
     from rpython.translator.tool.pdbplus import PdbPlusShow
     from rpython.translator.driver import log
     t = drv.translator
+
     class options:
         huge = 100
 
@@ -161,6 +160,7 @@ def debug(drv, use_pdb=True):
         pdb_plus_show.start(tb)
 
 
+@jit.elidable
 def offset2lineno(c, stopat):
     tab = c.co_lnotab
     line = c.co_firstlineno

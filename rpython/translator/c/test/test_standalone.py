@@ -1,10 +1,13 @@
 import py
 import sys, os, re
 
+from rpython.config.translationoption import get_combined_translation_config
 from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib.rarithmetic import r_longlong
 from rpython.rlib.debug import ll_assert, have_debug_prints, debug_flush
 from rpython.rlib.debug import debug_print, debug_start, debug_stop, debug_offset
+from rpython.rlib.entrypoint import entrypoint, secondary_entrypoints
+from rpython.rtyper.lltypesystem import lltype
 from rpython.translator.translator import TranslationContext
 from rpython.translator.backendopt import all
 from rpython.translator.c.genc import CStandaloneBuilder, ExternalCompilationInfo
@@ -18,9 +21,16 @@ class StandaloneTests(object):
     config = None
 
     def compile(self, entry_point, debug=True, shared=False,
-                stackcheck=False):
+                stackcheck=False, entrypoints=None):
         t = TranslationContext(self.config)
-        t.buildannotator().build_types(entry_point, [s_list_of_strings])
+        ann = t.buildannotator()
+        ann.build_types(entry_point, [s_list_of_strings])
+        if entrypoints is not None:
+            anns = {}
+            for func, annotation in secondary_entrypoints['test']:
+                anns[func] = annotation
+            for item in entrypoints:
+                ann.build_types(item, anns[item])
         t.buildrtyper().specialize()
 
         if stackcheck:
@@ -29,7 +39,11 @@ class StandaloneTests(object):
 
         t.config.translation.shared = shared
 
-        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
+        if entrypoints is not None:
+            kwds = {'secondary_entrypoints': [(i, None) for i in entrypoints]}
+        else:
+            kwds = {}
+        cbuilder = CStandaloneBuilder(t, entry_point, t.config, **kwds)
         if debug:
             cbuilder.generate_source(debug_defines=True)
         else:
@@ -89,7 +103,7 @@ class TestStandalone(StandaloneTests):
             llop.instrument_count(lltype.Void, 'test', 1)
             llop.instrument_count(lltype.Void, 'test', 1)
             llop.instrument_count(lltype.Void, 'test', 2)
-            llop.instrument_count(lltype.Void, 'test', 1)        
+            llop.instrument_count(lltype.Void, 'test', 1)
             return 0
         t = TranslationContext(self.config)
         t.config.translation.instrument = True
@@ -277,7 +291,7 @@ class TestStandalone(StandaloneTests):
 
     def test_debug_print_start_stop(self):
         from rpython.rtyper.lltypesystem import rffi
-        
+
         def entry_point(argv):
             x = "got:"
             debug_start  ("mycat")
@@ -409,7 +423,6 @@ class TestStandalone(StandaloneTests):
         assert 'bok' in data
         #
         # finally, check compiling with logging disabled
-        from rpython.config.translationoption import get_combined_translation_config
         config = get_combined_translation_config(translating=True)
         config.translation.log = False
         self.config = config
@@ -434,6 +447,57 @@ class TestStandalone(StandaloneTests):
         assert 'bar' == lines[1]
         assert 'foo}' in lines[2]
 
+    def test_debug_print_fork(self):
+        if not hasattr(os, 'fork'):
+            py.test.skip("requires fork()")
+
+        def entry_point(argv):
+            debug_start("foo")
+            debug_print("test line")
+            childpid = os.fork()
+            debug_print("childpid =", childpid)
+            if childpid == 0:
+                childpid2 = os.fork()   # double-fork
+                debug_print("childpid2 =", childpid2)
+            debug_stop("foo")
+            return 0
+        t, cbuilder = self.compile(entry_point)
+        path = udir.join('test_debug_print_fork.log')
+        out, err = cbuilder.cmdexec("", err=True,
+                                    env={'PYPYLOG': ':%s' % path})
+        assert not err
+        #
+        f = open(str(path), 'r')
+        lines = f.readlines()
+        f.close()
+        assert '{foo' in lines[0]
+        assert lines[1] == "test line\n"
+        offset1 = len(lines[0]) + len(lines[1])
+        assert lines[2].startswith('childpid = ')
+        childpid = int(lines[2][11:])
+        assert childpid != 0
+        assert 'foo}' in lines[3]
+        assert len(lines) == 4
+        #
+        f = open('%s.fork%d' % (path, childpid), 'r')
+        lines = f.readlines()
+        f.close()
+        assert lines[0] == 'FORKED: %d %s\n' % (offset1, path)
+        assert lines[1] == 'childpid = 0\n'
+        offset2 = len(lines[0]) + len(lines[1])
+        assert lines[2].startswith('childpid2 = ')
+        childpid2 = int(lines[2][11:])
+        assert childpid2 != 0
+        assert 'foo}' in lines[3]
+        assert len(lines) == 4
+        #
+        f = open('%s.fork%d' % (path, childpid2), 'r')
+        lines = f.readlines()
+        f.close()
+        assert lines[0] == 'FORKED: %d %s.fork%d\n' % (offset2, path, childpid)
+        assert lines[1] == 'childpid2 = 0\n'
+        assert 'foo}' in lines[2]
+        assert len(lines) == 3
 
     def test_fatal_error(self):
         def g(x):
@@ -817,13 +881,36 @@ class TestStandalone(StandaloneTests):
         out = cbuilder.cmdexec('')
         assert out.strip() == '789'
 
+    def test_llhelper_stored_in_struct(self):
+        from rpython.rtyper.annlowlevel import llhelper
+
+        def f(x):
+            return x + 3
+
+        FUNC_TP = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed))
+
+        S = lltype.GcStruct('s', ('f', FUNC_TP))
+
+        class Glob(object):
+            pass
+
+        glob = Glob()
+
+        def entry_point(argv):
+            x = llhelper(FUNC_TP, f)
+            s = lltype.malloc(S)
+            s.f = x
+            glob.s = s # escape
+            return 0
+
+        self.compile(entry_point)
+        # assert did not explode
 
 class TestMaemo(TestStandalone):
     def setup_class(cls):
         py.test.skip("TestMaemo: tests skipped for now")
         from rpython.translator.platform.maemo import check_scratchbox
         check_scratchbox()
-        from rpython.config.translationoption import get_combined_translation_config
         config = get_combined_translation_config(translating=True)
         config.translation.platform = 'maemo'
         cls.config = config
@@ -1164,3 +1251,26 @@ class TestThread(object):
                 and result.count('c') == result.count('p') == 5
                 and result.count('a') == 1
                 and result.count('d') == 6)
+
+
+class TestShared(StandaloneTests):
+
+    def test_entrypoint(self):
+        import ctypes
+
+        config = get_combined_translation_config(translating=True)
+        self.config = config
+
+        @entrypoint('test', [lltype.Signed], c_name='foo')
+        def f(a):
+            return a + 3
+
+        def entry_point(argv):
+            return 0
+
+        t, cbuilder = self.compile(entry_point, shared=True,
+                                   entrypoints=[f])
+        libname = cbuilder.executable_name.join('..', 'lib' +
+                                                cbuilder.modulename + '.so')
+        lib = ctypes.CDLL(str(libname))
+        assert lib.foo(13) == 16

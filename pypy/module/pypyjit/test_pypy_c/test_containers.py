@@ -1,5 +1,3 @@
-
-import py, sys
 from pypy.module.pypyjit.test_pypy_c.test_00_model import BaseTestPyPyC
 
 
@@ -13,6 +11,7 @@ class TestDicts(BaseTestPyPyC):
             a = A()
             a.x = 1
             for s in sys.modules.keys() * 1000:
+                d.get(s)  # force pending setfields etc.
                 inc = a.x # ID: look
                 d[s] = d.get(s, 0) + inc
             return sum(d.values())
@@ -21,8 +20,7 @@ class TestDicts(BaseTestPyPyC):
         assert log.result % 1000 == 0
         loop, = log.loops_by_filename(self.filepath)
         ops = loop.ops_by_id('look')
-        assert log.opnames(ops) == ['setfield_gc',
-                                    'guard_not_invalidated']
+        assert log.opnames(ops) == []
 
     def test_identitydict(self):
         def fn(n):
@@ -44,31 +42,11 @@ class TestDicts(BaseTestPyPyC):
         # gc_id call is hoisted out of the loop, the id of a value obviously
         # can't change ;)
         assert loop.match_by_id("getitem", """
+            ...
             i26 = call(ConstClass(ll_dict_lookup), p18, p6, i25, descr=...)
             ...
             p33 = getinteriorfield_gc(p31, i26, descr=<InteriorFieldDescr <FieldP dictentry.value .*>>)
             ...
-        """)
-
-    def test_list(self):
-        def main(n):
-            i = 0
-            while i < n:
-                z = list(())
-                z.append(1)
-                i += z[-1] / len(z)
-            return i
-
-        log = self.run(main, [1000])
-        assert log.result == main(1000)
-        loop, = log.loops_by_filename(self.filepath)
-        assert loop.match("""
-            i7 = int_lt(i5, i6)
-            guard_true(i7, descr=...)
-            guard_not_invalidated(descr=...)
-            i9 = int_add(i5, 1)
-            --TICK--
-            jump(..., descr=...)
         """)
 
     def test_non_virtual_dict(self):
@@ -86,7 +64,7 @@ class TestDicts(BaseTestPyPyC):
             i8 = int_lt(i5, i7)
             guard_true(i8, descr=...)
             guard_not_invalidated(descr=...)
-            p10 = call(ConstClass(ll_int_str), i5, descr=<Callr . i EF=3>)
+            p10 = call(ConstClass(ll_str__IntegerR_SignedConst_Signed), i5, descr=<Callr . i EF=3>)
             guard_no_exception(descr=...)
             i12 = call(ConstClass(ll_strhash), p10, descr=<Calli . r EF=0>)
             p13 = new(descr=...)
@@ -115,7 +93,31 @@ class TestDicts(BaseTestPyPyC):
             i35 = int_add_ovf(i5, i34)
             guard_no_overflow(descr=...)
             --TICK--
-            jump(p0, p1, p2, p3, p4, i35, p13, i7, descr=...)
+            jump(..., descr=...)
+        """)
+
+
+
+class TestOtherContainers(BaseTestPyPyC):
+    def test_list(self):
+        def main(n):
+            i = 0
+            while i < n:
+                z = list(())
+                z.append(1)
+                i += z[-1] / len(z)
+            return i
+
+        log = self.run(main, [1000])
+        assert log.result == main(1000)
+        loop, = log.loops_by_filename(self.filepath)
+        assert loop.match("""
+            i7 = int_lt(i5, i6)
+            guard_true(i7, descr=...)
+            guard_not_invalidated(descr=...)
+            i9 = int_add(i5, 1)
+            --TICK--
+            jump(..., descr=...)
         """)
 
     def test_floatlist_unpack_without_calls(self):
@@ -129,8 +131,7 @@ class TestDicts(BaseTestPyPyC):
         ops = loop.ops_by_id('look')
         assert 'call' not in log.opnames(ops)
 
-    #XXX the following tests only work with strategies enabled
-
+    # XXX the following tests only work with strategies enabled
     def test_should_not_create_intobject_with_sets(self):
         def main(n):
             i = 0
@@ -200,10 +201,43 @@ class TestDicts(BaseTestPyPyC):
         def main(n):
             i = 0
             while i < n:
-                s = set([1,2,3])
+                s = set([1, 2, 3])
                 i += 1
         log = self.run(main, [1000])
         assert log.result == main(1000)
         loop, = log.loops_by_filename(self.filepath)
         opnames = log.opnames(loop.allops())
         assert opnames.count('new_with_vtable') == 0
+
+    def test_constfold_tuple(self):
+        code = """if 1:
+        tup = tuple(range(10000))
+        l = [1, 2, 3, 4, 5, 6, "a"]
+        def main(n):
+            while n > 0:
+                sub = tup[1]  # ID: getitem
+                l[1] = n # kill cache of tup[1]
+                n -= sub
+        """
+        log = self.run(code, [1000])
+        loop, = log.loops_by_filename(self.filepath)
+        ops = loop.ops_by_id('getitem', include_guard_not_invalidated=False)
+        assert log.opnames(ops) == []
+
+
+    def test_specialised_tuple(self):
+        def main(n):
+            import pypyjit
+
+            f = lambda: None
+            tup = (n, n)
+            while n > 0:
+                tup[0]  # ID: getitem
+                pypyjit.residual_call(f)
+                n -= 1
+
+        log = self.run(main, [1000])
+        assert log.result == main(1000)
+        loop, = log.loops_by_filename(self.filepath)
+        ops = loop.ops_by_id('getitem', include_guard_not_invalidated=False)
+        assert log.opnames(ops) == []

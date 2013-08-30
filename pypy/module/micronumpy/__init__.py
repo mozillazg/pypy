@@ -2,9 +2,8 @@ from pypy.interpreter.mixedmodule import MixedModule
 from pypy.module.micronumpy.interp_boxes import long_double_size, ENABLED_LONG_DOUBLE
 
 
-class Module(MixedModule):
-    applevel_name = '_numpypy'
-
+class MultiArrayModule(MixedModule):
+    appleveldefs = {'arange': 'app_numpy.arange'}
     interpleveldefs = {
         'ndarray': 'interp_numarray.W_NDimArray',
         'dtype': 'interp_dtype.W_Dtype',
@@ -13,17 +12,23 @@ class Module(MixedModule):
         'zeros': 'interp_numarray.zeros',
         'empty': 'interp_numarray.zeros',
         'ones': 'interp_numarray.ones',
+        '_reconstruct' : 'interp_numarray._reconstruct',
+        'scalar' : 'interp_numarray.build_scalar',
         'dot': 'interp_arrayops.dot',
         'fromstring': 'interp_support.fromstring',
         'flatiter': 'interp_flatiter.W_FlatIterator',
         'concatenate': 'interp_arrayops.concatenate',
-        'repeat': 'interp_arrayops.repeat',
         'where': 'interp_arrayops.where',
         'count_nonzero': 'interp_arrayops.count_nonzero',
 
         'set_string_function': 'appbridge.set_string_function',
         'typeinfo': 'interp_dtype.get_dtype_cache(space).w_typeinfo',
+    }
 
+
+class NumericTypesModule(MixedModule):
+    appleveldefs = {}
+    interpleveldefs = {
         'generic': 'interp_boxes.W_GenericBox',
         'number': 'interp_boxes.W_NumberBox',
         'integer': 'interp_boxes.W_IntegerBox',
@@ -66,8 +71,32 @@ class Module(MixedModule):
         'complex_': 'interp_boxes.W_Complex128Box',
         'complex128': 'interp_boxes.W_Complex128Box',
         'complex64': 'interp_boxes.W_Complex64Box',
+        'cfloat': 'interp_boxes.W_Complex64Box',
     }
+    if ENABLED_LONG_DOUBLE:
+        long_double_dtypes = [
+            ('longdouble', 'interp_boxes.W_LongDoubleBox'),
+            ('longfloat', 'interp_boxes.W_LongDoubleBox'),
+            ('clongdouble', 'interp_boxes.W_CLongDoubleBox'),
+            ('clongfloat', 'interp_boxes.W_CLongDoubleBox'),
+        ]
+        if long_double_size == 16:
+            long_double_dtypes += [
+                ('float128', 'interp_boxes.W_Float128Box'),
+                ('complex256', 'interp_boxes.W_Complex256Box'),
+            ]
+        elif long_double_size == 12:
+            long_double_dtypes += [
+                ('float96', 'interp_boxes.W_Float96Box'),
+                ('complex192', 'interp_boxes.W_Complex192Box'),
+            ]
+        for dt, box in long_double_dtypes:
+            interpleveldefs[dt] = box
 
+
+class UMathModule(MixedModule):
+    appleveldefs = {}
+    interpleveldefs = {}
     # ufuncs
     for exposed, impl in [
         ("absolute", "absolute"),
@@ -111,6 +140,7 @@ class Module(MixedModule):
         ("deg2rad", "radians"),
         ("rad2deg", "degrees"),
         ("reciprocal", "reciprocal"),
+        ("rint", "rint"),
         ("sign", "sign"),
         ("signbit", "signbit"),
         ("sin", "sin"),
@@ -146,38 +176,22 @@ class Module(MixedModule):
         ('logaddexp2', 'logaddexp2'),
         ('real', 'real'),
         ('imag', 'imag'),
+        ('ones_like', 'ones_like'),
+        ('zeros_like', 'zeros_like'),
     ]:
         interpleveldefs[exposed] = "interp_ufuncs.get(space).%s" % impl
 
-    appleveldefs = {
-        'arange': 'app_numpy.arange',
-    }
-    def setup_after_space_initialization(self):
-        space = self.space
-        all_list = sorted(Module.interpleveldefs.keys() + \
-                                Module.appleveldefs.keys())
-        # found by set(numpypy.__all__) - set(numpy.__all__)
-        all_list.remove('set_string_function')
-        all_list.remove('typeinfo')
-        w_all = space.wrap(all_list)
-        space.setitem(self.w_dict, space.new_interned_str('__all__'), w_all)
 
-if ENABLED_LONG_DOUBLE:
-    long_double_dtypes = [
-        ('longdouble', 'interp_boxes.W_LongDoubleBox'),
-        ('longfloat', 'interp_boxes.W_LongDoubleBox'),
-        ('clongdouble', 'interp_boxes.W_CLongDoubleBox'),
-        ('clongfloat', 'interp_boxes.W_CLongDoubleBox'),
-      ]
-    if long_double_size == 16:
-        long_double_dtypes += [
-            ('float128', 'interp_boxes.W_Float128Box'),
-            ('complex256', 'interp_boxes.W_Complex256Box'),
-            ]
-    elif long_double_size == 12:
-        long_double_dtypes += [
-            ('float96', 'interp_boxes.W_Float96Box'),
-            ('complex192', 'interp_boxes.W_Complex192Box'),
-            ]
-    for dt, box in long_double_dtypes:
-        Module.interpleveldefs[dt] = box
+class Module(MixedModule):
+    applevel_name = '_numpypy'
+    appleveldefs = {}
+    interpleveldefs = {
+        'choose': 'interp_arrayops.choose',
+        'put': 'interp_arrayops.put',
+        'repeat': 'interp_arrayops.repeat',
+    }
+    submodules = {
+        'multiarray': MultiArrayModule,
+        'numerictypes': NumericTypesModule,
+        'umath': UMathModule,
+    }

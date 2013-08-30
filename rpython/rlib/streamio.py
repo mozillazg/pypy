@@ -89,7 +89,7 @@ def open_file_as_stream(path, mode="r", buffering=-1):
 
 def _setfd_binary(fd):
     pass
-    
+
 def fdopen_as_stream(fd, mode, buffering=-1):
     # XXX XXX XXX you want do check whether the modes are compatible
     # otherwise you get funny results
@@ -185,11 +185,8 @@ if sys.platform == "win32":
     SetEndOfFile = rffi.llexternal('SetEndOfFile', [HANDLE], BOOL,
                                    compilation_info=_eci)
 
-    # HACK: These implementations are specific to MSVCRT and the C backend.
-    # When generating on CLI or JVM, these are patched out.
-    # See PyPyTarget.target() in targetpypystandalone.py
     def _setfd_binary(fd):
-        #Allow this to succeed on invalid fd's
+        # Allow this to succeed on invalid fd's
         if rposix.is_valid_fd(fd):
             _setmode(fd, os.O_BINARY)
 
@@ -561,19 +558,22 @@ class BufferingInputStream(Stream):
             if -self.pos <= difpos <= currentsize:
                 self.pos += difpos
                 return
-            self.buf = ""
-            self.pos = 0
             if whence == 1:
                 offset -= currentsize
             try:
                 self.do_seek(offset, whence)
             except MyNotImplementedError:
+                self.buf = ""
+                self.pos = 0
                 if difpos < 0:
                     raise
                 if whence == 0:
                     offset = difpos - currentsize
                 intoffset = offset2int(offset)
                 self.read(intoffset)
+            else:
+                self.buf = ""
+                self.pos = 0
             return
         if whence == 2:
             try:

@@ -25,33 +25,42 @@ class AppTestThreadSignal(GenericTestThread):
             __pypy__.thread._signals_enter()
 
     def test_enable_signals(self):
-        import __pypy__, thread, signal, time
+        import __pypy__, thread, signal, time, sys
 
         def subthread():
+            print('subthread started')
             try:
                 with __pypy__.thread.signals_enabled:
                     thread.interrupt_main()
                     for i in range(10):
-                        print 'x'
-                        time.sleep(0.1)
+                        print('x')
+                        time.sleep(0.25)
             except BaseException, e:
                 interrupted.append(e)
             finally:
+                print('subthread stops, interrupted=%r' % (interrupted,))
                 done.append(None)
 
         # This is normally called by app_main.py
         signal.signal(signal.SIGINT, signal.default_int_handler)
+
+        if sys.platform.startswith('win'):
+            # Windows seems to hang on _setmode when the first print comes from
+            # a thread, so make sure we've initialized io
+            sys.stdout
 
         for i in range(10):
             __pypy__.thread._signals_exit()
             try:
                 done = []
                 interrupted = []
+                print('--- start ---')
                 thread.start_new_thread(subthread, ())
-                for i in range(10):
+                for j in range(10):
                     if len(done): break
-                    print '.'
-                    time.sleep(0.1)
+                    print('.')
+                    time.sleep(0.25)
+                print('main thread loop done')
                 assert len(done) == 1
                 assert len(interrupted) == 1
                 assert 'KeyboardInterrupt' in interrupted[0].__class__.__name__
@@ -72,7 +81,7 @@ class AppTestThreadSignal(GenericTestThread):
         def threadfunction():
             pid = fork()
             if pid == 0:
-                print 'in child'
+                print('in child')
                 # signal() only works from the 'main' thread
                 signal.signal(signal.SIGUSR1, signal.SIG_IGN)
                 os._exit(42)
@@ -100,7 +109,7 @@ class AppTestThreadSignalLock:
             py.test.skip("this is only a test for -A runs on top of pypy")
 
     def test_enable_signals(self):
-        import __pypy__, thread, signal, time
+        import __pypy__, thread, time
 
         interrupted = []
         lock = thread.allocate_lock()
@@ -108,7 +117,7 @@ class AppTestThreadSignalLock:
 
         def subthread():
             try:
-                time.sleep(0.25)
+                time.sleep(0.5)
                 with __pypy__.thread.signals_enabled:
                     thread.interrupt_main()
             except BaseException, e:

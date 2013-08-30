@@ -12,17 +12,18 @@ import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.pycode import PyCode, CO_GENERATOR
 from pypy.interpreter.pyframe import PyFrame
-from pypy.interpreter.pyopcode import ExitFrame
+from pypy.interpreter.pyopcode import ExitFrame, Yield
 from opcode import opmap
 
-PyFrame._virtualizable2_ = ['last_instr', 'pycode',
-                            'valuestackdepth', 'locals_stack_w[*]',
-                            'cells[*]',
-                            'last_exception',
-                            'lastblock',
-                            'is_being_profiled',
-                            'w_globals',
-                            ]
+PyFrame._virtualizable_ = ['last_instr', 'pycode',
+                           'valuestackdepth', 'locals_stack_w[*]',
+                           'cells[*]',
+                           'last_exception',
+                           'lastblock',
+                           'is_being_profiled',
+                           'w_globals',
+                           'w_f_trace',
+                           ]
 
 JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
 
@@ -32,17 +33,15 @@ def get_printable_location(next_instr, is_being_profiled, bytecode):
     return '%s #%d %s' % (bytecode.get_repr(), next_instr, name)
 
 def get_jitcell_at(next_instr, is_being_profiled, bytecode):
-    return bytecode.jit_cells.get((next_instr, is_being_profiled), None)
+    # use only uints as keys in the jit_cells dict, rather than
+    # a tuple (next_instr, is_being_profiled)
+    key = (next_instr << 1) | r_uint(intmask(is_being_profiled))
+    return bytecode.jit_cells.get(key, None)
 
 def set_jitcell_at(newcell, next_instr, is_being_profiled, bytecode):
-    bytecode.jit_cells[next_instr, is_being_profiled] = newcell
+    key = (next_instr << 1) | r_uint(intmask(is_being_profiled))
+    bytecode.jit_cells[key] = newcell
 
-def confirm_enter_jit(next_instr, is_being_profiled, bytecode, frame, ec):
-    return (frame.w_f_trace is None and
-            ec.w_tracefunc is None)
-
-def can_never_inline(next_instr, is_being_profiled, bytecode):
-    return False
 
 def should_unroll_one_iteration(next_instr, is_being_profiled, bytecode):
     return (bytecode.co_flags & CO_GENERATOR) != 0
@@ -55,8 +54,6 @@ class PyPyJitDriver(JitDriver):
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
                               get_jitcell_at = get_jitcell_at,
                               set_jitcell_at = set_jitcell_at,
-                              confirm_enter_jit = confirm_enter_jit,
-                              can_never_inline = can_never_inline,
                               should_unroll_one_iteration =
                               should_unroll_one_iteration,
                               name='pypyjit')
@@ -76,7 +73,13 @@ class __extend__(PyFrame):
                 self.valuestackdepth = hint(self.valuestackdepth, promote=True)
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
                 is_being_profiled = self.is_being_profiled
+        except Yield:
+            self.last_exception = None
+            w_result = self.popvalue()
+            jit.hint(self, force_virtualizable=True)
+            return w_result
         except ExitFrame:
+            self.last_exception = None
             return self.popvalue()
 
     def jump_absolute(self, jumpto, ec):

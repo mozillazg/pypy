@@ -19,7 +19,7 @@ import py.test
 
 class BaseArrayTests:
 
-    
+
     def test_ctor(self):
         assert len(self.array('c')) == 0
         assert len(self.array('i')) == 0
@@ -390,7 +390,6 @@ class BaseArrayTests:
         assert self.array('c', ('h', 'i')).tostring() == 'hi'
         a = self.array('i', [0, 0, 0])
         assert a.tostring() == '\x00' * 3 * a.itemsize
-
         s = self.array('i', [1, 2, 3]).tostring()
         assert '\x00' in s
         assert '\x01' in s
@@ -502,7 +501,7 @@ class BaseArrayTests:
                 return 0
         class incomparable(object):
             pass
-        
+
         for v1, v2, tt in (([1, 2, 3], [1, 3, 2], 'bhilBHIL'),
                          ('abc', 'acb', 'c'),
                          (unicode('abc'), unicode('acb'), 'u')):
@@ -552,6 +551,15 @@ class BaseArrayTests:
                 assert (b >= a) is True
                 assert (a >= c) is False
                 assert (c >= a) is True
+
+        a = self.array('i', [-1, 0, 1, 42, 0x7f])
+        assert not a == 2*a
+        assert a != 2*a
+        assert a < 2*a
+        assert a <= 2*a
+        assert not a > 2*a
+        assert not a >= 2*a
+
 
     def test_reduce(self):
         import pickle
@@ -653,14 +661,14 @@ class BaseArrayTests:
         raises(TypeError, "a * 'hi'")
         raises(TypeError, "'hi' * a")
         raises(TypeError, "a *= 'hi'")
-        
+
         class mulable(object):
             def __mul__(self, other):
                 return "mul"
 
             def __rmul__(self, other):
                 return "rmul"
-        
+
         assert mulable() * self.array('i') == 'mul'
         assert self.array('i') * mulable() == 'rmul'
 
@@ -769,7 +777,7 @@ class BaseArrayTests:
 
             def __getitem__(self, i):
                 return array.__getitem__(self, self._index(i))
-            
+
             def __setitem__(self, i, val):
                 return array.__setitem__(self, self._index(i), val)
 
@@ -783,7 +791,7 @@ class BaseArrayTests:
 
         assert img[3, 25] == 3 * 9
 
-                
+
     def test_override_from(self):
         class mya(self.array):
             def fromlist(self, lst):
@@ -854,7 +862,7 @@ class BaseArrayTests:
     def test_subclass_del(self):
         import array, gc, weakref
         l = []
-        
+
         class A(array.array):
             pass
 
@@ -866,6 +874,77 @@ class BaseArrayTests:
         assert l
         assert l[0] is None or len(l[0]) == 0
 
+    def test_assign_object_with_special_methods(self):
+        from array import array
+        
+        class Num(object):
+            def __float__(self):
+                return 5.25
+                
+            def __int__(self):
+                return 7
+                
+        class NotNum(object):
+            pass
+        
+        class Silly(object):
+            def __float__(self):
+                return None
+                
+            def __int__(self):
+                return None         
+
+        class OldNum:
+            def __float__(self):
+                return 6.25
+                
+            def __int__(self):
+                return 8
+                
+        class OldNotNum:
+            pass
+        
+        class OldSilly:
+            def __float__(self):
+                return None
+                
+            def __int__(self):
+                return None
+                
+        for tc in 'bBhHiIlL':
+            a = array(tc, [0])
+            raises(TypeError, a.__setitem__, 0, 1.0)
+            a[0] = 1
+            a[0] = Num()
+            assert a[0] == 7
+            raises(TypeError, a.__setitem__, NotNum())
+            a[0] = OldNum()
+            assert a[0] == 8
+            raises(TypeError, a.__setitem__, OldNotNum())
+            raises(TypeError, a.__setitem__, Silly())
+            raises(TypeError, a.__setitem__, OldSilly())
+
+        for tc in 'fd':
+            a = array(tc, [0])
+            a[0] = 1.0
+            a[0] = 1
+            a[0] = Num()        
+            assert a[0] == 5.25
+            raises(TypeError, a.__setitem__, NotNum())
+            a[0] = OldNum()
+            assert a[0] == 6.25
+            raises(TypeError, a.__setitem__, OldNotNum())
+            raises(TypeError, a.__setitem__, Silly())
+            raises(TypeError, a.__setitem__, OldSilly())
+            
+        a = array('c', 'hi')
+        a[0] = 'b'
+        assert a[0] == 'b'
+            
+        a = array('u', u'hi')
+        a[0] = u'b'
+        assert a[0] == u'b'
+        
 
 class TestCPythonsOwnArray(BaseArrayTests):
 

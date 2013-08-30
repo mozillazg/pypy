@@ -10,9 +10,7 @@ from rpython.rtyper.lltypesystem import rlist
 # Note about *.im_func: The annotator and the rtyper expect direct
 # references to functions, so we cannot insert classmethods here.
 
-EXTERNALS = {
-    'LL_flush_icache': 'LL_flush_icache',
-    }
+EXTERNALS = {'LL_flush_icache': 'LL_flush_icache'}
 
 #______________________________________________________
 
@@ -44,9 +42,6 @@ def predeclare_utility_functions(db, rtyper):
     LIST_OF_STR = find_list_of_str(rtyper)
     if LIST_OF_STR is not None:
         p = lltype.Ptr(LIST_OF_STR)
-
-        def _RPyListOfString_New(length=lltype.Signed):
-            return LIST_OF_STR.ll_newlist(length)
 
         def _RPyListOfString_New(length=lltype.Signed):
             return LIST_OF_STR.ll_newlist(length)
@@ -96,7 +91,7 @@ def predeclare_extfuncs(db, rtyper):
 
 def predeclare_exception_data(db, rtyper):
     # Exception-related types and constants
-    exceptiondata = rtyper.getexceptiondata()
+    exceptiondata = rtyper.exceptiondata
     exctransformer = db.exctransformer
 
     yield ('RPYTHON_EXCEPTION_VTABLE', exceptiondata.lltype_of_exception_type)

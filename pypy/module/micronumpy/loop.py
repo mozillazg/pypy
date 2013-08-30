@@ -19,9 +19,34 @@ call2_driver = jit.JitDriver(name='numpy_call2',
                              reds = ['shape', 'w_lhs', 'w_rhs', 'out',
                                      'left_iter', 'right_iter', 'out_iter'])
 
-def call2(shape, func, calc_dtype, res_dtype, w_lhs, w_rhs, out):
+def call2(space, shape, func, calc_dtype, res_dtype, w_lhs, w_rhs, out):
+    # handle array_priority
+    # w_lhs and w_rhs could be of different ndarray subtypes. Numpy does:
+    # 1. if __array_priorities__ are equal and one is an ndarray and the
+    #        other is a subtype,  flip the order
+    # 2. elif rhs.__array_priority__ is higher, flip the order
+    # Now return the subtype of the first one
+
+    w_ndarray = space.gettypefor(W_NDimArray)
+    lhs_type = space.type(w_lhs)
+    rhs_type = space.type(w_rhs)
+    lhs_for_subtype = w_lhs
+    rhs_for_subtype = w_rhs
+    #it may be something like a FlatIter, which is not an ndarray
+    if not space.is_true(space.issubtype(lhs_type, w_ndarray)):
+        lhs_type = space.type(w_lhs.base)
+        lhs_for_subtype = w_lhs.base
+    if not space.is_true(space.issubtype(rhs_type, w_ndarray)):
+        rhs_type = space.type(w_rhs.base)
+        rhs_for_subtype = w_rhs.base
+    if space.is_w(lhs_type, w_ndarray) and not space.is_w(rhs_type, w_ndarray):
+        lhs_for_subtype = rhs_for_subtype
+
+    # TODO handle __array_priorities__ and maybe flip the order
+
     if out is None:
-        out = W_NDimArray.from_shape(shape, res_dtype)
+        out = W_NDimArray.from_shape(space, shape, res_dtype,
+                                     w_instance=lhs_for_subtype)
     left_iter = w_lhs.create_iter(shape)
     right_iter = w_rhs.create_iter(shape)
     out_iter = out.create_iter(shape)
@@ -48,9 +73,9 @@ call1_driver = jit.JitDriver(name='numpy_call1',
                              reds = ['shape', 'w_obj', 'out', 'obj_iter',
                                      'out_iter'])
 
-def call1(shape, func, calc_dtype, res_dtype, w_obj, out):
+def call1(space, shape, func, calc_dtype, res_dtype, w_obj, out):
     if out is None:
-        out = W_NDimArray.from_shape(shape, res_dtype)
+        out = W_NDimArray.from_shape(space, shape, res_dtype, w_instance=w_obj)
     obj_iter = w_obj.create_iter(shape)
     out_iter = out.create_iter(shape)
     shapelen = len(shape)
@@ -65,12 +90,19 @@ def call1(shape, func, calc_dtype, res_dtype, w_obj, out):
         obj_iter.next()
     return out
 
-setslice_driver = jit.JitDriver(name='numpy_setslice',
+setslice_driver1 = jit.JitDriver(name='numpy_setslice1',
                                 greens = ['shapelen', 'dtype'],
-                                reds = ['target', 'source', 'target_iter',
-                                        'source_iter'])
+                                reds = 'auto')
+setslice_driver2 = jit.JitDriver(name='numpy_setslice2',
+                                greens = ['shapelen', 'dtype'],
+                                reds = 'auto')
 
-def setslice(shape, target, source):
+def setslice(space, shape, target, source):
+    if target.dtype.is_str_or_unicode():
+        return setslice_build_and_convert(space, shape, target, source)
+    return setslice_to(space, shape, target, source)
+
+def setslice_to(space, shape, target, source):
     # note that unlike everything else, target and source here are
     # array implementations, not arrays
     target_iter = target.create_iter(shape)
@@ -78,18 +110,29 @@ def setslice(shape, target, source):
     dtype = target.dtype
     shapelen = len(shape)
     while not target_iter.done():
-        setslice_driver.jit_merge_point(shapelen=shapelen, dtype=dtype,
-                                        target=target, source=source,
-                                        target_iter=target_iter,
-                                        source_iter=source_iter)
+        setslice_driver1.jit_merge_point(shapelen=shapelen, dtype=dtype)
         target_iter.setitem(source_iter.getitem().convert_to(dtype))
+        target_iter.next()
+        source_iter.next()
+    return target
+
+def setslice_build_and_convert(space, shape, target, source):
+    # note that unlike everything else, target and source here are
+    # array implementations, not arrays
+    target_iter = target.create_iter(shape)
+    source_iter = source.create_iter(shape)
+    dtype = target.dtype
+    shapelen = len(shape)
+    while not target_iter.done():
+        setslice_driver2.jit_merge_point(shapelen=shapelen, dtype=dtype)
+        target_iter.setitem(dtype.build_and_convert(space, source_iter.getitem()))
         target_iter.next()
         source_iter.next()
     return target
 
 reduce_driver = jit.JitDriver(name='numpy_reduce',
                               greens = ['shapelen', 'func', 'done_func',
-                                        'calc_dtype', 'identity'],
+                                        'calc_dtype'],
                               reds = 'auto')
 
 def compute_reduce(obj, calc_dtype, func, done_func, identity):
@@ -103,7 +146,7 @@ def compute_reduce(obj, calc_dtype, func, done_func, identity):
     while not obj_iter.done():
         reduce_driver.jit_merge_point(shapelen=shapelen, func=func,
                                       done_func=done_func,
-                                      calc_dtype=calc_dtype, identity=identity,
+                                      calc_dtype=calc_dtype,
                                       )
         rval = obj_iter.getitem().convert_to(calc_dtype)
         if done_func is not None and done_func(calc_dtype, rval):
@@ -112,7 +155,8 @@ def compute_reduce(obj, calc_dtype, func, done_func, identity):
         obj_iter.next()
     return cur_value
 
-reduce_cum_driver = jit.JitDriver(greens = ['shapelen', 'func', 'dtype'],
+reduce_cum_driver = jit.JitDriver(name='numpy_reduce_cum_driver',
+                                  greens = ['shapelen', 'func', 'dtype'],
                                   reds = 'auto')
 
 def compute_reduce_cumultative(obj, out, calc_dtype, func, identity):
@@ -155,7 +199,7 @@ def where(out, shape, arr, x, y, dtype):
         iter = x_iter
     shapelen = len(shape)
     while not iter.done():
-        where_driver.jit_merge_point(shapelen=shapelen, dtype=dtype, 
+        where_driver.jit_merge_point(shapelen=shapelen, dtype=dtype,
                                         arr_dtype=arr_dtype)
         w_cond = arr_iter.getitem()
         if arr_dtype.itemtype.bool(w_cond):
@@ -170,9 +214,8 @@ def where(out, shape, arr, x, y, dtype):
     return out
 
 axis_reduce__driver = jit.JitDriver(name='numpy_axis_reduce',
-                                    greens=['shapelen', 
-                                            'func', 'dtype',
-                                            'identity'],
+                                    greens=['shapelen',
+                                            'func', 'dtype'],
                                     reds='auto')
 
 def do_axis_reduce(shape, func, arr, dtype, axis, out, identity, cumultative,
@@ -188,8 +231,7 @@ def do_axis_reduce(shape, func, arr, dtype, axis, out, identity, cumultative,
     shapelen = len(shape)
     while not out_iter.done():
         axis_reduce__driver.jit_merge_point(shapelen=shapelen, func=func,
-                                            dtype=dtype, identity=identity,
-                                            )
+                                            dtype=dtype)
         w_val = arr_iter.getitem().convert_to(dtype)
         if out_iter.first_line:
             if identity is not None:
@@ -210,7 +252,7 @@ def _new_argmin_argmax(op_name):
     arg_driver = jit.JitDriver(name='numpy_' + op_name,
                                greens = ['shapelen', 'dtype'],
                                reds = 'auto')
-    
+
     def argmin_argmax(arr):
         result = 0
         idx = 1
@@ -247,7 +289,7 @@ def multidim_dot(space, left, right, result, dtype, right_critical_dim):
      result.shape == [3, 5, 2, 4]
      broadcast shape should be [3, 5, 2, 7, 4]
      result should skip dims 3 which is len(result_shape) - 1
-        (note that if right is 1d, result should 
+        (note that if right is 1d, result should
                   skip len(result_shape))
      left should skip 2, 4 which is a.ndims-1 + range(right.ndims)
           except where it==(right.ndims-2)
@@ -265,9 +307,9 @@ def multidim_dot(space, left, right, result, dtype, right_critical_dim):
     righti = right.create_dot_iter(broadcast_shape, right_skip)
     while not outi.done():
         dot_driver.jit_merge_point(dtype=dtype)
-        lval = lefti.getitem().convert_to(dtype) 
-        rval = righti.getitem().convert_to(dtype) 
-        outval = outi.getitem().convert_to(dtype) 
+        lval = lefti.getitem().convert_to(dtype)
+        rval = righti.getitem().convert_to(dtype)
+        outval = outi.getitem().convert_to(dtype)
         v = dtype.itemtype.mul(lval, rval)
         value = dtype.itemtype.add(v, outval).convert_to(dtype)
         outi.setitem(value)
@@ -276,22 +318,26 @@ def multidim_dot(space, left, right, result, dtype, right_critical_dim):
         lefti.next()
     return result
 
-count_all_true_driver = jit.JitDriver(name = 'numpy_count',
-                                      greens = ['shapelen', 'dtype'],
-                                      reds = 'auto')
 
 def count_all_true(arr):
-    s = 0
     if arr.is_scalar():
         return arr.get_dtype().itemtype.bool(arr.get_scalar_value())
     iter = arr.create_iter()
-    shapelen = len(arr.get_shape())
-    dtype = arr.get_dtype()
+    return count_all_true_iter(iter, arr.get_shape(), arr.get_dtype())
+
+count_all_true_iter_driver = jit.JitDriver(name = 'numpy_count',
+                                      greens = ['shapelen', 'dtype'],
+                                      reds = 'auto')
+def count_all_true_iter(iter, shape, dtype):
+    s = 0
+    shapelen = len(shape)
+    dtype = dtype
     while not iter.done():
-        count_all_true_driver.jit_merge_point(shapelen=shapelen, dtype=dtype)
+        count_all_true_iter_driver.jit_merge_point(shapelen=shapelen, dtype=dtype)
         s += iter.getitem_bool()
         iter.next()
     return s
+
 
 getitem_filter_driver = jit.JitDriver(name = 'numpy_getitem_bool',
                                       greens = ['shapelen', 'arr_dtype',
@@ -300,9 +346,12 @@ getitem_filter_driver = jit.JitDriver(name = 'numpy_getitem_bool',
 
 def getitem_filter(res, arr, index):
     res_iter = res.create_iter()
-    index_iter = index.create_iter()
-    arr_iter = arr.create_iter()
     shapelen = len(arr.get_shape())
+    if shapelen > 1 and len(index.get_shape()) < 2:
+        index_iter = index.create_iter(arr.get_shape(), backward_broadcast=True)
+    else:
+        index_iter = index.create_iter()
+    arr_iter = arr.create_iter()
     arr_dtype = arr.get_dtype()
     index_dtype = index.get_dtype()
     # XXX length of shape of index as well?
@@ -325,7 +374,7 @@ setitem_filter_driver = jit.JitDriver(name = 'numpy_setitem_bool',
 
 def setitem_filter(arr, index, value):
     arr_iter = arr.create_iter()
-    index_iter = index.create_iter()
+    index_iter = index.create_iter(arr.get_shape())
     value_iter = value.create_iter()
     shapelen = len(arr.get_shape())
     index_dtype = index.get_dtype()
@@ -334,7 +383,7 @@ def setitem_filter(arr, index, value):
         setitem_filter_driver.jit_merge_point(shapelen=shapelen,
                                               index_dtype=index_dtype,
                                               arr_dtype=arr_dtype,
-                                             ) 
+                                             )
         if index_iter.getitem_bool():
             arr_iter.setitem(value_iter.getitem())
             value_iter.next()
@@ -355,18 +404,43 @@ def flatiter_getitem(res, base_iter, step):
         ri.next()
     return res
 
-flatiter_setitem_driver = jit.JitDriver(name = 'numpy_flatiter_setitem',
+flatiter_setitem_driver1 = jit.JitDriver(name = 'numpy_flatiter_setitem1',
                                         greens = ['dtype'],
                                         reds = 'auto')
 
-def flatiter_setitem(arr, val, start, step, length):
+flatiter_setitem_driver2 = jit.JitDriver(name = 'numpy_flatiter_setitem2',
+                                        greens = ['dtype'],
+                                        reds = 'auto')
+
+def flatiter_setitem(space, arr, val, start, step, length):
+    dtype = arr.get_dtype()
+    if dtype.is_str_or_unicode():
+        return flatiter_setitem_build_and_convert(space, arr, val, start, step, length)
+    return flatiter_setitem_to(space, arr, val, start, step, length)
+
+def flatiter_setitem_to(space, arr, val, start, step, length):
     dtype = arr.get_dtype()
     arr_iter = arr.create_iter()
     val_iter = val.create_iter()
     arr_iter.next_skip_x(start)
     while length > 0:
-        flatiter_setitem_driver.jit_merge_point(dtype=dtype)
+        flatiter_setitem_driver1.jit_merge_point(dtype=dtype)
         arr_iter.setitem(val_iter.getitem().convert_to(dtype))
+        # need to repeat i_nput values until all assignments are done
+        arr_iter.next_skip_x(step)
+        length -= 1
+        val_iter.next()
+        # WTF numpy?
+        val_iter.reset()
+
+def flatiter_setitem_build_and_convert(space, arr, val, start, step, length):
+    dtype = arr.get_dtype()
+    arr_iter = arr.create_iter()
+    val_iter = val.create_iter()
+    arr_iter.next_skip_x(start)
+    while length > 0:
+        flatiter_setitem_driver2.jit_merge_point(dtype=dtype)
+        arr_iter.setitem(dtype.build_and_convert(space, val_iter.getitem()))
         # need to repeat i_nput values until all assignments are done
         arr_iter.next_skip_x(step)
         length -= 1
@@ -391,12 +465,12 @@ def fromstring_loop(a, dtype, itemsize, s):
 def tostring(space, arr):
     builder = StringBuilder()
     iter = arr.create_iter()
-    res_str = W_NDimArray.from_shape([1], arr.get_dtype(), order='C')
+    w_res_str = W_NDimArray.from_shape(space, [1], arr.get_dtype(), order='C')
     itemsize = arr.get_dtype().itemtype.get_element_size()
     res_str_casted = rffi.cast(rffi.CArrayPtr(lltype.Char),
-                               res_str.implementation.get_storage_as_int(space))
+                               w_res_str.implementation.get_storage_as_int(space))
     while not iter.done():
-        res_str.implementation.setitem(0, iter.getitem())
+        w_res_str.implementation.setitem(0, iter.getitem())
         for i in range(itemsize):
             builder.append(res_str_casted[i])
         iter.next()
@@ -458,20 +532,9 @@ def setitem_array_int(space, arr, iter_shape, indexes_w, val_arr,
                           val_arr.descr_getitem(space, w_idx))
         iter.next()
 
-copy_from_to_driver = jit.JitDriver(greens = ['dtype'],
-                                    reds = 'auto')
-
-def copy_from_to(from_, to, dtype):
-    from_iter = from_.create_iter()
-    to_iter = to.create_iter()
-    while not from_iter.done():
-        copy_from_to_driver.jit_merge_point(dtype=dtype)
-        to_iter.setitem(from_iter.getitem().convert_to(dtype))
-        to_iter.next()
-        from_iter.next()
-
-byteswap_driver = jit.JitDriver(greens = ['dtype'],
-                                    reds = 'auto')
+byteswap_driver = jit.JitDriver(name='numpy_byteswap_driver',
+                                greens = ['dtype'],
+                                reds = 'auto')
 
 def byteswap(from_, to):
     dtype = from_.dtype
@@ -483,8 +546,9 @@ def byteswap(from_, to):
         to_iter.next()
         from_iter.next()
 
-choose_driver = jit.JitDriver(greens = ['shapelen', 'mode', 'dtype'],
-                                    reds = 'auto')
+choose_driver = jit.JitDriver(name='numpy_choose_driver',
+                              greens = ['shapelen', 'mode', 'dtype'],
+                              reds = 'auto')
 
 def choose(space, arr, choices, shape, dtype, out, mode):
     shapelen = len(shape)
@@ -513,8 +577,9 @@ def choose(space, arr, choices, shape, dtype, out, mode):
         out_iter.next()
         arr_iter.next()
 
-clip_driver = jit.JitDriver(greens = ['shapelen', 'dtype'],
-                                    reds = 'auto')
+clip_driver = jit.JitDriver(name='numpy_clip_driver',
+                            greens = ['shapelen', 'dtype'],
+                            reds = 'auto')
 
 def clip(space, arr, shape, min, max, out):
     arr_iter = arr.create_iter(shape)
@@ -538,7 +603,24 @@ def clip(space, arr, shape, min, max, out):
         out_iter.next()
         min_iter.next()
 
-diagonal_simple_driver = jit.JitDriver(greens = ['axis1', 'axis2'],
+round_driver = jit.JitDriver(name='numpy_round_driver',
+                             greens = ['shapelen', 'dtype'],
+                             reds = 'auto')
+
+def round(space, arr, dtype, shape, decimals, out):
+    arr_iter = arr.create_iter(shape)
+    shapelen = len(shape)
+    out_iter = out.create_iter(shape)
+    while not arr_iter.done():
+        round_driver.jit_merge_point(shapelen=shapelen, dtype=dtype)
+        w_v = dtype.itemtype.round(arr_iter.getitem().convert_to(dtype),
+                     decimals)
+        out_iter.setitem(w_v)
+        arr_iter.next()
+        out_iter.next()
+
+diagonal_simple_driver = jit.JitDriver(name='numpy_diagonal_simple_driver',
+                                       greens = ['axis1', 'axis2'],
                                        reds = 'auto')
 
 def diagonal_simple(space, arr, out, offset, axis1, axis2, size):
@@ -579,4 +661,4 @@ def diagonal_array(space, arr, out, offset, axis1, axis2, shape):
         out_iter.setitem(arr.getitem_index(space, indexes))
         iter.next()
         out_iter.next()
-       
+

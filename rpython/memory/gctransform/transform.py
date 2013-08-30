@@ -86,9 +86,9 @@ class BaseGCTransformer(object):
 
     def __init__(self, translator, inline=False):
         self.translator = translator
-        self.seen_graphs = {}
+        self.seen_graphs = set()
         self.prepared = False
-        self.minimal_transform = {}
+        self.minimal_transform = set()
         if translator:
             self.mixlevelannotator = MixLevelHelperAnnotator(translator.rtyper)
         else:
@@ -105,12 +105,12 @@ class BaseGCTransformer(object):
             self.minimalgctransformer = None
 
     def get_lltype_of_exception_value(self):
-        exceptiondata = self.translator.rtyper.getexceptiondata()
+        exceptiondata = self.translator.rtyper.exceptiondata
         return exceptiondata.lltype_of_exception_value
 
     def need_minimal_transform(self, graph):
-        self.seen_graphs[graph] = True
-        self.minimal_transform[graph] = True
+        self.seen_graphs.add(graph)
+        self.minimal_transform.add(graph)
 
     def prepare_inline_helpers(self, graphs):
         from rpython.translator.backendopt.inline import iter_callsites
@@ -210,11 +210,11 @@ class BaseGCTransformer(object):
         if graph in self.minimal_transform:
             if self.minimalgctransformer:
                 self.minimalgctransformer.transform_graph(graph)
-            del self.minimal_transform[graph]
+            self.minimal_transform.remove(graph)
             return
         if graph in self.seen_graphs:
             return
-        self.seen_graphs[graph] = True
+        self.seen_graphs.add(graph)
 
         self.links_to_split = {} # link -> vars to pop_alive across the link
 
@@ -281,11 +281,11 @@ class BaseGCTransformer(object):
     def finish_helpers(self, backendopt=True):
         if self.translator is not None:
             self.mixlevelannotator.finish_annotate()
-        self.finished_helpers = True
         if self.translator is not None:
             self.mixlevelannotator.finish_rtype()
             if backendopt:
                 self.mixlevelannotator.backend_optimize()
+        self.finished_helpers = True
         # Make sure that the database also sees all finalizers now.
         # It is likely that the finalizers need special support there
         newgcdependencies = self.ll_finalizers_ptrs
@@ -479,11 +479,11 @@ class GCTransformer(BaseGCTransformer):
         flags = hop.spaceop.args[1].value
         flavor = flags['flavor']
         meth = getattr(self, 'gct_fv_%s_malloc' % flavor, None)
-        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor) 
+        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor)
         c_size = rmodel.inputconst(lltype.Signed, llmemory.sizeof(TYPE))
         v_raw = meth(hop, flags, TYPE, c_size)
         hop.cast_result(v_raw)
- 
+
     def gct_fv_raw_malloc(self, hop, flags, TYPE, c_size):
         v_raw = hop.genop("direct_call", [self.raw_malloc_fixedsize_ptr, c_size],
                           resulttype=llmemory.Address)
@@ -506,7 +506,7 @@ class GCTransformer(BaseGCTransformer):
             flags.update(add_flags)
         flavor = flags['flavor']
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
-        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor) 
+        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor)
         return self.varsize_malloc_helper(hop, flags, meth, [])
 
     def gct_malloc_nonmovable(self, *args, **kwds):

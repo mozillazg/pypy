@@ -6,14 +6,15 @@ from rpython.conftest import option
 from rpython.annotator import model as annmodel
 from rpython.annotator.annrpython import RPythonAnnotator as _RPythonAnnotator
 from rpython.translator.translator import graphof as tgraphof
-from rpython.annotator import policy
+from rpython.annotator.policy import AnnotatorPolicy
+from rpython.annotator.signature import Sig
 from rpython.annotator.listdef import ListDef, ListChangeUnallowed
 from rpython.annotator.dictdef import DictDef
 from rpython.flowspace.model import *
 from rpython.rlib.rarithmetic import r_uint, base_int, r_longlong, r_ulonglong
 from rpython.rlib.rarithmetic import r_singlefloat
 from rpython.rlib import objectmodel
-from rpython.flowspace.objspace import FlowObjSpace, FlowingError
+from rpython.flowspace.objspace import build_flow, FlowingError
 
 from rpython.translator.test import snippet
 
@@ -40,9 +41,6 @@ def somedict(s_key, s_value):
 
 
 class TestAnnotateTestCase:
-    def setup_class(cls):
-        cls.space = FlowObjSpace()
-
     def teardown_method(self, meth):
         assert annmodel.s_Bool == annmodel.SomeBool()
 
@@ -60,7 +58,7 @@ class TestAnnotateTestCase:
         except AttributeError:
             pass
         name = func.func_name
-        funcgraph = self.space.build_flow(func)
+        funcgraph = build_flow(func)
         funcgraph.source = inspect.getsource(func)
         return funcgraph
 
@@ -230,7 +228,7 @@ class TestAnnotateTestCase:
         def f():
             return X().meth()
         a = self.RPythonAnnotator()
-        py.test.raises(AssertionError, a.build_types, f,  [])
+        py.test.raises(annmodel.AnnotatorError, a.build_types, f,  [])
 
     def test_methodcall1(self):
         a = self.RPythonAnnotator()
@@ -448,6 +446,25 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeList)
         s_item = s.listdef.listitem.s_value
         assert s_item.no_nul
+
+    def test_str_split_nul(self):
+        def f(n):
+            return n.split('\0')[0]
+        a = self.RPythonAnnotator()
+        a.translator.config.translation.check_str_without_nul = True
+        s = a.build_types(f, [annmodel.SomeString(no_nul=False, can_be_None=False)])
+        assert isinstance(s, annmodel.SomeString)
+        assert not s.can_be_None
+        assert s.no_nul
+
+        def g(n):
+            return n.split('\0', 1)[0]
+        a = self.RPythonAnnotator()
+        a.translator.config.translation.check_str_without_nul = True
+        s = a.build_types(g, [annmodel.SomeString(no_nul=False, can_be_None=False)])
+        assert isinstance(s, annmodel.SomeString)
+        assert not s.can_be_None
+        assert not s.no_nul
 
     def test_str_splitlines(self):
         a = self.RPythonAnnotator()
@@ -670,17 +687,17 @@ class TestAnnotateTestCase:
         assert s == a.bookkeeper.immutablevalue(42)
 
     def test_call_star_args(self):
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        a = self.RPythonAnnotator(policy=AnnotatorPolicy())
         s = a.build_types(snippet.call_star_args, [int])
         assert s.knowntype == int
 
     def test_call_star_args_multiple(self):
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        a = self.RPythonAnnotator(policy=AnnotatorPolicy())
         s = a.build_types(snippet.call_star_args_multiple, [int])
         assert s.knowntype == int
 
     def test_class_spec(self):
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        a = self.RPythonAnnotator(policy=AnnotatorPolicy())
         s = a.build_types(snippet.class_spec, [])
         assert s.items[0].knowntype == int
         assert s.items[1].knowntype == str
@@ -689,7 +706,7 @@ class TestAnnotateTestCase:
         x = snippet.PolyStk()
         def f():
             return x
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        a = self.RPythonAnnotator(policy=AnnotatorPolicy())
         py.test.raises(Exception, a.build_types, f, [])
 
     def test_exception_deduction_with_raise1(self):
@@ -722,6 +739,35 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [B])
         assert s.classdef is a.bookkeeper.getuniqueclassdef(C)
+
+    def test_union_type_some_pbc(self):
+        py.test.skip("is there a point? f() can return self.__class__ instead")
+        class A(object):
+            name = "A"
+
+            def f(self):
+                return type(self)
+
+        class B(A):
+            name = "B"
+
+        def f(tp):
+            return tp
+
+        def main(n):
+            if n:
+                if n == 1:
+                    inst = A()
+                else:
+                    inst = B()
+                arg = inst.f()
+            else:
+                arg = B
+            return f(arg).name
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(main, [int])
+        assert isinstance(s, annmodel.SomeString)
 
     def test_ann_assert(self):
         def assert_(x):
@@ -775,7 +821,7 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomePBC)
         assert s.const == myobj
 
-    def test_cleanup_protocol(self): 
+    def test_cleanup_protocol(self):
         class Stuff:
             def __init__(self):
                 self.called = False
@@ -2493,6 +2539,27 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [])
         assert s.const == 2
 
+    def test_import_from_mixin(self):
+        class M(object):
+            def f(self):
+                return self.a
+        class I(object):
+            objectmodel.import_from_mixin(M)
+            def __init__(self, i):
+                self.a = i
+        class S(object):
+            objectmodel.import_from_mixin(M)
+            def __init__(self, s):
+                self.a = s
+        def f(n):
+            return (I(n).f(), S("a" * n).f())
+
+        assert f(3) == (3, "aaa")
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert isinstance(s.items[0], annmodel.SomeInteger)
+        assert isinstance(s.items[1], annmodel.SomeString)
+
     def test___class___attribute(self):
         class Base(object): pass
         class A(Base): pass
@@ -2773,7 +2840,7 @@ class TestAnnotateTestCase:
         def fun(x, y):
             return x+y
         s_nonneg = annmodel.SomeInteger(nonneg=True)
-        fun._annenforceargs_ = policy.Sig(int, s_nonneg)
+        fun._annenforceargs_ = Sig(int, s_nonneg)
 
         a = self.RPythonAnnotator()
         s = a.build_types(fun, [s_nonneg, s_nonneg])
@@ -2797,7 +2864,7 @@ class TestAnnotateTestCase:
         def fun(x, y):
             return y
         s_nonneg = annmodel.SomeInteger(nonneg=True)
-        fun._annenforceargs_ = policy.Sig(lambda s1,s2: s1, lambda s1,s2: s1)
+        fun._annenforceargs_ = Sig(lambda s1,s2: s1, lambda s1,s2: s1)
         # means: the 2nd argument's annotation becomes the 1st argument's
         #        input annotation
 
@@ -3000,7 +3067,7 @@ class TestAnnotateTestCase:
                     x > y,
                     x >= y)
 
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        a = self.RPythonAnnotator(policy=AnnotatorPolicy())
         s = a.build_types(fun, [float, float])
         assert [s_item.knowntype for s_item in s.items] == [bool] * 6
 
@@ -3013,41 +3080,14 @@ class TestAnnotateTestCase:
         def fun():
             return g([])
 
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        a = self.RPythonAnnotator(policy=AnnotatorPolicy())
         s = a.build_types(fun, [])
         assert s.const == 0
-
-    def test_some_generic_function_call(self):
-        def h(x):
-            return int(x)
-
-        def c(x):
-            return int(x)
-
-        def g(a, x):
-            if x == -1:
-                a = None
-            if x < 0:
-                if x == -1:
-                    a = h
-                else:
-                    a = c
-                x = x + .01
-            return a(x)
-
-        #def fun(x):
-
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
-        s = a.build_types(g, [annmodel.SomeGenericCallable(
-            args=[annmodel.SomeFloat()], result=annmodel.SomeInteger()),
-                              annmodel.SomeFloat()])
-        assert isinstance(s, annmodel.SomeInteger)
-        assert not hasattr(s, 'const')
 
     def test_compare_int_bool(self):
         def fun(x):
             return 50 < x
-        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        a = self.RPythonAnnotator(policy=AnnotatorPolicy())
         s = a.build_types(fun, [bool])
         assert isinstance(s, annmodel.SomeBool)
 
@@ -3060,7 +3100,7 @@ class TestAnnotateTestCase:
             else:
                 v = -maxint
             return intmask(v * 10)
-        P = policy.AnnotatorPolicy()
+        P = AnnotatorPolicy()
         a = self.RPythonAnnotator(policy=P)
         s = a.build_types(fun, [bool])
         assert isinstance(s, annmodel.SomeInteger)
@@ -3069,7 +3109,7 @@ class TestAnnotateTestCase:
         from rpython.rlib.jit import hint
 
         class A:
-            _virtualizable2_ = []
+            _virtualizable_ = []
         class B(A):
             def meth(self):
                 return self
@@ -3109,7 +3149,7 @@ class TestAnnotateTestCase:
         from rpython.rlib.jit import hint
 
         class A:
-            _virtualizable2_ = []
+            _virtualizable_ = []
 
         class I:
             pass
@@ -3164,8 +3204,6 @@ class TestAnnotateTestCase:
         py.test.raises(AssertionError, a.build_types, f, [])
 
     def test_ctr_location(self):
-        from rpython.rlib.jit import hint
-
         class A:
             _annspecialcase_ = 'specialize:ctr_location'
             def __init__(self, x):
@@ -3343,22 +3381,22 @@ class TestAnnotateTestCase:
             return '%s' % unichr(x)
 
         a = self.RPythonAnnotator()
-        py.test.raises(NotImplementedError, a.build_types, f, [int])
+        py.test.raises(annmodel.AnnotatorError, a.build_types, f, [int])
         def f(x):
             return '%s' % (unichr(x) * 3)
 
         a = self.RPythonAnnotator()
-        py.test.raises(NotImplementedError, a.build_types, f, [int])
+        py.test.raises(annmodel.AnnotatorError, a.build_types, f, [int])
         def f(x):
             return '%s%s' % (1, unichr(x))
 
         a = self.RPythonAnnotator()
-        py.test.raises(NotImplementedError, a.build_types, f, [int])
+        py.test.raises(annmodel.AnnotatorError, a.build_types, f, [int])
         def f(x):
             return '%s%s' % (1, unichr(x) * 15)
 
         a = self.RPythonAnnotator()
-        py.test.raises(NotImplementedError, a.build_types, f, [int])
+        py.test.raises(annmodel.AnnotatorError, a.build_types, f, [int])
 
 
     def test_strformatting_tuple(self):
@@ -3396,7 +3434,7 @@ class TestAnnotateTestCase:
             return [1, 2, 3][s:e]
 
         a = self.RPythonAnnotator()
-        py.test.raises(TypeError, "a.build_types(f, [int, int])")
+        py.test.raises(annmodel.AnnotatorError, "a.build_types(f, [int, int])")
         a.build_types(f, [annmodel.SomeInteger(nonneg=True),
                           annmodel.SomeInteger(nonneg=True)])
         def f(x):
@@ -3700,6 +3738,24 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         a.build_types(f, [int])
 
+    def test_immutable_field_subclass(self):
+        class Root:
+            pass
+        class A(Root):
+            _immutable_fields_ = '_my_lst[*]'
+            def __init__(self, lst):
+                self._my_lst = lst
+        def foo(x):
+            return len(x._my_lst)
+
+        def f(n):
+            foo(A([2, n]))
+            foo(Root())
+
+        a = self.RPythonAnnotator()
+        e = py.test.raises(Exception, a.build_types, f, [int])
+        assert "field '_my_lst' was migrated" in str(e.value)
+
     def test_call_classes_with_noarg_init(self):
         class A:
             foo = 21
@@ -3754,7 +3810,7 @@ class TestAnnotateTestCase:
 
     def test_join_none_and_nonnull(self):
         from rpython.rlib.rstring import assert_str0
-        
+
         def f(i):
             a = str(i)
             a = assert_str0(a)
@@ -3764,6 +3820,19 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [int])
         assert isinstance(s, annmodel.SomeString)
         assert not s.can_be_None
+
+    def test_contains_no_nul(self):
+        def f(i):
+            if "\0" in i:
+                return None
+            else:
+                return i
+        a = self.RPythonAnnotator()
+        a.translator.config.translation.check_str_without_nul = True
+        s = a.build_types(f, [annmodel.SomeString(no_nul=False)])
+        assert isinstance(s, annmodel.SomeString)
+        assert s.can_be_None
+        assert s.no_nul
 
     def test_no___call__(self):
         class X(object):
@@ -3798,7 +3867,7 @@ class TestAnnotateTestCase:
         class A(object):
             def __iter__(self):
                 return self
-        
+
         def fn():
             return iter(A())
 
@@ -3836,6 +3905,16 @@ class TestAnnotateTestCase:
         s = a.build_types(fn, [int])
         assert isinstance(s, annmodel.SomeInteger)
 
+    def test_reversed(self):
+        def fn(n):
+            for elem in reversed([1, 2, 3, 4, 5]):
+                return elem
+            return n
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(fn, [int])
+        assert isinstance(s, annmodel.SomeInteger)
+
     def test_no_attr_on_common_exception_classes(self):
         for cls in [ValueError, Exception]:
             def fn():
@@ -3857,7 +3936,7 @@ class TestAnnotateTestCase:
                 return True
 
         x = X()
-        
+
         def f(i):
             if i:
                 x1 = x
@@ -3920,6 +3999,123 @@ class TestAnnotateTestCase:
             return "abc".startswith("ab") and "abc".endswith("bc")
         a = self.RPythonAnnotator()
         assert a.build_types(f, []).const is True
+
+    def test_specific_attributes(self):
+        class A(object):
+            pass
+
+        class B(A):
+            def __init__(self, x):
+                assert x >= 0
+                self.x = x
+
+        def fn(i):
+            if i % 2:
+                a = A()
+            else:
+                a = B(3)
+            if i % 3:
+                a.x = -3
+            if isinstance(a, B):
+                return a.x
+            return 0
+
+        a = self.RPythonAnnotator()
+        assert not a.build_types(fn, [int]).nonneg
+
+    def test_unionerror_attrs(self):
+        def f(x):
+            if x < 10:
+                return 1
+            else:
+                return "bbb"
+        a = self.RPythonAnnotator()
+
+        with py.test.raises(annmodel.UnionError) as exc:
+            a.build_types(f, [int])
+
+        the_exc = exc.value
+        s_objs = set([type(the_exc.s_obj1), type(the_exc.s_obj2)])
+
+        assert s_objs == set([annmodel.SomeInteger, annmodel.SomeString])
+
+    def test_unionerror_tuple_size(self):
+        def f(x):
+            if x < 10:
+                return (1, )
+            else:
+                return (1, 2)
+        a = self.RPythonAnnotator()
+
+        with py.test.raises(annmodel.UnionError) as exc:
+            a.build_types(f, [int])
+
+        assert "RPython cannot unify tuples of different length: 2 versus 1" in exc.value.msg
+
+    def test_unionerror_signedness(self):
+        def f(x):
+            if x < 10:
+                return r_uint(99)
+            else:
+                return -1
+        a = self.RPythonAnnotator()
+
+        with py.test.raises(annmodel.UnionError) as exc:
+            a.build_types(f, [int])
+
+        assert ("RPython cannot prove that these integers are of the "
+                "same signedness" in exc.value.msg)
+
+    def test_unionerror_instance(self):
+        class A(object): pass
+        class B(object): pass
+
+        def f(x):
+            if x < 10:
+                return A()
+            else:
+                return B()
+        a = self.RPythonAnnotator()
+
+        with py.test.raises(annmodel.UnionError) as exc:
+            a.build_types(f, [int])
+
+        assert ("RPython cannot unify instances with no common base class" 
+                in exc.value.msg)
+
+    def test_unionerror_iters(self):
+
+        def f(x):
+            d = { 1 : "a", 2 : "b" }
+            if x < 10:
+                return d.iterkeys()
+            else:
+                return d.itervalues()
+        a = self.RPythonAnnotator()
+
+        with py.test.raises(annmodel.UnionError) as exc:
+            a.build_types(f, [int])
+
+        assert ("RPython cannot unify incompatible iterator variants" in 
+                exc.value.msg)
+
+    def test_variable_getattr(self):
+        class A(object): pass
+        def f(y):
+            a = A()
+            return getattr(a, y)
+        a = self.RPythonAnnotator()
+        with py.test.raises(annmodel.AnnotatorError) as exc:
+            a.build_types(f, [str])
+        assert ("variable argument to getattr" in exc.value.msg)
+
+    def test_bad_call(self):
+        def f(x):
+            return x()
+        a = self.RPythonAnnotator()
+        with py.test.raises(annmodel.AnnotatorError) as exc:
+            a.build_types(f, [str])
+        assert ("Cannot prove that the object is callable" in exc.value.msg)
 
 
 def g(n):

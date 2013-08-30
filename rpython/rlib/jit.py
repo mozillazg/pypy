@@ -66,6 +66,9 @@ def hint(x, **kwds):
                             Useful in say Frame.__init__ when we do want
                             to store things directly on it. Has to come with
                             access_directly=True
+    * force_virtualizable - a performance hint to force the virtualizable early
+                            (useful e.g. for python generators that are going
+                            to be read later anyway)
     """
     return x
 
@@ -81,6 +84,13 @@ def dont_look_inside(func):
     (it becomes a call instead)
     """
     func._jit_look_inside_ = False
+    return func
+
+def look_inside(func):
+    """ Make sure the JIT traces inside decorated function, even
+    if the rest of the module is not visible to the JIT
+    """
+    func._jit_look_inside_ = True
     return func
 
 def unroll_safe(func):
@@ -206,13 +216,11 @@ def isvirtual(value):
     return NonConstant(False)
 isvirtual._annspecialcase_ = "specialize:call_location"
 
-LIST_CUTOFF = 2
-
 @specialize.call_location()
-def loop_unrolling_heuristic(lst, size):
+def loop_unrolling_heuristic(lst, size, cutoff=2):
     """ In which cases iterating over items of lst can be unrolled
     """
-    return isvirtual(lst) or (isconstant(size) and size <= LIST_CUTOFF)
+    return isvirtual(lst) or (isconstant(size) and size <= cutoff)
 
 class Entry(ExtRegistryEntry):
     _about_ = hint
@@ -227,7 +235,7 @@ class Entry(ExtRegistryEntry):
             if isinstance(s_x, annmodel.SomeInstance):
                 from rpython.flowspace.model import Constant
                 classdesc = s_x.classdef.classdesc
-                virtualizable = classdesc.read_attribute('_virtualizable2_',
+                virtualizable = classdesc.read_attribute('_virtualizable_',
                                                          Constant(None)).value
                 if virtualizable is not None:
                     flags = s_x.flags.copy()
@@ -598,7 +606,7 @@ class JitDriver(object):
             return result
 
         return decorate
-        
+
 
     def clone(self):
         assert self.inline_jit_merge_point, 'JitDriver.clone works only after @inline'
@@ -753,12 +761,6 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
             args_s.append(s_arg)
         bk.emulate_pbc_call(uniquekey, s_func, args_s)
 
-    def get_getfield_op(self, rtyper):
-        if rtyper.type_system.name == 'ootypesystem':
-            return 'oogetfield'
-        else:
-            return 'getfield'
-
     def specialize_call(self, hop, **kwds_i):
         # XXX to be complete, this could also check that the concretetype
         # of the variables are the same for each of the calls.
@@ -787,10 +789,7 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
                         "field %r not found in %r" % (name,
                                                       r_red.lowleveltype.TO))
                     r_red = r_red.rbase
-                if hop.rtyper.type_system.name == 'ootypesystem':
-                    GTYPE = r_red.lowleveltype
-                else:
-                    GTYPE = r_red.lowleveltype.TO
+                GTYPE = r_red.lowleveltype.TO
                 assert GTYPE._immutable_field(mangled_name), (
                     "field %r must be declared as immutable" % name)
                 if not hasattr(driver, 'll_greenfields'):
@@ -799,8 +798,7 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
                 #
                 v_red = hop.inputarg(r_red, arg=i)
                 c_llname = hop.inputconst(lltype.Void, mangled_name)
-                getfield_op = self.get_getfield_op(hop.rtyper)
-                v_green = hop.genop(getfield_op, [v_red, c_llname],
+                v_green = hop.genop('getfield', [v_red, c_llname],
                                     resulttype=r_field)
                 s_green = s_red.classdef.about_attribute(fieldname)
                 assert s_green is not None
@@ -844,7 +842,7 @@ class ExtSetParam(ExtRegistryEntry):
         assert s_name.is_constant()
         if s_name.const == 'enable_opts':
             assert annmodel.SomeString(can_be_None=True).contains(s_value)
-        else: 
+        else:
             assert (s_value == annmodel.s_None or
                     annmodel.SomeInteger().contains(s_value))
         return annmodel.s_None
@@ -876,7 +874,7 @@ class ExtSetParam(ExtRegistryEntry):
 
 class AsmInfo(object):
     """ An addition to JitDebugInfo concerning assembler. Attributes:
-    
+
     ops_offset - dict of offsets of operations or None
     asmaddr - (int) raw address of assembler block
     asmlen - assembler block length
@@ -893,24 +891,24 @@ class JitDebugInfo(object):
     logger - an instance of jit.metainterp.logger.LogOperations
     type - either 'loop', 'entry bridge' or 'bridge'
     looptoken - description of a loop
-    fail_descr_no - number of failing descr for bridges, -1 otherwise
+    fail_descr - fail descr or None
     asminfo - extra assembler information
     """
 
     asminfo = None
     def __init__(self, jitdriver_sd, logger, looptoken, operations, type,
-                 greenkey=None, fail_descr_no=-1):
+                 greenkey=None, fail_descr=None):
         self.jitdriver_sd = jitdriver_sd
         self.logger = logger
         self.looptoken = looptoken
         self.operations = operations
         self.type = type
         if type == 'bridge':
-            assert fail_descr_no != -1
+            assert fail_descr is not None
         else:
             assert greenkey is not None
         self.greenkey = greenkey
-        self.fail_descr_no = fail_descr_no
+        self.fail_descr = fail_descr
 
     def get_jitdriver(self):
         """ Return where the jitdriver on which the jitting started
@@ -928,7 +926,7 @@ class JitHookInterface(object):
     of JIT running like JIT loops compiled, aborts etc.
     An instance of this class will be available as policy.jithookiface.
     """
-    def on_abort(self, reason, jitdriver, greenkey, greenkey_repr):
+    def on_abort(self, reason, jitdriver, greenkey, greenkey_repr, logops, operations):
         """ A hook called each time a loop is aborted with jitdriver and
         greenkey where it started, reason is a string why it got aborted
         """
@@ -986,7 +984,7 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         from rpython.rtyper.lltypesystem import rclass, lltype
-        
+
         classrepr = rclass.get_type_repr(hop.rtyper)
 
         hop.exception_cannot_occur()
@@ -994,6 +992,34 @@ class Entry(ExtRegistryEntry):
         v_cls = hop.inputarg(classrepr, arg=1)
         return hop.genop('jit_record_known_class', [v_inst, v_cls],
                          resulttype=lltype.Void)
+
+def _jit_conditional_call(condition, function, *args):
+    pass
+
+@specialize.call_location()
+def conditional_call(condition, function, *args):
+    if we_are_jitted():
+        _jit_conditional_call(condition, function, *args)
+    else:
+        if condition:
+            function(*args)
+conditional_call._always_inline_ = True
+
+class ConditionalCallEntry(ExtRegistryEntry):
+    _about_ = _jit_conditional_call
+
+    def compute_result_annotation(self, *args_s):
+        self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
+                                         args_s[1], args_s[2:])
+
+    def specialize_call(self, hop):
+        from rpython.rtyper.lltypesystem import lltype
+
+        args_v = hop.inputargs(lltype.Bool, lltype.Void, *hop.args_r[2:])
+        args_v[1] = hop.args_r[1].get_concrete_llfn(hop.args_s[1],
+                                                    hop.args_s[2:], hop.spaceop)
+        hop.exception_is_here()
+        return hop.genop('jit_conditional_call', args_v)
 
 class Counters(object):
     counters="""

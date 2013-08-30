@@ -1,5 +1,5 @@
 from rpython.flowspace.model import Variable, Constant, Block, Link
-from rpython.flowspace.model import SpaceOperation, FunctionGraph, copygraph
+from rpython.flowspace.model import SpaceOperation, copygraph
 from rpython.flowspace.model import checkgraph
 from rpython.flowspace.model import c_last_exception
 from rpython.translator.backendopt.support import log
@@ -252,7 +252,7 @@ class MallocVirtualizer(object):
     def __init__(self, graphs, rtyper, verbose=False):
         self.graphs = graphs
         self.rtyper = rtyper
-        self.excdata = rtyper.getexceptiondata()
+        self.excdata = rtyper.exceptiondata
         self.graphbuilders = {}
         self.specialized_graphs = {}
         self.specgraphorigin = {}

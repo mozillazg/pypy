@@ -1,4 +1,4 @@
-from rpython.flowspace.argument import ArgumentsForTranslation, ArgErr
+from rpython.annotator.argument import ArgumentsForTranslation, ArgErr
 from rpython.annotator import model as annmodel
 from rpython.rtyper import rtuple
 from rpython.rtyper.error import TyperError
@@ -137,7 +137,7 @@ class NewTupleHolder(Holder):
         return self.holders
 
     def _emit(self, repr, hop):
-        assert isinstance(repr, rtuple.AbstractTupleRepr)
+        assert isinstance(repr, rtuple.TupleRepr)
         tupleitems_v = []
         for h in self.holders:
             v = h.emit(repr.items_r[len(tupleitems_v)], hop)

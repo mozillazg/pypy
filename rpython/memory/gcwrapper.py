@@ -106,7 +106,6 @@ class GCManagedHeap(object):
                         assert (type(index) is int    # <- fast path
                                 or lltype.typeOf(index) == lltype.Signed)
                         self.gc.write_barrier_from_array(
-                            llmemory.cast_ptr_to_adr(newvalue),
                             llmemory.cast_ptr_to_adr(toplevelcontainer),
                             index)
                         wb = False
@@ -114,7 +113,6 @@ class GCManagedHeap(object):
             #
             if wb:
                 self.gc.write_barrier(
-                    llmemory.cast_ptr_to_adr(newvalue),
                     llmemory.cast_ptr_to_adr(toplevelcontainer))
         llheap.setinterior(toplevelcontainer, inneraddr, INNERTYPE, newvalue)
 
@@ -216,16 +214,14 @@ class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
         t = self.llinterp.typer.annotator.translator
         light = not FinalizerAnalyzer(t).analyze_light_finalizer(destrgraph)
-        def ll_finalizer(addr, dummy):
-            assert dummy == llmemory.NULL
+        def ll_finalizer(addr):
             try:
                 v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
                 self.llinterp.eval_graph(destrgraph, [v], recursive=True)
             except llinterp.LLException:
                 raise RuntimeError(
                     "a finalizer raised an exception, shouldn't happen")
-            return llmemory.NULL
-        return llhelper(gctypelayout.GCData.FINALIZER_OR_CT, ll_finalizer), light
+        return llhelper(gctypelayout.GCData.FINALIZER, ll_finalizer), light
 
     def make_custom_trace_funcptr_for_type(self, TYPE):
         from rpython.memory.gctransform.support import get_rtti

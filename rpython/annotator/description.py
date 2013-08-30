@@ -3,9 +3,10 @@ import types, py
 from rpython.annotator.signature import enforce_signature_args, enforce_signature_return
 from rpython.flowspace.model import Constant, FunctionGraph
 from rpython.flowspace.bytecode import cpython_code_signature
-from rpython.flowspace.argument import rawshape, ArgErr
+from rpython.annotator.argument import rawshape, ArgErr
 from rpython.tool.sourcetools import valid_identifier, func_with_new_name
 from rpython.tool.pairtype import extendabletype
+from rpython.annotator.model import AnnotatorError
 
 class CallFamily(object):
     """A family of Desc objects that could be called from common call sites.
@@ -261,7 +262,7 @@ class FunctionDesc(Desc):
         try:
             inputcells = args.match_signature(signature, defs_s)
         except ArgErr, e:
-            raise TypeError("signature mismatch: %s() %s" %
+            raise AnnotatorError("signature mismatch: %s() %s" %
                             (self.name, e.getmsg()))
         return inputcells
 
@@ -282,7 +283,7 @@ class FunctionDesc(Desc):
             raise Exception("%r: signature and enforceargs cannot both be used" % (self,))
         if enforceargs:
             if not callable(enforceargs):
-                from rpython.annotator.policy import Sig
+                from rpython.annotator.signature import Sig
                 enforceargs = Sig(*enforceargs)
                 self.pyobj._annenforceargs_ = enforceargs
             enforceargs(self, inputcells) # can modify inputcells in-place
@@ -306,8 +307,10 @@ class FunctionDesc(Desc):
             result = schedule(graph, inputcells)
             signature = getattr(self.pyobj, '_signature_', None)
             if signature:
-                result = enforce_signature_return(self, signature[1], result)
-                self.bookkeeper.annotator.addpendingblock(graph, graph.returnblock, [result])
+                sigresult = enforce_signature_return(self, signature[1], result)
+                if sigresult is not None:
+                    self.bookkeeper.annotator.addpendingblock(graph, graph.returnblock, [sigresult])
+                    result = sigresult
         # Some specializations may break the invariant of returning
         # annotations that are always more general than the previous time.
         # We restore it here:
@@ -351,6 +354,7 @@ class FunctionDesc(Desc):
                 row[desc.rowkey()] = graph
                 return s_ImpossibleValue   # meaningless
             desc.pycall(enlist, args, s_ImpossibleValue, op)
+            assert row
         return row
     row_to_consider = staticmethod(row_to_consider)
 
@@ -388,6 +392,7 @@ class ClassDesc(Desc):
     instance_level = False
     all_enforced_attrs = None   # or a set
     settled = False
+    _detect_invalid_attrs = None
 
     def __init__(self, bookkeeper, pyobj=None,
                  name=None, basedesc=None, classdict=None,
@@ -674,7 +679,7 @@ class ClassDesc(Desc):
                 value = value.__get__(42)
                 classdef = None   # don't bind
             elif isinstance(value, classmethod):
-                raise AssertionError("classmethods are not supported")
+                raise AnnotatorError("classmethods are not supported")
             s_value = self.bookkeeper.immutablevalue(value)
             if classdef is not None:
                 s_value = s_value.bind_callables_under(classdef, name)
@@ -711,6 +716,10 @@ class ClassDesc(Desc):
         # by changing the result's annotation (but not, of course, doing an
         # actual copy in the rtyper).  Tested in rpython.rtyper.test.test_rlist,
         # test_immutable_list_out_of_instance.
+        if self._detect_invalid_attrs and attr in self._detect_invalid_attrs:
+            raise Exception("field %r was migrated to %r from a subclass in "
+                            "which it was declared as _immutable_fields_" %
+                            (attr, self.pyobj))
         search1 = '%s[*]' % (attr,)
         search2 = '%s?[*]' % (attr,)
         cdesc = self
@@ -721,6 +730,14 @@ class ClassDesc(Desc):
                     s_result.listdef.never_resize()
                     s_copy = s_result.listdef.offspring()
                     s_copy.listdef.mark_as_immutable()
+                    #
+                    cdesc = cdesc.basedesc
+                    while cdesc is not None:
+                        if cdesc._detect_invalid_attrs is None:
+                            cdesc._detect_invalid_attrs = set()
+                        cdesc._detect_invalid_attrs.add(attr)
+                        cdesc = cdesc.basedesc
+                    #
                     return s_copy
             cdesc = cdesc.basedesc
         return s_result     # common case
@@ -864,7 +881,6 @@ class MethodDesc(Desc):
 
     def consider_call_site(bookkeeper, family, descs, args, s_result, op):
         shape = rawshape(args, nextra=1)     # account for the extra 'self'
-        funcdescs = [methoddesc.funcdesc for methoddesc in descs]
         row = FunctionDesc.row_to_consider(descs, args, op)
         family.calltable_add_row(shape, row)
     consider_call_site = staticmethod(consider_call_site)
@@ -1025,7 +1041,6 @@ class MethodOfFrozenDesc(Desc):
 
     def consider_call_site(bookkeeper, family, descs, args, s_result, op):
         shape = rawshape(args, nextra=1)    # account for the extra 'self'
-        funcdescs = [mofdesc.funcdesc for mofdesc in descs]
         row = FunctionDesc.row_to_consider(descs, args, op)
         family.calltable_add_row(shape, row)
     consider_call_site = staticmethod(consider_call_site)

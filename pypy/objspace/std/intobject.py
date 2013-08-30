@@ -1,38 +1,21 @@
+"""The builtin int implementation
+
+In order to have the same behavior running on CPython, and after RPython
+translation this module uses rarithmetic.ovfcheck to explicitly check
+for overflows, something CPython does not do anymore.
+"""
+
+from rpython.rlib import jit
+from rpython.rlib.rarithmetic import LONG_BIT, is_valid_int, ovfcheck, r_uint
+from rpython.rlib.rbigint import rbigint
+
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std import newformat
-from pypy.objspace.std.inttype import wrapint
-from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.inttype import W_AbstractIntObject
+from pypy.objspace.std.model import W_Object, registerimplementation
 from pypy.objspace.std.multimethod import FailedToImplementArgs
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.register_all import register_all
-from rpython.rlib import jit
-from rpython.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint, is_valid_int
-from rpython.rlib.rbigint import rbigint
-
-"""
-In order to have the same behavior running
-on CPython, and after RPython translation we use ovfcheck
-from rarithmetic to explicitly check for overflows,
-something CPython does not do anymore.
-"""
-
-class W_AbstractIntObject(W_Object):
-    __slots__ = ()
-
-    def is_w(self, space, w_other):
-        if not isinstance(w_other, W_AbstractIntObject):
-            return False
-        if self.user_overridden_class or w_other.user_overridden_class:
-            return self is w_other
-        return space.int_w(self) == space.int_w(w_other)
-
-    def immutable_unique_id(self, space):
-        if self.user_overridden_class:
-            return None
-        from pypy.objspace.std.model import IDTAG_INT as tag
-        b = space.bigint_w(self)
-        b = b.lshift(3).or_(rbigint.fromint(tag))
-        return space.newlong_from_rbigint(b)
 
 
 class W_IntObject(W_AbstractIntObject):
@@ -41,35 +24,43 @@ class W_IntObject(W_AbstractIntObject):
 
     from pypy.objspace.std.inttype import int_typedef as typedef
 
-    def __init__(w_self, intval):
+    def __init__(self, intval):
         assert is_valid_int(intval)
-        w_self.intval = intval
+        self.intval = intval
 
-    def __repr__(w_self):
-        """ representation for debugging purposes """
-        return "%s(%d)" % (w_self.__class__.__name__, w_self.intval)
+    def __repr__(self):
+        """representation for debugging purposes"""
+        return "%s(%d)" % (self.__class__.__name__, self.intval)
 
-    def unwrap(w_self, space):
-        return int(w_self.intval)
+    def unwrap(self, space):
+        return int(self.intval)
     int_w = unwrap
 
-    def uint_w(w_self, space):
-        intval = w_self.intval
+    def uint_w(self, space):
+        intval = self.intval
         if intval < 0:
-            raise OperationError(space.w_ValueError,
-                                 space.wrap("cannot convert negative integer to unsigned"))
+            raise OperationError(
+                space.w_ValueError,
+                space.wrap("cannot convert negative integer to unsigned"))
         else:
             return r_uint(intval)
 
-    def bigint_w(w_self, space):
-        return rbigint.fromint(w_self.intval)
+    def bigint_w(self, space):
+        return rbigint.fromint(self.intval)
+
+    def float_w(self, space):
+        return float(self.intval)
+
+    def int(self, space):
+        if (type(self) is not W_IntObject and
+            space.is_overloaded(self, space.w_int, '__int__')):
+            return W_Object.int(self, space)
+        if space.is_w(space.type(self), space.w_int):
+            return self
+        a = self.intval
+        return space.newint(a)
 
 registerimplementation(W_IntObject)
-
-# NB: This code is shared by smallintobject.py, and thus no other Int
-# multimethods should be invoked from these implementations. Instead, add an
-# alias and then teach copy_multimethods in smallintobject.py to override
-# it. See int__Int for example.
 
 def repr__Int(space, w_int1):
     a = w_int1.intval
@@ -101,7 +92,7 @@ def hash__Int(space, w_int1):
     # unlike CPython, we don't special-case the value -1 in most of our
     # hash functions, so there is not much sense special-casing it here either.
     # Make sure this is consistent with the hash of floats and longs.
-    return get_integer(space, w_int1)
+    return w_int1.int(space)
 
 # coerce
 def coerce__Int_Int(space, w_int1, w_int2):
@@ -116,7 +107,7 @@ def add__Int_Int(space, w_int1, w_int2):
     except OverflowError:
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer addition"))
-    return wrapint(space, z)
+    return space.newint(z)
 
 def sub__Int_Int(space, w_int1, w_int2):
     x = w_int1.intval
@@ -126,7 +117,7 @@ def sub__Int_Int(space, w_int1, w_int2):
     except OverflowError:
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer substraction"))
-    return wrapint(space, z)
+    return space.newint(z)
 
 def mul__Int_Int(space, w_int1, w_int2):
     x = w_int1.intval
@@ -136,7 +127,7 @@ def mul__Int_Int(space, w_int1, w_int2):
     except OverflowError:
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer multiplication"))
-    return wrapint(space, z)
+    return space.newint(z)
 
 def floordiv__Int_Int(space, w_int1, w_int2):
     x = w_int1.intval
@@ -149,14 +140,15 @@ def floordiv__Int_Int(space, w_int1, w_int2):
     except OverflowError:
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer division"))
-    return wrapint(space, z)
+    return space.newint(z)
 div__Int_Int = floordiv__Int_Int
 
 def truediv__Int_Int(space, w_int1, w_int2):
     x = float(w_int1.intval)
     y = float(w_int2.intval)
     if y == 0.0:
-        raise FailedToImplementArgs(space.w_ZeroDivisionError, space.wrap("float division"))
+        raise FailedToImplementArgs(space.w_ZeroDivisionError,
+                                    space.wrap("float division"))
     return space.wrap(x / y)
 
 def mod__Int_Int(space, w_int1, w_int2):
@@ -170,7 +162,7 @@ def mod__Int_Int(space, w_int1, w_int2):
     except OverflowError:
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer modulo"))
-    return wrapint(space, z)
+    return space.newint(z)
 
 def divmod__Int_Int(space, w_int1, w_int2):
     x = w_int1.intval
@@ -190,7 +182,8 @@ def divmod__Int_Int(space, w_int1, w_int2):
 
 
 # helper for pow()
-@jit.look_inside_iff(lambda space, iv, iw, iz: jit.isconstant(iw) and jit.isconstant(iz))
+@jit.look_inside_iff(lambda space, iv, iw, iz:
+                     jit.isconstant(iw) and jit.isconstant(iz))
 def _impl_int_int_pow(space, iv, iw, iz):
     if iw < 0:
         if iz != 0:
@@ -242,13 +235,13 @@ def neg__Int(space, w_int1):
     except OverflowError:
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer negation"))
-    return wrapint(space, x)
+    return space.newint(x)
 get_negint = neg__Int
 
 
 def abs__Int(space, w_int1):
     if w_int1.intval >= 0:
-        return get_integer(space, w_int1)
+        return w_int1.int(space)
     else:
         return get_negint(space, w_int1)
 
@@ -258,7 +251,7 @@ def nonzero__Int(space, w_int1):
 def invert__Int(space, w_int1):
     x = w_int1.intval
     a = ~x
-    return wrapint(space, a)
+    return space.newint(a)
 
 def lshift__Int_Int(space, w_int1, w_int2):
     a = w_int1.intval
@@ -269,13 +262,13 @@ def lshift__Int_Int(space, w_int1, w_int2):
         except OverflowError:
             raise FailedToImplementArgs(space.w_OverflowError,
                                     space.wrap("integer left shift"))
-        return wrapint(space, c)
+        return space.newint(c)
     if b < 0:
         raise OperationError(space.w_ValueError,
                              space.wrap("negative shift count"))
     else: #b >= LONG_BIT
         if a == 0:
-            return get_integer(space, w_int1)
+            return w_int1.int(space)
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer left shift"))
 
@@ -288,47 +281,39 @@ def rshift__Int_Int(space, w_int1, w_int2):
                                  space.wrap("negative shift count"))
         else: # b >= LONG_BIT
             if a == 0:
-                return get_integer(space, w_int1)
+                return w_int1.int(space)
             if a < 0:
                 a = -1
             else:
                 a = 0
     else:
         a = a >> b
-    return wrapint(space, a)
+    return space.newint(a)
 
 def and__Int_Int(space, w_int1, w_int2):
     a = w_int1.intval
     b = w_int2.intval
     res = a & b
-    return wrapint(space, res)
+    return space.newint(res)
 
 def xor__Int_Int(space, w_int1, w_int2):
     a = w_int1.intval
     b = w_int2.intval
     res = a ^ b
-    return wrapint(space, res)
+    return space.newint(res)
 
 def or__Int_Int(space, w_int1, w_int2):
     a = w_int1.intval
     b = w_int2.intval
     res = a | b
-    return wrapint(space, res)
+    return space.newint(res)
 
-# int__Int is supposed to do nothing, unless it has
-# a derived integer object, where it should return
-# an exact one.
-def int__Int(space, w_int1):
-    if space.is_w(space.type(w_int1), space.w_int):
-        return w_int1
-    a = w_int1.intval
-    return wrapint(space, a)
-get_integer = int__Int
-pos__Int = int__Int
-trunc__Int = int__Int
+def pos__Int(self, space):
+    return self.int(space)
+trunc__Int = pos__Int
 
 def index__Int(space, w_int1):
-    return get_integer(space, w_int1)
+    return w_int1.int(space)
 
 def float__Int(space, w_int1):
     a = w_int1.intval
@@ -342,7 +327,7 @@ def hex__Int(space, w_int1):
     return space.wrap(hex(w_int1.intval))
 
 def getnewargs__Int(space, w_int1):
-    return space.newtuple([wrapint(space, w_int1.intval)])
+    return space.newtuple([space.newint(w_int1.intval)])
 
 
 register_all(vars())

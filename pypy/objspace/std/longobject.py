@@ -1,39 +1,27 @@
+"""The builtin long implementation"""
+
 import sys
+
+from rpython.rlib.rbigint import rbigint
+
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std import model, newformat
-from pypy.objspace.std.model import registerimplementation, W_Object
-from pypy.objspace.std.register_all import register_all
-from pypy.objspace.std.multimethod import FailedToImplementArgs
 from pypy.objspace.std.intobject import W_IntObject
+from pypy.objspace.std.longtype import W_AbstractLongObject, long_typedef
+from pypy.objspace.std.model import W_Object, registerimplementation
+from pypy.objspace.std.multimethod import FailedToImplementArgs
 from pypy.objspace.std.noneobject import W_NoneObject
-from rpython.rlib.rbigint import rbigint, SHIFT
-
-class W_AbstractLongObject(W_Object):
-    __slots__ = ()
-
-    def is_w(self, space, w_other):
-        if not isinstance(w_other, W_AbstractLongObject):
-            return False
-        if self.user_overridden_class or w_other.user_overridden_class:
-            return self is w_other
-        return space.bigint_w(self).eq(space.bigint_w(w_other))
-
-    def immutable_unique_id(self, space):
-        if self.user_overridden_class:
-            return None
-        from pypy.objspace.std.model import IDTAG_LONG as tag
-        b = space.bigint_w(self)
-        b = b.lshift(3).or_(rbigint.fromint(tag))
-        return space.newlong_from_rbigint(b)
+from pypy.objspace.std.register_all import register_all
 
 
 class W_LongObject(W_AbstractLongObject):
     """This is a wrapper of rbigint."""
-    from pypy.objspace.std.longtype import long_typedef as typedef
     _immutable_fields_ = ['num']
 
-    def __init__(w_self, l):
-        w_self.num = l # instance of rbigint
+    typedef = long_typedef
+
+    def __init__(self, l):
+        self.num = l # instance of rbigint
 
     def fromint(space, intval):
         return W_LongObject(rbigint.fromint(intval))
@@ -42,11 +30,12 @@ class W_LongObject(W_AbstractLongObject):
     def longval(self):
         return self.num.tolong()
 
-    def unwrap(w_self, space): #YYYYYY
-        return w_self.longval()
-
-    def tofloat(self):
-        return self.num.tofloat()
+    def tofloat(self, space):
+        try:
+            return self.num.tofloat()
+        except OverflowError:
+            raise OperationError(space.w_OverflowError,
+                    space.wrap("long int too large to convert to float"))
 
     def toint(self):
         return self.num.toint()
@@ -64,16 +53,16 @@ class W_LongObject(W_AbstractLongObject):
     fromrarith_int._annspecialcase_ = "specialize:argtype(0)"
     fromrarith_int = staticmethod(fromrarith_int)
 
-    def int_w(w_self, space):
+    def int_w(self, space):
         try:
-            return w_self.num.toint()
+            return self.num.toint()
         except OverflowError:
             raise OperationError(space.w_OverflowError, space.wrap(
                 "long int too large to convert to int"))
 
-    def uint_w(w_self, space):
+    def uint_w(self, space):
         try:
-            return w_self.num.touint()
+            return self.num.touint()
         except ValueError:
             raise OperationError(space.w_ValueError, space.wrap(
                 "cannot convert negative integer to unsigned int"))
@@ -81,8 +70,20 @@ class W_LongObject(W_AbstractLongObject):
             raise OperationError(space.w_OverflowError, space.wrap(
                 "long int too large to convert to unsigned int"))
 
-    def bigint_w(w_self, space):
-        return w_self.num
+    def bigint_w(self, space):
+        return self.num
+
+    def float_w(self, space):
+        return self.tofloat(space)
+
+    def int(self, space):
+        if (type(self) is not W_LongObject and
+            space.is_overloaded(self, space.w_long, '__int__')):
+            return W_Object.int(self, space)
+        try:
+            return space.newint(self.num.toint())
+        except OverflowError:
+            return long__Long(space, self)
 
     def __repr__(self):
         return '<W_LongObject(%d)>' % self.num.tolong()
@@ -127,21 +128,11 @@ trunc__Long = long__Long
 def long__Int(space, w_intobj):
     return space.newlong(w_intobj.intval)
 
-def int__Long(space, w_value):
-    try:
-        return space.newint(w_value.num.toint())
-    except OverflowError:
-        return long__Long(space, w_value)
-
 def index__Long(space, w_value):
     return long__Long(space, w_value)
 
 def float__Long(space, w_longobj):
-    try:
-        return space.newfloat(w_longobj.num.tofloat())
-    except OverflowError:
-        raise OperationError(space.w_OverflowError,
-                             space.wrap("long int too large to convert to float"))
+    return space.newfloat(w_longobj.tofloat(space))
 
 def repr__Long(space, w_long):
     return space.wrap(w_long.num.repr())
@@ -337,7 +328,8 @@ def recover_with_smalllong(space):
             sys.maxint == 2147483647)
 
 # binary ops
-for opname in ['add', 'sub', 'mul', 'div', 'floordiv', 'truediv', 'mod', 'divmod', 'lshift']:
+for opname in ['add', 'sub', 'mul', 'div', 'floordiv', 'truediv', 'mod',
+               'divmod', 'lshift']:
     exec compile("""
 def %(opname)s_ovr__Int_Int(space, w_int1, w_int2):
     if recover_with_smalllong(space) and %(opname)r != 'truediv':

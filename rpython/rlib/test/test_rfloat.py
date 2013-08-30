@@ -1,10 +1,12 @@
 import sys, py
 
 from rpython.rlib.rfloat import float_as_rbigint_ratio
-from rpython.rlib.rfloat import break_up_float
 from rpython.rlib.rfloat import copysign
 from rpython.rlib.rfloat import round_away
 from rpython.rlib.rfloat import round_double
+from rpython.rlib.rfloat import erf, erfc, gamma, lgamma, isnan
+from rpython.rlib.rfloat import ulps_check, acc_check
+from rpython.rlib.rfloat import string_to_float
 from rpython.rlib.rbigint import rbigint
 
 def test_copysign():
@@ -85,32 +87,11 @@ def test_round_double():
 
 def test_round_half_even():
     from rpython.rlib import rfloat
-    for func in (rfloat.round_double_short_repr,
-                 rfloat.round_double_fallback_repr):
-        # 2.x behavior
-        assert func(2.5, 0, False) == 3.0
-        # 3.x behavior
-        assert func(2.5, 0, True) == 2.0
-
-def test_break_up_float():
-    assert break_up_float('1') == ('', '1', '', '')
-    assert break_up_float('+1') == ('+', '1', '', '')
-    assert break_up_float('-1') == ('-', '1', '', '')
-
-    assert break_up_float('.5') == ('', '', '5', '')
-
-    assert break_up_float('1.2e3') == ('', '1', '2', '3')
-    assert break_up_float('1.2e+3') == ('', '1', '2', '+3')
-    assert break_up_float('1.2e-3') == ('', '1', '2', '-3')
-
-    # some that will get thrown out on return:
-    assert break_up_float('.') == ('', '', '', '')
-    assert break_up_float('+') == ('+', '', '', '')
-    assert break_up_float('-') == ('-', '', '', '')
-    assert break_up_float('e1') == ('', '', '', '1')
-
-    py.test.raises(ValueError, break_up_float, 'e')
-
+    func = rfloat.round_double
+    # 2.x behavior
+    assert func(2.5, 0, False) == 3.0
+    # 3.x behavior
+    assert func(2.5, 0, True) == 2.0
 
 def test_float_as_rbigint_ratio():
     for f, ratio in [
@@ -129,3 +110,158 @@ def test_float_as_rbigint_ratio():
         float_as_rbigint_ratio(float('-inf'))
     with py.test.raises(ValueError):
         float_as_rbigint_ratio(float('nan'))
+
+def test_mtestfile():
+    from rpython.rlib import rfloat
+    import zipfile
+    import os
+    def _parse_mtestfile(fname):
+        """Parse a file with test values
+
+        -- starts a comment
+        blank lines, or lines containing only a comment, are ignored
+        other lines are expected to have the form
+          id fn arg -> expected [flag]*
+
+        """
+        with open(fname) as fp:
+            for line in fp:
+                # strip comments, and skip blank lines
+                if '--' in line:
+                    line = line[:line.index('--')]
+                if not line.strip():
+                    continue
+
+                lhs, rhs = line.split('->')
+                id, fn, arg = lhs.split()
+                rhs_pieces = rhs.split()
+                exp = rhs_pieces[0]
+                flags = rhs_pieces[1:]
+
+                yield (id, fn, float(arg), float(exp), flags)
+
+    ALLOWED_ERROR = 20  # permitted error, in ulps
+    fail_fmt = "{}:{}({!r}): expected {!r}, got {!r}"
+
+    failures = []
+    math_testcases = os.path.join(os.path.dirname(__file__),
+                                  "math_testcases.txt")
+    for id, fn, arg, expected, flags in _parse_mtestfile(math_testcases):
+        func = getattr(rfloat, fn)
+
+        if 'invalid' in flags or 'divide-by-zero' in flags:
+            expected = 'ValueError'
+        elif 'overflow' in flags:
+            expected = 'OverflowError'
+
+        try:
+            got = func(arg)
+        except ValueError:
+            got = 'ValueError'
+        except OverflowError:
+            got = 'OverflowError'
+
+        accuracy_failure = None
+        if isinstance(got, float) and isinstance(expected, float):
+            if isnan(expected) and isnan(got):
+                continue
+            if not isnan(expected) and not isnan(got):
+                if fn == 'lgamma':
+                    # we use a weaker accuracy test for lgamma;
+                    # lgamma only achieves an absolute error of
+                    # a few multiples of the machine accuracy, in
+                    # general.
+                    accuracy_failure = acc_check(expected, got,
+                                              rel_err = 5e-15,
+                                              abs_err = 5e-15)
+                elif fn == 'erfc':
+                    # erfc has less-than-ideal accuracy for large
+                    # arguments (x ~ 25 or so), mainly due to the
+                    # error involved in computing exp(-x*x).
+                    #
+                    # XXX Would be better to weaken this test only
+                    # for large x, instead of for all x.
+                    accuracy_failure = ulps_check(expected, got, 2000)
+
+                else:
+                    accuracy_failure = ulps_check(expected, got, 20)
+                if accuracy_failure is None:
+                    continue
+
+        if isinstance(got, str) and isinstance(expected, str):
+            if got == expected:
+                continue
+
+        fail_msg = fail_fmt.format(id, fn, arg, expected, got)
+        if accuracy_failure is not None:
+            fail_msg += ' ({})'.format(accuracy_failure)
+        failures.append(fail_msg)
+    assert not failures
+
+
+def test_gamma_overflow_translated():
+    from rpython.translator.c.test.test_genc import compile
+    def wrapper(arg):
+        try:
+            return gamma(arg)
+        except OverflowError:
+            return -42
+
+    f = compile(wrapper, [float])
+    assert f(10.0) == 362880.0
+    assert f(1720.0) == -42
+    assert f(172.0) == -42
+
+
+
+def test_string_to_float():
+    from rpython.rlib.rstring import ParseStringError
+    import random
+    assert string_to_float('0') == 0.0
+    assert string_to_float('1') == 1.0
+    assert string_to_float('-1.5') == -1.5
+    assert string_to_float('1.5E2') == 150.0
+    assert string_to_float('2.5E-1') == 0.25
+    assert string_to_float('1e1111111111111') == float('1e1111111111111')
+    assert string_to_float('1e-1111111111111') == float('1e-1111111111111')
+    assert string_to_float('-1e1111111111111') == float('-1e1111111111111')
+    assert string_to_float('-1e-1111111111111') == float('-1e-1111111111111')
+    assert string_to_float('1e111111111111111111111') == float('1e111111111111111111111')
+    assert string_to_float('1e-111111111111111111111') == float('1e-111111111111111111111')
+    assert string_to_float('-1e111111111111111111111') == float('-1e111111111111111111111')
+    assert string_to_float('-1e-111111111111111111111') == float('-1e-111111111111111111111')
+
+    valid_parts = [['', '  ', ' \f\n\r\t\v'],
+                   ['', '+', '-'],
+                   ['00', '90', '.5', '2.4', '3.', '0.07',
+                    '12.3489749871982471987198371293717398256187563298638726'
+                    '2187362820947193247129871083561249818451804287437824015'
+                    '013816418758104762348932657836583048761487632840726386'],
+                   ['', 'e0', 'E+1', 'E-01', 'E42'],
+                   ['', '  ', ' \f\n\r\t\v'],
+                   ]
+    invalid_parts = [['#'],
+                     ['++', '+-', '-+', '--'],
+                     ['', '1.2.3', '.', '5..6'],
+                     ['E+', 'E-', 'e', 'e++', 'E++2'],
+                     ['#'],
+                     ]
+    for part0 in valid_parts[0]:
+        for part1 in valid_parts[1]:
+            for part2 in valid_parts[2]:
+                for part3 in valid_parts[3]:
+                    for part4 in valid_parts[4]:
+                        s = part0+part1+part2+part3+part4
+                        assert (abs(string_to_float(s) - float(s)) <=
+                                1E-13 * abs(float(s)))
+
+    for j in range(len(invalid_parts)):
+        for invalid in invalid_parts[j]:
+            for i in range(20):
+                parts = [random.choice(lst) for lst in valid_parts]
+                parts[j] = invalid
+                s = ''.join(parts)
+                print repr(s)
+                if s.strip(): # empty s raises OperationError directly
+                    py.test.raises(ParseStringError, string_to_float, s)
+    py.test.raises(ParseStringError, string_to_float, "")

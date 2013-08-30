@@ -14,7 +14,7 @@ class MyLLCPU(AbstractLLCPU):
         def set_debug(flag):
             pass
     
-    def compile_loop(self, inputargs, operations, looptoken):
+    def compile_loop(self, logger, inputargs, operations, looptoken):
         py.test.skip("llsupport test: cannot compile operations")
 
 
@@ -22,6 +22,6 @@ class TestAbstractLLCPU(LLtypeBackendTest):
 
     # for the individual tests see
     # ====> ../../test/runner_test.py
-    
-    def setup_class(cls):
-        cls.cpu = MyLLCPU(rtyper=None, stats=FakeStats(), opts=None)
+
+    def get_cpu(self):
+        return MyLLCPU(rtyper=None, stats=FakeStats(), opts=None)

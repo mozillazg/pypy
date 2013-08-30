@@ -7,9 +7,9 @@ from __future__ import generators
 import re, os, math
 import pygame
 from pygame.locals import *
+from strunicode import forceunicode
 
 
-RAW_ENCODING = "utf-8"
 this_dir = os.path.dirname(os.path.abspath(__file__))
 FONT = os.path.join(this_dir, 'font', 'DroidSans.ttf')
 FIXEDFONT = os.path.join(this_dir, 'font', 'DroidSansMono.ttf')
@@ -22,6 +22,7 @@ COLOR = {
     'yellow': (255,255,0),
     }
 re_nonword=re.compile(r'([^0-9a-zA-Z_.]+)')
+re_linewidth=re.compile(r'setlinewidth\((\d+(\.\d*)?|\.\d+)\)')
 
 def combine(color1, color2, alpha):
     r1, g1, b1 = color1
@@ -51,12 +52,6 @@ def getcolor(name, default):
         return rval
     else:
         return default
-
-def forceunicode(name):
-    return name if isinstance(name, unicode) else name.decode(RAW_ENCODING)
-
-def forcestr(name):
-    return name if isinstance(name, str) else name.encode(RAW_ENCODING)
 
 
 class GraphLayout:
@@ -144,6 +139,13 @@ class Edge:
             self.yl = float(yl)
             rest = rest[3:]
         self.style, self.color = rest
+        linematch = re_linewidth.match(self.style)
+        if linematch:
+            num = linematch.group(1)
+            self.linewidth = int(round(float(num)))
+            self.style = self.style[linematch.end(0):]
+        else:
+            self.linewidth = 1
         self.highlight = False
         self.cachedbezierpoints = None
         self.cachedarrowhead = None
@@ -526,8 +528,8 @@ class GraphRenderer:
                 fgcolor = highlight_color(fgcolor)
             points = [self.map(*xy) for xy in edge.bezierpoints()]
 
-            def drawedgebody(points=points, fgcolor=fgcolor):
-                pygame.draw.lines(self.screen, fgcolor, False, points)
+            def drawedgebody(points=points, fgcolor=fgcolor, width=edge.linewidth):
+                pygame.draw.lines(self.screen, fgcolor, False, points, width)
             edgebodycmd.append(drawedgebody)
 
             points = [self.map(*xy) for xy in edge.arrowhead()]

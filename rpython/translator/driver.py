@@ -343,7 +343,7 @@ class TranslationDriver(object):
             for func, inputtypes in self.secondary_entrypoints:
                 if inputtypes == Ellipsis:
                     continue
-                rettype = annotator.build_types(func, inputtypes, False)
+                annotator.build_types(func, inputtypes, False)
 
         if self.entry_point:
             s = annotator.build_types(self.entry_point, self.inputtypes)
@@ -373,16 +373,19 @@ class TranslationDriver(object):
     def task_rtype(self):
         """ RTyping
         """
-        type_system = self.config.translation.type_system
-        rtyper = self.translator.buildrtyper(type_system)
+        rtyper = self.translator.buildrtyper()
         rtyper.specialize(dont_simplify_again=True)
 
     @taskdef("JIT compiler generation")
     def task_pyjitpl(self):
         """ Generate bytecodes for JIT and flow the JIT helper functions
         """
-        get_policy = self.extra['jitpolicy']
-        self.jitpolicy = get_policy(self)
+        from rpython.jit.codewriter.policy import JitPolicy
+        get_policy = self.extra.get('jitpolicy', None)
+        if get_policy is None:
+            self.jitpolicy = JitPolicy()
+        else:
+            self.jitpolicy = get_policy(self)
         #
         from rpython.jit.metainterp.warmspot import apply_jit
         apply_jit(self.translator, policy=self.jitpolicy,
@@ -436,174 +439,6 @@ class TranslationDriver(object):
         if '/' not in newexename and '\\' not in newexename:
             newexename = './' + newexename
         return py.path.local(newexename)
-
-    @taskdef('Generating CLI source')
-    def task_source_cli(self):
-        from rpython.translator.cli.gencli import GenCli
-        from rpython.translator.cli.entrypoint import get_entrypoint
-
-        if self.entry_point is not None: # executable mode
-            entry_point_graph = self.translator.graphs[0]
-            entry_point = get_entrypoint(entry_point_graph)
-        else:
-            raise NotImplementedError
-
-        self.gen = GenCli(udir, self.translator, entry_point, config=self.config)
-        filename = self.gen.generate_source()
-        self.log.info("Wrote %s" % (filename,))
-
-    @taskdef('Compiling CLI source')
-    def task_compile_cli(self):
-        from rpython.translator.oosupport.support import unpatch_os
-        from rpython.translator.cli.test.runtest import CliFunctionWrapper
-        filename = self.gen.build_exe()
-        self.c_entryp = CliFunctionWrapper(filename)
-        # restore original os values
-        if hasattr(self, 'old_cli_defs'):
-            unpatch_os(self.old_cli_defs)
-
-        self.log.info("Compiled %s" % filename)
-        if self.standalone and self.exe_name:
-            self.copy_cli_exe()
-
-    def copy_cli_exe(self):
-        # XXX messy
-        main_exe = self.c_entryp._exe
-        usession_path, main_exe_name = os.path.split(main_exe)
-        pypylib_dll = os.path.join(usession_path, 'pypylib.dll')
-
-        basename = self.exe_name % self.get_info()
-        dirname = basename + '-data/'
-        if '/' not in dirname and '\\' not in dirname:
-            dirname = './' + dirname
-
-        if not os.path.exists(dirname):
-            os.makedirs(dirname)
-        shutil.copy(main_exe, dirname)
-        shutil.copy(pypylib_dll, dirname)
-        if bool(os.getenv('PYPY_GENCLI_COPYIL')):
-            shutil.copy(os.path.join(usession_path, 'main.il'), dirname)
-        newexename = basename
-        f = file(newexename, 'w')
-        f.write(r"""#!/bin/bash
-LEDIT=`type -p ledit`
-EXE=`readlink $0`
-if [ -z $EXE ]
-then
-    EXE=$0
-fi
-if  uname -s | grep -iq Cygwin
-then 
-    MONO=
-else 
-    MONO=mono
-    # workaround for known mono buggy versions
-    VER=`mono -V | head -1 | sed s/'Mono JIT compiler version \(.*\) (.*'/'\1/'`
-    if [[ 2.1 < "$VER" && "$VER" < 2.4.3 ]]
-    then
-        MONO="mono -O=-branch"
-    fi
-fi
-$LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
-""" % main_exe_name)
-        f.close()
-        os.chmod(newexename, 0755)
-
-    def copy_cli_dll(self):
-        dllname = self.gen.outfile
-        usession_path, dll_name = os.path.split(dllname)
-        pypylib_dll = os.path.join(usession_path, 'pypylib.dll')
-        shutil.copy(dllname, '.')
-        shutil.copy(pypylib_dll, '.')
-
-        # main.exe is a stub but is needed right now because it's
-        # referenced by pypylib.dll.  Will be removed in the future
-        translator_path, _ = os.path.split(__file__)
-        main_exe = os.path.join(translator_path, 'cli/src/main.exe')
-        shutil.copy(main_exe, '.')
-        self.log.info("Copied to %s" % os.path.join(os.getcwd(), dllname))
-
-    @taskdef('Generating JVM source')
-    def task_source_jvm(self):
-        from rpython.translator.jvm.genjvm import GenJvm
-        from rpython.translator.jvm.node import EntryPoint
-
-        entry_point_graph = self.translator.graphs[0]
-        is_func = not self.standalone
-        entry_point = EntryPoint(entry_point_graph, is_func, is_func)
-        self.gen = GenJvm(udir, self.translator, entry_point)
-        self.jvmsource = self.gen.generate_source()
-        self.log.info("Wrote JVM code")
-
-    @taskdef('Compiling JVM source')
-    def task_compile_jvm(self):
-        from rpython.translator.oosupport.support import unpatch_os
-        from rpython.translator.jvm.test.runtest import JvmGeneratedSourceWrapper
-        self.jvmsource.compile()
-        self.c_entryp = JvmGeneratedSourceWrapper(self.jvmsource)
-        # restore original os values
-        if hasattr(self, 'old_cli_defs'):
-            unpatch_os(self.old_cli_defs)
-        self.log.info("Compiled JVM source")
-        if self.standalone and self.exe_name:
-            self.copy_jvm_jar()
-
-    def copy_jvm_jar(self):
-        import subprocess
-        basename = self.exe_name % self.get_info()
-        root = udir.join('pypy')
-        manifest = self.create_manifest(root)
-        jnajar = py.path.local(__file__).dirpath('jvm', 'src', 'jna.jar')
-        classlist = self.create_classlist(root, [jnajar])
-        jarfile = py.path.local(basename + '.jar')
-        self.log.info('Creating jar file')
-        oldpath = root.chdir()
-        subprocess.call(['jar', 'cmf', str(manifest), str(jarfile), '@'+str(classlist)])
-        oldpath.chdir()
-
-        # create a convenience script
-        newexename = basename
-        f = file(newexename, 'w')
-        f.write("""#!/bin/bash
-LEDIT=`type -p ledit`
-EXE=`readlink $0`
-if [ -z $EXE ]
-then
-    EXE=$0
-fi
-$LEDIT java -Xmx256m -jar $EXE.jar "$@"
-""")
-        f.close()
-        os.chmod(newexename, 0755)
-
-    def create_manifest(self, root):
-        filename = root.join('manifest.txt')
-        manifest = filename.open('w')
-        manifest.write('Main-class: pypy.Main\n\n')
-        manifest.close()
-        return filename
-
-    def create_classlist(self, root, additional_jars=[]):
-        import subprocess
-        # first, uncompress additional jars
-        for jarfile in additional_jars:
-            oldpwd = root.chdir()
-            subprocess.call(['jar', 'xf', str(jarfile)])
-            oldpwd.chdir()
-        filename = root.join('classlist.txt')
-        classlist = filename.open('w')
-        classfiles = list(root.visit('*.class', True))
-        classfiles += root.visit('*.so', True)
-        classfiles += root.visit('*.dll', True)
-        classfiles += root.visit('*.jnilib', True)
-        for classfile in classfiles:
-            print >> classlist, classfile.relto(root)
-        classlist.close()
-        return filename
-
-    @taskdef('XXX')
-    def task_run_jvm(self):
-        pass
 
     def proceed(self, goal):
         tasks = []

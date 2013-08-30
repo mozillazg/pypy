@@ -35,7 +35,10 @@ class LLTrace(object):
         self.operations = []
         for op in operations:
             if op.getdescr() is not None:
-                newdescr = WeakrefDescr(op.getdescr())
+                if op.is_guard() or op.getopnum() == rop.FINISH:
+                    newdescr = op.getdescr()
+                else:
+                    newdescr = WeakrefDescr(op.getdescr())
             else:
                 newdescr = None
             newop = op.copy_and_change(op.getopnum(),
@@ -49,6 +52,7 @@ class LLTrace(object):
 class WeakrefDescr(AbstractDescr):
     def __init__(self, realdescr):
         self.realdescrref = weakref.ref(realdescr)
+        self.final_descr = getattr(realdescr, 'final_descr', False)
 
 class ExecutionFinished(Exception):
     def __init__(self, deadframe):
@@ -96,6 +100,9 @@ class FieldDescr(AbstractDescr):
         self.S = S
         self.fieldname = fieldname
         self.FIELD = getattr(S, fieldname)
+
+    def get_vinfo(self):
+        return self.vinfo
 
     def __repr__(self):
         return 'FieldDescr(%r, %r)' % (self.S, self.fieldname)
@@ -166,7 +173,7 @@ class LLGraphCPU(model.AbstractCPU):
     translate_support_code = False
     is_llgraph = True
 
-    def __init__(self, rtyper, stats=None, *ignored_args, **ignored_kwds):
+    def __init__(self, rtyper, stats=None, *ignored_args, **kwds):
         model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
@@ -174,8 +181,10 @@ class LLGraphCPU(model.AbstractCPU):
         class MiniStats:
             pass
         self.stats = stats or MiniStats()
+        self.vinfo_for_tests = kwds.get('vinfo_for_tests', None)
 
-    def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
+    def compile_loop(self, logger, inputargs, operations, looptoken, log=True,
+                     name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
         looptoken.compiled_loop_token = clt
         lltrace = LLTrace(inputargs, operations)
@@ -183,7 +192,7 @@ class LLGraphCPU(model.AbstractCPU):
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
 
-    def compile_bridge(self, faildescr, inputargs, operations,
+    def compile_bridge(self, logger, faildescr, inputargs, operations,
                        original_loop_token, log=True):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
@@ -232,26 +241,23 @@ class LLGraphCPU(model.AbstractCPU):
         except ExecutionFinished, e:
             return e.deadframe
 
-    def get_latest_value_int(self, deadframe, index):
+    def get_int_value(self, deadframe, index):
         v = deadframe._values[index]
         assert lltype.typeOf(v) == lltype.Signed
         return v
 
-    def get_latest_value_ref(self, deadframe, index):
+    def get_ref_value(self, deadframe, index):
         v = deadframe._values[index]
         assert lltype.typeOf(v) == llmemory.GCREF
         return v
 
-    def get_latest_value_float(self, deadframe, index):
+    def get_float_value(self, deadframe, index):
         v = deadframe._values[index]
         assert lltype.typeOf(v) == longlong.FLOATSTORAGE
         return v
 
     def get_latest_descr(self, deadframe):
         return deadframe._latest_descr
-
-    def get_latest_value_count(self, deadframe):
-        return len(deadframe._values)
 
     def grab_exc_value(self, deadframe):
         if deadframe._last_exception is not None:
@@ -285,7 +291,7 @@ class LLGraphCPU(model.AbstractCPU):
     def get_savedata_ref(self, deadframe):
         assert deadframe._saved_data is not None
         return deadframe._saved_data
-    
+
     # ------------------------------------------------------------
 
     def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
@@ -315,6 +321,8 @@ class LLGraphCPU(model.AbstractCPU):
         except KeyError:
             descr = FieldDescr(S, fieldname)
             self.descrs[key] = descr
+            if self.vinfo_for_tests is not None:
+                descr.vinfo = self.vinfo_for_tests
             return descr
 
     def arraydescrof(self, A):
@@ -333,7 +341,7 @@ class LLGraphCPU(model.AbstractCPU):
         except KeyError:
             descr = InteriorFieldDescr(A, fieldname)
             self.descrs[key] = descr
-            return descr        
+            return descr
 
     def _calldescr_dynamic_for_tests(self, atypes, rtype,
                                      abiname='FFI_DEFAULT_ABI'):
@@ -483,9 +491,20 @@ class LLGraphCPU(model.AbstractCPU):
         else:
             return self.bh_raw_load_i(struct, offset, descr)
 
+    def unpack_arraydescr_size(self, arraydescr):
+        from rpython.jit.backend.llsupport.symbolic import get_array_token
+        from rpython.jit.backend.llsupport.descr import get_type_flag, FLAG_SIGNED
+        assert isinstance(arraydescr, ArrayDescr)
+        basesize, itemsize, _ = get_array_token(arraydescr.A, False)
+        flag = get_type_flag(arraydescr.A.OF)
+        is_signed = (flag == FLAG_SIGNED)
+        return basesize, itemsize, is_signed
+
     def bh_raw_store_i(self, struct, offset, newvalue, descr):
         ll_p = rffi.cast(rffi.CCHARP, struct)
         ll_p = rffi.cast(lltype.Ptr(descr.A), rffi.ptradd(ll_p, offset))
+        if descr.A.OF == lltype.SingleFloat:
+            newvalue = longlong.int2singlefloat(newvalue)
         ll_p[0] = rffi.cast(descr.A.OF, newvalue)
 
     def bh_raw_store_f(self, struct, offset, newvalue, descr):
@@ -565,6 +584,13 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_read_timestamp(self):
         return read_timestamp()
 
+    def bh_new_raw_buffer(self, size):
+        return lltype.malloc(rffi.CCHARP.TO, size, flavor='raw')
+
+    def store_fail_descr(self, deadframe, descr):
+        pass # I *think*
+
+
 
 class LLDeadFrame(object):
     _TYPE = llmemory.GCREF
@@ -578,11 +604,12 @@ class LLDeadFrame(object):
 
 
 class LLFrame(object):
-    _TYPE = lltype.Signed
+    _TYPE = llmemory.GCREF
 
     forced_deadframe = None
     overflow_flag = False
     last_exception = None
+    force_guard_op = None
 
     def __init__(self, cpu, argboxes, args):
         self.env = {}
@@ -590,6 +617,22 @@ class LLFrame(object):
         assert len(argboxes) == len(args)
         for box, arg in zip(argboxes, args):
             self.setenv(box, arg)
+
+    def __eq__(self, other):
+        # this is here to avoid crashes in 'token == TOKEN_TRACING_RESCALL'
+        from rpython.jit.metainterp.virtualizable import TOKEN_NONE
+        from rpython.jit.metainterp.virtualizable import TOKEN_TRACING_RESCALL
+        if isinstance(other, LLFrame):
+            return self is other
+        if other == TOKEN_NONE or other == TOKEN_TRACING_RESCALL:
+            return False
+        assert 0
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def _identityhash(self):
+        return hash(self)
 
     def setenv(self, box, arg):
         if box.type == INT:
@@ -733,6 +776,8 @@ class LLFrame(object):
         if self.forced_deadframe is not None:
             saved_data = self.forced_deadframe._saved_data
             self.fail_guard(descr, saved_data)
+        self.force_guard_op = self.current_op
+    execute_guard_not_forced_2 = execute_guard_not_forced
 
     def execute_guard_not_invalidated(self, descr):
         if self.lltrace.invalid:
@@ -769,7 +814,7 @@ class LLFrame(object):
         else:
             ovf = False
         self.overflow_flag = ovf
-        return z        
+        return z
 
     def execute_guard_no_overflow(self, descr):
         if self.overflow_flag:
@@ -787,6 +832,12 @@ class LLFrame(object):
         y = support.cast_from_floatstorage(lltype.Float, value)
         x = math.sqrt(y)
         return support.cast_to_floatstorage(x)
+
+    def execute_cond_call(self, calldescr, cond, func, *args):
+        if not cond:
+            return
+        # cond_call can't have a return value
+        self.execute_call(calldescr, func, *args)
 
     def execute_call(self, calldescr, func, *args):
         effectinfo = calldescr.get_extra_info()
@@ -820,10 +871,22 @@ class LLFrame(object):
             # manipulation here (as a hack, instead of really doing
             # the aroundstate manipulation ourselves)
             return self.execute_call_may_force(descr, func, *args)
+        guard_op = self.lltrace.operations[self.current_index + 1]
+        assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
+        self.force_guard_op = guard_op
         call_args = support.cast_call_args_in_order(descr.ARGS, args)
-        FUNC = lltype.FuncType(descr.ARGS, descr.RESULT)
-        func_to_call = rffi.cast(lltype.Ptr(FUNC), func)
-        result = func_to_call(*call_args)
+        #
+        func_adr = llmemory.cast_int_to_adr(func)
+        if hasattr(func_adr.ptr._obj, '_callable'):
+            # this is needed e.g. by test_fficall.test_guard_not_forced_fails,
+            # because to actually force the virtualref we need to llinterp the
+            # graph, not to directly execute the python function
+            result = self.cpu.maybe_on_top_of_llinterp(func, call_args, descr.RESULT)
+        else:
+            FUNC = lltype.FuncType(descr.ARGS, descr.RESULT)
+            func_to_call = rffi.cast(lltype.Ptr(FUNC), func)
+            result = func_to_call(*call_args)
+        del self.force_guard_op
         return support.cast_result(descr.RESULT, result)
 
     def execute_call_assembler(self, descr, *args):
@@ -836,7 +899,6 @@ class LLFrame(object):
         #     res = CALL assembler_call_helper(pframe)
         #     jmp @done
         #   @fastpath:
-        #     RESET_VABLE
         #     res = GETFIELD(pframe, 'result')
         #   @done:
         #
@@ -856,25 +918,17 @@ class LLFrame(object):
             vable = lltype.nullptr(llmemory.GCREF.TO)
         #
         # Emulate the fast path
-        def reset_vable(jd, vable):
-            if jd.index_of_virtualizable != -1:
-                fielddescr = jd.vable_token_descr
-                self.cpu.bh_setfield_gc(vable, 0, fielddescr)
-        faildescr = self.cpu.get_latest_descr(pframe)
-        failindex = self.cpu.get_fail_descr_number(faildescr)
-        if failindex == self.cpu.done_with_this_frame_int_v:
-            reset_vable(jd, vable)
-            return self.cpu.get_latest_value_int(pframe, 0)
-        if failindex == self.cpu.done_with_this_frame_ref_v:
-            reset_vable(jd, vable)
-            return self.cpu.get_latest_value_ref(pframe, 0)
-        if failindex == self.cpu.done_with_this_frame_float_v:
-            reset_vable(jd, vable)
-            return self.cpu.get_latest_value_float(pframe, 0)
-        if failindex == self.cpu.done_with_this_frame_void_v:
-            reset_vable(jd, vable)
-            return None
         #
+        faildescr = self.cpu.get_latest_descr(pframe)
+        if faildescr == self.cpu.done_with_this_frame_descr_int:
+            return self.cpu.get_int_value(pframe, 0)
+        elif faildescr == self.cpu.done_with_this_frame_descr_ref:
+            return self.cpu.get_ref_value(pframe, 0)
+        elif faildescr == self.cpu.done_with_this_frame_descr_float:
+            return self.cpu.get_float_value(pframe, 0)
+        elif faildescr == self.cpu.done_with_this_frame_descr_void:
+            return None
+
         assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
         try:
             result = assembler_helper_ptr(pframe, vable)
@@ -907,18 +961,19 @@ class LLFrame(object):
     def execute_force_token(self, _):
         return self
 
-    def execute_cond_call_gc_wb(self, descr, a, b):
+    def execute_cond_call_gc_wb(self, descr, a):
         py.test.skip("cond_call_gc_wb not supported")
 
-    def execute_cond_call_gc_wb_array(self, descr, a, b, c):
+    def execute_cond_call_gc_wb_array(self, descr, a, b):
         py.test.skip("cond_call_gc_wb_array not supported")
 
     def execute_keepalive(self, descr, x):
         pass
 
+
 def _getdescr(op):
     d = op.getdescr()
-    if d is not None:
+    if d is not None and isinstance(d, WeakrefDescr):
         d = d.realdescrref()
         assert d is not None, "the descr disappeared: %r" % (op,)
     return d

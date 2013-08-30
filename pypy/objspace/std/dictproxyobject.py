@@ -54,10 +54,11 @@ class DictProxyStrategy(DictStrategy):
                 raise
             if not w_type.is_cpytype():
                 raise
-            # xxx obscure workaround: allow cpyext to write to type->tp_dict
-            # xxx even in the case of a builtin type.
-            # xxx like CPython, we assume that this is only done early after
-            # xxx the type is created, and we don't invalidate any cache.
+            # Allow cpyext to write to type->tp_dict even in the case
+            # of a builtin type.
+            # Like CPython, we assume that this is only done early
+            # after the type is created, and we don't invalidate any
+            # cache.  User code shoud call PyType_Modified().
             w_type.dict_w[key] = w_value
 
     def setdefault(self, w_dict, w_key, w_default):
@@ -81,7 +82,7 @@ class DictProxyStrategy(DictStrategy):
     def length(self, w_dict):
         return len(self.unerase(w_dict.dstorage).dict_w)
 
-    def keys(self, w_dict):
+    def w_keys(self, w_dict):
         space = self.space
         return space.newlist_str(self.unerase(w_dict.dstorage).dict_w.keys())
 
@@ -97,8 +98,8 @@ class DictProxyStrategy(DictStrategy):
         space = self.space
         w_type = self.unerase(w_dict.dstorage)
         if not w_type.is_heaptype():
-            msg = "can't clear dictionary of type '%s'"
-            raise operationerrfmt(space.w_TypeError, msg, w_type.name)
+            msg = "can't clear dictionary of type '%N'"
+            raise operationerrfmt(space.w_TypeError, msg, w_type)
         w_type.dict_w.clear()
         w_type.mutated(None)
 

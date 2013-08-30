@@ -70,7 +70,11 @@ def parse_log(lines, verbose=False):
         time = int(int(match.group(1), 16))
         time_decrase = time_decrase or time < lasttime
         lasttime = time
-        record(match.group(2), time=int(match.group(1), 16))
+        try:
+            record(match.group(2), time=int(match.group(1), 16))
+        except:
+            print "Line", i
+            raise
     if verbose:
         sys.stderr.write('loaded\n')
     if performance_log and time_decrase:
@@ -129,6 +133,8 @@ def gettotaltimes(log):
     def rectime(category1, timestart1, timestop1, subcats):
         substartstop = []
         for entry in getsubcategories(subcats):
+            if len(entry) != 4:
+                continue
             rectime(*entry)
             substartstop.append(entry[1:3])   # (start, stop)
         # compute the total time for category1 as the part of the
@@ -234,7 +240,11 @@ def get_timeline_image(log, width, height):
     #
     def recdraw(sublist, subheight):
         firstx1 = None
-        for category1, timestart1, timestop1, subcats in sublist:
+        for entry in sublist:
+            try:
+                category1, timestart1, timestop1, subcats = entry
+            except ValueError:
+                continue
             x1 = int((timestart1 - timestart0) * timefactor)
             x2 = int((timestop1 - timestart0) * timefactor)
             y1 = (height - subheight) / 2
