@@ -31,13 +31,14 @@ class ResumeBuilder(object):
         oplist[op.getopnum()](self, op)
 
     def process_enter_frame(self, op):
-        self.framestack.append(None)
+        self.framestack.append(op.getdescr())
         self.newops.append(op)
 
+    def _find_position_for_box(self, v):
+        return self.regalloc.loc(v).get_jitframe_position()
+
     def process_resume_put(self, op):
-        v = op.getarg(0)
-        loc = self.regalloc.loc(v)
-        pos = loc.get_jitframe_position()
+        pos = self._find_position_for_box(op.getarg(0))
         self.newops.append(op.copy_and_change(rop.BACKEND_PUT,
                                               args=[ConstInt(pos),
                                                     op.getarg(1),

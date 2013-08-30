@@ -162,13 +162,13 @@ class BaseBackendTest(Runner):
         looptoken = JitCellToken()
         targettoken = TargetToken()
         jitcode = JitCode("name")
-        jitcode.setup()
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         operations = [
             ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
             ResOperation(rop.LABEL, [i0], None, descr=targettoken),
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
-            ResOperation(rop.RESUME_PUT, [i2, ConstInt(0), ConstInt(0)],
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)],
                          None),
             ResOperation(rop.GUARD_TRUE, [i2], None, descr=BasicFailDescr(2)),
             ResOperation(rop.LEAVE_FRAME, [], None),

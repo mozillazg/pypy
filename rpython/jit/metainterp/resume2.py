@@ -4,10 +4,6 @@ from rpython.jit.metainterp.history import BoxInt
 from rpython.jit.codewriter.jitcode import JitCode
 
 class AbstractResumeReader(object):
-    def __init__(self, metainterp, deadframe):
-        self.metainterp = metainterp
-        self.deadframe = deadframe
-
     def rebuild(self, faildescr):
         bytecode = faildescr.rd_loop.rd_bytecode
         pos = faildescr.rd_bytecode_position
@@ -30,21 +26,11 @@ class AbstractResumeReader(object):
                 xxx
             pos += 1
 
-    def enter_frame(self, pc, jitcode):
-        if pc != -1:
-            self.metainterp.framestack[-1].pc = pc
-        self.metainterp.newframe(jitcode)
-
-    def leave_frame(self):
-        self.metainterp.popframe()
-
     def put(self, jitframe_index, depth, frontend_position):
         jitcode = self.metainterp.framestack[-1].jitcode
-        cpu = self.metainterp.cpu
         frame = self.metainterp.framestack[- depth - 1]
         if frontend_position < jitcode.num_regs_i():
-            self.write_int(frame, frontend_position,
-                           cpu.get_int_value(self.deadframe, jitframe_index))
+            self.write_int(frame, frontend_position, jitframe_index)
         elif frontend_position < (jitcode.num_regs_r() + jitcode.num_regs_i()):
             xxx
         else:
@@ -55,7 +41,21 @@ class DirectResumeReader(AbstractResumeReader):
     pass
 
 class BoxResumeReader(AbstractResumeReader):
-    def write_int(self, frame, pos, value):
+    def __init__(self, metainterp, deadframe):
+        self.metainterp = metainterp
+        self.deadframe = deadframe
+
+    def enter_frame(self, pc, jitcode):
+        if pc != -1:
+            self.metainterp.framestack[-1].pc = pc
+        self.metainterp.newframe(jitcode)
+
+    def leave_frame(self):
+        self.metainterp.popframe()
+
+    def write_int(self, frame, pos, jitframe_index):
+        cpu = self.metainterp.cpu
+        value = cpu.get_int_value(self.deadframe, jitframe_index)
         frame.registers_i[pos] = BoxInt(value)
 
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):

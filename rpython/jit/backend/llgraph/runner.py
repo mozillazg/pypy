@@ -1,7 +1,8 @@
 import py, weakref
 from rpython.jit.backend import model
 from rpython.jit.backend.llgraph import support
-from rpython.jit.backend.llsupport import resumebuilder
+from rpython.jit.backend.llsupport.resumebuilder import ResumeBuilder,\
+     LivenessAnalyzer
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.history import Const, getkind
 from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID
@@ -14,6 +15,42 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 
 from rpython.rlib.rarithmetic import ovfcheck, r_uint, r_ulonglong
 from rpython.rlib.rtimer import read_timestamp
+
+class LLGraphResumeBuilder(ResumeBuilder):
+    def __init__(self):
+        ResumeBuilder.__init__(self, None)
+        self.liveness = LivenessAnalyzer()
+        self.numbering = {}
+
+    def process(self, op):
+        func = getattr(self, 'process_' + op.getopname(), None)
+        if func is not None:
+            func(op)
+
+    def process_enter_frame(self, op):
+        self.liveness.enter_frame(op.getdescr())
+        ResumeBuilder.process_enter_frame(self, op)
+
+    def process_leave_frame(self, op):
+        self.liveness.leave_frame()
+        ResumeBuilder.process_leave_frame(self, op)
+
+    def process_resume_put(self, op):
+        self.liveness.put(op.getarg(0), op.getarg(1).getint(),
+                                  op.getarg(2).getint())
+        ResumeBuilder.process_resume_put(self, op)
+
+    def _find_position_for_box(self, v):
+        if v not in self.numbering:
+            self.numbering[v] = len(self.numbering)
+        return self.numbering[v]
+
+    def get_numbering(self, mapping, op):
+        numbering = []
+        for f in self.liveness.framestack:
+            for v in f:
+                numbering.append(mapping(v))
+        return numbering
 
 class LLTrace(object):
     has_been_freed = False
@@ -34,8 +71,11 @@ class LLTrace(object):
         #
         self.inputargs = map(mapping, inputargs)
         self.operations = []
-        self.liveness = resumebuilder.LivenessAnalyzer()
+        resumebuilder = LLGraphResumeBuilder()
         for op in operations:
+            if op.is_resume():
+                resumebuilder.process(op)
+                continue
             if op.getdescr() is not None:
                 if op.is_guard() or op.getopnum() == rop.FINISH:
                     newdescr = op.getdescr()
@@ -47,6 +87,10 @@ class LLTrace(object):
                                        map(mapping, op.getarglist()),
                                        mapping(op.result),
                                        newdescr)
+            if op.is_guard():
+                newop.failargs = resumebuilder.get_numbering(mapping, op)
+                newop.failarg_numbers = resumebuilder.get_numbering(
+                    lambda x: resumebuilder.numbering[x], op)
             self.operations.append(newop)
 
 class WeakrefDescr(AbstractDescr):
@@ -694,11 +738,17 @@ class LLFrame(object):
     # -----------------------------------------------------
 
     def fail_guard(self, descr, saved_data=None):
+        values = {}
+        for i in range(len(self.current_op.failargs)):
+            arg = self.current_op.failargs[i]
+            value = self.env[arg]
+            index = self.current_op.failarg_numbers[i]
+            values[index] = value
         if hasattr(descr, '_llgraph_bridge'):
             target = (descr._llgraph_bridge, -1)
-            raise Jump(target, self.frontend_env)
+            raise Jump(target, values)
         else:
-            raise ExecutionFinished(LLDeadFrame(descr, self.frontend_env,
+            raise ExecutionFinished(LLDeadFrame(descr, values,
                                                 self.last_exception,
                                                 saved_data))
 
@@ -818,9 +868,6 @@ class LLFrame(object):
 
     def execute_jump(self, descr, *args):
         raise Jump(descr._llgraph_target, args)
-
-    def execute_resume_put(self, descr, box, depth, position):
-        xxx
 
     def _do_math_sqrt(self, value):
         import math
