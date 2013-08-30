@@ -1,6 +1,7 @@
 
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.history import ConstInt
+from rpython.jit.metainterp.resume2 import ResumeBytecode
 from rpython.jit.codewriter.jitcode import JitCode
 
 class LivenessAnalyzer(object):
@@ -50,6 +51,9 @@ class ResumeBuilder(object):
 
     def get_position(self):
         return len(self.newops)
+
+    def finish(self, parent, clt):
+        return ResumeBytecode(self.newops, parent, clt)
 
     def not_implemented_op(self, op):
         print "Not implemented", op.getopname()

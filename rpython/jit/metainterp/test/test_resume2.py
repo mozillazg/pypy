@@ -85,7 +85,7 @@ class TestResumeDirect(object):
         assert f.registers_i[3].getint() == 12 + 3
         assert f2.registers_i[4].getint() == 8 + 3
         assert f2.registers_i[2].getint() == 11 + 3
-        
+
         descr.rd_bytecode_position = 7
         metainterp.framestack = []
         rebuild_from_resumedata(metainterp, "myframe", descr)
@@ -96,3 +96,18 @@ class TestResumeDirect(object):
         assert f.registers_i[2].getint() == 11 + 3
         assert f.registers_i[4].getint() == 8 + 3
 
+    def test_reconstructing_resume_reader(self):
+        jitcode1 = JitCode("jitcode")
+        jitcode1.setup(num_regs_i=13)
+        resume_loop = parse("""
+        []
+        enter_frame(-1, descr=jitcode1)
+        backend_put(11, 0, 2)
+        enter_frame(12, descr=jitcode2)
+        backend_put(12, 0, 3)
+        backend_put(8, 1, 4)
+        leave_frame()
+        backend_put(10, 0, 1)
+        leave_frame()
+        """)
+        xxx

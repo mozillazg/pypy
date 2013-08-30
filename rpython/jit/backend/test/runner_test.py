@@ -227,6 +227,8 @@ class BaseBackendTest(Runner):
             ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)],
+                         None),
             ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
             ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.JUMP, [i1], None, descr=targettoken),
@@ -239,6 +241,7 @@ class BaseBackendTest(Runner):
         bridge = [
             ResOperation(rop.INT_LE, [i1b, ConstInt(19)], i3),
             ResOperation(rop.GUARD_TRUE, [i3], None, descr=faildescr2),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.JUMP, [i1b], None, descr=targettoken),
         ]
 

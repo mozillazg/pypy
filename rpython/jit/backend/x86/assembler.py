@@ -476,6 +476,7 @@ class Assembler386(BaseAssembler):
         self.update_frame_depth(frame_depth_no_fixed_size + JITFRAME_FIXED_SIZE)
         #
         size_excluding_failure_stuff = self.mc.get_relative_pos()
+        self.resume_bytecode = regalloc.resumebuilder.finish(None, looptoken)
         self.write_pending_failure_recoveries()
         full_size = self.mc.get_relative_pos()
         #
@@ -535,6 +536,8 @@ class Assembler386(BaseAssembler):
         self._check_frame_depth(self.mc, regalloc.get_gcmap())
         frame_depth_no_fixed_size = self._assemble(regalloc, inputargs, operations)
         codeendpos = self.mc.get_relative_pos()
+        self.resume_bytecode = regalloc.resumebuilder.finish(
+            faildescr.rd_bytecode, original_loop_token)
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
         #
@@ -565,7 +568,8 @@ class Assembler386(BaseAssembler):
         # for each pending guard, generate the code of the recovery stub
         # at the end of self.mc.
         for tok in self.pending_guard_tokens:
-            tok.pos_recovery_stub = self.generate_quick_failure(tok)
+            tok.pos_recovery_stub = self.generate_quick_failure(tok,
+                                                        self.resume_bytecode)
         if WORD == 8 and len(self.pending_memoryerror_trampoline_from) > 0:
             self.error_trampoline_64 = self.generate_propagate_error_64()
 
@@ -1732,11 +1736,12 @@ class Assembler386(BaseAssembler):
         self.mc.JMP(imm(self.propagate_exception_path))
         return startpos
 
-    def generate_quick_failure(self, guardtok):
+    def generate_quick_failure(self, guardtok, resume_bytecode):
         """ Gather information about failure
         """
         startpos = self.mc.get_relative_pos()
-        fail_descr, target = self.store_info_on_descr(startpos, guardtok)
+        fail_descr, target = self.store_info_on_descr(startpos, guardtok,
+                                                      resume_bytecode)
         self.mc.PUSH(imm(fail_descr))
         self.push_gcmap(self.mc, guardtok.gcmap, push=True)
         self.mc.JMP(imm(target))

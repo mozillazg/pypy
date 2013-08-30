@@ -3,6 +3,16 @@ from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.history import BoxInt
 from rpython.jit.codewriter.jitcode import JitCode
 
+class ResumeBytecode(object):
+    def __init__(self, bc, parent=None, loop=None):
+        self.bc = bc
+        self.branches = {}
+        self.parent = parent
+        self.loop = loop
+
+    def add_branch(self, pos, bc):
+        self.branches[pos] = ResumeBytecode(bc, self)
+
 class AbstractResumeReader(object):
     def rebuild(self, faildescr):
         bytecode = faildescr.rd_loop.rd_bytecode
@@ -57,6 +67,10 @@ class BoxResumeReader(AbstractResumeReader):
         cpu = self.metainterp.cpu
         value = cpu.get_int_value(self.deadframe, jitframe_index)
         frame.registers_i[pos] = BoxInt(value)
+
+class ReconstructingResumeReader(AbstractResumeReader):
+    def __init__(self):
+        pass
 
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     BoxResumeReader(metainterp, deadframe).rebuild(faildescr)

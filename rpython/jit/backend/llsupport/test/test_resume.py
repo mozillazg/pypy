@@ -39,4 +39,4 @@ class ResumeTest(object):
         backend_put(28, 0, 2)
         leave_frame()
         """, namespace={'jitcode': jitcode}).operations
-        equaloplists(descr.rd_loop_token.rd_bytecode, expected_resume)
+        equaloplists(descr.rd_resume_bytecode.bc, expected_resume)

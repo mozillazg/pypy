@@ -136,14 +136,13 @@ class BaseAssembler(object):
             input_i += 1
         return locs
 
-    def store_info_on_descr(self, startspos, guardtok):
+    def store_info_on_descr(self, startspos, guardtok, resume_bytecode):
         withfloats = guardtok.has_floats
         exc = guardtok.exc
         target = self.failure_recovery_code[exc + 2 * withfloats]
         fail_descr = cast_instance_to_gcref(guardtok.faildescr)
         fail_descr = rffi.cast(lltype.Signed, fail_descr)
-        # we want the descr to keep loop alive
-        guardtok.faildescr.rd_loop_token = self.current_clt
+        guardtok.faildescr.rd_resume_bytecode = resume_bytecode
         return fail_descr, target
 
     def call_assembler(self, op, guard_op, argloc, vloc, result_loc, tmploc):
