@@ -125,8 +125,7 @@ def args_dict_box():
 
 # ____________________________________________________________
 
-def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={},
-                 text_right=None):
+def equaloplists(oplist1, oplist2, remap={}, text_right=None):
     # try to use the full width of the terminal to display the list
     # unfortunately, does not work with the default capture method of py.test
     # (which is fd), you you need to use either -s or --capture=sys, else you

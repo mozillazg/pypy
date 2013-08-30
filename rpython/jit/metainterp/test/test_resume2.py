@@ -124,6 +124,17 @@ class TestResumeDirect(object):
         assert f.registers_i[0].getint() == 42 + 3
         assert f.registers_i[1].getint() == 2 + 3
 
+    def test_new(self):
+        base = parse("""
+        []
+        enter_frame(-1, descr=jitcode)
+        i0 = new(descr=structdescr)
+        XXX
+        resume_setfield(i0, 13
+        backend_put(12,
+        leave_frame()
+        """)
+
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=3, num_regs_f=0, num_regs_r=0)

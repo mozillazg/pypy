@@ -472,7 +472,9 @@ _oplist = [
     'ENTER_FRAME/1d',
     'LEAVE_FRAME/0',
     'RESUME_PUT/3',
-    'BACKEND_PUT/3',
+    'RESUME_NEW/0d',
+    'RESUME_SETFIELD_GC/2d',
+    'BACKEND_ATTACH/2',
     # same as resume_put, but the first arg is backend-dependent,
     # instead of a box
     '_RESUME_LAST',

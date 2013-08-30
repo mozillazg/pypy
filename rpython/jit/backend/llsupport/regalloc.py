@@ -678,7 +678,7 @@ class BaseRegalloc(object):
             return [self.loc(op.getarg(0))]
 
 
-def compute_vars_longevity(inputargs, operations):
+def compute_vars_longevity(inputargs, operations, descr=None):
     # compute a dictionary that maps variables to index in
     # operations that is a "last-time-seen"
 
@@ -689,21 +689,19 @@ def compute_vars_longevity(inputargs, operations):
     produced = {}
     last_used = {}
     last_real_usage = {}
+    frontend_alive = {}
     liveness_analyzer = LivenessAnalyzer()
+    start_pos = 0
     for position, op in enumerate(operations):
-        if op.getopnum() == rop.ENTER_FRAME:
-            liveness_analyzer.enter_frame(op.getdescr())
-        elif op.getopnum() == rop.LEAVE_FRAME:
-            liveness_analyzer.leave_frame()
-        elif op.getopnum() == rop.RESUME_PUT:
-            liveness_analyzer.put(op.getarg(0), op.getarg(1).getint(),
-                                  op.getarg(2).getint())
-        elif op.is_guard():
+        if op.is_guard():
+            liveness_analyzer.interpret_until(operations, position, start_pos)
+            start_pos = position
             framestack = liveness_analyzer.get_live_info()
             for frame in framestack:
-                for item in frame:
+                for item in liveness_analyzer.all_boxes_from(frame):
                     if item is not None:
                         last_used[item] = position
+                        frontend_alive[item] = position
 
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]
@@ -740,7 +738,7 @@ def compute_vars_longevity(inputargs, operations):
             longevity[arg] = (0, last_used[arg])
             del last_used[arg]
     assert len(last_used) == 0
-    return longevity, last_real_usage
+    return longevity, last_real_usage, frontend_alive
 
 def is_comparison_or_ovf_op(opnum):
     from rpython.jit.metainterp.resoperation import opclasses

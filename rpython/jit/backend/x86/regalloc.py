@@ -125,7 +125,6 @@ class RegAlloc(BaseRegalloc):
 
     def __init__(self, assembler, translate_support_code=False):
         assert isinstance(translate_support_code, bool)
-        self.resumebuilder = ResumeBuilder(self)
         # variables that have place in register
         self.assembler = assembler
         self.translate_support_code = translate_support_code
@@ -133,14 +132,15 @@ class RegAlloc(BaseRegalloc):
         self.jump_target_descr = None
         self.final_jump_op = None
 
-    def _prepare(self, inputargs, operations, allgcrefs):
+    def _prepare(self, inputargs, operations, allgcrefs, descr=None):
         cpu = self.assembler.cpu
         self.fm = X86FrameManager(cpu.get_baseofs_of_frame_field())
         operations = cpu.gc_ll_descr.rewrite_assembler(cpu, operations,
                                                        allgcrefs)
         # compute longevity of variables
-        longevity, last_real_usage = compute_vars_longevity(
-                                                    inputargs, operations)
+        x = compute_vars_longevity(inputargs, operations, descr)
+        longevity, last_real_usage, frontend_liveness = x
+        self.resumebuilder = ResumeBuilder(self, frontend_liveness, descr)
         self.longevity = longevity
         self.last_real_usage = last_real_usage
         self.rm = gpr_reg_mgr_cls(self.longevity,
@@ -163,8 +163,8 @@ class RegAlloc(BaseRegalloc):
         return operations
 
     def prepare_bridge(self, inputargs, arglocs, operations, allgcrefs,
-                       frame_info):
-        operations = self._prepare(inputargs, operations, allgcrefs)
+                       frame_info, descr):
+        operations = self._prepare(inputargs, operations, allgcrefs, descr)
         self._update_bindings(arglocs, inputargs)
         self.min_bytes_before_label = 0
         return operations
@@ -334,7 +334,6 @@ class RegAlloc(BaseRegalloc):
         self.assembler.mc.mark_op(None) # end of the loop
         for arg in inputargs:
             self.possibly_free_var(arg)
-        self.assembler.current_clt.rd_bytecode = self.resumebuilder.newops
 
     def flush_loop(self):
         # rare case: if the loop is too short, or if we are just after

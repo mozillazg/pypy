@@ -532,7 +532,8 @@ class Assembler386(BaseAssembler):
         operations = regalloc.prepare_bridge(inputargs, arglocs,
                                              operations,
                                              self.current_clt.allgcrefs,
-                                             self.current_clt.frame_info)
+                                             self.current_clt.frame_info,
+                                             faildescr)
         self._check_frame_depth(self.mc, regalloc.get_gcmap())
         frame_depth_no_fixed_size = self._assemble(regalloc, inputargs, operations)
         codeendpos = self.mc.get_relative_pos()
@@ -1723,7 +1724,7 @@ class Assembler386(BaseAssembler):
         is_guard_not_invalidated = guard_opnum == rop.GUARD_NOT_INVALIDATED
         is_guard_not_forced = guard_opnum == rop.GUARD_NOT_FORCED
         gcmap = self._regalloc.get_gcmap()
-        pos = self._regalloc.resumebuilder.get_position()
+        pos = self._regalloc.resumebuilder.mark_resumable_position()
         faildescr.rd_bytecode_position = pos
         return GuardToken(self.cpu, gcmap, faildescr,
                           self._regalloc.uses_floats(),

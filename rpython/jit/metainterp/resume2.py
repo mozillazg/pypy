@@ -20,8 +20,7 @@ class AbstractResumeReader(object):
             self._rebuild_until(rb.parent, rb.parent_position)
         self.interpret_until(rb.opcodes, position)
 
-    def interpret_until(self, bytecode, until):
-        pos = 0
+    def interpret_until(self, bytecode, until, pos=0):
         while pos < until:
             op = bytecode[pos]
             if op.getopnum() == rop.ENTER_FRAME:
@@ -30,14 +29,23 @@ class AbstractResumeReader(object):
                 self.enter_frame(op.getarg(0).getint(), descr)
             elif op.getopnum() == rop.LEAVE_FRAME:
                 self.leave_frame()
-            elif op.getopnum() == rop.BACKEND_PUT:
-                self.put(op.getarg(0).getint(), op.getarg(1).getint(),
+            elif op.getopnum() == rop.RESUME_PUT:
+                self.resume_put(op.getarg(0), op.getarg(1).getint(),
                          op.getarg(2).getint())
+            elif op.getopnum() == rop.RESUME_NEW:
+                self.resume_new(op.result, op.getdescr())
+            elif op.getopnum() == rop.RESUME_SETFIELD_GC:
+                self.resume_setfield_gc(op.getarg(0), op.getarg(1),
+                                        op.getdescr())
+            elif not op.is_resume():
+                pos += 1
+                continue
             else:
                 xxx
             pos += 1
 
-    def put(self, jitframe_index, depth, frontend_position):
+    def resume_put(self, jitframe_index, depth, frontend_position):
+        XXX
         jitcode = self.metainterp.framestack[-1].jitcode
         frame = self.metainterp.framestack[- depth - 1]
         if frontend_position < jitcode.num_regs_i():
@@ -78,6 +86,19 @@ class ReconstructingResumeReader(AbstractResumeReader):
 
     def put(self, jitframe_index, depth, frontend_position):
         self.framestack[- depth - 1][frontend_position] = jitframe_index
+
+    def leave_frame(self):
+        self.framestack.pop()
+
+class SimpleResumeReader(AbstractResumeReader):
+    def __init__(self):
+        self.framestack = []
+
+    def enter_frame(self, pc, jitcode):
+        self.framestack.append(jitcode.num_regs())
+
+    def put(self, *args):
+        pass
 
     def leave_frame(self):
         self.framestack.pop()
