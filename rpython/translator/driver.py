@@ -10,6 +10,7 @@ from rpython.annotator import policy as annpolicy
 from rpython.tool.udir import udir
 from rpython.rlib.debug import debug_start, debug_print, debug_stop
 from rpython.rlib.entrypoint import secondary_entrypoints
+from rpython.rtyper.typesystem import getfunctionptr
 
 import py
 from rpython.tool.ansi_print import ansi_log
@@ -247,6 +248,7 @@ class TranslationDriver(object):
         if not self.config.translation.backendopt.none:
             expose_task(self.task_backendopt)
         expose_task(self.task_stackcheckinsertion)
+        expose_task(self.task_transform)
         for task in backends[self.config.translation.backend](self).get_tasks():
             expose_task(task)
 
@@ -414,6 +416,10 @@ class TranslationDriver(object):
         from rpython.translator.transform import insert_ll_stackcheck
         count = insert_ll_stackcheck(self.translator)
         self.log.info("inserted %d stack checks." % (count,))
+
+    @taskdef("exception and gc transformations")
+    def task_transform(self):
+        pass
 
     @taskdef("LLInterpreting")
     def task_llinterpret(self):
