@@ -91,16 +91,37 @@ class ResumeTest(object):
     def test_spill(self):
         jitcode = JitCode("name")
         jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
-        faildescr = BasicFailDescr(1)
+        faildescr1 = BasicFailDescr(1)
+        faildescr2 = BasicFailDescr(2)
         loop = parse("""
-        [i0, i1]
+        [i0]
         enter_frame(-1, descr=jitcode)
-        i2 = int_add(i0, i1)
+        i2 = int_add(i0, 1)
         resume_put(i2, 0, 1)
+        guard_true(i0, descr=faildescr1)
         force_spill(i2)
-        guard_true(i0, descr=faildescr)
+        guard_true(i0, descr=faildescr2)
         leave_frame()
-        """, namespace={'jitcode':jitcode, 'faildescr':faildescr})
+        """, namespace={'jitcode':jitcode, 'faildescr1':faildescr1,
+                        'faildescr2':faildescr2})
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
+
+        expected_resume = parse("""
+        [i2]
+        enter_frame(-1, descr=jitcode)
+        resume_put(i2, 0, 1)
+        backend_attach(i2, 1)
+        backend_attach(i2, 29)
+        leave_frame()
+        """, namespace={'jitcode':jitcode})
+        descr1 = loop.operations[3].getdescr()
+        descr2 = loop.operations[5].getdescr()
+        assert descr1.rd_bytecode_position == 3
+        assert descr2.rd_bytecode_position == 4
+        i0 = descr1.rd_resume_bytecode.opcodes[1].getarg(0)
+        i0b = expected_resume.inputargs[0]
+        equaloplists(descr1.rd_resume_bytecode.opcodes,
+                     expected_resume.operations,
+                     remap={i0b:i0})

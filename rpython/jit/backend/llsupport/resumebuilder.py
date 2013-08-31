@@ -54,7 +54,7 @@ class ResumeBuilder(object):
     def _mark_visited(self, v, loc):
         pos = loc.get_jitframe_position()
         if (v not in self.frontend_liveness or
-            self.frontend_liveness[v] > self.regalloc.rm.position):
+            self.frontend_liveness[v] < self.regalloc.rm.position):
             return
         if (v not in self.current_attachment or
             self.current_attachment[v] != pos):
