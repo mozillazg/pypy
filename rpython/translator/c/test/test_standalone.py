@@ -21,7 +21,7 @@ class StandaloneTests(object):
     config = None
 
     def compile(self, entry_point, debug=True, shared=False,
-                stackcheck=False, entrypoints=None):
+                stackcheck=False, lldebug=False, entrypoints=None):
         t = TranslationContext(self.config)
         ann = t.buildannotator()
         ann.build_types(entry_point, [s_list_of_strings])
@@ -38,6 +38,7 @@ class StandaloneTests(object):
             insert_ll_stackcheck(t)
 
         t.config.translation.shared = shared
+        t.config.translation.lldebug = lldebug
 
         if entrypoints is not None:
             kwds = {'secondary_entrypoints': [(i, None) for i in entrypoints]}
@@ -905,6 +906,19 @@ class TestStandalone(StandaloneTests):
 
         self.compile(entry_point)
         # assert did not explode
+
+    def test_track_allocations(self):
+        from rpython.rtyper.lltypesystem import rffi
+        def entry_point(argv):
+            buf = lltype.malloc(rffi.CCHARP.TO, 10, flavor='raw')
+            # we intentionally forget to free buf
+            return 0
+
+        t, cbuilder = self.compile(entry_point, lldebug=True)
+        out, err = cbuilder.cmdexec(err=True)
+        assert err == 'mem.c: 1 mallocs left (use PYPY_ALLOC=1 to see the list)\n'
+
+
 
 class TestMaemo(TestStandalone):
     def setup_class(cls):
