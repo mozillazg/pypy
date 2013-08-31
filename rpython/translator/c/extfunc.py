@@ -1,6 +1,6 @@
 import types
 from rpython.flowspace.model import FunctionGraph
-from rpython.rtyper.lltypesystem import lltype
+from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.translator.c.support import cdecl
 from rpython.rtyper.lltypesystem.rstr import STR, mallocstr
 from rpython.rtyper.lltypesystem import rstr
@@ -26,6 +26,14 @@ def predeclare_common_types(db, rtyper):
     LIST_OF_STR = find_list_of_str(rtyper)
     if LIST_OF_STR is not None:
         yield ('RPyListOfString', LIST_OF_STR)
+
+def setitem(d, k, v):
+    d[k] = v
+def getitem(d, k, default):
+    return d.get(k, default)
+def delitem(d, k):
+    del d[k]
+
 
 def predeclare_utility_functions(db, rtyper):
     # Common utility functions
@@ -57,6 +65,25 @@ def predeclare_utility_functions(db, rtyper):
 
         def _RPyListOfString_Length(l=p):
             return rlist.ll_length(l)
+
+    raw_malloc_size = {}
+    
+    def _RPyRawMalloc_Record(ptr=rffi.VOIDP, size=lltype.Signed):
+        ptr = rffi.cast(lltype.Signed, ptr)
+        setitem(raw_malloc_size, ptr, size)
+
+    def _RPyRawMalloc_Forget(ptr=rffi.VOIDP):
+        ptr = rffi.cast(lltype.Signed, ptr)
+        delitem(raw_malloc_size, ptr)
+
+    def _RPyRawMalloc_Size(ptr=rffi.VOIDP):
+        import sys
+        # the result of this function will be checked by RPyBareItem to see if
+        # we are doing an out-of-bound access (on lldebug builds): we don't
+        # want it to crash in case we don't know about the memory, so we just
+        # return a large number
+        ptr = rffi.cast(lltype.Signed, ptr)
+        return getitem(raw_malloc_size, ptr, sys.maxint)
 
     for fname, f in locals().items():
         if isinstance(f, types.FunctionType):

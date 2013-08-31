@@ -918,6 +918,16 @@ class TestStandalone(StandaloneTests):
         out, err = cbuilder.cmdexec(err=True)
         assert err == 'mem.c: 1 mallocs left (use PYPY_ALLOC=1 to see the list)\n'
 
+    def test_check_rawmem_access(self):
+        from rpython.rtyper.lltypesystem import rffi
+        def entry_point(argv):
+            buf = lltype.malloc(rffi.CCHARP.TO, 10, flavor='raw')
+            buf[10] = 'x' # out of bounds!
+            lltype.free(buf, flavor='raw')
+            return 0
+        t, cbuilder = self.compile(entry_point, lldebug=True)
+        out, err = cbuilder.cmdexec(expect_crash=True, err=True)
+        assert err == 'Invalid RPython operation (NULL ptr or bad array index)\nAborted\n'
 
 
 class TestMaemo(TestStandalone):

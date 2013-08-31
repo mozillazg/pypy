@@ -279,7 +279,6 @@ class CBuilder(object):
             extrafiles.append(fn)
         return extrafiles
 
-
 class CStandaloneBuilder(CBuilder):
     standalone = True
     split = True

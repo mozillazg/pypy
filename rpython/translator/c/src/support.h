@@ -57,8 +57,14 @@ void RPyAbort(void);
       (ptr))[index])
 #  define RPyNLenItem(array, index)                                         \
      ((RPyCHECK((array) && (index) >= 0), (array))->items[index])
+
 #  define RPyBareItem(array, index)                                         \
-     ((RPyCHECK((array) && (index) >= 0), (array))[index])
+     ((RPyCHECK((array) && (index) >= 0 &&                                  \
+                (index*sizeof(*array) < _RPyRawMalloc_Size(array))),        \
+       (array))[index])
+
+#  define RPyRawMalloc_Record(ptr, size) _RPyRawMalloc_Record(ptr, size)
+
 
 #else
 #  define RPyField(ptr, name)                ((ptr)->name)
@@ -66,4 +72,5 @@ void RPyAbort(void);
 #  define RPyFxItem(ptr, index, fixedsize)   ((ptr)[index])
 #  define RPyNLenItem(array, index)          ((array)->items[index])
 #  define RPyBareItem(array, index)          ((array)[index])
+#  define RPyRawMalloc_Record(ptr, size)
 #endif
