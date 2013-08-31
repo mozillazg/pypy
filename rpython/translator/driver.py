@@ -350,7 +350,13 @@ class TranslationDriver(object):
         else:
             s = None
 
-        self.sanity_check_annotation()
+        irreg = query.qoutput(query.check_exceptblocks_qgen(translator))
+        if irreg:
+            self.log.info("Some exceptblocks seem insane")
+
+        lost = query.qoutput(query.check_methods_qgen(translator))
+        assert not lost, "lost methods, something gone wrong with the annotation of method defs"
+
         if self.entry_point and self.standalone and s.knowntype != int:
             raise Exception("stand-alone program entry point must return an "
                             "int (and not, e.g., None or always raise an "
@@ -358,15 +364,6 @@ class TranslationDriver(object):
         annotator.complete()
         annotator.simplify()
         return s
-
-    def sanity_check_annotation(self):
-        translator = self.translator
-        irreg = query.qoutput(query.check_exceptblocks_qgen(translator))
-        if irreg:
-            self.log.info("Some exceptblocks seem insane")
-
-        lost = query.qoutput(query.check_methods_qgen(translator))
-        assert not lost, "lost methods, something gone wrong with the annotation of method defs"
 
     @taskdef("RTyping")
     def task_rtype(self):
