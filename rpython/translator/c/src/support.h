@@ -64,6 +64,7 @@ void RPyAbort(void);
        (array))[index])
 
 #else
+#  define RPyCHECK(x)                        /* nothing */
 #  define RPyField(ptr, name)                ((ptr)->name)
 #  define RPyItem(array, index)              ((array)->items[index])
 #  define RPyFxItem(ptr, index, fixedsize)   ((ptr)[index])

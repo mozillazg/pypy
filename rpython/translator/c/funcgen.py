@@ -698,6 +698,7 @@ class FunctionCodeGenerator(object):
         TYPE = op.args[2].concretetype
         typename = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
         return (
+           'RPyCHECK(%(offset)s < RPyRawMalloc_Size(%(addr)s));\n'
            '((%(typename)s) (((char *)%(addr)s) + %(offset)s))[0] = %(value)s;'
            % locals())
 
@@ -708,6 +709,7 @@ class FunctionCodeGenerator(object):
         TYPE = op.result.concretetype
         typename = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
         return (
+          "RPyCHECK(%(offset)s < RPyRawMalloc_Size(%(addr)s));\n"
           "%(result)s = ((%(typename)s) (((char *)%(addr)s) + %(offset)s))[0];"
           % locals())
 
