@@ -306,6 +306,13 @@ class NoneGcPolicy(BoehmGcPolicy):
 
 class BasicFrameworkGcPolicy(BasicGcPolicy):
 
+    def compilation_info(self):
+        eci = BasicGcPolicy.compilation_info(self)
+        eci = eci.merge(ExternalCompilationInfo(
+            post_include_bits=['#define PYPY_USING_FRAMEWORK_GC'],
+            ))
+        return eci
+
     def gettransformer(self):
         if hasattr(self, 'transformerclass'):    # for rpython/memory tests
             return self.transformerclass(self.db.translator)

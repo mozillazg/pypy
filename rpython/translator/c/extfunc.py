@@ -68,7 +68,7 @@ def predeclare_utility_functions(db, rtyper):
 
     raw_malloc_size = {}
     
-    def _RPyRawMalloc_Record(ptr=rffi.VOIDP, size=lltype.Signed):
+    def _RPyRawMalloc_Record_Size(ptr=rffi.VOIDP, size=lltype.Signed):
         ptr = rffi.cast(lltype.Signed, ptr)
         setitem(raw_malloc_size, ptr, size)
 

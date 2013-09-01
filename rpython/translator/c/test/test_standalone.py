@@ -21,7 +21,7 @@ class StandaloneTests(object):
     config = None
 
     def compile(self, entry_point, debug=True, shared=False,
-                stackcheck=False, lldebug=False, entrypoints=None):
+                stackcheck=False, lldebug=False, entrypoints=None, gc='ref'):
         t = TranslationContext(self.config)
         ann = t.buildannotator()
         ann.build_types(entry_point, [s_list_of_strings])
@@ -39,6 +39,7 @@ class StandaloneTests(object):
 
         t.config.translation.shared = shared
         t.config.translation.lldebug = lldebug
+        t.config.translation.gc = gc
 
         if entrypoints is not None:
             kwds = {'secondary_entrypoints': [(i, None) for i in entrypoints]}
@@ -925,7 +926,7 @@ class TestStandalone(StandaloneTests):
             buf[10] = 'x' # out of bounds!
             lltype.free(buf, flavor='raw')
             return 0
-        t, cbuilder = self.compile(entry_point, lldebug=True)
+        t, cbuilder = self.compile(entry_point, lldebug=True, gc='minimark')
         out, err = cbuilder.cmdexec(expect_crash=True, err=True)
         assert err == 'Invalid RPython operation (NULL ptr or bad array index)\nAborted\n'
 
