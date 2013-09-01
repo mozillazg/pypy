@@ -58,25 +58,15 @@ void RPyAbort(void);
 #  define RPyNLenItem(array, index)                                         \
      ((RPyCHECK((array) && (index) >= 0), (array))->items[index])
 
+#  define RPyBareItem(array, index)                                         \
+     ((RPyCHECK((array) && (index) >= 0 &&                                  \
+                ((index) < RPyRawMalloc_Size(array) / sizeof(*(array)))),   \
+       (array))[index])
+
 #else
 #  define RPyField(ptr, name)                ((ptr)->name)
 #  define RPyItem(array, index)              ((array)->items[index])
 #  define RPyFxItem(ptr, index, fixedsize)   ((ptr)[index])
 #  define RPyNLenItem(array, index)          ((array)->items[index])
-#endif
-
-#if defined(RPY_LL_ASSERT) && defined(PYPY_USING_FRAMEWORK_GC)
-    /* we can use the raw malloc bounds checking only if we are using the
-       framework GC, else the dictionary operations will try to do a raw_malloc
-       and we get infinite recursion
-    */
-#  define RPyRawMalloc_Record_Size(ptr, size) _RPyRawMalloc_Record_Size(ptr, size)
-#  define RPyBareItem(array, index)                                         \
-     ((RPyCHECK((array) && (index) >= 0 &&                                  \
-                (index*sizeof(*array) < _RPyRawMalloc_Size(array))),        \
-       (array))[index])
-
-#else
-#  define RPyRawMalloc_Record_Size(ptr, size)
 #  define RPyBareItem(array, index)          ((array)[index])
 #endif

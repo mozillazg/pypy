@@ -26,6 +26,7 @@
 #include "src/profiling.h"
 
 #include "src/debug_print.h"
+#include "src/debug_rawmem.h"
 
 /*** modules ***/
 #ifdef HAVE_RTYPER      /* only if we have an RTyper */

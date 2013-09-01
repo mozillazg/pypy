@@ -926,9 +926,10 @@ class TestStandalone(StandaloneTests):
             buf[10] = 'x' # out of bounds!
             lltype.free(buf, flavor='raw')
             return 0
-        t, cbuilder = self.compile(entry_point, lldebug=True, gc='minimark')
+        t, cbuilder = self.compile(entry_point, lldebug=True)
         out, err = cbuilder.cmdexec(expect_crash=True, err=True)
-        assert err == 'Invalid RPython operation (NULL ptr or bad array index)\nAborted\n'
+        assert err.startswith(
+            'Invalid RPython operation (NULL ptr or bad array index)\n')
 
 
 class TestMaemo(TestStandalone):

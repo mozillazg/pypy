@@ -776,6 +776,7 @@ def add_extra_files(eci):
         srcdir / 'support.c',
         srcdir / 'profiling.c',
         srcdir / 'debug_print.c',
+        srcdir / 'debug_rawmem.c',
         srcdir / 'debug_traceback.c',  # ifdef HAVE_RTYPER
         srcdir / 'asm.c',
         srcdir / 'instrument.c',

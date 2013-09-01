@@ -612,6 +612,12 @@ class FunctionCodeGenerator(object):
         malloc = "OP_RAW_MALLOC(%s, %s, void *);" % (esize, eresult)
         record = "RPyRawMalloc_Record_Size(%s, %s);" % (eresult, esize)
         return '%s\n%s' % (malloc, record)
+
+    def OP_RAW_FREE(self, op):
+        eptr = self.expr(op.args[0])
+        forget = "RPyRawMalloc_Forget_Size(%s);" % (eptr,)
+        free = "OP_RAW_FREE(%s, /*result*/);" % (eptr,)
+        return '%s\n%s' % (forget, free)
                            
     def OP_STACK_MALLOC(self, op):
         eresult = self.expr(op.result)
