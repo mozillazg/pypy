@@ -299,7 +299,8 @@ class FunctionCodeGenerator(object):
     def gen_op(self, op):
         macro = 'OP_%s' % op.opname.upper()
         line = None
-        if op.opname.startswith('gc_'):
+        if op.opname.startswith('gc_') and (
+                  op.opname != 'gc_free'):     # <------ haaaaaaaack
             meth = getattr(self.gcpolicy, macro, None)
             if meth:
                 line = meth(self, op)
@@ -618,7 +619,9 @@ class FunctionCodeGenerator(object):
         forget = "RPyRawMalloc_Forget_Size(%s);" % (eptr,)
         free = "OP_RAW_FREE(%s, /*result*/);" % (eptr,)
         return '%s\n%s' % (forget, free)
-                           
+
+    OP_GC_FREE = OP_RAW_FREE    # that's only for the refcounting GC!
+
     def OP_STACK_MALLOC(self, op):
         eresult = self.expr(op.result)
         esize = self.expr(op.args[0])

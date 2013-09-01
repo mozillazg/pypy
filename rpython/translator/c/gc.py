@@ -143,10 +143,6 @@ class RefcountingGcPolicy(BasicGcPolicy):
         line = '%s(%s);' % (args[0], ', '.join(args[1:]))
         return line
 
-    def OP_GC_FREE(self, funcgen, op):
-        args = [funcgen.expr(v) for v in op.args]
-        return 'OP_FREE(%s);' % (args[0], )
-
     def OP_GC__COLLECT(self, funcgen, op):
         return ''
 

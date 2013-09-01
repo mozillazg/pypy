@@ -50,8 +50,6 @@
 
 /************************************************************/
 
-#define OP_FREE(p)	OP_RAW_FREE(p, do_not_use)
-
 #ifndef COUNT_OP_MALLOCS
 
 #define COUNT_MALLOC	/* nothing */
