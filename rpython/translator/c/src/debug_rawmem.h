@@ -11,5 +11,6 @@ Signed RPyRawMalloc_Size(void *);
 #else
 
 #define RPyRawMalloc_Record_Size(ptr, size)
+#define RPyRawMalloc_Forget_Size(ptr)
 
 #endif
