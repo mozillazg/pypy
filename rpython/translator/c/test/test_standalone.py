@@ -942,6 +942,17 @@ class TestStandalone(StandaloneTests):
         assert err.startswith(
             'Invalid RPython operation (NULL ptr or bad array index)\n')
 
+    def test_check_rawmem_access_raw_load_minimark(self):
+        from rpython.rlib import rawstorage
+        def entry_point(argv):
+            buf = rawstorage.alloc_raw_storage(10)
+            return rawstorage.raw_storage_getitem(
+                lltype.Signed, buf, 10)    # out of bounds!
+        t, cbuilder = self.compile(entry_point, lldebug=True, gc='minimark')
+        out, err = cbuilder.cmdexec(expect_crash=True, err=True)
+        assert err.startswith(
+            'Invalid RPython operation (NULL ptr or bad array index)\n')
+
 
 class TestMaemo(TestStandalone):
     def setup_class(cls):
