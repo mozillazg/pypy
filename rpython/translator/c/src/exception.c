@@ -25,14 +25,6 @@ void RPyDebugReturnShowException(const char *msg, const char *filename,
 /* Hint: functions and macros not defined here, like RPyRaiseException,
    come from exctransformer via the table in extfunc.py. */
 
-#define RPyFetchException(etypevar, evaluevar, type_of_evaluevar) do {  \
-		etypevar = RPyFetchExceptionType();			\
-		evaluevar = (type_of_evaluevar)RPyFetchExceptionValue(); \
-		RPyClearException();					\
-	} while (0)
-
-/* implementations */
-
 void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc)
 {
 	/* XXX msg is ignored */
