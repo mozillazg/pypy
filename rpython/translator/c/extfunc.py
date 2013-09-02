@@ -94,12 +94,8 @@ def predeclare_exception_data(db, rtyper):
     exceptiondata = rtyper.exceptiondata
     exctransformer = db.exctransformer
 
-    yield ('RPYTHON_EXCEPTION_VTABLE', exceptiondata.lltype_of_exception_type)
     yield ('RPYTHON_EXCEPTION',        exceptiondata.lltype_of_exception_value)
-
-    yield ('RPYTHON_EXCEPTION_MATCH',  exceptiondata.fn_exception_match)
     yield ('RPYTHON_TYPE_OF_EXC_INST', exceptiondata.fn_type_of_exc_inst)
-    yield ('RPYTHON_RAISE_OSERROR',    exceptiondata.fn_raise_OSError)
 
     yield ('RPyExceptionOccurred1',    exctransformer.rpyexc_occured_ptr.value)
     yield ('RPyFetchExceptionType',    exctransformer.rpyexc_fetch_type_ptr.value)
