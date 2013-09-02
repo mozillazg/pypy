@@ -236,11 +236,6 @@ def main():
         if args is None:
             args = []
         drv = driver.TranslationDriver(config=config)
-        # patch some attributes of the os module to make sure they
-        # have the same value on every platform.
-        if config.translation.backend in ('cli', 'jvm'):
-            from rpython.translator.oosupport.support import patch_os
-            drv.old_cli_defs = patch_os()
 
         target = targetspec_dic['target']
         spec = target(drv, args)
