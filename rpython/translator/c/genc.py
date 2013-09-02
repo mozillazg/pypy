@@ -771,11 +771,11 @@ def add_extra_files(eci):
         srcdir / 'allocator.c',        # ifdef PYPY_STANDALONE
         srcdir / 'mem.c',
         srcdir / 'exception.c',
-        srcdir / 'rtyper.c',           # ifdef HAVE_RTYPER
+        srcdir / 'rtyper.c',
         srcdir / 'support.c',
         srcdir / 'profiling.c',
         srcdir / 'debug_print.c',
-        srcdir / 'debug_traceback.c',  # ifdef HAVE_RTYPER
+        srcdir / 'debug_traceback.c',
         srcdir / 'asm.c',
         srcdir / 'instrument.c',
         srcdir / 'int.c',

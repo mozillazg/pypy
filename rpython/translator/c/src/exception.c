@@ -4,14 +4,6 @@
 #include "preimpl.h"
 #include "src/exception.h"
 
-#if defined(PYPY_CPYTHON_EXTENSION)
-   PyObject *RPythonError;
-#endif 
-
-/******************************************************************/
-#ifdef HAVE_RTYPER               /* RPython version of exceptions */
-/******************************************************************/
-
 void RPyDebugReturnShowException(const char *msg, const char *filename,
                                  long lineno, const char *functionname)
 {
@@ -30,8 +22,3 @@ void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc)
 	/* XXX msg is ignored */
 	RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(rexc), rexc);
 }
-
-
-/******************************************************************/
-#endif                                             /* HAVE_RTYPER */
-/******************************************************************/

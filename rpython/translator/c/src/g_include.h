@@ -28,10 +28,8 @@
 #include "src/debug_print.h"
 
 /*** modules ***/
-#ifdef HAVE_RTYPER      /* only if we have an RTyper */
 #  include "src/rtyper.h"
 #  include "src/debug_traceback.h"
-#endif
 
 #  include "src/allocator.h"
 #ifdef PYPY_STANDALONE
