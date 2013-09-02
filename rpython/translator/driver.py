@@ -10,7 +10,6 @@ from rpython.annotator import policy as annpolicy
 from rpython.tool.udir import udir
 from rpython.rlib.debug import debug_start, debug_print, debug_stop
 from rpython.rlib.entrypoint import secondary_entrypoints
-from rpython.rtyper.typesystem import getfunctionptr
 
 import py
 from rpython.tool.ansi_print import ansi_log
