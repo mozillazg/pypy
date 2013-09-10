@@ -682,8 +682,8 @@ class MiniMarkGC(MovingGCBase):
 
 
     def external_malloc(self, typeid, length):
-        """Allocate a large object using raw_malloc(),
-        possibly as an object with card marking enabled,
+        """Allocate a young, large object using raw_malloc(), possibly
+        as an object with card marking enabled, if large enough and
         if it has gc pointers in its var-sized part.  'length' should be
         specified as 0 if the object is not varsized.  The returned
         object is fully initialized and zero-filled."""
@@ -738,12 +738,11 @@ class MiniMarkGC(MovingGCBase):
                 extra_words = self.card_marking_words_for_length(length)
                 cardheadersize = WORD * extra_words
                 extra_flags = GCFLAG_HAS_CARDS | GCFLAG_TRACK_YOUNG_PTRS
-                # if 'can_make_young', then we also immediately set
+                # We also immediately set
                 # GCFLAG_CARDS_SET, but without adding the object to
                 # 'old_objects_with_cards_set'.  In this way it should
                 # never be added to that list as long as it is young.
-                if can_make_young:
-                    extra_flags |= GCFLAG_CARDS_SET
+                extra_flags |= GCFLAG_CARDS_SET
             #
             # Detect very rare cases of overflows
             if raw_malloc_usage(totalsize) > (sys.maxint - (WORD-1)
@@ -776,16 +775,12 @@ class MiniMarkGC(MovingGCBase):
             llarena.arena_reserve(result, totalsize)
             #
             # Record the newly allocated object and its full malloced size.
-            # The object is young or old depending on the argument.
+            # The new object is always young.
             self.rawmalloced_total_size += r_uint(allocsize)
-            if can_make_young:
-                if not self.young_objects_not_in_nursery:
-                    self.young_objects_not_in_nursery = self.AddressDict()
-                self.young_objects_not_in_nursery.add(result + size_gc_header)
-                extra_flags |= GCFLAG_YOUNG_RAW_MALLOCED
-            else:
-                self.old_rawmalloced_objects.append(result + size_gc_header)
-                extra_flags |= GCFLAG_TRACK_YOUNG_PTRS
+            if not self.young_objects_not_in_nursery:
+                self.young_objects_not_in_nursery = self.AddressDict()
+            self.young_objects_not_in_nursery.add(result + size_gc_header)
+            extra_flags |= GCFLAG_YOUNG_RAW_MALLOCED
         #
         # Common code to fill the header and length of the object.
         self.init_gc_object(result, typeid, extra_flags)
