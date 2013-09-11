@@ -183,7 +183,8 @@ class LLGraphCPU(model.AbstractCPU):
         self.stats = stats or MiniStats()
         self.vinfo_for_tests = kwds.get('vinfo_for_tests', None)
 
-    def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
+    def compile_loop(self, logger, inputargs, operations, looptoken, log=True,
+                     name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
         looptoken.compiled_loop_token = clt
         lltrace = LLTrace(inputargs, operations)
@@ -191,7 +192,7 @@ class LLGraphCPU(model.AbstractCPU):
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
 
-    def compile_bridge(self, faildescr, inputargs, operations,
+    def compile_bridge(self, logger, faildescr, inputargs, operations,
                        original_loop_token, log=True):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
@@ -417,7 +418,6 @@ class LLGraphCPU(model.AbstractCPU):
 
     bh_setfield_raw   = bh_setfield_gc
     bh_setfield_raw_i = bh_setfield_raw
-    bh_setfield_raw_r = bh_setfield_raw
     bh_setfield_raw_f = bh_setfield_raw
 
     def bh_arraylen_gc(self, a, descr):
@@ -960,10 +960,10 @@ class LLFrame(object):
     def execute_force_token(self, _):
         return self
 
-    def execute_cond_call_gc_wb(self, descr, a, b):
+    def execute_cond_call_gc_wb(self, descr, a):
         py.test.skip("cond_call_gc_wb not supported")
 
-    def execute_cond_call_gc_wb_array(self, descr, a, b, c):
+    def execute_cond_call_gc_wb_array(self, descr, a, b):
         py.test.skip("cond_call_gc_wb_array not supported")
 
     def execute_keepalive(self, descr, x):

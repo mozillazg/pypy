@@ -643,7 +643,6 @@ class MIFrame(object):
     def _opimpl_getfield_raw_any(self, box, fielddescr):
         return self.execute_with_descr(rop.GETFIELD_RAW, fielddescr, box)
     opimpl_getfield_raw_i = _opimpl_getfield_raw_any
-    opimpl_getfield_raw_r = _opimpl_getfield_raw_any
     opimpl_getfield_raw_f = _opimpl_getfield_raw_any
 
     @arguments("box", "descr")
@@ -657,7 +656,6 @@ class MIFrame(object):
     def _opimpl_setfield_raw_any(self, box, valuebox, fielddescr):
         self.execute_with_descr(rop.SETFIELD_RAW, fielddescr, box, valuebox)
     opimpl_setfield_raw_i = _opimpl_setfield_raw_any
-    opimpl_setfield_raw_r = _opimpl_setfield_raw_any
     opimpl_setfield_raw_f = _opimpl_setfield_raw_any
 
     @arguments("box", "box", "box", "descr")
@@ -1015,9 +1013,6 @@ class MIFrame(object):
     @arguments("int", "boxes3", "jitcode_position", "boxes3", "orgpc")
     def opimpl_jit_merge_point(self, jdindex, greenboxes,
                                jcposition, redboxes, orgpc):
-        resumedescr = compile.ResumeAtPositionDescr()
-        self.metainterp.capture_resumedata(resumedescr, orgpc)
-
         any_operation = len(self.metainterp.history.operations) > 0
         jitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         self.verify_green_args(jitdriver_sd, greenboxes)
@@ -1049,6 +1044,9 @@ class MIFrame(object):
             # much less expensive to blackhole out of.
             saved_pc = self.pc
             self.pc = orgpc
+            resumedescr = compile.ResumeAtPositionDescr()
+            self.metainterp.capture_resumedata(resumedescr, orgpc)
+
             self.metainterp.reached_loop_header(greenboxes, redboxes, resumedescr)
             self.pc = saved_pc
             # no exception, which means that the jit_merge_point did not

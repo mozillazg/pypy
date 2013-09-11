@@ -51,7 +51,8 @@ class AbstractCPU(object):
         """
         return False
 
-    def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
+    def compile_loop(self, logger, inputargs, operations, looptoken,
+                     log=True, name=''):
         """Assemble the given loop.
         Should create and attach a fresh CompiledLoopToken to
         looptoken.compiled_loop_token and stick extra attributes
@@ -67,7 +68,7 @@ class AbstractCPU(object):
         """
         raise NotImplementedError
 
-    def compile_bridge(self, faildescr, inputargs, operations,
+    def compile_bridge(self, logger, faildescr, inputargs, operations,
                        original_loop_token, log=True):
         """Assemble the bridge.
         The FailDescr is the descr of the original guard that failed.
@@ -262,8 +263,6 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def bh_setfield_raw_i(self, struct, newvalue, fielddescr):
-        raise NotImplementedError
-    def bh_setfield_raw_r(self, struct, newvalue, fielddescr):
         raise NotImplementedError
     def bh_setfield_raw_f(self, struct, newvalue, fielddescr):
         raise NotImplementedError
