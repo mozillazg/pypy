@@ -1,11 +1,20 @@
-import py, sys, random, os, struct, operator
+import gc
+import operator
+import os
+import random
+import struct
+import sys
+import weakref
+
+import py
+
 from rpython.jit.metainterp.history import (AbstractFailDescr,
                                          AbstractDescr,
                                          BasicFailDescr,
                                          BasicFinalDescr,
                                          BoxInt, Box, BoxPtr,
                                          JitCellToken, TargetToken,
-                                         ConstInt, ConstPtr,
+                                         ConstInt,
                                          BoxFloat, ConstFloat)
 from rpython.jit.metainterp.resoperation import ResOperation, rop
 from rpython.jit.metainterp.typesystem import deref
@@ -184,7 +193,6 @@ class BaseBackendTest(Runner):
         assert res == 10
 
     def test_backends_dont_keep_loops_alive(self):
-        import weakref, gc
         self.cpu.dont_keepalive_stuff = True
         i0 = BoxInt()
         i1 = BoxInt()
@@ -3718,19 +3726,23 @@ class LLtypeBackendTest(BaseBackendTest):
         targettoken1 = TargetToken()
         targettoken2 = TargetToken()
         faildescr = BasicFailDescr(2)
+        jitcode = JitCode("name")
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         operations = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
             ResOperation(rop.LABEL, [i0], None, descr=targettoken1),
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)], None),
             ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr),
             ResOperation(rop.LABEL, [i1], None, descr=targettoken2),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)], None),
             ResOperation(rop.INT_GE, [i1, ConstInt(0)], i3),
             ResOperation(rop.GUARD_TRUE, [i3], None, descr=BasicFailDescr(3)),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.JUMP, [i1], None, descr=targettoken1),
-            ]
+        ]
         inputargs = [i0]
-        operations[3].setfailargs([i1])
-        operations[6].setfailargs([i1])
 
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 2)
