@@ -469,15 +469,14 @@ _oplist = [
     'READ_TIMESTAMP/0',
     'MARK_OPAQUE_PTR/1b',
     '_RESUME_FIRST',
+    # resume-only operations that never make it to the real assembler
     'ENTER_FRAME/1d',
     'LEAVE_FRAME/0',
     'RESUME_PUT/3',
     'RESUME_NEW/0d',
     'RESUME_SETFIELD_GC/2d',
     'BACKEND_ATTACH/2',
-    # same as resume_put, but the first arg is backend-dependent,
-    # instead of a box
-    '_RESUME_LAST',
+    '_RESUME_LAST', # ----- end of resume only operations ------
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
     'SETARRAYITEM_GC/3d',

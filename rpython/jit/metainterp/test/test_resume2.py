@@ -3,7 +3,7 @@ from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.resume2 import rebuild_from_resumedata,\
-     rebuild_locs_from_resumedata, ResumeBytecode
+     ResumeBytecode
 
 
 class Descr(AbstractDescr):
@@ -40,14 +40,15 @@ class TestResumeDirect(object):
         jitcode = JitCode("jitcode")
         jitcode.setup(num_regs_i=13)
         resume_loop = parse("""
-        []
+        [i0]
         enter_frame(-1, descr=jitcode1)
-        backend_put(10, 0, 1)
+        resume_put(i0, 0, 1)
+        backend_attach(i0, 10)
         leave_frame()
         """, namespace={'jitcode1': jitcode})
         descr = Descr()
         descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 2
+        descr.rd_bytecode_position = 3
         metainterp = MockMetaInterp()
         metainterp.cpu = MockCPU()
         rebuild_from_resumedata(metainterp, "myframe", descr)
@@ -61,21 +62,25 @@ class TestResumeDirect(object):
         jitcode2 = JitCode("jitcode2")
         jitcode2.setup(num_regs_i=9)
         resume_loop = parse("""
-        []
+        [i0, i1, i2, i3]
         enter_frame(-1, descr=jitcode1)
-        backend_put(11, 0, 2)
+        resume_put(i0, 0, 2)
+        backend_attach(i0, 11)
         enter_frame(12, descr=jitcode2)
-        backend_put(12, 0, 3)
-        backend_put(8, 1, 4)
+        resume_put(i1, 0, 3)
+        resume_put(i2, 1, 4)
+        backend_attach(i1, 12)
+        backend_attach(i2, 8)
         leave_frame()
-        backend_put(10, 0, 1)
+        backend_attach(i3, 10)
+        resume_put(i3, 0, 1)
         leave_frame()
         """, namespace={'jitcode1': jitcode1, 'jitcode2': jitcode2})
         metainterp = MockMetaInterp()
         metainterp.cpu = MockCPU()
         descr = Descr()
         descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 5
+        descr.rd_bytecode_position = 8
         rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 2
         f = metainterp.framestack[-1]
@@ -86,7 +91,7 @@ class TestResumeDirect(object):
         assert f2.registers_i[4].getint() == 8 + 3
         assert f2.registers_i[2].getint() == 11 + 3
 
-        descr.rd_bytecode_position = 7
+        descr.rd_bytecode_position = 11
         metainterp.framestack = []
         rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 1
@@ -100,21 +105,24 @@ class TestResumeDirect(object):
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=13)
         base = parse("""
-        []
+        [i0, i1]
         enter_frame(-1, descr=jitcode1)
-        backend_put(42, 0, 0)
+        resume_put(i0, 0, 0)
+        backend_attach(i0, 42)
         # here is the split caused by a guard
-        backend_put(1, 0, 1)
+        resume_put(i1, 0, 1)
+        backend_attach(i1, 1)
         """, namespace={'jitcode1': jitcode1})
         bridge = parse("""
-        []
-        backend_put(2, 0, 1)
+        [i2]
+        resume_put(i2, 0, 1)
+        backend_attach(i2, 2)
         """)
         descr = Descr()
-        descr.rd_bytecode_position = 1
+        descr.rd_bytecode_position = 2
         parent = ResumeBytecode(base.operations)
         b = ResumeBytecode(bridge.operations, parent=parent,
-                           parent_position=2)
+                           parent_position=3)
         descr.rd_resume_bytecode = b
         metainterp = MockMetaInterp()
         metainterp.cpu = MockCPU()
@@ -125,17 +133,19 @@ class TestResumeDirect(object):
         assert f.registers_i[1].getint() == 2 + 3
 
     def test_new(self):
+        jitcode1 = JitCode("jitcode")
+        jitcode1.setup(num_regs_i=1)
         base = parse("""
         []
         enter_frame(-1, descr=jitcode)
         i0 = new(descr=structdescr)
-        XXX
-        resume_setfield(i0, 13
+        resume_setfield(i0, 13, descr=fielddescr)
         backend_put(12,
         leave_frame()
-        """)
+        """, namespace={'jitcode':jitcode})
 
     def test_reconstructing_resume_reader(self):
+        XXX
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=3, num_regs_f=0, num_regs_r=0)
         jitcode2 = JitCode("jitcode2")

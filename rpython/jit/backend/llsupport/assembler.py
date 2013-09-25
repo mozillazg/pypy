@@ -4,7 +4,7 @@ from rpython.jit.backend.llsupport.symbolic import WORD
 from rpython.jit.metainterp.history import (INT, REF, FLOAT, JitCellToken,
     ConstInt, BoxInt, AbstractFailDescr)
 from rpython.jit.metainterp.resoperation import ResOperation, rop
-from rpython.jit.metainterp.resume2 import rebuild_locs_from_resumedata
+#from rpython.jit.metainterp.resume2 import rebuild_locs_from_resumedata
 from rpython.rlib import rgc
 from rpython.rlib.debug import (debug_start, debug_stop, have_debug_prints,
                                 debug_print)
