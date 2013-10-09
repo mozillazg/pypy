@@ -700,9 +700,19 @@ MIN_INDEXES_MINUS_ENTRIES = VALID_OFFSET + 1
 FLAG_LOOKUP = 0
 FLAG_STORE = 1
 FLAG_DELETE = 2
+FLAG_DELETE_TRY_HARD = 3
 
 def new_lookup_functions(LOOKUP_FUNC, LOOKCLEAN_FUNC, T):
     INDEXES = lltype.Ptr(lltype.GcArray(T))
+
+    def ll_kill_something(d):
+        i = 0
+        while True:
+            index = rffi.cast(lltype.Signed, d.indexes[i])
+            if index >= VALID_OFFSET:
+                d.indexes[i] = rffi.cast(T, DELETED)
+                return index
+            i += 1
 
     @jit.look_inside_iff(lambda d, key, hash, store_flag:
                          jit.isvirtual(d) and jit.isconstant(key))
@@ -749,6 +759,8 @@ def new_lookup_functions(LOOKUP_FUNC, LOOKCLEAN_FUNC, T):
             # pristine entry -- lookup failed
             if store_flag == FLAG_STORE:
                 indexes[i] = rffi.cast(T, d.num_used_items + VALID_OFFSET)
+            elif d.paranoia and store_flag == FLAG_DELETE_TRY_HARD:
+                return ll_kill_something(d)
             return -1
 
         # In the loop, a deleted entry (everused and not valid) is by far
@@ -767,6 +779,8 @@ def new_lookup_functions(LOOKUP_FUNC, LOOKCLEAN_FUNC, T):
                         deletedslot = i
                     indexes[deletedslot] = rffi.cast(T, d.num_used_items +
                                                      VALID_OFFSET)
+                elif d.paranoia and store_flag == FLAG_DELETE_TRY_HARD:
+                    return ll_kill_something(d)
                 return -1
             elif index >= VALID_OFFSET:
                 checkingkey = entries[index].key
@@ -1071,7 +1085,15 @@ def _ll_getnextitem(dic):
         i -= 1
 
     key = entries[i].key
-    return dic.lookup_function(dic, key, dic.keyhash(key), FLAG_DELETE)
+    index = dic.lookup_function(dic, key, dic.keyhash(key),
+                                FLAG_DELETE_TRY_HARD)
+    # if the lookup function returned me a random strange thing,
+    # don't care about deleting the item
+    if index == dic.num_used_items - 1:
+        dic.num_used_items -= 1
+    else:
+        assert index != -1
+    return index
 
 def ll_popitem(ELEM, dic):
     i = _ll_getnextitem(dic)

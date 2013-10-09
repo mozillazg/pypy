@@ -170,7 +170,7 @@ class TestRDictDirect(object):
             rdict.ll_dict_setitem(ll_d, num, 1)
             rdict.ll_dict_delitem(ll_d, num)
             for k in foreach_index(ll_d):
-                assert k < 0
+                assert k < rdict.VALID_OFFSET
 
 class TestRdict(BaseRtypingTest):
 
