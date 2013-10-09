@@ -146,11 +146,15 @@ class TestRDictDirect(object):
         ll_d = rdict.ll_newdict(DICT)
         rdict.ll_dict_setitem(ll_d, llstr("k"), 1)
         rdict.ll_dict_setitem(ll_d, llstr("j"), 2)
-        ll_elem = rdict.ll_popitem(lltype.Ptr(
-            lltype.GcStruct('x', ('item0', lltype.Ptr(rstr.STR)),
-                            ('item1', lltype.Signed))), ll_d)
+        TUP = lltype.Ptr(lltype.GcStruct('x', ('item0', lltype.Ptr(rstr.STR)),
+                                              ('item1', lltype.Signed)))
+        ll_elem = rdict.ll_popitem(TUP, ll_d)
         assert hlstr(ll_elem.item0) == "j"
         assert ll_elem.item1 == 2
+        ll_elem = rdict.ll_popitem(TUP, ll_d)
+        assert hlstr(ll_elem.item0) == "k"
+        assert ll_elem.item1 == 1
+        py.test.raises(KeyError, rdict.ll_popitem, TUP, ll_d)
 
     def test_direct_enter_and_del(self):
         def eq(a, b):

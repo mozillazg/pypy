@@ -932,7 +932,7 @@ def _make_ll_dictnext(kind):
                     return entry.key
                 elif kind == 'values':
                     return entry.value
-                
+
         # clear the reference to the dict and prevent restarts
         iter.dict = lltype.nullptr(lltype.typeOf(iter).TO.dict.TO)
         raise StopIteration
@@ -1058,32 +1058,20 @@ def ll_contains(d, key):
     i = ll_dict_lookup(d, key, d.keyhash(key))
     return not i & HIGHEST_BIT
 
-POPITEMINDEX = lltype.Struct('PopItemIndex', ('nextindex', lltype.Signed))
-global_popitem_index = lltype.malloc(POPITEMINDEX, zero=True, immortal=True)
-
 def _ll_getnextitem(dic):
+    if dic.num_items == 0:
+        raise KeyError
+
     entries = dic.entries
-    ENTRY = lltype.typeOf(entries).TO.OF
-    dmask = len(entries) - 1
-    if hasattr(ENTRY, 'f_hash'):
-        if entries.valid(0):
-            return 0
-        base = entries[0].f_hash
-    else:
-        base = global_popitem_index.nextindex
-    counter = 0
-    while counter <= dmask:
-        i = (base + counter) & dmask
-        counter += 1
+
+    i = dic.num_used_items - 1
+    while True:
         if entries.valid(i):
             break
-    else:
-        raise KeyError
-    if hasattr(ENTRY, 'f_hash'):
-        entries[0].f_hash = base + counter
-    else:
-        global_popitem_index.nextindex = base + counter
-    return i
+        i -= 1
+
+    key = entries[i].key
+    return dic.lookup_function(dic, key, dic.keyhash(key), FLAG_DELETE)
 
 def ll_popitem(ELEM, dic):
     i = _ll_getnextitem(dic)
