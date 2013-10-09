@@ -648,9 +648,9 @@ def new_lookup_function(LOOKUP_FUNC, T):
                     if store_flag == FLAG_DELETE:
                         indexes[i] = rffi.cast(T, DELETED)
                     return index - VALID_OFFSET
-            freeslot = -1
+            deletedslot = -1
         elif index == DELETED:
-            freeslot = i
+            deletedslot = i
         else:
             # pristine entry -- lookup failed
             if store_flag == FLAG_STORE:
@@ -659,29 +659,34 @@ def new_lookup_function(LOOKUP_FUNC, T):
 
         # In the loop, a deleted entry (everused and not valid) is by far
         # (factor of 100s) the least likely outcome, so test for that last.
-        XXX
         perturb = r_uint(hash)
         while 1:
             # compute the next index using unsigned arithmetic
             i = r_uint(i)
             i = (i << 2) + i + perturb + 1
             i = intmask(i) & mask
-            index = ll_index_getitem(d.size, indexes, i)
             # keep 'i' as a signed number here, to consistently pass signed
             # arguments to the small helper methods.
+            index = rffi.cast(lltype.Signed, indexes[i])
             if index == FREE:
-                if freeslot == -1:
-                    freeslot = i
-                return freeslot | HIGHEST_BIT
-            elif entries.valid(index):
-                checkingkey = entries.getitem_clean(index).key
+                if store_flag == FLAG_STORE:
+                    if deletedslot == -1:
+                        deletedslot = i
+                    indexes[deletedslot] = rffi.cast(T, d.num_used_items +
+                                                     VALID_OFFSET)
+                return -1
+            elif index >= VALID_OFFSET:
+                checkingkey = entries[index].key
                 if direct_compare and checkingkey == key:
-                    return i
-                if d.keyeq is not None and entries.hash(index) == hash:
+                    if store_flag == FLAG_DELETE:
+                        indexes[i] = rffi.cast(T, DELETED)
+                    return index - VALID_OFFSET   # found the entry
+                if d.keyeq is not None and entries.hash(index - VALID_OFFSET) == hash:
                     # correct hash, maybe the key is e.g. a different pointer to
                     # an equal object
                     found = d.keyeq(checkingkey, key)
                     if d.paranoia:
+                        XXX
                         if (entries != d.entries or indexes != d.indexes or
                             not entries.valid(ll_index_getitem(d.size, indexes, i)) or
                             entries.getitem_clean(index).key != checkingkey):
@@ -694,10 +699,13 @@ def new_lookup_function(LOOKUP_FUNC, T):
                                 return ll_dict_lookup(d, key, hash,
                                                       ll_index_getitem_int)
                     if found:
-                        return i   # found the entry
-            elif freeslot == -1:
-                freeslot = i
+                        if store_flag == FLAG_DELETE:
+                            indexes[i] = rffi.cast(T, DELETED)
+                        return index - VALID_OFFSET
+            elif deletedslot == -1:
+                deletedslot = i
             perturb >>= PERTURB_SHIFT
+
     return llhelper(LOOKUP_FUNC, ll_dict_lookup)
 
 def ll_dict_lookup_clean(d, hash):
