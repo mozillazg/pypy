@@ -39,12 +39,17 @@ def count_items(ll_d, ITEM):
     return c
 
 class TestRDictDirect(object):
+    dummykeyobj = None
+    dummyvalueobj = None
+
     def _get_str_dict(self):
         # STR -> lltype.Signed
         DICT = rdict.get_ll_dict(lltype.Ptr(rstr.STR), lltype.Signed,
                                  ll_fasthash_function=rstr.LLHelpers.ll_strhash,
                                  ll_hash_function=rstr.LLHelpers.ll_strhash,
-                                 ll_eq_function=rstr.LLHelpers.ll_streq)
+                                 ll_eq_function=rstr.LLHelpers.ll_streq,
+                                 dummykeyobj=self.dummykeyobj,
+                                 dummyvalueobj=self.dummyvalueobj)
         return DICT
 
     def test_dict_creation(self):
@@ -171,6 +176,16 @@ class TestRDictDirect(object):
             rdict.ll_dict_delitem(ll_d, num)
             for k in foreach_index(ll_d):
                 assert k < rdict.VALID_OFFSET
+
+
+class TestRDictDirectDummyKey(TestRDictDirect):
+    class dummykeyobj:
+        ll_dummy_value = llstr("dupa")
+
+class TestRDictDirectDummyValue(TestRDictDirect):
+    class dummyvalueobj:
+        ll_dummy_value = -42
+
 
 class TestRdict(BaseRtypingTest):
 

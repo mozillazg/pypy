@@ -448,12 +448,12 @@ def ll_valid_from_flag(entries, i):
 def ll_valid_from_key(entries, i):
     ENTRIES = lltype.typeOf(entries).TO
     dummy = ENTRIES.dummy_obj.ll_dummy_value
-    return entries.everused(i) and entries[i].key != dummy
+    return entries[i].key != dummy
 
 def ll_valid_from_value(entries, i):
     ENTRIES = lltype.typeOf(entries).TO
     dummy = ENTRIES.dummy_obj.ll_dummy_value
-    return entries.everused(i) and entries[i].value != dummy
+    return entries[i].value != dummy
 
 def ll_mark_deleted_in_flag(entries, i):
     entries[i].f_valid = False
