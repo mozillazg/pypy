@@ -60,6 +60,30 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("abc"), 43)
         assert rdict.ll_dict_getitem(ll_d, lls) == 43
 
+    def test_dict_store_get(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        for i in range(20):
+            for j in range(i):
+                assert rdict.ll_dict_getitem(ll_d, llstr(str(j))) == j
+            rdict.ll_dict_setitem(ll_d, llstr(str(i)), i)
+        assert ll_d.num_items == 20
+        for i in range(20):
+            assert rdict.ll_dict_getitem(ll_d, llstr(str(i))) == i
+
+    def test_dict_store_get_del(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        for i in range(20):
+            for j in range(0, i, 2):
+                assert rdict.ll_dict_getitem(ll_d, llstr(str(j))) == j
+            rdict.ll_dict_setitem(ll_d, llstr(str(i)), i)
+            if i % 2 != 0:
+                rdict.ll_dict_delitem(ll_d, llstr(str(i)))
+        assert ll_d.num_items == 10
+        for i in range(0, 20, 2):
+            assert rdict.ll_dict_getitem(ll_d, llstr(str(i))) == i
+
     def test_dict_del_lastitem(self):
         DICT = self._get_str_dict()
         ll_d = rdict.ll_newdict(DICT)
@@ -93,6 +117,15 @@ class TestRDictDirect(object):
         assert len(get_indexes(ll_d)) == 32
         for item in ['a', 'b', 'c', 'd', 'e', 'f']:
             assert rdict.ll_dict_getitem(ll_d, llstr(item)) == ord(item) - ord('a') + 1
+
+    def test_dict_grow_cleanup(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        lls = llstr("a")
+        for i in range(20):
+            rdict.ll_dict_setitem(ll_d, lls, i)
+            rdict.ll_dict_delitem(ll_d, lls)
+        assert ll_d.num_used_items <= 4
 
     def test_dict_iteration(self):
         DICT = self._get_str_dict()
