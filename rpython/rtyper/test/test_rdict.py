@@ -23,8 +23,11 @@ def not_really_random():
         assert 0 <= x < 4
         yield x
 
+def get_indexes(ll_d):
+    return ll_d.indexes._obj.container._as_ptr()
+
 def foreach_index(ll_d):
-    indexes = ll_d.indexes._obj.container._as_ptr()
+    indexes = get_indexes(ll_d)
     for i in range(len(indexes)):
         yield rffi.cast(lltype.Signed, indexes[i])
 
@@ -84,10 +87,10 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("b"), 2)
         rdict.ll_dict_setitem(ll_d, llstr("c"), 3)
         rdict.ll_dict_setitem(ll_d, llstr("d"), 4)
-        assert ll_d.size == 8
+        assert len(get_indexes(ll_d)) == 8
         rdict.ll_dict_setitem(ll_d, llstr("e"), 5)
         rdict.ll_dict_setitem(ll_d, llstr("f"), 6)
-        assert ll_d.size == 32
+        assert len(get_indexes(ll_d)) == 32
         for item in ['a', 'b', 'c', 'd', 'e', 'f']:
             assert rdict.ll_dict_getitem(ll_d, llstr(item)) == ord(item) - ord('a') + 1
 

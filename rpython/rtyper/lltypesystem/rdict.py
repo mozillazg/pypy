@@ -99,8 +99,12 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     DICTENTRY = lltype.Struct("dictentry", *entryfields)
     DICTENTRYARRAY = lltype.GcArray(DICTENTRY,
                                     adtmeths=entrymeths)
-    LOOKUP_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT), DICTKEY, lltype.Signed, lltype.Signed], lltype.Signed))
-
+    LOOKUP_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT), DICTKEY,
+                                              lltype.Signed, lltype.Signed],
+                                             lltype.Signed))
+    LOOKCLEAN_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT),
+                                                 lltype.Signed],
+                                                lltype.Signed))
 
     fields =          [ ("num_items", lltype.Signed),
                         ("num_used_items", lltype.Signed),
@@ -135,15 +139,18 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     adtmeths['VALUE'] = DICTVALUE
     adtmeths['allocate'] = lltype.typeMethod(_ll_malloc_dict)
     adtmeths['empty_array'] = DICTENTRYARRAY.allocate(0)
-    adtmeths['byte_lookup_function'] = new_lookup_function(LOOKUP_FUNC,
-                                                           T=rffi.UCHAR)
-    adtmeths['short_lookup_function'] = new_lookup_function(LOOKUP_FUNC,
-                                                            T=rffi.USHORT)
-    if IS_64BIT:
-        adtmeths['int_lookup_function'] = new_lookup_function(LOOKUP_FUNC,
-                                                              T=rffi.UINT)
-    adtmeths['long_lookup_function'] = new_lookup_function(LOOKUP_FUNC,
-                                                           T=lltype.Unsigned)
+
+    for name, T in [('byte', rffi.UCHAR),
+                    ('short', rffi.USHORT),
+                    ('int', rffi.UINT),
+                    ('long', lltype.Unsigned)]:
+        if name == 'int' and not IS_64BIT:
+            continue
+        lookupfn, lookcleanfn = new_lookup_functions(LOOKUP_FUNC,
+                                                     LOOKCLEAN_FUNC, T=T)
+        adtmeths['%s_lookup_function' % name] = lookupfn
+        adtmeths['%s_lookup_clean_function' % name] = lookcleanfn
+
     DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
                                 *fields))
     return DICT
@@ -397,21 +404,26 @@ def ll_malloc_indexes_and_choose_lookup(d, n):
                                            lltype.malloc(DICTINDEX_BYTE.TO, n,
                                                          zero=True))
         d.lookup_function = DICT.byte_lookup_function
+        return DICT.byte_lookup_clean_function
     elif n <= 65536:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_SHORT.TO, n,
                                                          zero=True))
         d.lookup_function = DICT.short_lookup_function
+        return DICT.short_lookup_clean_function
     elif IS_64BIT and n <= 2 ** 32:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_INT.TO, n,
                                                          zero=True))
         d.lookup_function = DICT.int_lookup_function
+        return DICT.int_lookup_clean_function
     else:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_LONG.TO, n,
                                                          zero=True))
         d.lookup_function = DICT.long_lookup_function
+        return DICT.long_lookup_clean_function
+ll_malloc_indexes_and_choose_lookup._always_inline_ = True
 
 def ll_valid_from_flag(entries, i):
     return entries[i].f_valid
@@ -495,15 +507,14 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
         d.num_items += 1
         rc = d.resize_counter - 3
         if rc <= 0:
-            XXX
             ll_dict_resize(d)
-            i = ll_dict_lookup_clean(d, hash)  # then redo the lookup for 'key'
-            entry = d.entries[i]
             rc = d.resize_counter - 3
             ll_assert(rc > 0, "ll_dict_resize failed?")
         d.resize_counter = rc
 
 def ll_dict_grow(d):
+    if d.num_items < d.num_used_items // 4:
+        xxxxxxxxx
     # This over-allocates proportional to the list size, making room
     # for additional growth.  The over-allocation is mild, but is
     # enough to give linear-time amortized behavior over a long
@@ -518,24 +529,37 @@ def ll_dict_grow(d):
     some += newsize >> 3
     new_allocated = newsize + some
     newitems = lltype.malloc(lltype.typeOf(d).TO.entries.TO, new_allocated)
-    rgc.ll_arraycopy(d.entries, newitems, 0, 0, len(d.entries))
+    #
+    # XXX we should do this with rgc.ll_arraycopy()!!
+    ENTRY = lltype.typeOf(d).TO.entries.TO.OF
+    i = 0
+    while i < len(d.entries):
+        src = d.entries[i]
+        dst = newitems[i]
+        dst.key = src.key
+        dst.value = src.value
+        if hasattr(ENTRY, 'f_hash'):
+            dst.f_hash = src.f_hash
+        if hasattr(ENTRY, 'f_valid'):
+            dst.f_valid = src.f_valid
+        i += 1
     d.entries = newitems
 
-def ll_dict_insertclean(d, key, value, hash):
+def ll_dict_insertclean(d, key, value, hash, lookcleanfn):
     # Internal routine used by ll_dict_resize() to insert an item which is
     # known to be absent from the dict.  This routine also assumes that
     # the dict contains no deleted entries.  This routine has the advantage
     # of never calling d.keyhash() and d.keyeq(), so it cannot call back
     # to user code.  ll_dict_insertclean() doesn't resize the dict, either.
-    i = ll_dict_lookup_clean(d, hash)
+    index = lookcleanfn(d, hash)
     ENTRY = lltype.typeOf(d.entries).TO.OF
-    entry = d.entries[i]
+    entry = d.entries[index]
     entry.value = value
     entry.key = key
     if hasattr(ENTRY, 'f_hash'):     entry.f_hash = hash
     if hasattr(ENTRY, 'f_valid'):    entry.f_valid = True
-    if hasattr(ENTRY, 'f_everused'): entry.f_everused = True
     d.num_items += 1
+    d.num_used_items += 1
     d.resize_counter -= 3
 
 def ll_dict_delitem(d, key):
@@ -571,29 +595,31 @@ def _ll_dict_del(d, index):
     # avoid extra branches.
 
 def ll_dict_resize(d):
-    old_entries = d.entries
-    old_size = len(old_entries)
     # make a 'new_size' estimate and shrink it if there are many
     # deleted entry markers.  See CPython for why it is a good idea to
     # quadruple the dictionary size as long as it's not too big.
-    num_items = d.num_items + 1
-    if num_items > 50000: new_estimate = num_items * 2
-    else:                 new_estimate = num_items * 4
+    num_items = d.num_used_items
+    if num_items > 50000:
+        new_estimate = num_items * 2
+    else:
+        new_estimate = num_items * 4
     new_size = DICT_INITSIZE
     while new_size <= new_estimate:
         new_size *= 2
-    #
-    d.entries = lltype.typeOf(old_entries).TO.allocate(new_size)
+    lookcleanfn = ll_malloc_indexes_and_choose_lookup(d, new_size)
     d.num_items = 0
+    d.num_used_items = 0
     d.resize_counter = new_size * 2
+    #
+    entries = d.entries
     i = 0
-    while i < old_size:
-        if old_entries.valid(i):
-            hash = old_entries.hash(i)
-            entry = old_entries[i]
-            ll_dict_insertclean(d, entry.key, entry.value, hash)
+    while i < num_items:
+        if entries.valid(i):
+            hash = entries.hash(i)
+            entry = entries[i]
+            ll_dict_insertclean(d, entry.key, entry.value, hash, lookcleanfn)
         i += 1
-    old_entries.delete()
+    #old_entries.delete() XXXX!
 ll_dict_resize.oopspec = 'dict.resize(d)'
 
 # ------- a port of CPython's dictobject.c's lookdict implementation -------
@@ -607,7 +633,7 @@ FLAG_LOOKUP = 0
 FLAG_STORE = 1
 FLAG_DELETE = 2
 
-def new_lookup_function(LOOKUP_FUNC, T):
+def new_lookup_functions(LOOKUP_FUNC, LOOKCLEAN_FUNC, T):
     INDEXES = lltype.Ptr(lltype.GcArray(T))
 
     @jit.look_inside_iff(lambda d, key, hash, store_flag:
@@ -616,7 +642,7 @@ def new_lookup_function(LOOKUP_FUNC, T):
         entries = d.entries
         indexes = lltype.cast_opaque_ptr(INDEXES, d.indexes)
         mask = len(indexes) - 1
-        i = hash & mask
+        i = r_uint(hash & mask)
         # do the first try before any looping
         ENTRIES = lltype.typeOf(entries).TO
         direct_compare = not hasattr(ENTRIES, 'no_direct_compare')
@@ -662,7 +688,6 @@ def new_lookup_function(LOOKUP_FUNC, T):
         perturb = r_uint(hash)
         while 1:
             # compute the next index using unsigned arithmetic
-            i = r_uint(i)
             i = (i << 2) + i + perturb + 1
             i = intmask(i) & mask
             # keep 'i' as a signed number here, to consistently pass signed
@@ -706,21 +731,24 @@ def new_lookup_function(LOOKUP_FUNC, T):
                 deletedslot = i
             perturb >>= PERTURB_SHIFT
 
-    return llhelper(LOOKUP_FUNC, ll_dict_lookup)
+    def ll_dict_lookup_clean(d, hash):
+        # a simplified version of ll_dict_lookup() which assumes that the
+        # key is new, and the dictionary doesn't contain deleted entries.
+        # It only finds the next free slot for the given hash.
+        indexes = lltype.cast_opaque_ptr(INDEXES, d.indexes)
+        mask = len(indexes) - 1
+        i = r_uint(hash & mask)
+        perturb = r_uint(hash)
+        while rffi.cast(lltype.Signed, indexes[i]) != 0:
+            i = (i << 2) + i + perturb + 1
+            i = i & mask
+            perturb >>= PERTURB_SHIFT
+        index = d.num_used_items
+        indexes[i] = rffi.cast(T, index + VALID_OFFSET)
+        return index
 
-def ll_dict_lookup_clean(d, hash):
-    # a simplified version of ll_dict_lookup() which assumes that the
-    # key is new, and the dictionary doesn't contain deleted entries.
-    # It only finds the next free slot for the given hash.
-    entries = d.entries
-    mask = len(entries) - 1
-    i = r_uint(hash & mask)
-    perturb = r_uint(hash)
-    while entries.everused(i):
-        i = (i << 2) + i + perturb + 1
-        i = i & mask
-        perturb >>= PERTURB_SHIFT
-    return i
+    return (llhelper(LOOKUP_FUNC, ll_dict_lookup),
+            llhelper(LOOKCLEAN_FUNC, ll_dict_lookup_clean))
 
 # ____________________________________________________________
 #
