@@ -139,8 +139,9 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     adtmeths['KEY']   = DICTKEY
     adtmeths['VALUE'] = DICTVALUE
     adtmeths['allocate'] = lltype.typeMethod(_ll_malloc_dict)
-    adtmeths['empty_array'] = DICTENTRYARRAY.allocate(0)
 
+    family = LookupFamily()
+    family.empty_array = DICTENTRYARRAY.allocate(0)
     for name, T in [('byte', rffi.UCHAR),
                     ('short', rffi.USHORT),
                     ('int', rffi.UINT),
@@ -149,12 +150,18 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
             continue
         lookupfn, lookcleanfn = new_lookup_functions(LOOKUP_FUNC,
                                                      LOOKCLEAN_FUNC, T=T)
-        adtmeths['%s_lookup_function' % name] = lookupfn
-        adtmeths['%s_lookup_clean_function' % name] = lookcleanfn
+        setattr(family, '%s_lookup_function' % name, lookupfn)
+        setattr(family, '%s_insert_clean_function' % name, lookcleanfn)
+    adtmeths['lookup_family'] = family
 
     DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
                                 *fields))
     return DICT
+
+class LookupFamily:
+    def _freeze_(self):
+        return True
+
 
 class DictRepr(AbstractDictRepr):
 
@@ -404,34 +411,35 @@ def ll_malloc_indexes_and_choose_lookup(d, n):
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_BYTE.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.byte_lookup_function
+        d.lookup_function = DICT.lookup_family.byte_lookup_function
     elif n <= 65536:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_SHORT.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.short_lookup_function
+        d.lookup_function = DICT.lookup_family.short_lookup_function
     elif IS_64BIT and n <= 2 ** 32:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_INT.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.int_lookup_function
+        d.lookup_function = DICT.lookup_family.int_lookup_function
     else:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_LONG.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.long_lookup_function
+        d.lookup_function = DICT.lookup_family.long_lookup_function
 ll_malloc_indexes_and_choose_lookup._always_inline_ = True
 
 def ll_pick_insert_clean_function(d):
     DICT = lltype.typeOf(d).TO
-    if d.lookup_function == DICT.byte_lookup_function:
-        return d.byte_lookup_clean_function
-    if d.lookup_function == DICT.short_lookup_function:
-        return d.short_lookup_clean_function
-    if IS_64BIT and d.lookup_function == DICT.int_lookup_function:
-        return d.int_lookup_clean_function
-    if d.lookup_function == DICT.long_lookup_function:
-        return d.long_lookup_clean_function
+    if d.lookup_function == DICT.lookup_family.byte_lookup_function:
+        return DICT.lookup_family.byte_insert_clean_function
+    if d.lookup_function == DICT.lookup_family.short_lookup_function:
+        return DICT.lookup_family.short_insert_clean_function
+    if IS_64BIT:
+        if d.lookup_function == DICT.lookup_family.int_lookup_function:
+            return DICT.lookup_family.int_insert_clean_function
+    if d.lookup_function == DICT.lookup_family.long_lookup_function:
+        return DICT.lookup_family.long_insert_clean_function
     assert False
 
 def ll_valid_from_flag(entries, i):
@@ -838,7 +846,7 @@ DICT_INITSIZE = 8
 
 def ll_newdict(DICT):
     d = DICT.allocate()
-    d.entries = DICT.empty_array
+    d.entries = DICT.lookup_family.empty_array
     ll_malloc_indexes_and_choose_lookup(d, DICT_INITSIZE)
     d.num_items = 0
     d.num_used_items = 0
