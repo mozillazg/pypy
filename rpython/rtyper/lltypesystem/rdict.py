@@ -539,19 +539,19 @@ def ll_dict_insertclean(d, key, value, hash):
     d.resize_counter -= 3
 
 def ll_dict_delitem(d, key):
-    i = ll_dict_lookup(d, key, d.keyhash(key))
-    if i & HIGHEST_BIT:
+    index = d.lookup_function(d, key, d.keyhash(key), FLAG_DELETE)
+    if index == -1:
         raise KeyError
-    _ll_dict_del(d, i)
+    _ll_dict_del(d, index)
 
 @jit.look_inside_iff(lambda d, i: jit.isvirtual(d) and jit.isconstant(i))
-def _ll_dict_del(d, i):
-    d.entries.mark_deleted(i)
+def _ll_dict_del(d, index):
+    d.entries.mark_deleted(index)
     d.num_items -= 1
     # clear the key and the value if they are GC pointers
     ENTRIES = lltype.typeOf(d.entries).TO
     ENTRY = ENTRIES.OF
-    entry = d.entries[i]
+    entry = d.entries[index]
     if ENTRIES.must_clear_key:
         entry.key = lltype.nullptr(ENTRY.key.TO)
     if ENTRIES.must_clear_value:
@@ -624,8 +624,9 @@ def new_lookup_function(LOOKUP_FUNC, T):
         if index >= VALID_OFFSET:
             checkingkey = entries[index - VALID_OFFSET].key
             if direct_compare and checkingkey == key:
-                XXX
-                return index   # found the entry
+                if store_flag == FLAG_DELETE:
+                    indexes[i] = rffi.cast(T, DELETED)
+                return index - VALID_OFFSET   # found the entry
             if d.keyeq is not None and entries.hash(index - VALID_OFFSET) == hash:
                 # correct hash, maybe the key is e.g. a different pointer to
                 # an equal object
@@ -644,6 +645,8 @@ def new_lookup_function(LOOKUP_FUNC, T):
                             return ll_dict_lookup(d, key, hash,
                                                   ll_index_getitem_int)
                 if found:
+                    if store_flag == FLAG_DELETE:
+                        indexes[i] = rffi.cast(T, DELETED)
                     return index - VALID_OFFSET
             freeslot = -1
         elif index == DELETED:

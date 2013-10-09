@@ -47,9 +47,15 @@ class TestRDictDirect(object):
     def test_dict_creation(self):
         DICT = self._get_str_dict()
         ll_d = rdict.ll_newdict(DICT)
-        rdict.ll_dict_setitem(ll_d, llstr("abc"), 13)
+        lls = llstr("abc")
+        rdict.ll_dict_setitem(ll_d, lls, 13)
         assert count_items(ll_d, rdict.FREE) == rdict.DICT_INITSIZE - 1
         assert rdict.ll_dict_getitem(ll_d, llstr("abc")) == 13
+        assert rdict.ll_dict_getitem(ll_d, lls) == 13
+        rdict.ll_dict_setitem(ll_d, lls, 42)
+        assert rdict.ll_dict_getitem(ll_d, lls) == 42
+        rdict.ll_dict_setitem(ll_d, llstr("abc"), 43)
+        assert rdict.ll_dict_getitem(ll_d, lls) == 43
 
     def test_dict_del_lastitem(self):
         DICT = self._get_str_dict()
