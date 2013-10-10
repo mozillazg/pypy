@@ -497,9 +497,9 @@ class LLtypeHelpers:
     _ll_0_newdict.need_result_type = True
 
     _ll_2_dict_delitem = ll_rdict.ll_dict_delitem
-    _ll_1_dict_copy = ll_rdict.ll_copy
-    _ll_1_dict_clear = ll_rdict.ll_clear
-    _ll_2_dict_update = ll_rdict.ll_update
+    _ll_1_dict_copy = ll_rdict.ll_dict_copy
+    _ll_1_dict_clear = ll_rdict.ll_dict_clear
+    _ll_2_dict_update = ll_rdict.ll_dict_update
 
     # ---------- dict keys(), values(), items(), iter ----------
 

@@ -503,7 +503,7 @@ def ll_dict_setitem(d, key, value):
 
 # It may be safe to look inside always, it has a few branches though, and their
 # frequencies needs to be investigated.
-#@jit.look_inside_iff(lambda d, key, value, hash, i: jit.isvirtual(d) and jit.isconstant(key))
+@jit.look_inside_iff(lambda d, key, value, hash, i: jit.isvirtual(d) and jit.isconstant(key))
 def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     ENTRY = lltype.typeOf(d.entries).TO.OF
     if i >= 0:
