@@ -184,6 +184,15 @@ class TestRDictDirect(object):
         assert rdict.ll_dict_contains(ll_d, llstr("k"))
         assert not rdict.ll_dict_contains(ll_d, llstr("j"))
 
+    def test_clear(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 1)
+        rdict.ll_dict_setitem(ll_d, llstr("j"), 1)
+        rdict.ll_dict_setitem(ll_d, llstr("l"), 1)
+        rdict.ll_dict_clear(ll_d)
+        assert ll_d.num_items == 0
+
 class TestRDictDirectDummyKey(TestRDictDirect):
     class dummykeyobj:
         ll_dummy_value = llstr("dupa")

@@ -328,7 +328,7 @@ class DictRepr(AbstractDictRepr):
     def rtype_method_clear(self, hop):
         v_dict, = hop.inputargs(self)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_clear, v_dict)
+        return hop.gendirectcall(ll_dict_clear, v_dict)
 
     def rtype_method_popitem(self, hop):
         v_dict, = hop.inputargs(self)
@@ -1007,16 +1007,18 @@ def ll_copy(dict):
     return d
 ll_copy.oopspec = 'dict.copy(dict)'
 
-def ll_clear(d):
-    if (len(d.entries) == DICT_INITSIZE and
-        d.resize_counter == DICT_INITSIZE * 2):
+def ll_dict_clear(d):
+    if d.num_used_items == 0:
         return
+    DICT = lltype.typeOf(d).TO
     old_entries = d.entries
-    d.entries = lltype.typeOf(old_entries).TO.allocate(DICT_INITSIZE)
+    d.entries = DICT.lookup_family.empty_array
+    ll_malloc_indexes_and_choose_lookup(d, DICT_INITSIZE)
     d.num_items = 0
+    d.num_used_items = 0
     d.resize_counter = DICT_INITSIZE * 2
-    old_entries.delete()
-ll_clear.oopspec = 'dict.clear(d)'
+    # old_entries.delete() XXX
+ll_dict_clear.oopspec = 'dict.clear(d)'
 
 def ll_update(dic1, dic2):
     entries = dic2.entries
