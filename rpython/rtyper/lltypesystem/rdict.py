@@ -292,7 +292,7 @@ class DictRepr(AbstractDictRepr):
     def rtype_method_update(self, hop):
         v_dic1, v_dic2 = hop.inputargs(self, self)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_update, v_dic1, v_dic2)
+        return hop.gendirectcall(ll_dict_update, v_dic1, v_dic2)
 
     def _rtype_method_kvi(self, hop, ll_func):
         v_dic, = hop.inputargs(self)
@@ -957,7 +957,7 @@ def ll_dict_get(dict, key, default):
 
 def ll_dict_setdefault(dict, key, default):
     hash = dict.keyhash(key)
-    index = dict.lookup_function(dict, key, dict.keyhash(key), FLAG_STORE)
+    index = dict.lookup_function(dict, key, hash, FLAG_STORE)
     if index == -1:
         _ll_dict_setitem_lookup_done(dict, key, default, hash, -1)
         return default
@@ -1006,19 +1006,19 @@ def ll_dict_clear(d):
     # old_entries.delete() XXX
 ll_dict_clear.oopspec = 'dict.clear(d)'
 
-def ll_update(dic1, dic2):
-    entries = dic2.entries
-    d2len = len(entries)
+def ll_dict_update(dic1, dic2):
     i = 0
-    while i < d2len:
+    while i < dic2.num_used_items:
+        entries = dic2.entries
         if entries.valid(i):
             entry = entries[i]
             hash = entries.hash(i)
             key = entry.key
-            j = ll_dict_lookup(dic1, key, hash)
-            _ll_dict_setitem_lookup_done(dic1, key, entry.value, hash, j)
+            value = entry.value
+            index = dic1.lookup_function(dic1, key, hash, FLAG_STORE)
+            _ll_dict_setitem_lookup_done(dic1, key, value, hash, index)
         i += 1
-ll_update.oopspec = 'dict.update(dic1, dic2)'
+ll_dict_update.oopspec = 'dict.update(dic1, dic2)'
 
 # this is an implementation of keys(), values() and items()
 # in a single function.
@@ -1081,7 +1081,7 @@ def _ll_getnextitem(dic):
         i -= 1
 
     key = entries[i].key
-    index = dic.lookup_function(dic, key, dic.keyhash(key),
+    index = dic.lookup_function(dic, key, entries.hash(i),
                                 FLAG_DELETE_TRY_HARD)
     # if the lookup function returned me a random strange thing,
     # don't care about deleting the item

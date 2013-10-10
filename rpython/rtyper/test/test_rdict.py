@@ -229,6 +229,18 @@ class TestRDictDirect(object):
             assert rdict.ll_dict_get(ll_d3, llstr("j"), 42) == 2
             assert rdict.ll_dict_get(ll_d3, llstr("i"), 42) == 42
 
+    def test_update(self):
+        DICT = self._get_str_dict()
+        ll_d1 = rdict.ll_newdict(DICT)
+        ll_d2 = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d1, llstr("k"), 5)
+        rdict.ll_dict_setitem(ll_d1, llstr("j"), 6)
+        rdict.ll_dict_setitem(ll_d2, llstr("i"), 7)
+        rdict.ll_dict_setitem(ll_d2, llstr("k"), 8)
+        rdict.ll_dict_update(ll_d1, ll_d2)
+        for key, value in [("k", 8), ("i", 7), ("j", 6)]:
+            assert rdict.ll_dict_getitem(ll_d1, llstr(key)) == value
+
 class TestRDictDirectDummyKey(TestRDictDirect):
     class dummykeyobj:
         ll_dummy_value = llstr("dupa")
