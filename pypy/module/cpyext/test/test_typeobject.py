@@ -320,6 +320,24 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         obj = foo.new()
         assert module.hack_tp_dict(obj) == 2
 
+    def test_getitem(self):
+        import numpypy as np
+        module = self.import_extension('foo', [
+            ("test_getitem", "METH_O",
+             '''
+                PyObject *j, *retval;
+                j = PyInt_FromLong(2);
+                retval = PyObject_GetItem(args, j);
+                Py_DECREF(j);
+                return retval;
+            '''),
+            ],
+            )
+        val = module.test_getitem([10, 11, 12, 13, 14])
+        assert val == 12
+        val = module.test_getitem(np.array([20, 21, 22, 23, 24, 25]))
+        assert val == 22
+
 
 class TestTypes(BaseApiTest):
     def test_type_attributes(self, space, api):
@@ -364,6 +382,7 @@ class TestTypes(BaseApiTest):
             return np.int64(2)""")
         ref = make_ref(space, w_obj)
         api.Py_DecRef(ref)
+
 
 class AppTestSlots(AppTestCpythonExtensionBase):
     def test_some_slots(self):
