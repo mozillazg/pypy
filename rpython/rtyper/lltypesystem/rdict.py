@@ -281,7 +281,7 @@ class DictRepr(AbstractDictRepr):
         v_dict, v_key, v_default = hop.inputargs(self, self.key_repr,
                                                  self.value_repr)
         hop.exception_cannot_occur()
-        v_res = hop.gendirectcall(ll_setdefault, v_dict, v_key, v_default)
+        v_res = hop.gendirectcall(ll_dict_setdefault, v_dict, v_key, v_default)
         return self.recast_value(hop.llops, v_res)
 
     def rtype_method_copy(self, hop):
@@ -973,14 +973,14 @@ def ll_dict_get(dict, key, default):
     else:
         return dict.entries[index].value
 
-def ll_setdefault(dict, key, default):
+def ll_dict_setdefault(dict, key, default):
     hash = dict.keyhash(key)
-    i = ll_dict_lookup(dict, key, hash)
-    if not i & HIGHEST_BIT:
-        return ll_get_value(dict, i)
-    else:
-        _ll_dict_setitem_lookup_done(dict, key, default, hash, i)
+    index = dict.lookup_function(dict, key, dict.keyhash(key), FLAG_STORE)
+    if index == -1:
+        _ll_dict_setitem_lookup_done(dict, key, default, hash, -1)
         return default
+    else:
+        return dict.entries[index].value
 
 def ll_copy(dict):
     DICT = lltype.typeOf(dict).TO

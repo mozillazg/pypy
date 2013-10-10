@@ -200,6 +200,15 @@ class TestRDictDirect(object):
         assert rdict.ll_dict_get(ll_d, llstr("k"), 32) == 1
         assert rdict.ll_dict_get(ll_d, llstr("j"), 32) == 32
 
+    def test_setdefault(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 1)
+        assert rdict.ll_dict_setdefault(ll_d, llstr("j"), 42) == 42
+        assert rdict.ll_dict_getitem(ll_d, llstr("j")) == 42
+        assert rdict.ll_dict_setdefault(ll_d, llstr("k"), 42) == 1
+        assert rdict.ll_dict_getitem(ll_d, llstr("k")) == 1
+        
 class TestRDictDirectDummyKey(TestRDictDirect):
     class dummykeyobj:
         ll_dummy_value = llstr("dupa")
