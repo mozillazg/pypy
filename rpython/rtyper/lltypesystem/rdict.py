@@ -207,7 +207,9 @@ class DictRepr(AbstractDictRepr):
             assert not self.force_non_null # XXX kill the flag
             kwd = {}
             if self.custom_eq_hash:
-                kwd['get_custom_eq_hash'] = self.custom_eq_hash
+                self.r_rdict_eqfn, self.r_rdict_hashfn = (
+                    self._custom_eq_hash_repr())
+                kwd['get_custom_eq_hash'] = self._custom_eq_hash_repr
             else:
                 kwd['ll_hash_function'] = self.key_repr.get_ll_hash_function()
                 kwd['ll_eq_function'] = self.key_repr.get_ll_eq_function()
