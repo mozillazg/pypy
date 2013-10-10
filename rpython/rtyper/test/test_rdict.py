@@ -177,6 +177,12 @@ class TestRDictDirect(object):
             for k in foreach_index(ll_d):
                 assert k < rdict.VALID_OFFSET
 
+    def test_contains(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 1)
+        assert rdict.ll_dict_contains(ll_d, llstr("k"))
+        assert not rdict.ll_dict_contains(ll_d, llstr("j"))
 
 class TestRDictDirectDummyKey(TestRDictDirect):
     class dummykeyobj:

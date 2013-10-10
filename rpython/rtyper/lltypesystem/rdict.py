@@ -376,7 +376,7 @@ class __extend__(pairtype(DictRepr, rmodel.Repr)):
     def rtype_contains((r_dict, r_key), hop):
         v_dict, v_key = hop.inputargs(r_dict, r_dict.key_repr)
         hop.exception_is_here()
-        return hop.gendirectcall(ll_contains, v_dict, v_key)
+        return hop.gendirectcall(ll_dict_contains, v_dict, v_key)
 
 class __extend__(pairtype(DictRepr, DictRepr)):
     def convert_from_to((r_dict1, r_dict2), v, llops):
@@ -1076,9 +1076,9 @@ ll_dict_keys   = _make_ll_keys_values_items('keys')
 ll_dict_values = _make_ll_keys_values_items('values')
 ll_dict_items  = _make_ll_keys_values_items('items')
 
-def ll_contains(d, key):
-    i = ll_dict_lookup(d, key, d.keyhash(key))
-    return not i & HIGHEST_BIT
+def ll_dict_contains(d, key):
+    i = d.lookup_function(d, key, d.keyhash(key), FLAG_LOOKUP)
+    return i != -1
 
 def _ll_getnextitem(dic):
     if dic.num_items == 0:
