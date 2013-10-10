@@ -1071,9 +1071,9 @@ class TestRdict(BaseRtypingTest):
                     del d[chr(ord('A') - i)]
             return d
         res = self.interpret(func, [0])
-        assert len(res.entries) > rdict.DICT_INITSIZE
+        assert rdict._ll_len_of_d_indexes(res) > rdict.DICT_INITSIZE
         res = self.interpret(func, [1])
-        assert len(res.entries) == rdict.DICT_INITSIZE
+        assert rdict._ll_len_of_d_indexes(res) == rdict.DICT_INITSIZE
 
     def test_dict_valid_resize(self):
         # see if we find our keys after resize
@@ -1378,7 +1378,7 @@ class TestStress:
                        DictValue(None, annmodel.SomeString(value_can_be_none)))
         dictrepr.setup()
         print dictrepr.lowleveltype
-        for key, value in dictrepr.DICTENTRY._adtmeths.items():
+        for key, value in dictrepr.DICT.entries.TO._adtmeths.items():
             print '    %s = %s' % (key, value)
         l_dict = rdict.ll_newdict(dictrepr.DICT)
         referencetable = [None] * 400
