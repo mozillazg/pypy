@@ -162,13 +162,13 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("j"), 2)
         TUP = lltype.Ptr(lltype.GcStruct('x', ('item0', lltype.Ptr(rstr.STR)),
                                               ('item1', lltype.Signed)))
-        ll_elem = rdict.ll_popitem(TUP, ll_d)
+        ll_elem = rdict.ll_dict_popitem(TUP, ll_d)
         assert hlstr(ll_elem.item0) == "j"
         assert ll_elem.item1 == 2
-        ll_elem = rdict.ll_popitem(TUP, ll_d)
+        ll_elem = rdict.ll_dict_popitem(TUP, ll_d)
         assert hlstr(ll_elem.item0) == "k"
         assert ll_elem.item1 == 1
-        py.test.raises(KeyError, rdict.ll_popitem, TUP, ll_d)
+        py.test.raises(KeyError, rdict.ll_dict_popitem, TUP, ll_d)
 
     def test_direct_enter_and_del(self):
         def eq(a, b):
@@ -240,6 +240,26 @@ class TestRDictDirect(object):
         rdict.ll_dict_update(ll_d1, ll_d2)
         for key, value in [("k", 8), ("i", 7), ("j", 6)]:
             assert rdict.ll_dict_getitem(ll_d1, llstr(key)) == value
+
+    def test_pop(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 5)
+        rdict.ll_dict_setitem(ll_d, llstr("j"), 6)
+        assert rdict.ll_dict_pop(ll_d, llstr("k")) == 5
+        assert rdict.ll_dict_pop(ll_d, llstr("j")) == 6
+        py.test.raises(KeyError, rdict.ll_dict_pop, ll_d, llstr("k"))
+        py.test.raises(KeyError, rdict.ll_dict_pop, ll_d, llstr("j"))
+
+    def test_pop_default(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 5)
+        rdict.ll_dict_setitem(ll_d, llstr("j"), 6)
+        assert rdict.ll_dict_pop_default(ll_d, llstr("k"), 42) == 5
+        assert rdict.ll_dict_pop_default(ll_d, llstr("j"), 41) == 6
+        assert rdict.ll_dict_pop_default(ll_d, llstr("k"), 40) == 40
+        assert rdict.ll_dict_pop_default(ll_d, llstr("j"), 39) == 39
 
 class TestRDictDirectDummyKey(TestRDictDirect):
     class dummykeyobj:

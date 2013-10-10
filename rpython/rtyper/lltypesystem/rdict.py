@@ -334,15 +334,15 @@ class DictRepr(AbstractDictRepr):
         r_tuple = hop.r_result
         cTUPLE = hop.inputconst(lltype.Void, r_tuple.lowleveltype)
         hop.exception_is_here()
-        return hop.gendirectcall(ll_popitem, cTUPLE, v_dict)
+        return hop.gendirectcall(ll_dict_popitem, cTUPLE, v_dict)
 
     def rtype_method_pop(self, hop):
         if hop.nb_args == 2:
             v_args = hop.inputargs(self, self.key_repr)
-            target = ll_pop
+            target = ll_dict_pop
         elif hop.nb_args == 3:
             v_args = hop.inputargs(self, self.key_repr, self.value_repr)
-            target = ll_pop_default
+            target = ll_dict_pop_default
         hop.exception_is_here()
         v_res = hop.gendirectcall(target, *v_args)
         return self.recast_value(hop.llops, v_res)
@@ -1093,7 +1093,7 @@ def _ll_getnextitem(dic):
         assert index != -1
     return index
 
-def ll_popitem(ELEM, dic):
+def ll_dict_popitem(ELEM, dic):
     i = _ll_getnextitem(dic)
     entry = dic.entries[i]
     r = lltype.malloc(ELEM.TO)
@@ -1102,17 +1102,18 @@ def ll_popitem(ELEM, dic):
     _ll_dict_del(dic, r_uint(i))
     return r
 
-def ll_pop(dic, key):
-    i = ll_dict_lookup(dic, key, dic.keyhash(key))
-    if not i & HIGHEST_BIT:
-        value = ll_get_value(dic, r_uint(i))
-        _ll_dict_del(dic, r_uint(i))
-        return value
-    else:
+def ll_dict_pop(dic, key):
+    index = dic.lookup_function(dic, key, dic.keyhash(key), FLAG_DELETE)
+    if index == -1:
         raise KeyError
+    value = dic.entries[index].value
+    _ll_dict_del(dic, index)
+    return value
 
-def ll_pop_default(dic, key, dfl):
-    try:
-        return ll_pop(dic, key)
-    except KeyError:
+def ll_dict_pop_default(dic, key, dfl):
+    index = dic.lookup_function(dic, key, dic.keyhash(key), FLAG_DELETE)
+    if index == -1:
         return dfl
+    value = dic.entries[index].value
+    _ll_dict_del(dic, index)
+    return value
