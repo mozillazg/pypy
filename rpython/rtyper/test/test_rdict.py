@@ -193,6 +193,13 @@ class TestRDictDirect(object):
         rdict.ll_dict_clear(ll_d)
         assert ll_d.num_items == 0
 
+    def test_get(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 1)
+        assert rdict.ll_dict_get(ll_d, llstr("k"), 32) == 1
+        assert rdict.ll_dict_get(ll_d, llstr("j"), 32) == 32
+
 class TestRDictDirectDummyKey(TestRDictDirect):
     class dummykeyobj:
         ll_dummy_value = llstr("dupa")

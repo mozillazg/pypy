@@ -274,7 +274,7 @@ class DictRepr(AbstractDictRepr):
         v_dict, v_key, v_default = hop.inputargs(self, self.key_repr,
                                                  self.value_repr)
         hop.exception_cannot_occur()
-        v_res = hop.gendirectcall(ll_get, v_dict, v_key, v_default)
+        v_res = hop.gendirectcall(ll_dict_get, v_dict, v_key, v_default)
         return self.recast_value(hop.llops, v_res)
 
     def rtype_method_setdefault(self, hop):
@@ -966,12 +966,12 @@ ll_dictnext_group = {'keys'  : _make_ll_dictnext('keys'),
 # _____________________________________________________________
 # methods
 
-def ll_get(dict, key, default):
-    i = ll_dict_lookup(dict, key, dict.keyhash(key))
-    if not i & HIGHEST_BIT:
-        return ll_get_value(dict, i)
-    else:
+def ll_dict_get(dict, key, default):
+    index = dict.lookup_function(dict, key, dict.keyhash(key), FLAG_LOOKUP)
+    if index == -1:
         return default
+    else:
+        return dict.entries[index].value
 
 def ll_setdefault(dict, key, default):
     hash = dict.keyhash(key)
