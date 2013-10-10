@@ -220,7 +220,6 @@ class DictRepr(AbstractDictRepr):
             get_ll_dict(DICTKEY, DICTVALUE, DICT=self.DICT, **kwd)
 
     def convert_const(self, dictobj):
-        XXX
         from rpython.rtyper.lltypesystem import llmemory
         # get object from bound dict methods
         #dictobj = getattr(dictobj, '__self__', dictobj)
@@ -250,16 +249,14 @@ class DictRepr(AbstractDictRepr):
                 for dictkeycontainer, dictvalue in dictobj._dict.items():
                     llkey = r_key.convert_const(dictkeycontainer.key)
                     llvalue = r_value.convert_const(dictvalue)
-                    ll_dict_insertclean(l_dict, llkey, llvalue,
-                                        dictkeycontainer.hash)
+                    ll_dict_setitem(l_dict, llkey, llvalue)
                 return l_dict
 
             else:
                 for dictkey, dictvalue in dictobj.items():
                     llkey = r_key.convert_const(dictkey)
                     llvalue = r_value.convert_const(dictvalue)
-                    ll_dict_insertclean(l_dict, llkey, llvalue,
-                                        l_dict.keyhash(llkey))
+                    ll_dict_setitem(l_dict, llkey, llvalue)
                 return l_dict
 
     def rtype_len(self, hop):
@@ -853,15 +850,16 @@ def ll_newdict(DICT):
     d.resize_counter = DICT_INITSIZE * 2
     return d
 
-def ll_newdict_size(DICT, length_estimate):
-    xxx
-    length_estimate = (length_estimate // 2) * 3
+def ll_newdict_size(DICT, orig_length_estimate):
+    length_estimate = (orig_length_estimate // 2) * 3
     n = DICT_INITSIZE
     while n < length_estimate:
         n *= 2
     d = DICT.allocate()
-    d.entries = DICT.entries.TO.allocate(n)
+    d.entries = DICT.entries.TO.allocate(orig_length_estimate)
+    ll_malloc_indexes_and_choose_lookup(d, n)
     d.num_items = 0
+    d.num_used_items = 0
     d.resize_counter = n * 2
     return d
 
