@@ -102,10 +102,10 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     LOOKUP_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT), DICTKEY,
                                               lltype.Signed, lltype.Signed],
                                              lltype.Signed))
-    LOOKCLEAN_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT),
-                                                 lltype.Signed,
-                                                 lltype.Signed],
-                                                lltype.Void))
+    STORECLEAN_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT),
+                                                  lltype.Signed,
+                                                  lltype.Signed],
+                                                 lltype.Void))
 
     fields =          [ ("num_items", lltype.Signed),
                         ("num_used_items", lltype.Signed),
@@ -148,10 +148,10 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                     ('long', lltype.Unsigned)]:
         if name == 'int' and not IS_64BIT:
             continue
-        lookupfn, lookcleanfn = new_lookup_functions(LOOKUP_FUNC,
-                                                     LOOKCLEAN_FUNC, T=T)
+        lookupfn, storecleanfn = new_lookup_functions(LOOKUP_FUNC,
+                                                      STORECLEAN_FUNC, T=T)
         setattr(family, '%s_lookup_function' % name, lookupfn)
-        setattr(family, '%s_insert_clean_function' % name, lookcleanfn)
+        setattr(family, '%s_insert_clean_function' % name, storecleanfn)
     adtmeths['lookup_family'] = family
 
     DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
@@ -610,24 +610,6 @@ def ll_dict_remove_deleted_items(d):
     ll_dict_reindex(d, _ll_len_of_d_indexes(d))
 
 
-def ll_dict_insertclean(d, key, value, hash, lookcleanfn):
-    XXXXXXX
-    # Internal routine used by ll_dict_resize() to insert an item which is
-    # known to be absent from the dict.  This routine also assumes that
-    # the dict contains no deleted entries.  This routine has the advantage
-    # of never calling d.keyhash() and d.keyeq(), so it cannot call back
-    # to user code.  ll_dict_insertclean() doesn't resize the dict, either.
-    index = lookcleanfn(d, hash)
-    ENTRY = lltype.typeOf(d.entries).TO.OF
-    entry = d.entries[index]
-    entry.value = value
-    entry.key = key
-    if hasattr(ENTRY, 'f_hash'):     entry.f_hash = hash
-    if hasattr(ENTRY, 'f_valid'):    entry.f_valid = True
-    d.num_items += 1
-    d.num_used_items += 1
-    d.resize_counter -= 3
-
 def ll_dict_delitem(d, key):
     index = d.lookup_function(d, key, d.keyhash(key), FLAG_DELETE)
     if index == -1:
@@ -707,7 +689,7 @@ FLAG_STORE = 1
 FLAG_DELETE = 2
 FLAG_DELETE_TRY_HARD = 3
 
-def new_lookup_functions(LOOKUP_FUNC, LOOKCLEAN_FUNC, T):
+def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T):
     INDEXES = lltype.Ptr(lltype.GcArray(T))
 
     def ll_kill_something(d):
@@ -833,7 +815,7 @@ def new_lookup_functions(LOOKUP_FUNC, LOOKCLEAN_FUNC, T):
         indexes[i] = rffi.cast(T, index + VALID_OFFSET)
 
     return (llhelper(LOOKUP_FUNC, ll_dict_lookup),
-            llhelper(LOOKCLEAN_FUNC, ll_dict_store_clean))
+            llhelper(STORECLEAN_FUNC, ll_dict_store_clean))
 
 # ____________________________________________________________
 #
