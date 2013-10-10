@@ -65,6 +65,15 @@ class TestRDictDirect(object):
         rdict.ll_dict_setitem(ll_d, llstr("abc"), 43)
         assert rdict.ll_dict_getitem(ll_d, lls) == 43
 
+    def test_dict_creation_2(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        llab = llstr("ab")
+        llb = llstr("b")
+        rdict.ll_dict_setitem(ll_d, llab, 1)
+        rdict.ll_dict_setitem(ll_d, llb, 2)
+        assert rdict.ll_dict_getitem(ll_d, llb) == 2
+
     def test_dict_store_get(self):
         DICT = self._get_str_dict()
         ll_d = rdict.ll_newdict(DICT)
@@ -208,7 +217,18 @@ class TestRDictDirect(object):
         assert rdict.ll_dict_getitem(ll_d, llstr("j")) == 42
         assert rdict.ll_dict_setdefault(ll_d, llstr("k"), 42) == 1
         assert rdict.ll_dict_getitem(ll_d, llstr("k")) == 1
-        
+
+    def test_copy(self):
+        DICT = self._get_str_dict()
+        ll_d = rdict.ll_newdict(DICT)
+        rdict.ll_dict_setitem(ll_d, llstr("k"), 1)
+        rdict.ll_dict_setitem(ll_d, llstr("j"), 2)
+        ll_d2 = rdict.ll_dict_copy(ll_d)
+        for ll_d3 in [ll_d, ll_d2]:
+            assert rdict.ll_dict_getitem(ll_d3, llstr("k")) == 1
+            assert rdict.ll_dict_get(ll_d3, llstr("j"), 42) == 2
+            assert rdict.ll_dict_get(ll_d3, llstr("i"), 42) == 42
+
 class TestRDictDirectDummyKey(TestRDictDirect):
     class dummykeyobj:
         ll_dummy_value = llstr("dupa")

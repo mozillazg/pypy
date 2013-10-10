@@ -287,7 +287,7 @@ class DictRepr(AbstractDictRepr):
     def rtype_method_copy(self, hop):
         v_dict, = hop.inputargs(self)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_copy, v_dict)
+        return hop.gendirectcall(ll_dict_copy, v_dict)
 
     def rtype_method_update(self, hop):
         v_dic1, v_dic2 = hop.inputargs(self, self)
@@ -770,7 +770,7 @@ def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T):
                     return ll_kill_something(d)
                 return -1
             elif index >= VALID_OFFSET:
-                checkingkey = entries[index].key
+                checkingkey = entries[index - VALID_OFFSET].key
                 if direct_compare and checkingkey == key:
                     if store_flag == FLAG_DELETE:
                         indexes[i] = rffi.cast(T, DELETED)
@@ -964,28 +964,34 @@ def ll_dict_setdefault(dict, key, default):
     else:
         return dict.entries[index].value
 
-def ll_copy(dict):
+def ll_dict_copy(dict):
     DICT = lltype.typeOf(dict).TO
-    dictsize = len(dict.entries)
-    d = DICT.allocate()
-    d.entries = DICT.entries.TO.allocate(dictsize)
-    d.num_items = dict.num_items
-    d.resize_counter = dict.resize_counter
-    if hasattr(DICT, 'fnkeyeq'):   d.fnkeyeq   = dict.fnkeyeq
-    if hasattr(DICT, 'fnkeyhash'): d.fnkeyhash = dict.fnkeyhash
+    newdict = DICT.allocate()
+    newdict.entries = DICT.entries.TO.allocate(len(dict.entries))
+
+    newdict.num_items = dict.num_items
+    newdict.num_used_items = dict.num_used_items
+    if hasattr(DICT, 'fnkeyeq'):
+        newdict.fnkeyeq = dict.fnkeyeq
+    if hasattr(DICT, 'fnkeyhash'):
+        newdict.fnkeyhash = dict.fnkeyhash
+
     i = 0
-    while i < dictsize:
-        d_entry = d.entries[i]
+    while i < newdict.num_used_items:
+        d_entry = newdict.entries[i]
         entry = dict.entries[i]
-        ENTRY = lltype.typeOf(d.entries).TO.OF
+        ENTRY = lltype.typeOf(newdict.entries).TO.OF
         d_entry.key = entry.key
-        if hasattr(ENTRY, 'f_valid'):    d_entry.f_valid    = entry.f_valid
-        if hasattr(ENTRY, 'f_everused'): d_entry.f_everused = entry.f_everused
+        if hasattr(ENTRY, 'f_valid'):
+            d_entry.f_valid = entry.f_valid
         d_entry.value = entry.value
-        if hasattr(ENTRY, 'f_hash'):     d_entry.f_hash     = entry.f_hash
+        if hasattr(ENTRY, 'f_hash'):
+            d_entry.f_hash = entry.f_hash
         i += 1
-    return d
-ll_copy.oopspec = 'dict.copy(dict)'
+
+    ll_dict_reindex(newdict, _ll_len_of_d_indexes(dict))
+    return newdict
+ll_dict_copy.oopspec = 'dict.copy(dict)'
 
 def ll_dict_clear(d):
     if d.num_used_items == 0:
@@ -1029,7 +1035,7 @@ def _make_ll_keys_values_items(kind):
     def ll_kvi(LIST, dic):
         res = LIST.ll_newlist(dic.num_items)
         entries = dic.entries
-        dlen = len(entries)
+        dlen = dic.num_used_items
         items = res.ll_items()
         i = 0
         p = 0
