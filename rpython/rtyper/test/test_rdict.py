@@ -856,6 +856,23 @@ class TestRdict(BaseRtypingTest):
         res = self.interpret(f, [5])
         assert res == 25019999
 
+    def test_prebuilt_r_dict(self):
+        def myeq(n, m):
+            return n // 2 == m // 2
+        def myhash(n):
+            return n // 2
+        d = r_dict(myeq, myhash)
+        for i in range(10):
+            d[i] = i*i
+        def f(n):
+            assert len(d) == 5
+            return d[n]
+        assert f(6) == 49
+        res = self.interpret(f, [6])
+        assert res == 49
+        res = self.interpret(f, [5])
+        assert res == 25
+
     def test_resize_during_iteration(self):
         def func():
             d = {5: 1, 6: 2, 7: 3}

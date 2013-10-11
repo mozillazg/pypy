@@ -43,7 +43,7 @@ from rpython.rtyper.annlowlevel import llhelper
 def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                 ll_fasthash_function=None, ll_hash_function=None,
                 ll_eq_function=None, method_cache={},
-                dummykeyobj=None, dummyvalueobj=None):
+                dummykeyobj=None, dummyvalueobj=None, rtyper=None):
     # get the actual DICT type. if DICT is None, it's created, otherwise
     # forward reference is becoming DICT
     if DICT is None:
@@ -141,6 +141,11 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     adtmeths['allocate'] = lltype.typeMethod(_ll_malloc_dict)
 
     family = LookupFamily()
+    adtmeths['lookup_family'] = family
+
+    DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
+                                *fields))
+
     family.empty_array = DICTENTRYARRAY.allocate(0)
     for name, T in [('byte', rffi.UCHAR),
                     ('short', rffi.USHORT),
@@ -149,14 +154,17 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
         if name == 'int' and not IS_64BIT:
             continue
         lookupfn, storecleanfn = new_lookup_functions(LOOKUP_FUNC,
-                                                      STORECLEAN_FUNC, T=T)
+                                                      STORECLEAN_FUNC, T=T,
+                                                      rtyper=rtyper)
         setattr(family, '%s_lookup_function' % name, lookupfn)
         setattr(family, '%s_insert_clean_function' % name, storecleanfn)
-    adtmeths['lookup_family'] = family
-
-    DICT.become(lltype.GcStruct("dicttable", adtmeths=adtmeths,
-                                *fields))
     return DICT
+
+def llhelper_or_compile(rtyper, FUNCPTR, ll_func):
+    if rtyper is None:
+        return llhelper(FUNCPTR, ll_func)
+    else:
+        return rtyper.annotate_helper(ll_func, FUNCPTR.TO.ARGS)
 
 class LookupFamily:
     def _freeze_(self):
@@ -219,7 +227,8 @@ class DictRepr(AbstractDictRepr):
             kwd['dummyvalueobj'] = self.value_repr.get_ll_dummyval_obj(
                 self.rtyper, s_value)
 
-            get_ll_dict(DICTKEY, DICTVALUE, DICT=self.DICT, **kwd)
+            get_ll_dict(DICTKEY, DICTVALUE, DICT=self.DICT,
+                        rtyper=self.rtyper, **kwd)
 
     def convert_const(self, dictobj):
         from rpython.rtyper.lltypesystem import llmemory
@@ -251,14 +260,16 @@ class DictRepr(AbstractDictRepr):
                 for dictkeycontainer, dictvalue in dictobj._dict.items():
                     llkey = r_key.convert_const(dictkeycontainer.key)
                     llvalue = r_value.convert_const(dictvalue)
-                    ll_dict_setitem(l_dict, llkey, llvalue)
+                    _ll_dict_insertclean(l_dict, llkey, llvalue,
+                                         dictkeycontainer.hash)
                 return l_dict
 
             else:
                 for dictkey, dictvalue in dictobj.items():
                     llkey = r_key.convert_const(dictkey)
                     llvalue = r_value.convert_const(dictvalue)
-                    ll_dict_setitem(l_dict, llkey, llvalue)
+                    _ll_dict_insertclean(l_dict, llkey, llvalue,
+                                         l_dict.keyhash(llkey))
                 return l_dict
 
     def rtype_len(self, hop):
@@ -530,6 +541,23 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
             ll_assert(rc > 0, "ll_dict_resize failed?")
         d.resize_counter = rc
 
+def _ll_dict_insertclean(d, key, value, hash):
+    ENTRY = lltype.typeOf(d.entries).TO.OF
+    insertcleanfn = ll_pick_insert_clean_function(d)
+    insertcleanfn(d, hash, d.num_used_items)
+    entry = d.entries[d.num_used_items]
+    entry.key = key
+    entry.value = value
+    if hasattr(ENTRY, 'f_hash'):
+        entry.f_hash = hash
+    if hasattr(ENTRY, 'f_valid'):
+        entry.f_valid = True
+    d.num_used_items += 1
+    d.num_items += 1
+    rc = d.resize_counter - 3
+    ll_assert(rc > 0, "_ll_dict_insertclean: overflow")
+    d.resize_counter = rc
+
 def _ll_len_of_d_indexes(d):
     # xxx Haaaack: returns len(d.indexes).  Works independently of
     # the exact type pointed to by d, using a forced cast...
@@ -691,7 +719,7 @@ FLAG_STORE = 1
 FLAG_DELETE = 2
 FLAG_DELETE_TRY_HARD = 3
 
-def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T):
+def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T, rtyper=None):
     INDEXES = lltype.Ptr(lltype.GcArray(T))
 
     def ll_kill_something(d):
@@ -816,8 +844,8 @@ def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T):
             perturb >>= PERTURB_SHIFT
         indexes[i] = rffi.cast(T, index + VALID_OFFSET)
 
-    return (llhelper(LOOKUP_FUNC, ll_dict_lookup),
-            llhelper(STORECLEAN_FUNC, ll_dict_store_clean))
+    return (llhelper_or_compile(rtyper, LOOKUP_FUNC, ll_dict_lookup),
+            llhelper_or_compile(rtyper, STORECLEAN_FUNC, ll_dict_store_clean))
 
 # ____________________________________________________________
 #
