@@ -164,7 +164,7 @@ def llhelper_or_compile(rtyper, FUNCPTR, ll_func):
     if rtyper is None:
         return llhelper(FUNCPTR, ll_func)
     else:
-        return rtyper.annotate_helper(ll_func, FUNCPTR.TO.ARGS)
+        return rtyper.annotate_helper_fn(ll_func, FUNCPTR.TO.ARGS)
 
 class LookupFamily:
     def _freeze_(self):
@@ -722,10 +722,11 @@ def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T, rtyper=None):
 
     def ll_kill_something(d):
         i = 0
+        indexes = lltype.cast_opaque_ptr(INDEXES, d.indexes)
         while True:
-            index = rffi.cast(lltype.Signed, d.indexes[i])
+            index = rffi.cast(lltype.Signed, indexes[i])
             if index >= VALID_OFFSET:
-                d.indexes[i] = rffi.cast(T, DELETED)
+                indexes[i] = rffi.cast(T, DELETED)
                 return index
             i += 1
 
@@ -739,7 +740,7 @@ def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T, rtyper=None):
         # do the first try before any looping
         ENTRIES = lltype.typeOf(entries).TO
         direct_compare = not hasattr(ENTRIES, 'no_direct_compare')
-        index = rffi.cast(lltype.Signed, indexes[i])
+        index = rffi.cast(lltype.Signed, indexes[intmask(i)])
         if index >= VALID_OFFSET:
             checkingkey = entries[index - VALID_OFFSET].key
             if direct_compare and checkingkey == key:
@@ -752,24 +753,18 @@ def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T, rtyper=None):
                 found = d.keyeq(checkingkey, key)
                 #llop.debug_print(lltype.Void, "comparing keys", ll_debugrepr(checkingkey), ll_debugrepr(key), found)
                 if d.paranoia:
-                    XXX
-                    if (entries != d.entries or indexes != d.indexes or
-                        not entries.valid(ll_index_getitem(d.size, indexes, i))
-                        or entries.getitem_clean(index).key != checkingkey):
+                    if (entries != d.entries or lltype.cast_opaque_ptr(llmemory.GCREF, indexes) != d.indexes or
+                        not entries.valid(index - VALID_OFFSET) or
+                        entries[index - VALID_OFFSET].key != checkingkey):
                         # the compare did major nasty stuff to the dict: start over
-                        if d_signed_indexes(d):
-                            return ll_dict_lookup(d, key, hash,
-                                                  ll_index_getitem_signed)
-                        else:
-                            return ll_dict_lookup(d, key, hash,
-                                                  ll_index_getitem_int)
+                        return ll_dict_lookup(d, key, hash, store_flag)
                 if found:
                     if store_flag == FLAG_DELETE:
                         indexes[i] = rffi.cast(T, DELETED)
                     return index - VALID_OFFSET
             deletedslot = -1
         elif index == DELETED:
-            deletedslot = i
+            deletedslot = intmask(i)
         else:
             # pristine entry -- lookup failed
             if store_flag == FLAG_STORE:
@@ -784,14 +779,12 @@ def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T, rtyper=None):
         while 1:
             # compute the next index using unsigned arithmetic
             i = (i << 2) + i + perturb + 1
-            i = intmask(i) & mask
-            # keep 'i' as a signed number here, to consistently pass signed
-            # arguments to the small helper methods.
-            index = rffi.cast(lltype.Signed, indexes[i])
+            i = i & mask
+            index = rffi.cast(lltype.Signed, indexes[intmask(i)])
             if index == FREE:
                 if store_flag == FLAG_STORE:
                     if deletedslot == -1:
-                        deletedslot = i
+                        deletedslot = intmask(i)
                     indexes[deletedslot] = rffi.cast(T, d.num_used_items +
                                                      VALID_OFFSET)
                 elif d.paranoia and store_flag == FLAG_DELETE_TRY_HARD:
@@ -808,24 +801,17 @@ def new_lookup_functions(LOOKUP_FUNC, STORECLEAN_FUNC, T, rtyper=None):
                     # an equal object
                     found = d.keyeq(checkingkey, key)
                     if d.paranoia:
-                        XXX
-                        if (entries != d.entries or indexes != d.indexes or
-                            not entries.valid(ll_index_getitem(d.size, indexes, i)) or
-                            entries.getitem_clean(index).key != checkingkey):
-                            # the compare did major nasty stuff to the dict:
-                            # start over
-                            if d_signed_indexes(d):
-                                return ll_dict_lookup(d, key, hash,
-                                                      ll_index_getitem_signed)
-                            else:
-                                return ll_dict_lookup(d, key, hash,
-                                                      ll_index_getitem_int)
+                        if (entries != d.entries or lltype.cast_opaque_ptr(llmemory.GCREF, indexes) != d.indexes or
+                            not entries.valid(index - VALID_OFFSET) or
+                            entries[index - VALID_OFFSET].key != checkingkey):
+                            # the compare did major nasty stuff to the dict: start over
+                            return ll_dict_lookup(d, key, hash, store_flag)
                     if found:
                         if store_flag == FLAG_DELETE:
                             indexes[i] = rffi.cast(T, DELETED)
                         return index - VALID_OFFSET
             elif deletedslot == -1:
-                deletedslot = i
+                deletedslot = intmask(i)
             perturb >>= PERTURB_SHIFT
 
     def ll_dict_store_clean(d, hash, index):
