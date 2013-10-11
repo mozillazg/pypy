@@ -161,7 +161,8 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     return DICT
 
 def llhelper_or_compile(rtyper, FUNCPTR, ll_func):
-    if rtyper is None:
+    # the check is for pseudo rtyper from tests
+    if rtyper is None or not hasattr(rtyper, 'annotate_helper_fn'):
         return llhelper(FUNCPTR, ll_func)
     else:
         return rtyper.annotate_helper_fn(ll_func, FUNCPTR.TO.ARGS)
