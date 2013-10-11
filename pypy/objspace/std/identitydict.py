@@ -2,7 +2,6 @@
 ## dict strategy (see dictmultiobject.py)
 
 from rpython.rlib import rerased
-from rpython.rlib.debug import mark_dict_non_null
 from pypy.objspace.std.dictmultiobject import (AbstractTypedStrategy,
                                                DictStrategy,
                                                create_iterator_classes)
@@ -66,7 +65,6 @@ class IdentityDictStrategy(AbstractTypedStrategy, DictStrategy):
 
     def get_empty_storage(self):
         d = {}
-        mark_dict_non_null(d)
         return self.erase(d)
 
     def is_correct_type(self, w_obj):

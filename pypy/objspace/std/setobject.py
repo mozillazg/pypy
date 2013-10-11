@@ -1533,7 +1533,7 @@ setiter_typedef = W_SetIterObject.typedef
 # some helper functions
 
 def newset(space):
-    return r_dict(space.eq_w, space.hash_w, force_non_null=True)
+    return r_dict(space.eq_w, space.hash_w)
 
 def set_strategy_and_setdata(space, w_set, w_iterable):
     if w_iterable is None :

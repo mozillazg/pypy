@@ -3,8 +3,7 @@ import py
 from rpython.rlib.debug import (check_annotation, make_sure_not_resized,
                              debug_print, debug_start, debug_stop,
                              have_debug_prints, debug_offset, debug_flush,
-                             check_nonneg, IntegerCanBeNegative,
-                             mark_dict_non_null)
+                             check_nonneg, IntegerCanBeNegative)
 from rpython.rlib import debug
 from rpython.rtyper.test.test_llinterp import interpret, gengraph
 
@@ -52,15 +51,6 @@ def test_make_sure_not_resized():
 
     py.test.raises(ListChangeUnallowed, interpret, f, [],
                    list_comprehension_operations=True)
-
-def test_mark_dict_non_null():
-    def f():
-        d = {"ac": "bx"}
-        mark_dict_non_null(d)
-        return d
-
-    t, typer, graph = gengraph(f, [])
-    assert sorted(graph.returnblock.inputargs[0].concretetype.TO.entries.TO.OF._flds.keys()) == ['key', 'value']
 
 
 class DebugTests(object):
