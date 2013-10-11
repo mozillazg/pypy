@@ -174,7 +174,7 @@ class LookupFamily:
 class DictRepr(AbstractDictRepr):
 
     def __init__(self, rtyper, key_repr, value_repr, dictkey, dictvalue,
-                 custom_eq_hash=None, force_non_null=False):
+                 custom_eq_hash=None):
         self.rtyper = rtyper
         self.DICT = lltype.GcForwardReference()
         self.lowleveltype = lltype.Ptr(self.DICT)
@@ -193,7 +193,6 @@ class DictRepr(AbstractDictRepr):
         self.dictvalue = dictvalue
         self.dict_cache = {}
         self._custom_eq_hash_repr = custom_eq_hash
-        self.force_non_null = force_non_null
         # setup() needs to be called to finish this initialization
 
     def _externalvsinternal(self, rtyper, item_repr):
@@ -212,7 +211,6 @@ class DictRepr(AbstractDictRepr):
             #   able to store dummy values
             s_key   = self.dictkey.s_value
             s_value = self.dictvalue.s_value
-            assert not self.force_non_null # XXX kill the flag
             kwd = {}
             if self.custom_eq_hash:
                 self.r_rdict_eqfn, self.r_rdict_hashfn = (
@@ -886,15 +884,12 @@ def _ll_free_entries(entries):
     pass
 
 
-def rtype_r_dict(hop, i_force_non_null=None):
+def rtype_r_dict(hop):
     r_dict = hop.r_result
     if not r_dict.custom_eq_hash:
         raise TyperError("r_dict() call does not return an r_dict instance")
     v_eqfn = hop.inputarg(r_dict.r_rdict_eqfn, arg=0)
     v_hashfn = hop.inputarg(r_dict.r_rdict_hashfn, arg=1)
-    if i_force_non_null is not None:
-        assert i_force_non_null == 2
-        hop.inputarg(lltype.Void, arg=2)
     cDICT = hop.inputconst(lltype.Void, r_dict.DICT)
     hop.exception_cannot_occur()
     v_result = hop.gendirectcall(ll_newdict, cDICT)

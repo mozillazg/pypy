@@ -1264,25 +1264,6 @@ class TestRdict(BaseRtypingTest):
         res = f()
         assert res == 1
 
-    def test_nonnull_hint(self):
-        def eq(a, b):
-            return a == b
-        def rhash(a):
-            return 3
-
-        def func(i):
-            d = r_dict(eq, rhash, force_non_null=True)
-            if not i:
-                d[None] = i
-            else:
-                d[str(i)] = i
-            return "12" in d, d
-
-        llres = self.interpret(func, [12])
-        assert llres.item0 == 1
-        DICT = lltype.typeOf(llres.item1)
-        assert sorted(DICT.TO.entries.TO.OF._flds) == ['f_hash', 'key', 'value']
-
     def test_memoryerror_should_not_insert(self):
         # This shows a misbehaviour that also exists in CPython 2.7, but not
         # any more in CPython 3.3.  The behaviour is that even if a dict

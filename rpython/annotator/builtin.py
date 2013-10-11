@@ -287,14 +287,8 @@ def robjmodel_instantiate(s_clspbc):
             clsdef = clsdef.commonbase(cdef)
     return SomeInstance(clsdef)
 
-def robjmodel_r_dict(s_eqfn, s_hashfn, s_force_non_null=None):
-    if s_force_non_null is None:
-        force_non_null = False
-    else:
-        assert s_force_non_null.is_constant()
-        force_non_null = s_force_non_null.const
-    dictdef = getbookkeeper().getdictdef(is_r_dict=True,
-                                         force_non_null=force_non_null)
+def robjmodel_r_dict(s_eqfn, s_hashfn):
+    dictdef = getbookkeeper().getdictdef(is_r_dict=True)
     dictdef.dictkey.update_rdict_annotations(s_eqfn, s_hashfn)
     return SomeDict(dictdef)
 
