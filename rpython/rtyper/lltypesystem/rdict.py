@@ -553,7 +553,6 @@ def _ll_dict_insertclean(d, key, value, hash):
     d.num_used_items += 1
     d.num_items += 1
     rc = d.resize_counter - 3
-    ll_assert(rc > 0, "_ll_dict_insertclean: overflow")
     d.resize_counter = rc
 
 def _ll_len_of_d_indexes(d):
