@@ -1270,14 +1270,21 @@ class BaseBackendTest(Runner):
             print 'Passing %d arguments around...' % nb_args
             #
             inputargs = []
+            floatargs = []
+            intargs = []
+            refargs = []
             for k in range(nb_args):
                 kind = r.randrange(0, numkinds)
                 if kind == 0:
-                    inputargs.append(BoxInt())
+                    box = BoxInt()
+                    intargs.append(box)
                 elif kind == 1:
-                    inputargs.append(BoxPtr())
+                    box = BoxPtr()
+                    refargs.append(box)
                 else:
-                    inputargs.append(BoxFloat())
+                    box = BoxFloat()
+                    floatargs.append(box)
+                inputargs.append(box)
             jumpargs = []
             remixing = []
             for srcbox in inputargs:
@@ -1289,25 +1296,46 @@ class BaseBackendTest(Runner):
                     otherbox = srcbox
                 jumpargs.append(otherbox)
             #
-            index_counter = r.randrange(0, len(inputargs)+1)
+            index_counter = 0 #r.randrange(0, len(inputargs)+1)
             i0 = BoxInt()
             i1 = BoxInt()
             i2 = BoxInt()
             inputargs.insert(index_counter, i0)
+            intargs.insert(index_counter, i0)
             jumpargs.insert(index_counter, i1)
             #
             looptoken = JitCellToken()
             targettoken = TargetToken()
             faildescr = BasicFailDescr(15)
+            jitcode = JitCode("jitcode")
+            jitcode.setup(num_regs_i=len(intargs), num_regs_r=len(refargs),
+                          num_regs_f=len(floatargs))
             operations = [
+                ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None,
+                             descr=jitcode),
                 ResOperation(rop.LABEL, inputargs, None, descr=targettoken),
                 ResOperation(rop.INT_SUB, [i0, ConstInt(1)], i1),
                 ResOperation(rop.INT_GE, [i1, ConstInt(0)], i2),
+            ]
+            for i in range(len(intargs)):
+                operations.append(ResOperation(rop.RESUME_PUT,
+                                               [intargs[i], ConstInt(0),
+                                                ConstInt(i)], None))
+            for i in range(len(refargs)):
+                pos = i + len(intargs)
+                operations.append(ResOperation(rop.RESUME_PUT,
+                                               [refargs[i], ConstInt(0),
+                                                ConstInt(pos)], None))
+            for i in range(len(floatargs)):
+                pos = i + len(intargs) + len(refargs)
+                operations.append(ResOperation(rop.RESUME_PUT,
+                                               [floatargs[i], ConstInt(0),
+                                                ConstInt(pos)], None))
+            operations.extend([
                 ResOperation(rop.GUARD_TRUE, [i2], None),
                 ResOperation(rop.JUMP, jumpargs, None, descr=targettoken),
-                ]
-            operations[3].setfailargs(inputargs[:])
-            operations[3].setdescr(faildescr)
+                ])
+            operations[-2].setdescr(faildescr)
             #
             self.cpu.compile_loop(None, inputargs, operations, looptoken)
             #
@@ -1315,14 +1343,15 @@ class BaseBackendTest(Runner):
             S = lltype.GcStruct('S')
             for box in inputargs:
                 if isinstance(box, BoxInt):
-                    values.append(r.randrange(-10000, 10000))
+                    v = r.randrange(-10000, 10000)
                 elif isinstance(box, BoxPtr):
                     p = lltype.malloc(S)
-                    values.append(lltype.cast_opaque_ptr(llmemory.GCREF, p))
+                    v = lltype.cast_opaque_ptr(llmemory.GCREF, p)
                 elif isinstance(box, BoxFloat):
-                    values.append(longlong.getfloatstorage(r.random()))
+                    v = longlong.getfloatstorage(r.random())
                 else:
                     assert 0
+                values.append(v)
             values[index_counter] = 11
             #
             deadframe = self.cpu.execute_token(looptoken, *values)
@@ -1339,16 +1368,26 @@ class BaseBackendTest(Runner):
             #
             assert dstvalues[index_counter] == 11
             dstvalues[index_counter] = 0
-            for i, (box, val) in enumerate(zip(inputargs, dstvalues)):
-                if isinstance(box, BoxInt):
-                    got = self.cpu.get_int_value(deadframe, i)
-                elif isinstance(box, BoxPtr):
-                    got = self.cpu.get_ref_value(deadframe, i)
-                elif isinstance(box, BoxFloat):
-                    got = self.cpu.get_float_value(deadframe, i)
+            locs = rebuild_locs_from_resumedata(fail)
+            intvals = []
+            refvals = []
+            floatvals = []
+            for val in dstvalues:
+                if isinstance(val, int):
+                    intvals.append(val)
+                elif isinstance(val, float):
+                    floatvals.append(val)
                 else:
-                    assert 0
-                assert type(got) == type(val)
+                    refvals.append(val)
+            for i, val in enumerate(intvals):
+                got = self.cpu.get_int_value(deadframe, locs, i)
+                assert got == val
+            for i, val in enumerate(refvals):
+                got = self.cpu.get_ref_value(deadframe, locs, i + len(intvals))
+                assert got == val
+            for i, val in enumerate(floatvals):
+                got = self.cpu.get_float_value(deadframe, locs,
+                                               i + len(intvals) + len(refvals))
                 assert got == val
 
     def test_compile_bridge_float(self):

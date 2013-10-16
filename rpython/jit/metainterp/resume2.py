@@ -56,7 +56,8 @@ class AbstractResumeReader(object):
         if frontend_position < jitcode.num_regs_i():
             self.put_box_int(frame, frontend_position, box)
         elif frontend_position < (jitcode.num_regs_r() + jitcode.num_regs_i()):
-            xxx
+            self.put_box_ref(frame, frontend_position - jitcode.num_regs_i(),
+                             box)
         else:
             assert frontend_position < jitcode.num_regs()
             self.put_box_float(frame, frontend_position - jitcode.num_regs_r()
@@ -84,6 +85,9 @@ class BoxResumeReader(AbstractResumeReader):
 
     def put_box_int(self, frame, position, box):
         frame.registers_i[position] = box
+
+    def put_box_ref(self, frame, position, box):
+        frame.registers_r[position] = box
 
     def put_box_float(self, frame, position, box):
         frame.registers_f[position] = box
