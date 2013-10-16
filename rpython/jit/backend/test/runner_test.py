@@ -2580,7 +2580,7 @@ class LLtypeBackendTest(BaseBackendTest):
         deadframe = self.cpu.execute_token(looptoken, ord('G'))
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 0
-        assert self.cpu.get_int_value(deadframe, 0) == ord('g')
+        assert self.cpu.get_int_value(deadframe, None, 0) == ord('g')
 
     def test_call_to_c_function_with_callback(self):
         from rpython.rlib.libffi import CDLL, types, ArgChain, clibffi
