@@ -326,6 +326,10 @@ class RegisterManager(object):
             if self.frame_manager is not None:
                 self.frame_manager.mark_as_free(v)
 
+    def free_unused_regs(self):
+        for v in self.reg_bindings:
+            self.possibly_free_var(v)
+
     def possibly_free_vars(self, vars):
         """ Same as 'possibly_free_var', but for all v in vars.
         """

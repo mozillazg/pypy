@@ -476,7 +476,7 @@ class Assembler386(BaseAssembler):
         self.update_frame_depth(frame_depth_no_fixed_size + JITFRAME_FIXED_SIZE)
         #
         size_excluding_failure_stuff = self.mc.get_relative_pos()
-        self.resume_bytecode = regalloc.resumebuilder.finish(None, looptoken)
+        self.resume_bytecode = regalloc.resumebuilder.finish(None, 0, looptoken)
         self.write_pending_failure_recoveries()
         full_size = self.mc.get_relative_pos()
         #
@@ -538,7 +538,7 @@ class Assembler386(BaseAssembler):
         frame_depth_no_fixed_size = self._assemble(regalloc, inputargs, operations)
         codeendpos = self.mc.get_relative_pos()
         self.resume_bytecode = regalloc.resumebuilder.finish(
-            faildescr.rd_resume_bytecode, original_loop_token)
+            faildescr.rd_resume_bytecode, faildescr.rd_bytecode_position, original_loop_token)
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
         #

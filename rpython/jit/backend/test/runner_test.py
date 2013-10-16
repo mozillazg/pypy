@@ -259,75 +259,49 @@ class BaseBackendTest(Runner):
         assert self.cpu.tracker.total_compiled_bridges == 1
         return looptoken
 
-    def test_compile_bridge_with_holes(self):
-        i0 = BoxInt()
-        i1 = BoxInt()
-        i2 = BoxInt()
-        i3 = BoxInt()
-        faildescr1 = BasicFailDescr(1)
-        faildescr2 = BasicFailDescr(2)
-        looptoken = JitCellToken()
-        targettoken = TargetToken()
-        operations = [
-            ResOperation(rop.INT_SUB, [i3, ConstInt(42)], i0),
-            ResOperation(rop.LABEL, [i0], None, descr=targettoken),
-            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
-            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
-            ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
-            ResOperation(rop.JUMP, [i1], None, descr=targettoken),
-            ]
-        inputargs = [i3]
-        operations[4].setfailargs([None, i1, None])
-        self.cpu.compile_loop(None, inputargs, operations, looptoken)
-
-        i1b = BoxInt()
-        i3 = BoxInt()
-        bridge = [
-            ResOperation(rop.INT_LE, [i1b, ConstInt(19)], i3),
-            ResOperation(rop.GUARD_TRUE, [i3], None, descr=faildescr2),
-            ResOperation(rop.JUMP, [i1b], None, descr=targettoken),
-        ]
-        bridge[1].setfailargs([i1b])
-
-        self.cpu.compile_bridge(None, faildescr1, [i1b], bridge, looptoken)
-
-        deadframe = self.cpu.execute_token(looptoken, 2)
-        fail = self.cpu.get_latest_descr(deadframe)
-        assert fail.identifier == 2
-        res = self.cpu.get_int_value(deadframe, 0)
-        assert res == 20
-
     def test_compile_big_bridge_out_of_small_loop(self):
+        jitcode = JitCode("name")
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         i0 = BoxInt()
         faildescr1 = BasicFailDescr(1)
         looptoken = JitCellToken()
         operations = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
+            ResOperation(rop.RESUME_PUT, [i0, ConstInt(0), ConstInt(0)], None),
             ResOperation(rop.GUARD_FALSE, [i0], None, descr=faildescr1),
             ResOperation(rop.FINISH, [], None, descr=BasicFinalDescr(2)),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ]
         inputargs = [i0]
-        operations[0].setfailargs([i0])
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
-
+        jitcode1 = JitCode("name1")
+        jitcode1.setup(num_regs_i=150, num_regs_r=0, num_regs_f=0)
         i1list = [BoxInt() for i in range(150)]
-        bridge = []
+        bridge = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(13)], None, descr=jitcode1)
+        ]
         iprev = i0
         for i1 in i1list:
             bridge.append(ResOperation(rop.INT_ADD, [iprev, ConstInt(1)], i1))
             iprev = i1
+        for i, i1 in enumerate(i1list):
+            bridge.append(ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(i)], None))
         bridge.append(ResOperation(rop.GUARD_FALSE, [i0], None,
                                    descr=BasicFailDescr(3)))
         bridge.append(ResOperation(rop.FINISH, [], None,
                                    descr=BasicFinalDescr(4)))
-        bridge[-2].setfailargs(i1list)
+        # XXX
+        #bridge[-2].setfailargs(i1list)
 
-        self.cpu.compile_bridge(None, faildescr1, [i0], bridge, looptoken)
+        locs = rebuild_locs_from_resumedata(faildescr1)
+        self.cpu.compile_bridge(None, faildescr1, [i0], locs, bridge, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, 1)
         fail = self.cpu.get_latest_descr(deadframe)
+        locs = rebuild_locs_from_resumedata(fail)
         assert fail.identifier == 3
         for i in range(len(i1list)):
-            res = self.cpu.get_int_value(deadframe, i)
+            res = self.cpu.get_int_value(deadframe, locs[i + 1])
             assert res == 2 + i
 
     def test_finish(self):

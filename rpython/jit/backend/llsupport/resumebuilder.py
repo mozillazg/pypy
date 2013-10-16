@@ -75,6 +75,6 @@ class ResumeBuilder(object):
                 self._mark_visited(v, loc)
         return len(self.newops)
 
-    def finish(self, parent, clt):
-        return ResumeBytecode(self.newops, parent, clt)
+    def finish(self, parent, parent_position, clt):
+        return ResumeBytecode(self.newops, parent, parent_position, clt)
 

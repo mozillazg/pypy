@@ -324,6 +324,9 @@ class RegAlloc(BaseRegalloc):
                 self._consider_force_spill(op)
             else:
                 oplist[op.getopnum()](self, op)
+            if op.is_guard():
+                self.rm.free_unused_regs()
+                self.xrm.free_unused_regs()
             self.possibly_free_vars_for_op(op)
             self.rm._check_invariants()
             self.xrm._check_invariants()
