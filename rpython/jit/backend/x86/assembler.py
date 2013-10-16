@@ -514,8 +514,8 @@ class Assembler386(BaseAssembler):
         return AsmInfo(ops_offset, rawstart + looppos,
                        size_excluding_failure_stuff - looppos)
 
-    def assemble_bridge(self, logger, faildescr, inputargs, operations,
-                        original_loop_token, log):
+    def assemble_bridge(self, logger, faildescr, inputargs, backend_positions,
+                        operations, original_loop_token, log):
         if not we_are_translated():
             # Arguments should be unique
             assert len(set(inputargs)) == len(inputargs)
@@ -526,7 +526,7 @@ class Assembler386(BaseAssembler):
             operations = self._inject_debugging_code(faildescr, operations,
                                                      'b', descr_number)
 
-        arglocs = self.rebuild_faillocs_from_descr(faildescr, inputargs)
+        arglocs = self.rebuild_faillocs_from_descr(faildescr, inputargs, backend_positions)
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         startpos = self.mc.get_relative_pos()
         operations = regalloc.prepare_bridge(inputargs, arglocs,
@@ -538,7 +538,7 @@ class Assembler386(BaseAssembler):
         frame_depth_no_fixed_size = self._assemble(regalloc, inputargs, operations)
         codeendpos = self.mc.get_relative_pos()
         self.resume_bytecode = regalloc.resumebuilder.finish(
-            faildescr.rd_bytecode, original_loop_token)
+            faildescr.rd_resume_bytecode, original_loop_token)
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
         #

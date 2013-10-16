@@ -9,7 +9,7 @@ from rpython.jit.metainterp.history import (AbstractFailDescr,
                                          BoxFloat, ConstFloat)
 from rpython.jit.metainterp.resoperation import ResOperation, rop
 from rpython.jit.metainterp.typesystem import deref
-from rpython.jit.metainterp.resume2 import rebuild_faillocs_from_resumedata
+from rpython.jit.metainterp.test.test_resume2 import rebuild_locs_from_resumedata
 from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.tool.oparser import parse
@@ -246,7 +246,8 @@ class BaseBackendTest(Runner):
             ResOperation(rop.JUMP, [i1b], None, descr=targettoken),
         ]
 
-        self.cpu.compile_bridge(None, faildescr1, [i1b], bridge, looptoken)
+        locs = rebuild_locs_from_resumedata(faildescr1)
+        self.cpu.compile_bridge(None, faildescr1, [i1b], locs, bridge, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
