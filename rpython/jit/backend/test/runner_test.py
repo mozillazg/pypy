@@ -1525,7 +1525,6 @@ class BaseBackendTest(Runner):
                     ResOperation(opguard, [res], None, descr=faildescr1),
                     ResOperation(rop.FINISH, [], None, descr=faildescr2),
                     ]
-                operations[1].setfailargs([])
                 looptoken = JitCellToken()
                 self.cpu.compile_loop(None, inputargs, operations, looptoken)
                 #
@@ -1570,7 +1569,6 @@ class BaseBackendTest(Runner):
                         ResOperation(opguard, [b1], None, descr=faildescr1),
                         ResOperation(rop.FINISH, [], None, descr=faildescr2),
                         ]
-                    operations[-2].setfailargs([])
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(None, inputargs, operations, looptoken)
                     #
@@ -1622,7 +1620,6 @@ class BaseBackendTest(Runner):
                         ResOperation(opguard, [b1], None, descr=faildescr1),
                         ResOperation(rop.FINISH, [], None, descr=faildescr2),
                         ]
-                    operations[-2].setfailargs([])
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(None, inputargs, operations, looptoken)
                     #
@@ -1678,7 +1675,6 @@ class BaseBackendTest(Runner):
                         ResOperation(opguard, [b1], None, descr=faildescr1),
                         ResOperation(rop.FINISH, [], None, descr=faildescr2),
                         ]
-                    operations[-2].setfailargs([])
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(None, inputargs, operations, looptoken)
                     #
@@ -1808,7 +1804,6 @@ class BaseBackendTest(Runner):
                                          descr=BasicFailDescr(4)),
                             ResOperation(rop.FINISH, [], None,
                                          descr=BasicFinalDescr(5))]
-                        operations[1].setfailargs([])
                         looptoken = JitCellToken()
                         # Use "set" to unique-ify inputargs
                         unique_testcase_list = list(set(testcase))
