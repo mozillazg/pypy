@@ -1375,7 +1375,7 @@ class BaseBackendTest(Runner):
             for val in dstvalues:
                 if isinstance(val, int):
                     intvals.append(val)
-                elif isinstance(val, float):
+                elif isinstance(val, longlong.r_float_storage):
                     floatvals.append(val)
                 else:
                     refvals.append(val)
