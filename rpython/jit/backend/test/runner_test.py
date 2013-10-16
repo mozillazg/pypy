@@ -2393,9 +2393,11 @@ class LLtypeBackendTest(BaseBackendTest):
         def maybe_force(token, flag):
             if flag:
                 deadframe = self.cpu.force(token)
-                values.append(self.cpu.get_latest_descr(deadframe))
-                values.append(self.cpu.get_int_value(deadframe, 0))
-                values.append(self.cpu.get_int_value(deadframe, 1))
+                fail = self.cpu.get_latest_descr(deadframe)
+                locs = rebuild_locs_from_resumedata(fail)
+                values.append(fail)
+                values.append(self.cpu.get_int_value(deadframe, locs, 0))
+                values.append(self.cpu.get_int_value(deadframe, locs, 1))
                 self.cpu.set_savedata_ref(deadframe, random_gcref)
 
         FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Void)
@@ -2408,27 +2410,32 @@ class LLtypeBackendTest(BaseBackendTest):
         i1 = BoxInt()
         tok = BoxPtr()
         faildescr = BasicFailDescr(1)
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
         ops = [
-        ResOperation(rop.FORCE_TOKEN, [], tok),
-        ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], None,
-                     descr=calldescr),
-        ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
-        ResOperation(rop.FINISH, [i0], None, descr=BasicFinalDescr(0))
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
+            ResOperation(rop.FORCE_TOKEN, [], tok),
+            ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], None,
+                         descr=calldescr),
+            ResOperation(rop.RESUME_PUT, [i0, ConstInt(0), ConstInt(1)], None),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)], None),
+            ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
+            ResOperation(rop.FINISH, [i0], None, descr=BasicFinalDescr(0))
         ]
-        ops[2].setfailargs([i1, i0])
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, [i0, i1], ops, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 20, 0)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 0
-        assert self.cpu.get_int_value(deadframe, 0) == 20
+        assert self.cpu.get_int_value(deadframe, None, 0) == 20
         assert values == []
 
         deadframe = self.cpu.execute_token(looptoken, 10, 1)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 1
-        assert self.cpu.get_int_value(deadframe, 0) == 1
-        assert self.cpu.get_int_value(deadframe, 1) == 10
+        locs = rebuild_locs_from_resumedata(fail)
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 1
+        assert self.cpu.get_int_value(deadframe, locs, 1) == 10
         assert values == [faildescr, 1, 10]
         assert self.cpu.get_savedata_ref(deadframe)   # not NULL
         assert self.cpu.get_savedata_ref(deadframe) == random_gcref
