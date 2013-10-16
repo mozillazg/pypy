@@ -2345,30 +2345,48 @@ class LLtypeBackendTest(BaseBackendTest):
             calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                              EffectInfo.MOST_GENERAL)
 
+            # [i1, i2, i3, i4, i5, i6, f0, f1]
+            jitcode = JitCode('jitcode')
+            jitcode.setup(num_regs_i=6, num_regs_r=0, num_regs_f=2)
+            faildescr = BasicFailDescr()
             ops = '''
             [i0, i1, i2, i3, i4, i5, i6, f0, f1]
+            enter_frame(-1, descr=jitcode)
+            resume_put(i1, 0, 0)
+            resume_put(i2, 0, 1)
+            resume_put(i3, 0, 2)
+            resume_put(i4, 0, 3)
+            resume_put(i5, 0, 4)
+            resume_put(i6, 0, 5)
+            resume_put(f0, 0, 6)
+            resume_put(f1, 0, 7)
             cond_call(i1, ConstClass(func_ptr), %s)
-            guard_false(i0, descr=faildescr) [i1, i2, i3, i4, i5, i6, f0, f1]
-            ''' % ', '.join(['i%d' % (j + 2) for j in range(i)] + ["descr=calldescr"])
-            loop = parse(ops, namespace={'faildescr': BasicFailDescr(),
+            guard_false(i0, descr=faildescr)
+            leave_frame()
+            ''' % (
+                ', '.join(['i%d' % (j + 2) for j in range(i)] +
+                          ["descr=calldescr"]))
+            loop = parse(ops, namespace={'faildescr': faildescr,
                                          'func_ptr': func_ptr,
-                                         'calldescr': calldescr})
+                                         'calldescr': calldescr,
+                                         'jitcode': jitcode})
             looptoken = JitCellToken()
             self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
             f1 = longlong.getfloatstorage(1.2)
             f2 = longlong.getfloatstorage(3.4)
             frame = self.cpu.execute_token(looptoken, 1, 0, 1, 2, 3, 4, 5, f1, f2)
             assert not called
+            locs = rebuild_locs_from_resumedata(faildescr)
             for j in range(5):
-                assert self.cpu.get_int_value(frame, j) == j
-            assert longlong.getrealfloat(self.cpu.get_float_value(frame, 6)) == 1.2
-            assert longlong.getrealfloat(self.cpu.get_float_value(frame, 7)) == 3.4
+                assert self.cpu.get_int_value(frame, locs, j) == j
+            assert longlong.getrealfloat(self.cpu.get_float_value(frame, locs, 6)) == 1.2
+            assert longlong.getrealfloat(self.cpu.get_float_value(frame, locs, 7)) == 3.4
             frame = self.cpu.execute_token(looptoken, 1, 1, 1, 2, 3, 4, 5, f1, f2)
             assert called == [tuple(range(1, i + 1))]
             for j in range(4):
-                assert self.cpu.get_int_value(frame, j + 1) == j + 1
-            assert longlong.getrealfloat(self.cpu.get_float_value(frame, 6)) == 1.2
-            assert longlong.getrealfloat(self.cpu.get_float_value(frame, 7)) == 3.4
+                assert self.cpu.get_int_value(frame, locs, j + 1) == j + 1
+            assert longlong.getrealfloat(self.cpu.get_float_value(frame, locs, 6)) == 1.2
+            assert longlong.getrealfloat(self.cpu.get_float_value(frame, locs, 7)) == 3.4
 
     def test_force_operations_returning_void(self):
         values = []
