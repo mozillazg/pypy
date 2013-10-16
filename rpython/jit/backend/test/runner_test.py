@@ -2916,18 +2916,22 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = BoxInt()
         i1 = BoxInt()
         faildescr = BasicFailDescr(1)
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         ops = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)], None),
             ResOperation(rop.GUARD_NOT_INVALIDATED, [], None, descr=faildescr),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.FINISH, [i0], None, descr=BasicFinalDescr(0))
         ]
-        ops[0].setfailargs([i1])
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, [i0, i1], ops, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, -42, 9)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 0
-        assert self.cpu.get_int_value(deadframe, 0) == -42
+        assert self.cpu.get_int_value(deadframe, None, 0) == -42
         print 'step 1 ok'
         print '-'*79
 
@@ -2936,8 +2940,9 @@ class LLtypeBackendTest(BaseBackendTest):
 
         deadframe = self.cpu.execute_token(looptoken, -42, 9)
         fail = self.cpu.get_latest_descr(deadframe)
+        locs = rebuild_locs_from_resumedata(fail)
         assert fail is faildescr
-        assert self.cpu.get_int_value(deadframe, 0) == 9
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 9
         print 'step 2 ok'
         print '-'*79
 
@@ -2948,13 +2953,12 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.GUARD_NOT_INVALIDATED, [],None, descr=faildescr2),
             ResOperation(rop.FINISH, [i2], None, descr=BasicFinalDescr(3))
         ]
-        ops[0].setfailargs([])
-        self.cpu.compile_bridge(None, faildescr, [i2], ops, looptoken)
+        self.cpu.compile_bridge(None, faildescr, [i2], locs, ops, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, -42, 9)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 3
-        assert self.cpu.get_int_value(deadframe, 0) == 9
+        assert self.cpu.get_int_value(deadframe, None, 0) == 9
         print 'step 3 ok'
         print '-'*79
 
@@ -2980,7 +2984,6 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.LABEL, [i0], None, descr=labeldescr),
             ResOperation(rop.FINISH, [i0], None, descr=BasicFinalDescr(3)),
         ]
-        ops[0].setfailargs([])
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, [i0], ops, looptoken)
         # mark as failing
@@ -2990,12 +2993,12 @@ class LLtypeBackendTest(BaseBackendTest):
         ops2 = [
             ResOperation(rop.JUMP, [ConstInt(333)], None, descr=labeldescr),
         ]
-        self.cpu.compile_bridge(None, faildescr, [], ops2, looptoken)
+        self.cpu.compile_bridge(None, faildescr, [], [], ops2, looptoken)
         # run: must not be caught in an infinite loop
         deadframe = self.cpu.execute_token(looptoken, 16)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 3
-        assert self.cpu.get_int_value(deadframe, 0) == 333
+        assert self.cpu.get_int_value(deadframe, None, 0) == 333
 
     # pure do_ / descr features
 
@@ -3168,7 +3171,7 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_assembler_call(self):
         called = []
         def assembler_helper(deadframe, virtualizable):
-            assert self.cpu.get_int_value(deadframe, 0) == 97
+            assert self.cpu.get_int_value(deadframe, None, 0) == 97
             called.append(self.cpu.get_latest_descr(deadframe))
             return 4 + 9
 
@@ -3206,12 +3209,12 @@ class LLtypeBackendTest(BaseBackendTest):
             EffectInfo.MOST_GENERAL)
         args = [i+1 for i in range(10)]
         deadframe = self.cpu.execute_token(looptoken, *args)
-        assert self.cpu.get_int_value(deadframe, 0) == 55
+        assert self.cpu.get_int_value(deadframe, None, 0) == 55
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
         i10 = int_add(i0, 42)
         i11 = call_assembler(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=looptoken)
-        guard_not_forced()[]
+        guard_not_forced()
         finish(i11)
         '''
         loop = parse(ops, namespace=locals())
@@ -3219,7 +3222,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, othertoken)
         args = [i+1 for i in range(10)]
         deadframe = self.cpu.execute_token(othertoken, *args)
-        assert self.cpu.get_int_value(deadframe, 0) == 13
+        assert self.cpu.get_int_value(deadframe, None, 0) == 13
         assert called == [finish_descr]
 
         # test the fast path, which should not call assembler_helper()
@@ -3229,7 +3232,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, othertoken)
         args = [i+1 for i in range(10)]
         deadframe = self.cpu.execute_token(othertoken, *args)
-        assert self.cpu.get_int_value(deadframe, 0) == 97
+        assert self.cpu.get_int_value(deadframe, None, 0) == 97
         assert not called
 
     def test_assembler_call_propagate_exc(self):
@@ -3273,21 +3276,21 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [i0]
         i11 = call_assembler(i0, descr=looptoken)
-        guard_not_forced()[]
+        guard_not_forced()
         finish(i11)
         '''
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, othertoken)
         deadframe = self.cpu.execute_token(othertoken, sys.maxint - 1)
-        assert self.cpu.get_int_value(deadframe, 0) == 3
+        assert self.cpu.get_int_value(deadframe, None, 0) == 3
 
     def test_assembler_call_float(self):
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         called = []
         def assembler_helper(deadframe, virtualizable):
-            x = self.cpu.get_float_value(deadframe, 0)
+            x = self.cpu.get_float_value(deadframe, None, 0)
             assert longlong.getrealfloat(x) == 1.2 + 3.2
             called.append(self.cpu.get_latest_descr(deadframe))
             print '!' * 30 + 'assembler_helper'
@@ -3320,12 +3323,12 @@ class LLtypeBackendTest(BaseBackendTest):
         args = [longlong.getfloatstorage(1.2),
                 longlong.getfloatstorage(2.3)]
         deadframe = self.cpu.execute_token(looptoken, *args)
-        x = self.cpu.get_float_value(deadframe, 0)
+        x = self.cpu.get_float_value(deadframe, None, 0)
         assert longlong.getrealfloat(x) == 1.2 + 2.3
         ops = '''
         [f4, f5]
         f3 = call_assembler(f4, f5, descr=looptoken)
-        guard_not_forced()[]
+        guard_not_forced()
         finish(f3)
         '''
         loop = parse(ops, namespace=locals())
@@ -3334,7 +3337,7 @@ class LLtypeBackendTest(BaseBackendTest):
         args = [longlong.getfloatstorage(1.2),
                 longlong.getfloatstorage(3.2)]
         deadframe = self.cpu.execute_token(othertoken, *args)
-        x = self.cpu.get_float_value(deadframe, 0)
+        x = self.cpu.get_float_value(deadframe, None, 0)
         assert longlong.getrealfloat(x) == 13.5
         assert called == [finish_descr]
 
@@ -3346,7 +3349,7 @@ class LLtypeBackendTest(BaseBackendTest):
         args = [longlong.getfloatstorage(1.2),
                 longlong.getfloatstorage(4.2)]
         deadframe = self.cpu.execute_token(othertoken, *args)
-        x = self.cpu.get_float_value(deadframe, 0)
+        x = self.cpu.get_float_value(deadframe, None, 0)
         assert longlong.getrealfloat(x) == 1.2 + 4.2
         assert not called
 
@@ -3379,7 +3382,7 @@ class LLtypeBackendTest(BaseBackendTest):
             py.test.skip("requires floats")
         called = []
         def assembler_helper(deadframe, virtualizable):
-            x = self.cpu.get_float_value(deadframe, 0)
+            x = self.cpu.get_float_value(deadframe, None, 0)
             assert longlong.getrealfloat(x) == 1.25 + 3.25
             called.append(self.cpu.get_latest_descr(deadframe))
             return 13.5
@@ -3410,14 +3413,14 @@ class LLtypeBackendTest(BaseBackendTest):
         args = [longlong.getfloatstorage(1.25),
                 longlong.getfloatstorage(2.35)]
         deadframe = self.cpu.execute_token(looptoken, *args)
-        x = self.cpu.get_float_value(deadframe, 0)
+        x = self.cpu.get_float_value(deadframe, None, 0)
         assert longlong.getrealfloat(x) == 1.25 + 2.35
         assert not called
 
         ops = '''
         [f4, f5]
         f3 = call_assembler(f4, f5, descr=looptoken)
-        guard_not_forced()[]
+        guard_not_forced()
         finish(f3)
         '''
         loop = parse(ops, namespace=locals())
@@ -3428,7 +3431,7 @@ class LLtypeBackendTest(BaseBackendTest):
         args = [longlong.getfloatstorage(1.25),
                 longlong.getfloatstorage(3.25)]
         deadframe = self.cpu.execute_token(othertoken, *args)
-        x = self.cpu.get_float_value(deadframe, 0)
+        x = self.cpu.get_float_value(deadframe, None, 0)
         assert longlong.getrealfloat(x) == 13.5
         assert called == [finish_descr]
         del called[:]
@@ -3451,7 +3454,7 @@ class LLtypeBackendTest(BaseBackendTest):
         args = [longlong.getfloatstorage(6.0),
                 longlong.getfloatstorage(1.5)]         # 6.0-1.5 == 1.25+3.25
         deadframe = self.cpu.execute_token(othertoken, *args)
-        x = self.cpu.get_float_value(deadframe, 0)
+        x = self.cpu.get_float_value(deadframe, None, 0)
         assert longlong.getrealfloat(x) == 13.5
         assert called == [finish_descr2]
 
@@ -3840,10 +3843,14 @@ class LLtypeBackendTest(BaseBackendTest):
         targettoken1 = TargetToken()
         targettoken2 = TargetToken()
         faildescr = BasicFailDescr(2)
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         operations = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
             ResOperation(rop.LABEL, [i0], None, descr=targettoken1),
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)], None),
             ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr),
             ResOperation(rop.LABEL, [i1], None, descr=targettoken2),
             ResOperation(rop.INT_GE, [i1, ConstInt(0)], i3),
@@ -3851,14 +3858,13 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.JUMP, [i1], None, descr=targettoken1),
             ]
         inputargs = [i0]
-        operations[3].setfailargs([i1])
-        operations[6].setfailargs([i1])
 
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
+        locs = rebuild_locs_from_resumedata(fail)
         assert fail.identifier == 2
-        res = self.cpu.get_int_value(deadframe, 0)
+        res = self.cpu.get_int_value(deadframe, locs, 0)
         assert res == 10
 
         inputargs2 = [i0]
@@ -3866,12 +3872,13 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.INT_SUB, [i0, ConstInt(20)], i2),
             ResOperation(rop.JUMP, [i2], None, descr=targettoken2),
             ]
-        self.cpu.compile_bridge(None, faildescr, inputargs2, operations2, looptoken)
+        self.cpu.compile_bridge(None, faildescr, inputargs2, locs, operations2, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
+        locs = rebuild_locs_from_resumedata(fail)
         assert fail.identifier == 3
-        res = self.cpu.get_int_value(deadframe, 0)
+        res = self.cpu.get_int_value(deadframe, locs, 0)
         assert res == -10
 
     def test_int_force_ge_zero(self):
@@ -3886,7 +3893,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
         for inp, outp in [(2,2), (-3, 0)]:
             deadframe = self.cpu.execute_token(looptoken, inp)
-            assert outp == self.cpu.get_int_value(deadframe, 0)
+            assert outp == self.cpu.get_int_value(deadframe, None, 0)
 
     def test_compile_asmlen(self):
         from rpython.jit.backend.llsupport.llmodel import AbstractLLCPU
@@ -3894,13 +3901,17 @@ class LLtypeBackendTest(BaseBackendTest):
             py.test.skip("pointless test on non-asm")
         from rpython.jit.backend.tool.viewcode import machine_code_dump
         import ctypes
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         targettoken = TargetToken()
         ops = """
         [i2]
+        enter_frame(-1, descr=jitcode)
         i0 = same_as(i2)    # but forced to be in a register
         label(i0, descr=targettoken)
         i1 = int_add(i0, i0)
-        guard_true(i1, descr=faildescr) [i1]
+        resume_put(i1, 0, 0)
+        guard_true(i1, descr=faildescr)
         jump(i1, descr=targettoken)
         """
         faildescr = BasicFailDescr(2)
@@ -3913,8 +3924,9 @@ class LLtypeBackendTest(BaseBackendTest):
         looptoken = JitCellToken()
         self.cpu.assembler.set_debug(False)
         info = self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
+        locs = rebuild_locs_from_resumedata(faildescr)
         bridge_info = self.cpu.compile_bridge(None, faildescr, bridge.inputargs,
-                                              bridge.operations,
+                                              locs, bridge.operations,
                                               looptoken)
         self.cpu.assembler.set_debug(True) # always on untranslated
         assert info.asmlen != 0
@@ -3951,12 +3963,16 @@ class LLtypeBackendTest(BaseBackendTest):
         targettoken1 = TargetToken()
         faildescr1 = BasicFailDescr(2)
         inputargs = [i0]
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         operations = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
             ResOperation(rop.INT_LE, [i0, ConstInt(1)], i1),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)], None),
             ResOperation(rop.GUARD_TRUE, [i1], None, descr=faildescr1),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.FINISH, [i0], None, descr=BasicFinalDescr(1234)),
             ]
-        operations[1].setfailargs([i0])
         self.cpu.compile_loop(None, inputargs, operations, looptoken1)
 
         def func(a, b, c, d, e, f, g, h, i):
@@ -4010,8 +4026,8 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.GUARD_TRUE, [i20], None, descr=BasicFailDescr(42)),
             ResOperation(rop.JUMP, [i19], None, descr=targettoken1),
             ]
-        operations2[-2].setfailargs([])
-        self.cpu.compile_bridge(None, faildescr1, inputargs, operations2, looptoken1)
+        locs = rebuild_locs_from_resumedata(faildescr1)
+        self.cpu.compile_bridge(None, faildescr1, inputargs, locs, operations2, looptoken1)
 
         looptoken2 = JitCellToken()
         inputargs = [BoxInt()]
@@ -4032,14 +4048,13 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.GUARD_NONNULL_CLASS, [t_box, T_box], None,
                                                         descr=faildescr),
             ResOperation(rop.FINISH, [], None, descr=BasicFinalDescr(1))]
-        operations[0].setfailargs([])
         looptoken = JitCellToken()
         inputargs = [t_box]
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
         operations = [
             ResOperation(rop.FINISH, [], None, descr=BasicFinalDescr(99))
         ]
-        self.cpu.compile_bridge(None, faildescr, [], operations, looptoken)
+        self.cpu.compile_bridge(None, faildescr, [], [], operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, null_box.getref_base())
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 99
@@ -4070,7 +4085,7 @@ class LLtypeBackendTest(BaseBackendTest):
             self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
             deadframe = self.cpu.execute_token(looptoken,
                                                rffi.cast(lltype.Signed, p), 16)
-            result = self.cpu.get_int_value(deadframe, 0)
+            result = self.cpu.get_int_value(deadframe, None, 0)
             assert result == rffi.cast(lltype.Signed, value)
             rawstorage.free_raw_storage(p)
 
@@ -4100,7 +4115,7 @@ class LLtypeBackendTest(BaseBackendTest):
             self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
             deadframe = self.cpu.execute_token(looptoken,
                                                rffi.cast(lltype.Signed, p), 16)
-            result = self.cpu.get_float_value(deadframe, 0)
+            result = self.cpu.get_float_value(deadframe, None, 0)
             result = longlong.getrealfloat(result)
             assert result == rffi.cast(lltype.Float, value)
             rawstorage.free_raw_storage(p)
@@ -4130,7 +4145,7 @@ class LLtypeBackendTest(BaseBackendTest):
             self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
             deadframe = self.cpu.execute_token(looptoken,
                                                rffi.cast(lltype.Signed, p), 16)
-            result = self.cpu.get_int_value(deadframe, 0)
+            result = self.cpu.get_int_value(deadframe, None, 0)
             assert result == longlong.singlefloat2int(value)
             rawstorage.free_raw_storage(p)
 
@@ -4238,7 +4253,9 @@ class LLtypeBackendTest(BaseBackendTest):
         values = []
         def maybe_force(token, flag):
             deadframe = self.cpu.force(token)
-            values.append(self.cpu.get_int_value(deadframe, 0))
+            fail = self.cpu.get_latest_descr(deadframe)
+            locs = rebuild_locs_from_resumedata(fail)
+            values.append(self.cpu.get_int_value(deadframe, locs, 0))
             return 42
 
         FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Signed)
@@ -4251,26 +4268,36 @@ class LLtypeBackendTest(BaseBackendTest):
         i2 = BoxInt()
         tok = BoxPtr()
         faildescr = BasicFailDescr(23)
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         ops = [
+        ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
         ResOperation(rop.FORCE_TOKEN, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], i2,
                      descr=calldescr),
+        ResOperation(rop.RESUME_PUT, [i2, ConstInt(0), ConstInt(0)], None),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
         ResOperation(rop.FINISH, [i2], None, descr=BasicFinalDescr(0))
         ]
-        ops[2].setfailargs([i2])
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, [i0, i1], ops, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 20, 0)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 23
-        assert self.cpu.get_int_value(deadframe, 0) == 42
+        locs = rebuild_locs_from_resumedata(fail)
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 42
         # make sure that force reads the registers from a zeroed piece of
         # memory
         assert values[0] == 0
 
     def test_compile_bridge_while_running(self):
+        XXX # it crashes because the regalloc does not inherit liveness
+        # rules from the parent, while it shoul
+
         def func():
+            jitcode2 = JitCode('name2')
+            jitcode2.setup(num_regs_i=7, num_regs_r=0, num_regs_f=0)
+
             bridge = parse("""
             [i1, i2, px]
             i3 = int_add(i1, i2)
@@ -4289,12 +4316,24 @@ class LLtypeBackendTest(BaseBackendTest):
             force_spill(i7)
             force_spill(i8)
             force_spill(i9)
+            enter_frame(1, descr=jitcode2)
             call(ConstClass(func2_ptr), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, descr=calldescr2)
-            guard_true(i1, descr=guarddescr) [i1, i2, i3, i4, i5, i6, i7, i8, i9, px]
+            resume_put(i3, 0, 0)
+            resume_put(i4, 0, 1)
+            resume_put(i5, 0, 2)
+            resume_put(i6, 0, 3)
+            resume_put(i7, 0, 4)
+            resume_put(i8, 0, 5)
+            resume_put(i9, 0, 6)
+            guard_true(i1, descr=guarddescr)
+            leave_frame()
+            leave_frame()
             finish(i1, descr=finaldescr)
             """, namespace={'finaldescr': finaldescr, 'calldescr2': calldescr2,
-                            'guarddescr': guarddescr, 'func2_ptr': func2_ptr})
-            self.cpu.compile_bridge(None, faildescr, bridge.inputargs,
+                            'guarddescr': guarddescr, 'func2_ptr': func2_ptr,
+                            'jitcode2': jitcode2})
+            locs = rebuild_locs_from_resumedata(faildescr)
+            self.cpu.compile_bridge(None, faildescr, bridge.inputargs, locs,
                                     bridge.operations, looptoken)
 
         cpu = self.cpu
@@ -4320,11 +4359,18 @@ class LLtypeBackendTest(BaseBackendTest):
         faildescr = BasicFailDescr(0)
 
         looptoken = JitCellToken()
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=2, num_regs_r=1, num_regs_f=0)
         loop = parse("""
         [i0, i1, i2]
+        enter_frame(-1, descr=jitcode)
         call(ConstClass(func_ptr), descr=calldescr)
         px = force_token()
-        guard_true(i0, descr=faildescr) [i1, i2, px]
+        resume_put(i1, 0, 0)
+        resume_put(i2, 0, 1)
+        resume_put(px, 0, 2)
+        guard_true(i0, descr=faildescr)
+        leave_frame()
         finish(i2, descr=finaldescr2)
         """, namespace=locals())
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
@@ -4337,7 +4383,8 @@ class LLtypeBackendTest(BaseBackendTest):
 
         frame = lltype.cast_opaque_ptr(jitframe.JITFRAMEPTR, frame)
         assert len(frame.jf_frame) == frame.jf_frame_info.jfi_frame_depth
-        ref = self.cpu.get_ref_value(frame, 9)
+        locs = rebuild_locs_from_resumedata(guarddescr)
+        ref = self.cpu.get_ref_value(frame, locs, 2)
         token = lltype.cast_opaque_ptr(jitframe.JITFRAMEPTR, ref)
         assert token != frame
         token = token.resolve()
