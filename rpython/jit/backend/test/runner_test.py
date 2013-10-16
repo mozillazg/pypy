@@ -1450,16 +1450,22 @@ class BaseBackendTest(Runner):
             py.test.skip("requires floats")
         fboxes = [BoxFloat() for i in range(3)]
         faildescr1 = BasicFailDescr(100)
-        faildescr2 = BasicFinalDescr(102)
+        jitcode = JitCode("jitcode")
+        jitcode.setup(num_regs_i=0, num_regs_r=0, num_regs_f=3)
         loopops = """
-        [i0,f1, f2]
+        [i0, f1, f2]
+        enter_frame(-1, descr=jitcode)
         f3 = float_add(f1, f2)
         force_spill(f3)
         force_spill(f1)
         force_spill(f2)
-        guard_false(i0) [f1, f2, f3]
+        resume_put(f1, 0, 0)
+        resume_put(f2, 0, 1)
+        resume_put(f3, 0, 2)
+        guard_false(i0, descr=faildescr1)
+        leave_frame()
         finish()"""
-        loop = parse(loopops)
+        loop = parse(loopops, namespace=locals())
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
         args = [1]
@@ -1467,32 +1473,36 @@ class BaseBackendTest(Runner):
         args.append(longlong.getfloatstorage(0.75))
         deadframe = self.cpu.execute_token(looptoken, *args)  #xxx check
         fail = self.cpu.get_latest_descr(deadframe)
-        assert loop.operations[-2].getdescr() == fail
-        f1 = self.cpu.get_float_value(deadframe, 0)
-        f2 = self.cpu.get_float_value(deadframe, 1)
-        f3 = self.cpu.get_float_value(deadframe, 2)
+        assert loop.operations[-3].getdescr() is fail is faildescr1
+        locs = rebuild_locs_from_resumedata(fail)
+        f1 = self.cpu.get_float_value(deadframe, locs, 0)
+        f2 = self.cpu.get_float_value(deadframe, locs, 1)
+        f3 = self.cpu.get_float_value(deadframe, locs, 2)
         assert longlong.getrealfloat(f1) == 132.25
         assert longlong.getrealfloat(f2) == 0.75
         assert longlong.getrealfloat(f3) == 133.0
 
+        faildescr2 = BasicFinalDescr(102)
+        faildescr3 = BasicFailDescr(103)
         zero = BoxInt()
         bridgeops = [
             ResOperation(rop.SAME_AS, [ConstInt(0)], zero),
-            ResOperation(rop.GUARD_TRUE, [zero], None, descr=faildescr1),
+            ResOperation(rop.GUARD_TRUE, [zero], None, descr=faildescr3),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.FINISH, [], None, descr=faildescr2),
             ]
-        bridgeops[-2].setfailargs(fboxes[:])
-        self.cpu.compile_bridge(None, loop.operations[-2].getdescr(), fboxes,
-                                                        bridgeops, looptoken)
+        self.cpu.compile_bridge(None, faildescr1, fboxes,
+                                locs, bridgeops, looptoken)
         args = [1,
                 longlong.getfloatstorage(132.25),
                 longlong.getfloatstorage(0.75)]
         deadframe = self.cpu.execute_token(looptoken, *args)
         fail = self.cpu.get_latest_descr(deadframe)
-        assert fail.identifier == 100
-        f1 = self.cpu.get_float_value(deadframe, 0)
-        f2 = self.cpu.get_float_value(deadframe, 1)
-        f3 = self.cpu.get_float_value(deadframe, 2)
+        assert fail.identifier == 103
+        locs = rebuild_locs_from_resumedata(fail)
+        f1 = self.cpu.get_float_value(deadframe, locs, 0)
+        f2 = self.cpu.get_float_value(deadframe, locs, 1)
+        f3 = self.cpu.get_float_value(deadframe, locs, 2)
         assert longlong.getrealfloat(f1) == 132.25
         assert longlong.getrealfloat(f2) == 0.75
         assert longlong.getrealfloat(f3) == 133.0
