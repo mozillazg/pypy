@@ -132,7 +132,7 @@ class BaseBackendTest(Runner):
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
-        res = self.cpu.get_int_value(deadframe, 0)
+        res = self.cpu.get_int_value(deadframe, None, 0)
         assert res == 3
         assert fail.identifier == 1
 
@@ -151,7 +151,7 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken,
                                            longlong.getfloatstorage(2.8))
         fail = self.cpu.get_latest_descr(deadframe)
-        res = self.cpu.get_float_value(deadframe, 0)
+        res = self.cpu.get_float_value(deadframe, None, 0)
         assert longlong.getrealfloat(res) == 5.1
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 1
@@ -181,7 +181,8 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 2
-        res = self.cpu.get_int_value(deadframe, 0)
+        locs = rebuild_locs_from_resumedata(fail)
+        res = self.cpu.get_int_value(deadframe, locs, 0)
         assert res == 10
 
     def test_backends_dont_keep_loops_alive(self):
@@ -252,7 +253,8 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 2
-        res = self.cpu.get_int_value(deadframe, 0)
+        locs = rebuild_locs_from_resumedata(fail)
+        res = self.cpu.get_int_value(deadframe, locs, 0)
         assert res == 20
 
         assert self.cpu.tracker.total_compiled_loops == 1
@@ -290,18 +292,16 @@ class BaseBackendTest(Runner):
                                    descr=BasicFailDescr(3)))
         bridge.append(ResOperation(rop.FINISH, [], None,
                                    descr=BasicFinalDescr(4)))
-        # XXX
-        #bridge[-2].setfailargs(i1list)
 
-        locs = rebuild_locs_from_resumedata(faildescr1)
-        self.cpu.compile_bridge(None, faildescr1, [i0], locs, bridge, looptoken)
+        faillocs = rebuild_locs_from_resumedata(faildescr1)
+        self.cpu.compile_bridge(None, faildescr1, [i0], faillocs, bridge, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, 1)
         fail = self.cpu.get_latest_descr(deadframe)
         locs = rebuild_locs_from_resumedata(fail)
         assert fail.identifier == 3
         for i in range(len(i1list)):
-            res = self.cpu.get_int_value(deadframe, locs[i + 1])
+            res = self.cpu.get_int_value(deadframe, locs, i + 1)
             assert res == 2 + i
 
     def test_finish(self):
@@ -323,7 +323,7 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, 99)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail is faildescr
-        res = self.cpu.get_int_value(deadframe, 0)
+        res = self.cpu.get_int_value(deadframe, None, 0)
         assert res == 99
 
         looptoken = JitCellToken()
@@ -334,7 +334,7 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail is faildescr
-        res = self.cpu.get_int_value(deadframe, 0)
+        res = self.cpu.get_int_value(deadframe, None, 0)
         assert res == 42
 
         looptoken = JitCellToken()
@@ -357,7 +357,7 @@ class BaseBackendTest(Runner):
             deadframe = self.cpu.execute_token(looptoken, value)
             fail = self.cpu.get_latest_descr(deadframe)
             assert fail is faildescr
-            res = self.cpu.get_float_value(deadframe, 0)
+            res = self.cpu.get_float_value(deadframe, None, 0)
             assert longlong.getrealfloat(res) == -61.25
 
             looptoken = JitCellToken()
@@ -368,7 +368,7 @@ class BaseBackendTest(Runner):
             deadframe = self.cpu.execute_token(looptoken)
             fail = self.cpu.get_latest_descr(deadframe)
             assert fail is faildescr
-            res = self.cpu.get_float_value(deadframe, 0)
+            res = self.cpu.get_float_value(deadframe, None, 0)
             assert longlong.getrealfloat(res) == 42.5
 
     def test_execute_operations_in_env(self):

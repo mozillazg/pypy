@@ -4,7 +4,6 @@ from rpython.jit.backend.llsupport.symbolic import WORD
 from rpython.jit.metainterp.history import (INT, REF, FLOAT, JitCellToken,
     ConstInt, BoxInt, AbstractFailDescr)
 from rpython.jit.metainterp.resoperation import ResOperation, rop
-#from rpython.jit.metainterp.resume2 import rebuild_locs_from_resumedata
 from rpython.rlib import rgc
 from rpython.rlib.debug import (debug_start, debug_stop, have_debug_prints,
                                 debug_print)
@@ -121,16 +120,16 @@ class BaseAssembler(object):
         else:
             coeff = 2
         for item, pos in enumerate(loc_positions):
-            if pos < GPR_REGS * WORD:
-                locs[item] = self.cpu.gen_regs[pos // WORD]
-            elif pos < (GPR_REGS + XMM_REGS * coeff) * WORD:
-                pos = (pos // WORD - GPR_REGS) // coeff
+            if pos < GPR_REGS:
+                locs[item] = self.cpu.gen_regs[pos]
+            elif pos < (GPR_REGS + XMM_REGS * coeff):
+                pos = (pos - GPR_REGS) // coeff
                 locs[item] = self.cpu.float_regs[pos]
             else:
-                i = pos // WORD - self.cpu.JITFRAME_FIXED_SIZE
+                i = pos - self.cpu.JITFRAME_FIXED_SIZE
                 assert i >= 0
                 tp = inputargs[input_i].type
-                locs[item] = self.new_stack_loc(i, pos, tp)
+                locs[item] = self.new_stack_loc(i, pos * WORD, tp)
             input_i += 1
         return locs
 

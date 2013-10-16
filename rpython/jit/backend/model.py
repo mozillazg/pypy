@@ -102,22 +102,22 @@ class AbstractCPU(object):
         """Returns the Descr for the last operation executed by the frame."""
         raise NotImplementedError
 
-    def get_int_value(self, deadframe, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns an int."""
+    def get_int_value(self, deadframe, locations, index):
+        """ Return the value for the index'th argument in the
+        given backend-specific locations. Returns an int.
+        """
         raise NotImplementedError
 
-    def get_float_value(self, deadframe, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a FLOATSTORAGE."""
+    def get_float_value(self, deadframe, locations, index):
+        """ Return the value for the index'th argument in the
+        given backend-specific locations. Returns a FLOATSTORAGE.
+        """
         raise NotImplementedError
 
-    def get_ref_value(self, deadframe, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a GCREF."""
+    def get_ref_value(self, deadframe, locations, index):
+        """ Return the value for the index'th argument in the
+        given backend-specific locations. Returns a GCREF.
+        """
         raise NotImplementedError
 
     def grab_exc_value(self, deadframe):
