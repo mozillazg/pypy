@@ -2574,7 +2574,6 @@ class LLtypeBackendTest(BaseBackendTest):
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
         ResOperation(rop.FINISH, [i2], None, descr=BasicFinalDescr(0))
         ]
-        ops[1].setfailargs([i1, i2])
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, [i1], ops, looptoken)
         deadframe = self.cpu.execute_token(looptoken, ord('G'))
@@ -2632,7 +2631,6 @@ class LLtypeBackendTest(BaseBackendTest):
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
         ResOperation(rop.FINISH, [], None, descr=BasicFinalDescr(0))
         ]
-        ops[1].setfailargs([])
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, [i0, i1, i2, i3], ops, looptoken)
         args = [rffi.cast(lltype.Signed, raw),
@@ -2759,7 +2757,6 @@ class LLtypeBackendTest(BaseBackendTest):
                 ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
                 ResOperation(rop.FINISH, [b3], None, descr=BasicFinalDescr(0))
                 ]
-            ops[1].setfailargs([])
             looptoken = JitCellToken()
             self.cpu.compile_loop(None, [], ops, looptoken)
 
@@ -2767,7 +2764,7 @@ class LLtypeBackendTest(BaseBackendTest):
             fail = self.cpu.get_latest_descr(deadframe)
             assert fail.identifier == 0
             if isinstance(b3, BoxInt):
-                r = self.cpu.get_int_value(deadframe, 0)
+                r = self.cpu.get_int_value(deadframe, None, 0)
                 if isinstance(result, r_singlefloat):
                     assert -sys.maxint-1 <= r <= 0xFFFFFFFF
                     r, = struct.unpack("f", struct.pack("I", r & 0xFFFFFFFF))
@@ -2776,7 +2773,7 @@ class LLtypeBackendTest(BaseBackendTest):
                     r = rffi.cast(TP, r)
                 assert r == result
             elif isinstance(b3, BoxFloat):
-                r = self.cpu.get_float_value(deadframe, 0)
+                r = self.cpu.get_float_value(deadframe, None, 0)
                 if isinstance(result, float):
                     r = longlong.getrealfloat(r)
                 else:
@@ -2894,7 +2891,6 @@ class LLtypeBackendTest(BaseBackendTest):
                 ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
                 ResOperation(rop.FINISH, [], None, descr=BasicFinalDescr(0))
                 ]
-            ops[-2].setfailargs([])
             # keep alive a random subset of the insideboxes
             for b1 in insideboxes:
                 if rnd.random() < keepalive_factor:
