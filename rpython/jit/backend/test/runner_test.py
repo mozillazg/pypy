@@ -1399,15 +1399,23 @@ class BaseBackendTest(Runner):
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
         faildescr3 = BasicFinalDescr(3)
+        jitcode = JitCode("jitcode")
+        jitcode.setup(num_regs_i=0, num_regs_r=0, num_regs_f=12)
         operations = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
             ResOperation(rop.LABEL, fboxes, None, descr=targettoken),
             ResOperation(rop.FLOAT_LE, [fboxes[0], constfloat(9.2)], i2),
+            ]
+        for i in range(12):
+            operations.append(
+                ResOperation(rop.RESUME_PUT, [fboxes[i], ConstInt(0),
+                                              ConstInt(i)], None))
+        operations.extend([
             ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
             ResOperation(rop.GUARD_FALSE, [i2], None, descr=faildescr2),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.FINISH, [], None, descr=faildescr3),
-            ]
-        operations[-3].setfailargs(fboxes)
-        operations[-2].setfailargs(fboxes)
+            ])
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, fboxes, operations, looptoken)
 
@@ -1418,7 +1426,9 @@ class BaseBackendTest(Runner):
             ResOperation(rop.JUMP, [f3]+fboxes2[1:], None, descr=targettoken),
         ]
 
-        self.cpu.compile_bridge(None, faildescr1, fboxes2, bridge, looptoken)
+        self.cpu.compile_bridge(None, faildescr1, fboxes2,
+                                rebuild_locs_from_resumedata(faildescr1),
+                                bridge, looptoken)
 
         args = []
         for i in range(len(fboxes)):
@@ -1427,11 +1437,12 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, *args)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 2
-        res = self.cpu.get_float_value(deadframe, 0)
+        locs = rebuild_locs_from_resumedata(fail)
+        res = self.cpu.get_float_value(deadframe, locs, 0)
         assert longlong.getrealfloat(res) == 8.5
         for i in range(1, len(fboxes)):
             got = longlong.getrealfloat(self.cpu.get_float_value(
-                deadframe, i))
+                deadframe, locs, i))
             assert got == 13.5 + 6.73 * i
 
     def test_compile_bridge_spilled_float(self):
