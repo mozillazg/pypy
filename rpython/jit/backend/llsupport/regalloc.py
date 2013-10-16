@@ -10,6 +10,8 @@ except ImportError:
     OrderedDict = dict # too bad
 
 class TempBox(Box):
+    type = 't' # none of the types
+    
     def __init__(self):
         pass
 

@@ -2096,15 +2096,21 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_exceptions(self):
         exc_tp = None
         exc_ptr = None
+        faildescr = BasicFailDescr(1)
         def func(i):
             if i:
                 raise LLException(exc_tp, exc_ptr)
 
+        jitcode = JitCode("name")
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         ops = '''
         [i0]
+        enter_frame(-1, descr=jitcode)
         i1 = same_as(1)
         call(ConstClass(fptr), i0, descr=calldescr)
-        p0 = guard_exception(ConstClass(xtp)) [i1]
+        resume_put(i1, 0, 0)
+        p0 = guard_exception(ConstClass(xtp), descr=faildescr)
+        leave_frame()
         finish(p0)
         '''
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Void))
@@ -2126,11 +2132,12 @@ class LLtypeBackendTest(BaseBackendTest):
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 1)
-        assert self.cpu.get_ref_value(deadframe, 0) == xptr
+        assert self.cpu.get_ref_value(deadframe, None, 0) == xptr
         excvalue = self.cpu.grab_exc_value(deadframe)
         assert not excvalue
         deadframe = self.cpu.execute_token(looptoken, 0)
-        assert self.cpu.get_int_value(deadframe, 0) == 1
+        locs = rebuild_locs_from_resumedata(faildescr)
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 1
         excvalue = self.cpu.grab_exc_value(deadframe)
         assert not excvalue
 
@@ -2149,7 +2156,7 @@ class LLtypeBackendTest(BaseBackendTest):
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 1)
-        assert self.cpu.get_int_value(deadframe, 0) == 1
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 1
         excvalue = self.cpu.grab_exc_value(deadframe)
         assert excvalue == yptr
 
@@ -2157,20 +2164,24 @@ class LLtypeBackendTest(BaseBackendTest):
         exc_ptr = xptr
         ops = '''
         [i0]
+        enter_frame(-1, descr=jitcode)
         i1 = same_as(1)
         call(ConstClass(fptr), i0, descr=calldescr)
-        guard_no_exception() [i1]
+        resume_put(i0, 0, 0)
+        guard_no_exception(descr=faildescr)
+        leave_frame()
         finish(0)
         '''
         loop = parse(ops, self.cpu, namespace=locals())
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 1)
-        assert self.cpu.get_int_value(deadframe, 0) == 1
+        locs = rebuild_locs_from_resumedata(faildescr)
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 1
         excvalue = self.cpu.grab_exc_value(deadframe)
         assert excvalue == xptr
         deadframe = self.cpu.execute_token(looptoken, 0)
-        assert self.cpu.get_int_value(deadframe, 0) == 0
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 0
         excvalue = self.cpu.grab_exc_value(deadframe)
         assert not excvalue
 
