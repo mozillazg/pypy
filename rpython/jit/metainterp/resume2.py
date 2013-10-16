@@ -14,7 +14,7 @@ class AbstractResumeReader(object):
     def rebuild(self, faildescr):
         self._rebuild_until(faildescr.rd_resume_bytecode,
                             faildescr.rd_bytecode_position)
-        self.finish()
+        return self.finish()
 
     def finish(self):
         pass
@@ -96,3 +96,4 @@ class BoxResumeReader(AbstractResumeReader):
 
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     BoxResumeReader(metainterp, deadframe).rebuild(faildescr)
+

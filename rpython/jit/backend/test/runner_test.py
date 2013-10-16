@@ -9,6 +9,7 @@ from rpython.jit.metainterp.history import (AbstractFailDescr,
                                          BoxFloat, ConstFloat)
 from rpython.jit.metainterp.resoperation import ResOperation, rop
 from rpython.jit.metainterp.typesystem import deref
+from rpython.jit.metainterp.resume2 import rebuild_faillocs_from_resumedata
 from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.tool.oparser import parse

@@ -1,9 +1,10 @@
 
+import py
 from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.resume2 import rebuild_from_resumedata,\
-     ResumeBytecode
+     ResumeBytecode, BoxResumeReader
 
 
 class Descr(AbstractDescr):
@@ -16,9 +17,16 @@ class Frame(object):
     def __init__(self, jitcode):
         self.jitcode = jitcode
         self.registers_i = [None] * jitcode.num_regs_i()
+        self.registers_r = [None] * jitcode.num_regs_r()
+        self.registers_f = [None] * jitcode.num_regs_f()
 
     def num_nonempty_regs(self):
         return len(filter(bool, self.registers_i))
+
+    def dump_registers(self, lst, backend_values):
+        lst += [backend_values[x] for x in self.registers_i]
+        lst += [backend_values[x] for x in self.registers_r]
+        lst += [backend_values[x] for x in self.registers_f]        
 
 class MockMetaInterp(object):
     def __init__(self):
@@ -34,6 +42,20 @@ class MockCPU(object):
     def get_int_value(self, frame, index):
         assert frame == "myframe"
         return index + 3
+
+class RebuildingResumeReader(BoxResumeReader):
+    def __init__(self):
+        self.backend_values = {}
+        self.metainterp = MockMetaInterp()
+
+    def finish(self):
+        l = []
+        for frame in self.metainterp.framestack:
+            frame.dump_registers(l, self.backend_values)
+        return l
+
+def rebuild_locs_from_resumedata(faildescr):
+    return RebuildingResumeReader().rebuild(faildescr)
 
 class TestResumeDirect(object):
     def test_box_resume_reader(self):
@@ -133,6 +155,7 @@ class TestResumeDirect(object):
         assert f.registers_i[1].getint() == 2 + 3
 
     def test_new(self):
+        py.test.skip("finish")
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=1)
         base = parse("""
@@ -142,28 +165,29 @@ class TestResumeDirect(object):
         resume_setfield(i0, 13, descr=fielddescr)
         backend_put(12,
         leave_frame()
-        """, namespace={'jitcode':jitcode})
+        """, namespace={'jitcode':jitcode1})
 
     def test_reconstructing_resume_reader(self):
-        XXX
         jitcode1 = JitCode("jitcode")
-        jitcode1.setup(num_regs_i=3, num_regs_f=0, num_regs_r=0)
+        jitcode1.setup(num_regs_i=2, num_regs_f=0, num_regs_r=0)
         jitcode2 = JitCode("jitcode2")
-        jitcode2.setup(num_regs_i=3, num_regs_f=0, num_regs_r=0)
+        jitcode2.setup(num_regs_i=1, num_regs_f=0, num_regs_r=0)
         resume_loop = parse("""
-        []
+        [i0, i1, i2, i3]
         enter_frame(-1, descr=jitcode1)
-        backend_put(11, 0, 1)
+        resume_put(i0, 0, 1)
+        backend_attach(i0, 11)
         enter_frame(12, descr=jitcode2)
-        backend_put(12, 0, 2)
-        backend_put(8, 1, 0)
+        resume_put(i1, 0, 0)
+        backend_attach(i1, 12)
+        resume_put(i3, 1, 0)
+        backend_attach(i3, 8)
         leave_frame()
-        backend_put(10, 0, 0)
         leave_frame()
         """, namespace={'jitcode1': jitcode1,
                         'jitcode2': jitcode2})
         descr = Descr()
         descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 5
+        descr.rd_bytecode_position = 8
         locs = rebuild_locs_from_resumedata(descr)
-        assert locs == [8, 11, -1, -1, -1, 12]
+        assert locs == [8, 11, 12]
