@@ -649,16 +649,21 @@ class BaseRegalloc(object):
             # for tests
             looptoken.compiled_loop_token._ll_initial_locs = locs
 
+    def get_next_op(self, operations, i):
+        while operations[i].is_resume():
+            i += 1
+        return operations[i]
+
     def can_merge_with_next_guard(self, op, i, operations):
         if (op.getopnum() == rop.CALL_MAY_FORCE or
             op.getopnum() == rop.CALL_ASSEMBLER or
             op.getopnum() == rop.CALL_RELEASE_GIL):
-            assert operations[i + 1].getopnum() == rop.GUARD_NOT_FORCED
+            assert self.get_next_op(operations, i + 1).getopnum() == rop.GUARD_NOT_FORCED
             return True
         if not op.is_comparison():
             if op.is_ovf():
-                if (operations[i + 1].getopnum() != rop.GUARD_NO_OVERFLOW and
-                    operations[i + 1].getopnum() != rop.GUARD_OVERFLOW):
+                if (self.get_next_op(operations, i + 1).getopnum() != rop.GUARD_NO_OVERFLOW and
+                    self.get_next_op(operations, i + 1).getopnum() != rop.GUARD_OVERFLOW):
                     not_implemented("int_xxx_ovf not followed by "
                                     "guard_(no)_overflow")
                 return True

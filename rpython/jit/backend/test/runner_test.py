@@ -65,14 +65,16 @@ class Runner(object):
         deadframe = self.cpu.execute_token(looptoken, *args)
         if self.cpu.get_latest_descr(deadframe) is operations[-1].getdescr():
             self.guard_failed = False
+            locs = None
         else:
             self.guard_failed = True
+            xxxx
         if result_type == 'int':
-            return BoxInt(self.cpu.get_int_value(deadframe, 0))
+            return BoxInt(self.cpu.get_int_value(deadframe, locs, 0))
         elif result_type == 'ref':
-            return BoxPtr(self.cpu.get_ref_value(deadframe, 0))
+            return BoxPtr(self.cpu.get_ref_value(deadframe, locs, 0))
         elif result_type == 'float':
-            return BoxFloat(self.cpu.get_float_value(deadframe, 0))
+            return BoxFloat(self.cpu.get_float_value(deadframe, locs, 0))
         elif result_type == 'void':
             return None
         else:
@@ -378,22 +380,29 @@ class BaseBackendTest(Runner):
         z = BoxInt(579)
         t = BoxInt(455)
         u = BoxInt(0)    # False
+        jitcode = JitCode('jitcode')
+        jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
         looptoken = JitCellToken()
         targettoken = TargetToken()
         operations = [
             ResOperation(rop.LABEL, [y, x], None, descr=targettoken),
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
             ResOperation(rop.INT_ADD, [x, y], z),
             ResOperation(rop.INT_SUB, [y, ConstInt(1)], t),
             ResOperation(rop.INT_EQ, [t, ConstInt(0)], u),
+            ResOperation(rop.RESUME_PUT, [t, ConstInt(0), ConstInt(0)], None),
+            ResOperation(rop.RESUME_PUT, [z, ConstInt(0), ConstInt(1)], None),
             ResOperation(rop.GUARD_FALSE, [u], None,
                          descr=BasicFailDescr()),
+            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.JUMP, [t, z], None, descr=targettoken),
             ]
-        operations[-2].setfailargs([t, z])
         cpu.compile_loop(None, [x, y], operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 0, 10)
-        assert self.cpu.get_int_value(deadframe, 0) == 0
-        assert self.cpu.get_int_value(deadframe, 1) == 55
+        fail = self.cpu.get_latest_descr(deadframe)
+        locs = rebuild_locs_from_resumedata(fail)
+        assert self.cpu.get_int_value(deadframe, locs, 0) == 0
+        assert self.cpu.get_int_value(deadframe, locs, 1) == 55
 
     def test_int_operations(self):
         from rpython.jit.metainterp.test.test_executor import get_int_tests
@@ -429,24 +438,33 @@ class BaseBackendTest(Runner):
             v2 = BoxInt(testcases[0][1])
             v_res = BoxInt()
             #
+            jitcode = JitCode('jitcode')
+            jitcode.setup(num_regs_i=1, num_regs_f=0, num_regs_r=0)
             if not reversed:
                 ops = [
+                    ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None,
+                                 descr=jitcode),
                     ResOperation(opnum, [v1, v2], v_res),
+                    ResOperation(rop.RESUME_PUT, [v_res, ConstInt(0),
+                                                  ConstInt(0)], None),
                     ResOperation(rop.GUARD_NO_OVERFLOW, [], None,
                                  descr=BasicFailDescr(1)),
+                    ResOperation(rop.LEAVE_FRAME, [], None),
                     ResOperation(rop.FINISH, [v_res], None,
                                  descr=BasicFinalDescr(2)),
                     ]
-                ops[1].setfailargs([])
             else:
-                v_exc = self.cpu.ts.BoxRef()
                 ops = [
+                    ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None,
+                                 descr=jitcode),
                     ResOperation(opnum, [v1, v2], v_res),
+                    ResOperation(rop.RESUME_PUT, [v_res, ConstInt(0),
+                                                  ConstInt(0)], None),
                     ResOperation(rop.GUARD_OVERFLOW, [], None,
                                  descr=BasicFailDescr(1)),
+                    ResOperation(rop.LEAVE_FRAME, [], None),
                     ResOperation(rop.FINISH, [], None, descr=BasicFinalDescr(2)),
                     ]
-                ops[1].setfailargs([v_res])
             #
             looptoken = JitCellToken()
             self.cpu.compile_loop(None, [v1, v2], ops, looptoken)
@@ -454,11 +472,13 @@ class BaseBackendTest(Runner):
                 deadframe = self.cpu.execute_token(looptoken, x, y)
                 fail = self.cpu.get_latest_descr(deadframe)
                 if (z == boom) ^ reversed:
+                    locs = rebuild_locs_from_resumedata(fail)
                     assert fail.identifier == 1
                 else:
+                    locs = None
                     assert fail.identifier == 2
                 if z != boom:
-                    assert self.cpu.get_int_value(deadframe, 0) == z
+                    assert self.cpu.get_int_value(deadframe, locs, 0) == z
                 excvalue = self.cpu.grab_exc_value(deadframe)
                 assert not excvalue
 

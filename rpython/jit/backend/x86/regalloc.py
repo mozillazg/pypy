@@ -318,8 +318,20 @@ class RegAlloc(BaseRegalloc):
                 self.possibly_free_vars_for_op(op)
                 continue
             if self.can_merge_with_next_guard(op, i, operations):
-                oplist_with_guard[op.getopnum()](self, op, operations[i + 1])
+                # make sure we process all the operations between this and the
+                # next guard before executing it
+                guard_op = self.get_next_op(operations, i + 1)
                 i += 1
+                while operations[i].is_resume():
+                    self.resumebuilder.process(operations[i])
+                    i += 1
+                oplist_with_guard[op.getopnum()](self, op, guard_op)
+                self.rm.position = i
+                self.xrm.position = i
+                self.rm.free_unused_regs()
+                self.xrm.free_unused_regs()
+                i += 1
+                continue
             elif not we_are_translated() and op.getopnum() == -124:
                 self._consider_force_spill(op)
             else:
