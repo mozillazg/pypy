@@ -68,7 +68,6 @@ class Runner(object):
             locs = None
         else:
             self.guard_failed = True
-            xxxx
         if result_type == 'int':
             return BoxInt(self.cpu.get_int_value(deadframe, locs, 0))
         elif result_type == 'ref':
@@ -100,7 +99,6 @@ class Runner(object):
                       ResOperation(rop.FINISH, results, None,
                                    descr=BasicFinalDescr(0))]
         if operations[0].is_guard():
-            operations[0].setfailargs([])
             if not descr:
                 descr = BasicFailDescr(1)
         if descr is not None:
@@ -1187,9 +1185,12 @@ class BaseBackendTest(Runner):
             #
             ks = range(nb_args)
             random.shuffle(ks)
+            intboxes = 0
+            floatboxes = 0
             for k in ks:
                 if isinstance(inputargs[k], BoxInt):
                     newbox = BoxInt()
+                    intboxes += 1
                     x = r.randrange(-100000, 100000)
                     operations.append(
                         ResOperation(rop.INT_ADD, [inputargs[k],
@@ -1198,6 +1199,7 @@ class BaseBackendTest(Runner):
                     y = values[k] + x
                 else:
                     newbox = BoxFloat()
+                    floatboxes += 1
                     x = r.random()
                     operations.append(
                         ResOperation(rop.FLOAT_ADD, [inputargs[k],
@@ -1210,12 +1212,32 @@ class BaseBackendTest(Runner):
                 retvalues.insert(kk, y)
             #
             zero = BoxInt()
+            jitcode = JitCode("name")
+            jitcode.setup(num_regs_i=intboxes, num_regs_r=0,
+                          num_regs_f=floatboxes)
             operations.extend([
+                ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None,
+                             descr=jitcode),
                 ResOperation(rop.SAME_AS, [ConstInt(0)], zero),
+            ])
+            i_int = 0
+            i_float = intboxes
+            expvalues = [None] * len(retboxes)
+            for i, box in enumerate(retboxes):
+                if isinstance(box, BoxInt):
+                    pos = i_int
+                    i_int += 1
+                else:
+                    pos = i_float
+                    i_float += 1
+                operations.append(ResOperation(rop.RESUME_PUT, [box, ConstInt(0), ConstInt(pos)], None))
+                expvalues[pos] = retvalues[i]
+            operations.extend([
                 ResOperation(rop.GUARD_TRUE, [zero], None, descr=guarddescr),
+                ResOperation(rop.LEAVE_FRAME, [], None),
                 ResOperation(rop.FINISH, [], None, descr=faildescr)
                 ])
-            operations[-2].setfailargs(retboxes)
+            #operations[-2].setfailargs(retboxes)
             print inputargs
             for op in operations:
                 print op
@@ -1223,14 +1245,15 @@ class BaseBackendTest(Runner):
             #
             deadframe = self.cpu.execute_token(looptoken, *values)
             fail = self.cpu.get_latest_descr(deadframe)
+            locs = rebuild_locs_from_resumedata(fail)
             assert fail.identifier == 42
             #
-            for k in range(len(retvalues)):
-                if isinstance(retboxes[k], BoxInt):
-                    got = self.cpu.get_int_value(deadframe, k)
-                else:
-                    got = self.cpu.get_float_value(deadframe, k)
-                assert got == retvalues[k]
+            for k in range(intboxes):
+                got = self.cpu.get_int_value(deadframe, locs, k)
+                assert got == expvalues[k]
+            for k in range(floatboxes):
+                got = self.cpu.get_float_value(deadframe, locs, k + intboxes)
+                assert got == expvalues[k + intboxes]
 
     def test_jump(self):
         # this test generates small loops where the JUMP passes many

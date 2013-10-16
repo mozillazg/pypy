@@ -59,7 +59,8 @@ class AbstractResumeReader(object):
             xxx
         else:
             assert frontend_position < jitcode.num_regs()
-            xxx
+            self.put_box_float(frame, frontend_position - jitcode.num_regs_r()
+                               - jitcode.num_regs_i(), box)
 
 class DirectResumeReader(AbstractResumeReader):
     pass
@@ -83,6 +84,9 @@ class BoxResumeReader(AbstractResumeReader):
 
     def put_box_int(self, frame, position, box):
         frame.registers_i[position] = box
+
+    def put_box_float(self, frame, position, box):
+        frame.registers_f[position] = box
 
     def finish(self):
         cpu = self.metainterp.cpu
