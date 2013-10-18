@@ -1108,7 +1108,7 @@ def ll_dict_popitem(ELEM, dic):
     r = lltype.malloc(ELEM.TO)
     r.item0 = recast(ELEM.TO.item0, entry.key)
     r.item1 = recast(ELEM.TO.item1, entry.value)
-    _ll_dict_del(dic, r_uint(i))
+    _ll_dict_del(dic, i)
     return r
 
 def ll_dict_pop(dic, key):
