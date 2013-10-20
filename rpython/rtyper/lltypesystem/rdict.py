@@ -1085,11 +1085,11 @@ def _ll_getnextitem(dic):
 
     entries = dic.entries
 
-    i = dic.num_used_items - 1
     while True:
+        i = dic.num_used_items - 1
         if entries.valid(i):
             break
-        i -= 1
+        dic.num_used_items -= 1
 
     key = entries[i].key
     index = dic.lookup_function(dic, key, entries.hash(i),
