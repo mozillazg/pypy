@@ -32,13 +32,36 @@ from rpython.rtyper.annlowlevel import llhelper
 #        int resize_counter;
 #        {byte, short, int, long} *indexes;
 #        dictentry *entries;
-#        lookup_function; # one of the four possible functions for different
+#        lookup_function_no; # one of the four possible functions for different
 #                         # size dicts
 #        (Function DICTKEY, DICTKEY -> bool) *fnkeyeq;
 #        (Function DICTKEY -> int) *fnkeyhash;
 #    }
 #
 #
+
+def ll_call_lookup_function(d, key, hash, flag):
+    DICT = lltype.typeOf(d).TO
+    if IS_64BIT:
+        fun = d.lookup_function_no
+        if fun == FUNC_BYTE:
+            return DICT.lookup_family.byte_lookup_function(d, key, hash, flag)
+        elif fun == FUNC_SHORT:
+            return DICT.lookup_family.short_lookup_function(d, key, hash, flag)
+        elif fun == FUNC_INT:
+            return DICT.lookup_family.int_lookup_function(d, key, hash, flag)
+        elif fun == FUNC_LONG:
+            return DICT.lookup_family.long_lookup_function(d, key, hash, flag)
+        assert False
+    else:
+        fun = d.lookup_function_no
+        if fun == FUNC_BYTE:
+            return DICT.lookup_family.byte_lookup_function(d, key, hash, flag)
+        elif fun == FUNC_SHORT:
+            return DICT.lookup_family.short_lookup_function(d, key, hash, flag)
+        elif fun == FUNC_LONG:
+            return DICT.lookup_family.long_lookup_function(d, key, hash, flag)
+        assert False
 
 def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                 ll_fasthash_function=None, ll_hash_function=None,
@@ -100,15 +123,11 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     DICTENTRY = lltype.Struct("dictentry", *entryfields)
     DICTENTRYARRAY = lltype.GcArray(DICTENTRY,
                                     adtmeths=entrymeths)
-    LOOKUP_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT), DICTKEY,
-                                              lltype.Signed, lltype.Signed],
-                                             lltype.Signed))
-
     fields =          [ ("num_items", lltype.Signed),
                         ("num_used_items", lltype.Signed),
                         ("resize_counter", lltype.Signed),
                         ("indexes", llmemory.GCREF),
-                        ("lookup_function", LOOKUP_FUNC),
+                        ("lookup_function_no", lltype.Signed),
                         ("entries", lltype.Ptr(DICTENTRYARRAY)) ]
     if get_custom_eq_hash is not None:
         r_rdict_eqfn, r_rdict_hashfn = get_custom_eq_hash()
@@ -135,6 +154,7 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
             }
     adtmeths['KEY']   = DICTKEY
     adtmeths['VALUE'] = DICTVALUE
+    adtmeths['lookup_function'] = lltype.staticAdtMethod(ll_call_lookup_function)
     adtmeths['allocate'] = lltype.typeMethod(_ll_malloc_dict)
 
     family = LookupFamily()
@@ -145,10 +165,16 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
 
     family.empty_array = DICTENTRYARRAY.allocate(0)
     if setup_lookup_funcs:
-        _setup_lookup_funcs(LOOKUP_FUNC, DICT, rtyper, family)
+        _setup_lookup_funcs(DICT, rtyper, family)
     return DICT
 
-def _setup_lookup_funcs(LOOKUP_FUNC, DICT, rtyper, family):
+def _setup_lookup_funcs(DICT, rtyper, family):
+    DICTKEY = DICT.entries.TO.OF.key
+    LOOKUP_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT), DICTKEY,
+                                              lltype.Signed, lltype.Signed],
+                                              lltype.Signed))
+
+
     STORECLEAN_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT),
                                                   lltype.Signed,
                                                   lltype.Signed],
@@ -239,10 +265,8 @@ class DictRepr(AbstractDictRepr):
 
     def _setup_repr_final(self):
         if not self.finalized:
-            LOOKUP_FUNC = self.lowleveltype.TO.lookup_function
             family = self.lowleveltype.TO.lookup_family
-            _setup_lookup_funcs(LOOKUP_FUNC, self.lowleveltype.TO, self.rtyper,
-                                family)
+            _setup_lookup_funcs(self.lowleveltype.TO, self.rtyper, family)
             self.finalized = True
 
 
@@ -432,40 +456,43 @@ DICTINDEX_BYTE = lltype.Ptr(lltype.GcArray(rffi.UCHAR))
 
 IS_64BIT = sys.maxint != 2 ** 31 - 1
 
+if IS_64BIT:
+    FUNC_BYTE, FUNC_SHORT, FUNC_INT, FUNC_LONG = range(4)
+else:
+    FUNC_BYTE, FUNC_SHORT, FUNC_LONG = range(3)
+
 def ll_malloc_indexes_and_choose_lookup(d, n):
-    DICT = lltype.typeOf(d).TO
     if n <= 256:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_BYTE.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.lookup_family.byte_lookup_function
+        d.lookup_function_no = FUNC_BYTE
     elif n <= 65536:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_SHORT.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.lookup_family.short_lookup_function
+        d.lookup_function_no = FUNC_SHORT
     elif IS_64BIT and n <= 2 ** 32:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_INT.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.lookup_family.int_lookup_function
+        d.lookup_function_no = FUNC_INT
     else:
         d.indexes = lltype.cast_opaque_ptr(llmemory.GCREF,
                                            lltype.malloc(DICTINDEX_LONG.TO, n,
                                                          zero=True))
-        d.lookup_function = DICT.lookup_family.long_lookup_function
-ll_malloc_indexes_and_choose_lookup._always_inline_ = True
+        d.lookup_function_no = FUNC_LONG
 
 def ll_pick_insert_clean_function(d):
     DICT = lltype.typeOf(d).TO
-    if d.lookup_function == DICT.lookup_family.byte_lookup_function:
+    if d.lookup_function_no == FUNC_BYTE:
         return DICT.lookup_family.byte_insert_clean_function
-    if d.lookup_function == DICT.lookup_family.short_lookup_function:
+    if d.lookup_function_no == FUNC_SHORT:
         return DICT.lookup_family.short_insert_clean_function
     if IS_64BIT:
-        if d.lookup_function == DICT.lookup_family.int_lookup_function:
+        if d.lookup_function_no == FUNC_INT:
             return DICT.lookup_family.int_insert_clean_function
-    if d.lookup_function == DICT.lookup_family.long_lookup_function:
+    if d.lookup_function_no == FUNC_LONG:
         return DICT.lookup_family.long_insert_clean_function
     assert False
 
