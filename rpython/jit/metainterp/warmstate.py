@@ -123,7 +123,6 @@ def hash_whatever(TYPE, x):
     else:
         return rffi.cast(lltype.Signed, x)
 
-
 class JitCell(BaseJitCell):
     # the counter can mean the following things:
     #     counter >=  0: not yet traced, wait till threshold is reached
@@ -291,7 +290,7 @@ class WarmEnterState(object):
             if vinfo is not None:
                 virtualizable = args[index_of_virtualizable]
                 vinfo.clear_vable_token(virtualizable)
-            
+
             deadframe = func_execute_token(loop_token, *args)
             #
             # Record in the memmgr that we just ran this loop,
@@ -429,6 +428,12 @@ class WarmEnterState(object):
     def _make_jitcell_getter_default(self):
         "NOT_RPYTHON"
         jitdriver_sd = self.jitdriver_sd
+        if len(jitdriver_sd._green_args_spec) == 0:
+            prebuilt_jitcell = JitCell()
+
+            def get_jitcell(build):
+                return prebuilt_jitcell
+            return get_jitcell
         green_args_spec = unrolling_iterable(jitdriver_sd._green_args_spec)
         #
         def comparekey(greenargs1, greenargs2):
