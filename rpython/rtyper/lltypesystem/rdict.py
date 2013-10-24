@@ -42,26 +42,16 @@ from rpython.rtyper.annlowlevel import llhelper
 
 def ll_call_lookup_function(d, key, hash, flag):
     DICT = lltype.typeOf(d).TO
-    if IS_64BIT:
-        fun = d.lookup_function_no
-        if fun == FUNC_BYTE:
-            return DICT.lookup_family.byte_lookup_function(d, key, hash, flag)
-        elif fun == FUNC_SHORT:
-            return DICT.lookup_family.short_lookup_function(d, key, hash, flag)
-        elif fun == FUNC_INT:
-            return DICT.lookup_family.int_lookup_function(d, key, hash, flag)
-        elif fun == FUNC_LONG:
-            return DICT.lookup_family.long_lookup_function(d, key, hash, flag)
-        assert False
-    else:
-        fun = d.lookup_function_no
-        if fun == FUNC_BYTE:
-            return DICT.lookup_family.byte_lookup_function(d, key, hash, flag)
-        elif fun == FUNC_SHORT:
-            return DICT.lookup_family.short_lookup_function(d, key, hash, flag)
-        elif fun == FUNC_LONG:
-            return DICT.lookup_family.long_lookup_function(d, key, hash, flag)
-        assert False
+    fun = d.lookup_function_no
+    if fun == FUNC_BYTE:
+        return DICT.lookup_family.byte_lookup_function(d, key, hash, flag)
+    elif fun == FUNC_SHORT:
+        return DICT.lookup_family.short_lookup_function(d, key, hash, flag)
+    elif IS_64BIT and fun == FUNC_INT:
+        return DICT.lookup_family.int_lookup_function(d, key, hash, flag)
+    elif fun == FUNC_LONG:
+        return DICT.lookup_family.long_lookup_function(d, key, hash, flag)
+    assert False
 
 def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                 ll_fasthash_function=None, ll_hash_function=None,
@@ -483,18 +473,18 @@ def ll_malloc_indexes_and_choose_lookup(d, n):
                                                          zero=True))
         d.lookup_function_no = FUNC_LONG
 
-def ll_pick_insert_clean_function(d):
+def ll_call_insert_clean_function(d, hash, i):
     DICT = lltype.typeOf(d).TO
     if d.lookup_function_no == FUNC_BYTE:
-        return DICT.lookup_family.byte_insert_clean_function
-    if d.lookup_function_no == FUNC_SHORT:
-        return DICT.lookup_family.short_insert_clean_function
-    if IS_64BIT:
-        if d.lookup_function_no == FUNC_INT:
-            return DICT.lookup_family.int_insert_clean_function
-    if d.lookup_function_no == FUNC_LONG:
-        return DICT.lookup_family.long_insert_clean_function
-    assert False
+        DICT.lookup_family.byte_insert_clean_function(d, hash, i)
+    elif d.lookup_function_no == FUNC_SHORT:
+        DICT.lookup_family.short_insert_clean_function(d, hash, i)
+    elif IS_64BIT and d.lookup_function_no == FUNC_INT:
+        DICT.lookup_family.int_insert_clean_function(d, hash, i)
+    elif d.lookup_function_no == FUNC_LONG:
+        DICT.lookup_family.long_insert_clean_function(d, hash, i)
+    else:
+        assert False
 
 def ll_valid_from_flag(entries, i):
     return entries[i].f_valid
@@ -567,8 +557,7 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
     else:
         if len(d.entries) == d.num_used_items:
             if ll_dict_grow(d):
-                insertcleanfn = ll_pick_insert_clean_function(d)
-                insertcleanfn(d, hash, d.num_used_items)
+                ll_call_insert_clean_function(d, hash, d.num_used_items)
         entry = d.entries[d.num_used_items]
         entry.key = key
         entry.value = value
@@ -587,8 +576,7 @@ def _ll_dict_setitem_lookup_done(d, key, value, hash, i):
 
 def _ll_dict_insertclean(d, key, value, hash):
     ENTRY = lltype.typeOf(d.entries).TO.OF
-    insertcleanfn = ll_pick_insert_clean_function(d)
-    insertcleanfn(d, hash, d.num_used_items)
+    ll_call_insert_clean_function(d, hash, d.num_used_items)
     entry = d.entries[d.num_used_items]
     entry.key = key
     entry.value = value
@@ -739,13 +727,12 @@ def ll_dict_reindex(d, new_size):
     d.resize_counter = new_size * 2 - d.num_items * 3
     assert d.resize_counter > 0
     #
-    insertcleanfn = ll_pick_insert_clean_function(d)
     entries = d.entries
     i = 0
     while i < d.num_used_items:
         if entries.valid(i):
             hash = entries.hash(i)
-            insertcleanfn(d, hash, i)
+            ll_call_insert_clean_function(d, hash, i)
         i += 1
     #old_entries.delete() XXXX!
 
