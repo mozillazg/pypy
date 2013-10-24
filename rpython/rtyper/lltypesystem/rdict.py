@@ -43,7 +43,8 @@ from rpython.rtyper.annlowlevel import llhelper
 def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                 ll_fasthash_function=None, ll_hash_function=None,
                 ll_eq_function=None, method_cache={},
-                dummykeyobj=None, dummyvalueobj=None, rtyper=None):
+                dummykeyobj=None, dummyvalueobj=None, rtyper=None,
+                setup_lookup_funcs=True):
     # get the actual DICT type. if DICT is None, it's created, otherwise
     # forward reference is becoming DICT
     if DICT is None:
@@ -102,10 +103,6 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
     LOOKUP_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT), DICTKEY,
                                               lltype.Signed, lltype.Signed],
                                              lltype.Signed))
-    STORECLEAN_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT),
-                                                  lltype.Signed,
-                                                  lltype.Signed],
-                                                 lltype.Void))
 
     fields =          [ ("num_items", lltype.Signed),
                         ("num_used_items", lltype.Signed),
@@ -147,6 +144,16 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                                 *fields))
 
     family.empty_array = DICTENTRYARRAY.allocate(0)
+    if setup_lookup_funcs:
+        _setup_lookup_funcs(LOOKUP_FUNC, DICT, rtyper, family)
+    return DICT
+
+def _setup_lookup_funcs(LOOKUP_FUNC, DICT, rtyper, family):
+    STORECLEAN_FUNC = lltype.Ptr(lltype.FuncType([lltype.Ptr(DICT),
+                                                  lltype.Signed,
+                                                  lltype.Signed],
+                                                 lltype.Void))
+
     for name, T in [('byte', rffi.UCHAR),
                     ('short', rffi.USHORT),
                     ('int', rffi.UINT),
@@ -158,7 +165,6 @@ def get_ll_dict(DICTKEY, DICTVALUE, get_custom_eq_hash=None, DICT=None,
                                                       rtyper=rtyper)
         setattr(family, '%s_lookup_function' % name, lookupfn)
         setattr(family, '%s_insert_clean_function' % name, storecleanfn)
-    return DICT
 
 def llhelper_or_compile(rtyper, FUNCPTR, ll_func):
     # the check is for pseudo rtyper from tests
@@ -226,8 +232,16 @@ class DictRepr(AbstractDictRepr):
             kwd['dummyvalueobj'] = self.value_repr.get_ll_dummyval_obj(
                 self.rtyper, s_value)
 
+            kwd['setup_lookup_funcs'] = False
             get_ll_dict(DICTKEY, DICTVALUE, DICT=self.DICT,
                         rtyper=self.rtyper, **kwd)
+
+    def _setup_repr_final(self):
+        LOOKUP_FUNC = self.lowleveltype.TO.lookup_function
+        family = self.lowleveltype.TO.lookup_family
+        _setup_lookup_funcs(LOOKUP_FUNC, self.lowleveltype.TO, self.rtyper,
+                            family)
+
 
     def convert_const(self, dictobj):
         from rpython.rtyper.lltypesystem import llmemory
