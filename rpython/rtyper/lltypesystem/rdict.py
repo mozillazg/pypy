@@ -183,6 +183,7 @@ class DictRepr(AbstractDictRepr):
     def __init__(self, rtyper, key_repr, value_repr, dictkey, dictvalue,
                  custom_eq_hash=None):
         self.rtyper = rtyper
+        self.finalized = False
         self.DICT = lltype.GcForwardReference()
         self.lowleveltype = lltype.Ptr(self.DICT)
         self.custom_eq_hash = custom_eq_hash is not None
@@ -237,10 +238,12 @@ class DictRepr(AbstractDictRepr):
                         rtyper=self.rtyper, **kwd)
 
     def _setup_repr_final(self):
-        LOOKUP_FUNC = self.lowleveltype.TO.lookup_function
-        family = self.lowleveltype.TO.lookup_family
-        _setup_lookup_funcs(LOOKUP_FUNC, self.lowleveltype.TO, self.rtyper,
-                            family)
+        if not self.finalized:
+            LOOKUP_FUNC = self.lowleveltype.TO.lookup_function
+            family = self.lowleveltype.TO.lookup_family
+            _setup_lookup_funcs(LOOKUP_FUNC, self.lowleveltype.TO, self.rtyper,
+                                family)
+            self.finalized = True
 
 
     def convert_const(self, dictobj):
@@ -256,6 +259,7 @@ class DictRepr(AbstractDictRepr):
             return self.dict_cache[key]
         except KeyError:
             self.setup()
+            self.setup_final()
             l_dict = ll_newdict_size(self.DICT, len(dictobj))
             self.dict_cache[key] = l_dict
             r_key = self.key_repr
