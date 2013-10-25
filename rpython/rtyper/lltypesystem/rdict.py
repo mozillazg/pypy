@@ -611,7 +611,7 @@ def _overallocate_entries_len(baselen):
 
 @jit.dont_look_inside
 def ll_dict_grow(d):
-    if d.num_items < d.num_used_items // 4:
+    if d.num_items < d.num_used_items // 2:
         ll_dict_remove_deleted_items(d)
         return True
 
