@@ -612,7 +612,7 @@ def _overallocate_entries_len(baselen):
 @jit.dont_look_inside
 def ll_dict_grow(d):
     # don't reindex the dict if it's tiny
-    if d.num_items < d.num_used_items // 2 and d.num_items >= 32:
+    if d.num_items < d.num_used_items // 2 and d.num_used_items >= 64:
         ll_dict_remove_deleted_items(d)
         return True
 
