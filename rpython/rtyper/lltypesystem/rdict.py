@@ -609,6 +609,7 @@ def _overallocate_entries_len(baselen):
     some += newsize >> 3
     return newsize + some
 
+@jit.dont_look_inside
 def ll_dict_grow(d):
     if d.num_items < d.num_used_items // 4:
         ll_dict_remove_deleted_items(d)
