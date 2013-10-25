@@ -611,7 +611,8 @@ def _overallocate_entries_len(baselen):
 
 @jit.dont_look_inside
 def ll_dict_grow(d):
-    if d.num_items < d.num_used_items // 2:
+    # don't reindex the dict if it's tiny
+    if d.num_items < d.num_used_items // 2 and d.num_items >= 32:
         ll_dict_remove_deleted_items(d)
         return True
 
@@ -639,7 +640,7 @@ def ll_dict_remove_deleted_items(d):
     ENTRY = lltype.typeOf(d).TO.entries.TO.OF
     isrc = 0
     idst = 0
-    while isrc < len(d.entries):
+    while isrc < d.num_used_items:
         if d.entries.valid(isrc):
             src = d.entries[isrc]
             dst = newitems[idst]

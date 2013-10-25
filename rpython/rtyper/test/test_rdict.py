@@ -136,10 +136,10 @@ class TestRDictDirect(object):
         DICT = self._get_str_dict()
         ll_d = rdict.ll_newdict(DICT)
         lls = llstr("a")
-        for i in range(20):
+        for i in range(40):
             rdict.ll_dict_setitem(ll_d, lls, i)
             rdict.ll_dict_delitem(ll_d, lls)
-        assert ll_d.num_used_items <= 4
+        assert ll_d.num_used_items <= 10
 
     def test_dict_iteration(self):
         DICT = self._get_str_dict()
@@ -271,6 +271,22 @@ class TestRDictDirectDummyValue(TestRDictDirect):
 
 
 class TestRdict(BaseRtypingTest):
+
+    def test_bug(self):
+        keys = [str(i) for i in range(0, 100, 2)]
+
+        def f():
+            d = {}
+            for key in keys:
+                d[key] = 0
+            for i in range(4):
+                print i
+                d['0'] = 13
+                for j in range(len(keys) - 1):
+                    del d[keys[j]]
+                    d[keys[j + 1]] = 42
+
+        self.interpret(f, [])
 
     def test_dict_creation(self):
         def createdict(i):
