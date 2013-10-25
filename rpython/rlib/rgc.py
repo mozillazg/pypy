@@ -7,6 +7,7 @@ from rpython.rlib import jit
 from rpython.rlib.objectmodel import we_are_translated, enforceargs, specialize
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.rtyper.lltypesystem import lltype, llmemory
+from rpython.rlib.objectmodel import keepalive_until_here
 
 # ____________________________________________________________
 # General GC features
@@ -137,15 +138,38 @@ class MallocNonMovingEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
 
-def copy_struct_item(source, dest, si, di):
+@specialize.ll()
+def copy_struct_item(source, dest, si, di, emit_write_barrier=True):
+    """ Copy struct items. There are two versions - one that emits
+    write barrier and one that does not. The one that does not *must*
+    have write barrier called before the copy
+    """
+    TP = lltype.typeOf(source).TO
+    if emit_write_barrier:
+        _copy_struct_item(source, dest, si, di)
+    else:
+        source_addr = llmemory.cast_ptr_to_adr(source)
+        dest_addr   = llmemory.cast_ptr_to_adr(dest)
+        cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
+                          llmemory.sizeof(TP.OF) * si)
+        cp_dest_addr = (dest_addr + llmemory.itemoffsetof(TP, 0) +
+                        llmemory.sizeof(TP.OF) * di)
+        llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
+                             llmemory.sizeof(TP.OF))
+        keepalive_until_here(source)
+        keepalive_until_here(dest)
+copy_struct_item._always_inline_ = True
+
+def _copy_struct_item(source, dest, si, di):
     TP = lltype.typeOf(source).TO.OF
     i = 0
     while i < len(TP._names):
-        setattr(dest[di], TP._names[i], getattr(source[si], TP._names[i]))
+        setattr(dest[di], TP._names[i],
+                getattr(source[si], TP._names[i]))
         i += 1
 
 class CopyStructEntry(ExtRegistryEntry):
-    _about_ = copy_struct_item
+    _about_ = _copy_struct_item
 
     def compute_result_annotation(self, s_source, s_dest, si, di):
         pass
@@ -189,7 +213,6 @@ def _contains_gcptr(TP):
 @specialize.ll()
 def ll_arraycopy(source, dest, source_start, dest_start, length):
     from rpython.rtyper.lltypesystem.lloperation import llop
-    from rpython.rlib.objectmodel import keepalive_until_here
 
     # XXX: Hack to ensure that we get a proper effectinfo.write_descrs_arrays
     # and also, maybe, speed up very small cases
@@ -266,7 +289,7 @@ def no_release_gil(func):
     func._dont_inline_ = True
     func._no_release_gil_ = True
     return func
-    
+
 def no_collect(func):
     func._dont_inline_ = True
     func._gc_no_collect_ = True

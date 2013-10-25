@@ -624,20 +624,7 @@ def ll_dict_grow(d):
         return True
 
     newitems = lltype.malloc(lltype.typeOf(d).TO.entries.TO, new_allocated)
-    #
-    # XXX we should do this with rgc.ll_arraycopy()!!
-    ENTRY = lltype.typeOf(d).TO.entries.TO.OF
-    i = 0
-    while i < len(d.entries):
-        src = d.entries[i]
-        dst = newitems[i]
-        dst.key = src.key
-        dst.value = src.value
-        if hasattr(ENTRY, 'f_hash'):
-            dst.f_hash = src.f_hash
-        if hasattr(ENTRY, 'f_valid'):
-            dst.f_valid = src.f_valid
-        i += 1
+    rgc.ll_arraycopy(d.entries, newitems, 0, 0, len(d.entries))
     d.entries = newitems
     return False
 

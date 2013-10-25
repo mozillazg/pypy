@@ -228,3 +228,18 @@ def test_get_memory_usage():
     x1 = X()
     n = rgc.get_rpy_memory_usage(rgc.cast_instance_to_gcref(x1))
     assert n >= 8 and n <= 64
+
+def test_copy_struct_items_no_wb():
+    S = lltype.GcArray(lltype.Struct('x', ('a', lltype.Signed), ('b', lltype.Signed)))
+
+    def f():
+        a = lltype.malloc(S, 1)
+        a[0].a = 3
+        a[0].b = 13
+        b = lltype.malloc(S, 1)
+        rgc.copy_struct_item(a, b, 0, 0, False)
+        assert b[0].a == 3
+        assert b[0].b == 13
+
+    f()
+    interpret(f, [])
