@@ -1556,10 +1556,17 @@ class IntegerListStrategy(ListStrategy):
             return self._safe_find(w_list, self.unwrap(w_obj), start, stop)
         elif w_objt is W_FloatObject or w_objt is W_LongObject:
             if w_objt is W_FloatObject:
+                # Floats with a fractional part can never compare True with
+                # respect to an integer, so we convert the float to an int and
+                # see if it compares True to itself or not. If it doesn't, we
+                # can immediately bail out.
+                w_objn = self.space.int(w_obj)
+                if not self.space.eq_w(w_obj, w_objn):
+                    raise ValueError
+                w_obj = w_objn
                 # Asking for an int from a W_FloatObject can return either a
                 # W_IntObject or W_LongObject, so we then need to disambiguate
                 # between the two.
-                w_obj = self.space.int(w_obj)
                 w_objt = type(w_obj)
 
             if w_objt is W_IntObject:
