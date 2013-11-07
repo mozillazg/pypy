@@ -19,6 +19,7 @@ from pypy.interpreter.signature import Signature
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.floatobject import W_FloatObject
 from pypy.objspace.std.intobject import W_IntObject
+from pypy.objspace.std.longobject import W_LongObject
 from pypy.objspace.std.iterobject import (W_FastListIterObject,
     W_ReverseSeqIterObject)
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
@@ -1537,6 +1538,47 @@ class IntegerListStrategy(ListStrategy):
     def getitems_int(self, w_list):
         return self.unerase(w_list.lstorage)
 
+    _orig_find = find
+    def find(self, w_list, w_obj, start, stop):
+        # Find an element in this integer list. For integers, floats, and longs,
+        # we can use primitive comparisons (possibly after a conversion to an
+        # int). For other user types (strings and user objects which don't play
+        # funny tricks with __eq__ etc.) we can prove immediately that an object
+        # could not be in the list and return.
+        #
+        # Note: although it might seem we want to do the clever tricks first,
+        # we expect that the common case is searching for an integer in an
+        # integer list. The clauses of this if are thus ordered in likely order
+        # of frequency of use.
+
+        w_objt = type(w_obj)
+        if w_objt is W_IntObject:
+            return self._safe_find(w_list, self.unwrap(w_obj), start, stop)
+        elif w_objt is W_FloatObject or w_objt is W_LongObject:
+            if w_objt is W_FloatObject:
+                # Asking for an int from a W_FloatObject can return either a
+                # W_IntObject or W_LongObject, so we then need to disambiguate
+                # between the two.
+                w_obj = self.space.int(w_obj)
+                w_objt = type(w_obj)
+
+            if w_objt is W_IntObject:
+                intv = self.unwrap(w_obj)
+            else:
+                assert w_objt is W_LongObject
+                try:
+                    intv = w_obj.toint()
+                except OverflowError:
+                    # Longs which overflow can't possibly be found in an integer
+                    # list.
+                    raise ValueError
+            return self._safe_find(w_list, intv, start, stop)
+        elif w_objt is W_StringObject or w_objt is W_UnicodeObject:
+            raise ValueError
+        elif self.space.type(w_obj).compares_by_identity():
+            raise ValueError
+        return self._orig_find(w_list, w_obj, start, stop)
+
 
     _base_extend_from_list = _extend_from_list
 
@@ -1580,6 +1622,19 @@ class FloatListStrategy(ListStrategy):
 
     def list_is_correct_type(self, w_list):
         return w_list.strategy is self.space.fromcache(FloatListStrategy)
+
+    _orig_find = find
+    def find(self, w_list, w_obj, start, stop):
+        w_objt = type(w_obj)
+        if w_objt is W_FloatObject:
+            return self._safe_find(w_list, self.unwrap(w_obj), start, stop)
+        elif w_objt is W_IntObject or w_objt is W_LongObject:
+            return self._safe_find(w_list, w_obj.float_w(self.space), start, stop)
+        elif w_objt is W_StringObject or w_objt is W_UnicodeObject:
+            raise ValueError
+        elif self.space.type(w_obj).compares_by_identity():
+            raise ValueError
+        return self._orig_find(w_list, w_obj, start, stop)
 
     def sort(self, w_list, reverse):
         l = self.unerase(w_list.lstorage)

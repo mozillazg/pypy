@@ -457,6 +457,39 @@ class AppTestW_ListObject(object):
         assert l.__contains__(2)
         assert not l.__contains__("2")
         assert l.__contains__(1.0)
+        assert l.__contains__(1.1)
+        assert l.__contains__(1.9)
+        assert l.__contains__(1L)
+        assert not l.__contains__(object())
+        assert not l.__contains__(object())
+        class t(object):
+            def __eq__(self, o):
+                if o == 2:
+                    return True
+                return False
+        assert l.__contains__(t())
+        assert not [1,3].__contains__(t())
+        assert "1" not in l
+       
+        l = [1.0,2.0,3.0]
+        assert l.__contains__(2.0)
+        assert l.__contains__(2)
+        assert not l.__contains__(4)
+        assert not l.__contains__("2")
+        assert l.__contains__(1.0)
+        assert not l.__contains__(1.1)
+        assert l.__contains__(1L)
+        assert not l.__contains__(4.0)
+        assert not l.__contains__(object())
+        assert l.__contains__(t())
+        assert not [1.0,3.0].__contains__(t())
+        assert "1" not in l
+
+        import sys
+        l = [sys.maxint]
+        assert l.__contains__(sys.maxint)
+        assert not l.__contains__(sys.maxint + 1)
+        assert not l.__contains__(sys.maxint * 1.0)
 
         l = ["1","2","3"]
         assert l.__contains__("2")
