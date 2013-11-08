@@ -1555,13 +1555,18 @@ class IntegerListStrategy(ListStrategy):
             return self._safe_find(w_list, self.unwrap(w_obj), start, stop)
         elif w_objt is W_FloatObject or w_objt is W_LongObject:
             if w_objt is W_FloatObject:
-                # Floats with a fractional part can never compare True with
-                # respect to an integer, so we convert the float to an int and
-                # see if it compares True to itself or not. If it doesn't, we
-                # can immediately bail out.
+                # We take a conservative approach to floats. Any float which,
+                # when converted into an integer compares true to the
+                # original float, can be compared using a fast case. When that
+                # isn't true, it either means the float is fractional or it's
+                # got to the range that doubles can't accurately represent
+                # (e.g. float(2**53+1) == 2**53+1 evaluates to False). Rather
+                # than encoding potentially platform dependent stuff here, we
+                # simply fall back on the slow-case to be sure we're not
+                # unintentionally changing number semantics.
                 w_objn = self.space.int(w_obj)
                 if not self.space.eq_w(w_obj, w_objn):
-                    raise ValueError
+                    return ListStrategy.find(self, w_list, w_obj, start, stop)
                 w_obj = w_objn
                 # Asking for an int from a W_FloatObject can return either a
                 # W_IntObject or W_LongObject, so we then need to disambiguate
