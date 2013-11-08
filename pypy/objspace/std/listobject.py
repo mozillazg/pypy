@@ -1538,7 +1538,6 @@ class IntegerListStrategy(ListStrategy):
     def getitems_int(self, w_list):
         return self.unerase(w_list.lstorage)
 
-    _orig_find = find
     def find(self, w_list, w_obj, start, stop):
         # Find an element in this integer list. For integers, floats, and longs,
         # we can use primitive comparisons (possibly after a conversion to an
@@ -1584,7 +1583,7 @@ class IntegerListStrategy(ListStrategy):
             raise ValueError
         elif self.space.type(w_obj).compares_by_identity():
             raise ValueError
-        return self._orig_find(w_list, w_obj, start, stop)
+        return ListStrategy.find(self, w_list, w_obj, start, stop)
 
 
     _base_extend_from_list = _extend_from_list
@@ -1630,7 +1629,6 @@ class FloatListStrategy(ListStrategy):
     def list_is_correct_type(self, w_list):
         return w_list.strategy is self.space.fromcache(FloatListStrategy)
 
-    _orig_find = find
     def find(self, w_list, w_obj, start, stop):
         w_objt = type(w_obj)
         if w_objt is W_FloatObject:
@@ -1641,7 +1639,7 @@ class FloatListStrategy(ListStrategy):
             raise ValueError
         elif self.space.type(w_obj).compares_by_identity():
             raise ValueError
-        return self._orig_find(w_list, w_obj, start, stop)
+        return ListStrategy.find(self, w_list, w_obj, start, stop)
 
     def sort(self, w_list, reverse):
         l = self.unerase(w_list.lstorage)
