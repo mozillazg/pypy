@@ -1579,9 +1579,8 @@ class IntegerListStrategy(ListStrategy):
                     # list.
                     raise ValueError
             return self._safe_find(w_list, intv, start, stop)
-        elif w_objt is W_StringObject or w_objt is W_UnicodeObject:
-            raise ValueError
-        elif self.space.type(w_obj).compares_by_identity():
+        elif w_objt is W_StringObject or w_objt is W_UnicodeObject \
+          or self.space.type(w_obj).compares_by_identity():
             raise ValueError
         return ListStrategy.find(self, w_list, w_obj, start, stop)
 
@@ -1635,9 +1634,8 @@ class FloatListStrategy(ListStrategy):
             return self._safe_find(w_list, self.unwrap(w_obj), start, stop)
         elif w_objt is W_IntObject or w_objt is W_LongObject:
             return self._safe_find(w_list, w_obj.float_w(self.space), start, stop)
-        elif w_objt is W_StringObject or w_objt is W_UnicodeObject:
-            raise ValueError
-        elif self.space.type(w_obj).compares_by_identity():
+        elif w_objt is W_StringObject or w_objt is W_UnicodeObject \
+          or self.space.type(w_obj).compares_by_identity(): 
             raise ValueError
         return ListStrategy.find(self, w_list, w_obj, start, stop)
 
