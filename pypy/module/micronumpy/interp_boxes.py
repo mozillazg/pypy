@@ -126,6 +126,15 @@ class W_GenericBox(W_Root):
     def item(self, space):
         return self.get_dtype(space).itemtype.to_builtin_type(space, self)
 
+    def descr_getitem(self, space, w_item):
+        from pypy.module.micronumpy.base import convert_to_array
+        if space.is_w(w_item, space.w_Ellipsis) or \
+                (space.isinstance_w(w_item, space.w_tuple) and
+                    space.len_w(w_item) == 0):
+            return convert_to_array(space, self)
+        raise OperationError(space.w_IndexError, space.wrap(
+            "invalid index to scalar variable"))
+
     def descr_str(self, space):
         return space.wrap(self.get_dtype(space).itemtype.str_format(self))
 
@@ -279,6 +288,9 @@ class W_GenericBox(W_Root):
 
     def descr_get_ndim(self, space):
         return space.wrap(0)
+
+    def descr_copy(self, space):
+        return self.convert_to(self.get_dtype(space))
 
 class W_BoolBox(W_GenericBox, PrimitiveBox):
     descr__new__, _get_dtype, descr_reduce = new_dtype_getter("bool")
@@ -467,6 +479,7 @@ W_GenericBox.typedef = TypeDef("generic",
 
     __new__ = interp2app(W_GenericBox.descr__new__.im_func),
 
+    __getitem__ = interp2app(W_GenericBox.descr_getitem),
     __str__ = interp2app(W_GenericBox.descr_str),
     __repr__ = interp2app(W_GenericBox.descr_str),
     __format__ = interp2app(W_GenericBox.descr_format),
@@ -528,6 +541,7 @@ W_GenericBox.typedef = TypeDef("generic",
     astype = interp2app(W_GenericBox.descr_astype),
     view = interp2app(W_GenericBox.descr_view),
     squeeze = interp2app(W_GenericBox.descr_self),
+    copy = interp2app(W_GenericBox.descr_copy),
 
     dtype = GetSetProperty(W_GenericBox.descr_get_dtype),
     itemsize = GetSetProperty(W_GenericBox.descr_get_itemsize),

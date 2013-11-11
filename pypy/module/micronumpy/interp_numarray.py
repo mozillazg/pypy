@@ -519,10 +519,13 @@ class __extend__(W_NDimArray):
         # by converting nonnative byte order.
         if self.is_scalar():
             return space.wrap(0)
-        s = self.get_dtype().name
-        if not self.get_dtype().is_native():
-            s = s[1:]
-        dtype = interp_dtype.get_dtype_cache(space).dtypes_by_name[s]
+        if not self.get_dtype().is_flexible_type():
+            s = self.get_dtype().name
+            if not self.get_dtype().is_native():
+                s = s[1:]
+            dtype = interp_dtype.get_dtype_cache(space).dtypes_by_name[s]
+        else:
+            dtype = self.get_dtype()
         contig = self.implementation.astype(space, dtype)
         return contig.argsort(space, w_axis)
 
@@ -637,7 +640,8 @@ class __extend__(W_NDimArray):
     def descr_put(self, space, w_indices, w_values, w_mode=None):
         put(space, self, w_indices, w_values, w_mode)
 
-    def descr_resize(self, space, w_new_shape, w_refcheck=True):
+    @unwrap_spec(w_refcheck=WrappedDefault(True))
+    def descr_resize(self, space, w_new_shape, w_refcheck=None):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "resize not implemented yet"))
 
@@ -689,9 +693,17 @@ class __extend__(W_NDimArray):
             return
         return self.implementation.sort(space, w_axis, w_order)
 
-    def descr_squeeze(self, space):
-        raise OperationError(space.w_NotImplementedError, space.wrap(
-            "squeeze not implemented yet"))
+    def descr_squeeze(self, space, w_axis=None):
+        if not space.is_none(w_axis):
+            raise OperationError(space.w_NotImplementedError, space.wrap(
+                "axis unsupported for squeeze"))
+        cur_shape = self.get_shape()
+        new_shape = [s for s in cur_shape if s != 1]
+        if len(cur_shape) == len(new_shape):
+            return self
+        return wrap_impl(space, space.type(self), self,
+                         self.implementation.get_view(
+                             self, self.get_dtype(), new_shape))
 
     def descr_strides(self, space):
         raise OperationError(space.w_NotImplementedError, space.wrap(
@@ -701,7 +713,7 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "tofile not implemented yet"))
 
-    def descr_view(self, space, w_dtype=None, w_type=None) :
+    def descr_view(self, space, w_dtype=None, w_type=None):
         if not w_type and w_dtype:
             try:
                 if space.is_true(space.issubtype(w_dtype, space.gettypefor(W_NDimArray))):
@@ -1215,6 +1227,8 @@ W_NDimArray.typedef = TypeDef(
 
     copy = interp2app(W_NDimArray.descr_copy),
     reshape = interp2app(W_NDimArray.descr_reshape),
+    resize = interp2app(W_NDimArray.descr_resize),
+    squeeze = interp2app(W_NDimArray.descr_squeeze),
     T = GetSetProperty(W_NDimArray.descr_get_transpose),
     transpose = interp2app(W_NDimArray.descr_transpose),
     tolist = interp2app(W_NDimArray.descr_tolist),
