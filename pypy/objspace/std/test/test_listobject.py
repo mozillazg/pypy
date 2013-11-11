@@ -1187,7 +1187,6 @@ class AppTestW_ListObject(object):
                 skip("not reliable on top of Boehm")
         class A(object):
             def __del__(self):
-                print 'del'
                 del lst[:]
         for i in range(10):
             keepalive = []
@@ -1257,7 +1256,6 @@ class AppTestW_ListObject(object):
                 (dict, []), (dict, [(5,6)]), (dict, [('x',7)]), (dict, [(X,8)]),
                 (dict, [(u'x', 7)]),
                 ]:
-            print base, arg
             class SubClass(base):
                 def __iter__(self):
                     return iter("foobar")
