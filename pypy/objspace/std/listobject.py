@@ -896,7 +896,7 @@ class EmptyListStrategy(ListStrategy):
 
     def switch_to_correct_strategy(self, w_list, w_item):
         if type(w_item) is W_IntObject:
-            strategy = self.space.fromcache(IntegerListStrategy)
+            strategy = self.space.fromcache(IntegerListAscendingStrategy)
         elif type(w_item) is W_StringObject:
             strategy = self.space.fromcache(StringListStrategy)
         elif type(w_item) is W_UnicodeObject:
@@ -1010,7 +1010,11 @@ class RangeListStrategy(ListStrategy):
 
     def switch_to_integer_strategy(self, w_list):
         items = self._getitems_range(w_list, False)
-        strategy = w_list.strategy = self.space.fromcache(IntegerListStrategy)
+        start, step, length = self.unerase(w_list.lstorage)
+        if step > 0:
+            strategy = w_list.strategy = self.space.fromcache(IntegerListAscendingStrategy)
+        else:
+            strategy = w_list.strategy = self.space.fromcache(IntegerListStrategy)
         w_list.lstorage = strategy.erase(items)
 
     def wrap(self, intval):
@@ -1518,6 +1522,25 @@ class IntegerListStrategy(ListStrategy):
     def unwrap(self, w_int):
         return self.space.int_w(w_int)
 
+    def init_from_list_w(self, w_list, list_w):
+        # While unpacking integer elements, also determine whether they're
+        # pre-sorted.
+        assert len(list_w) > 0
+        asc = True
+        l = [0] * len(list_w)
+        lst = l[0] = self.unwrap(list_w[0])
+        for i in range(1, len(list_w)):
+            item_w = list_w[i]
+            it = self.unwrap(item_w)
+            if asc and it < lst:
+                asc = False
+            l[i] = it
+            lst = it
+        w_list.lstorage = self.erase(l)
+        if asc:
+            # The list was already sorted into ascending order.
+            w_list.strategy = self.space.fromcache(IntegerListAscendingStrategy)
+
     erase, unerase = rerased.new_erasing_pair("integer")
     erase = staticmethod(erase)
     unerase = staticmethod(unerase)
@@ -1526,7 +1549,8 @@ class IntegerListStrategy(ListStrategy):
         return type(w_obj) is W_IntObject
 
     def list_is_correct_type(self, w_list):
-        return w_list.strategy is self.space.fromcache(IntegerListStrategy)
+        return w_list.strategy is self.space.fromcache(IntegerListStrategy) \
+          or w_list.strategy is self.space.fromcache(IntegerListAscendingStrategy)
 
     def sort(self, w_list, reverse):
         l = self.unerase(w_list.lstorage)
@@ -1534,6 +1558,8 @@ class IntegerListStrategy(ListStrategy):
         sorter.sort()
         if reverse:
             l.reverse()
+        else:
+            w_list.strategy = self.space.fromcache(IntegerListAscendingStrategy)
 
     def getitems_int(self, w_list):
         return self.unerase(w_list.lstorage)
@@ -1611,6 +1637,94 @@ class IntegerListStrategy(ListStrategy):
                     self.space, storage, self)
         return self._base_setslice(w_list, start, step, slicelength, w_other)
 
+class IntegerListAscendingStrategy(IntegerListStrategy):
+    def sort(self, w_list, reverse):
+        if reverse:
+            self.unerase(w_list.lstorage).reverse()
+            w_list.strategy = self.space.fromcache(IntegerListStrategy)
+
+    def append(self, w_list, w_item):
+        if type(w_item) is W_IntObject:
+            l = self.unerase(w_list.lstorage)
+            length = len(l)
+            item = self.unwrap(w_item)
+            if length == 0 or l[length - 1] <= item:
+                l.append(item)
+                return
+        w_list.strategy = self.space.fromcache(IntegerListStrategy)
+        IntegerListStrategy.append(self, w_list, w_item)
+
+    def insert(self, w_list, index, w_item):
+        if type(w_item) is W_IntObject:
+            l = self.unerase(w_list.lstorage)
+            length = len(l)
+            item = self.unwrap(w_item)
+            if length == 0 or \
+              ((index == 0 or l[index - 1] <= item) and (index == length or l[index] >= item)):
+                l.insert(index, item)
+                return
+        w_list.strategy = self.space.fromcache(IntegerListStrategy)
+        IntegerListStrategy.insert(self, w_list, index, w_item)
+
+    def _extend_from_list(self, w_list, w_item):
+        if type(w_item) is W_ListObject and \
+          w_item.strategy is self.space.fromcache(IntegerListAscendingStrategy):
+            self_l = self.unerase(w_list.lstorage)
+            other_l = self.unerase(w_item.lstorage)
+            if len(self_l) == 0 or len(other_l) == 0 or self_l[len(self_l) - 1] <= other_l[0]:
+                self_l.extend(other_l)
+                return
+        w_list.strategy = self.space.fromcache(IntegerListStrategy)
+        IntegerListStrategy._extend_from_list(self,w_list, w_item)
+
+    def setitem(self, w_list, index, w_item):
+        if type(w_item) is W_IntObject:
+            item = self.unwrap(w_item)
+            l = self.unerase(w_list.lstorage)
+            length = len(l)
+            assert len(l) > 0
+            if (index == 0 or l[index - 1] <= item) \
+              and (index == length - 1 or l[index + 1] >= item):
+                l[index] = item
+                return
+        w_list.strategy = self.space.fromcache(IntegerListStrategy)
+        IntegerListStrategy.setitem(self, w_list, index, w_item)
+
+    def setslice(self, w_list, start, step, slicelength, w_other):
+        # XXX could be supported if really desired
+        w_list.strategy = self.space.fromcache(IntegerListStrategy)
+        IntegerListStrategy.setslice(self, w_list, start, step, slicelength, w_other)
+
+    def inplace_mul(self, w_list, times):
+        l = self.unerase(w_list.lstorage)
+        length = len(l)
+        if length == 0:
+            return
+        if l[0] != l[length - 1]:
+            w_list.strategy = self.space.fromcache(IntegerListStrategy)
+        IntegerListStrategy.inplace_mul(self, w_list, times)
+
+    def reverse(self, w_list):
+        self.unerase(w_list.lstorage).reverse()
+        w_list.strategy = self.space.fromcache(IntegerListStrategy)
+
+    def _safe_find(self, w_list, obj, start, stop):
+        if w_list.length() < 16:
+            return IntegerListStrategy._safe_find(self, w_list, obj, start, stop)
+        l = self.unerase(w_list.lstorage)
+        start -= 1
+        stop += 1
+        while stop - start > 1:
+            p = (start + stop) / 2
+            if l[p] < obj:
+                start = p
+            else:
+                stop = p
+        if stop == len(l) or l[stop] != obj:
+            raise ValueError
+        return stop
+
+
 class FloatListStrategy(ListStrategy):
     import_from_mixin(AbstractUnwrappedStrategy)
 
@@ -1640,7 +1754,7 @@ class FloatListStrategy(ListStrategy):
         elif w_objt is W_IntObject or w_objt is W_LongObject:
             return self._safe_find(w_list, w_obj.float_w(self.space), start, stop)
         elif w_objt is W_StringObject or w_objt is W_UnicodeObject \
-          or self.space.type(w_obj).compares_by_identity(): 
+          or self.space.type(w_obj).compares_by_identity():
             raise ValueError
         return ListStrategy.find(self, w_list, w_obj, start, stop)
 
