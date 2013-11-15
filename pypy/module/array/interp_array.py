@@ -236,6 +236,8 @@ class W_ArrayBase(W_Root):
             raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
         oldlen = self.len
         new = len(s) / self.itemsize
+        if not new:
+            return
         self.setlen(oldlen + new)
         cbuf = self._charbuf_start()
         copy_string_to_raw(llstr(s), rffi.ptradd(cbuf, oldlen * self.itemsize), 0, len(s))
