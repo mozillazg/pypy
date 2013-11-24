@@ -1,8 +1,5 @@
 import sys
-from pypy.objspace.std.listobject import W_ListObject, EmptyListStrategy, \
-  ObjectListStrategy, IntegerListStrategy, IntegerListAscendingStrategy, \
-  FloatListStrategy, StringListStrategy, RangeListStrategy, make_range_list, \
-  UnicodeListStrategy
+from pypy.objspace.std.listobject import W_ListObject, EmptyListStrategy, ObjectListStrategy, IntegerListStrategy, FloatListStrategy, StringListStrategy, RangeListStrategy, make_range_list, UnicodeListStrategy
 from pypy.objspace.std import listobject
 from pypy.objspace.std.test.test_listobject import TestW_ListObject
 
@@ -345,6 +342,7 @@ class TestW_ListStrategies(TestW_ListObject):
         r = make_range_list(space, 1,3,7)
         empty.extend(r)
         assert isinstance(empty.strategy, RangeListStrategy)
+        print empty.getitem(6)
         assert space.is_true(space.eq(empty.getitem(1), w(4)))
 
         empty = W_ListObject(space, [])
@@ -482,8 +480,7 @@ class TestW_ListStrategies(TestW_ListObject):
         l1 = make_range_list(self.space, 0, 1, 100)
         l2 = W_ListObject(self.space, [self.space.wrap(1), self.space.wrap(2), self.space.wrap(3)])
         l3 = self.space.add(l2, l1)
-        assert isinstance(l2.strategy, IntegerListAscendingStrategy)
-        assert isinstance(l3.strategy, IntegerListStrategy)
+        assert l3.strategy is l2.strategy
 
     def test_mul(self):
         l1 = W_ListObject(self.space, [self.space.wrap(1), self.space.wrap(2), self.space.wrap(3)])
@@ -661,80 +658,6 @@ class TestW_ListStrategies(TestW_ListObject):
         assert list_orig == list_copy == [1, 2, 3]
         list_copy[0] = 42
         assert list_orig == [1, 2, 3]
-
-    def test_integerascending(self):
-        space = self.space
-        w_l = W_ListObject(space, [space.wrap(1), space.wrap(3)])
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        w_l.append(space.wrap(5))
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-
-        w_l.insert(0, space.wrap(0))
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        w_l.insert(4, space.wrap(6))
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        assert space.listview_int(w_l) == [0, 1, 3, 5 ,6]
-
-        w_l = W_ListObject(space, [])
-        w_l.insert(0, space.wrap(1))
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-
-        w_l = W_ListObject(space, [space.wrap(3), space.wrap(2), space.wrap(4), space.wrap(1)])
-        assert isinstance(w_l.strategy, IntegerListStrategy)
-        l2 = [1, 2, 3, 4] 
-        space.call_method(w_l, "sort")
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        assert space.listview_int(w_l) == l2
-        space.call_method(w_l, "sort")
-        assert space.listview_int(w_l) == l2
-        w_l.append(space.wrap(5))
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        w_l.append(space.wrap(0))
-        assert isinstance(w_l.strategy, IntegerListStrategy)
-
-        w_l = W_ListObject(space, [])
-        space.call_method(w_l, "extend", W_ListObject(space, [space.wrap(1), space.wrap(2)]))
-        assert space.listview_int(w_l) == [1, 2]
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-
-        space.call_method(w_l, "extend", W_ListObject(space, [space.wrap(4)]))
-        assert space.listview_int(w_l) == [1, 2, 4]
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-
-        space.call_method(w_l, "pop")
-        space.call_method(w_l, "pop")
-        space.call_method(w_l, "pop")
-        assert space.listview_int(w_l) == []
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        space.call_method(w_l, "extend", W_ListObject(space, [space.wrap(4)]))
-        assert space.listview_int(w_l) == [4]
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-
-        space.call_method(w_l, "extend", W_ListObject(space, [space.wrap(0)]))
-        assert space.listview_int(w_l) == [4, 0]
-        assert isinstance(w_l.strategy, IntegerListStrategy)
-
-        w_l = W_ListObject(space, [space.wrap(1), space.wrap(3), space.wrap(5)])
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        w_l.setitem(0, space.wrap(0))
-        w_l.setitem(1, space.wrap(4))
-        w_l.setitem(2, space.wrap(6))
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        w_l.setitem(1, space.wrap(7))
-        assert isinstance(w_l.strategy, IntegerListStrategy)
-
-        w_l = W_ListObject(space, [space.wrap(1), space.wrap(1)])
-        w_l.inplace_mul(2)
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        w_l.append(space.wrap(2))
-        w_l.inplace_mul(2)
-        assert isinstance(w_l.strategy, IntegerListStrategy)
-
-        w_l = W_ListObject(space, [space.wrap(1), space.wrap(2)])
-        assert isinstance(w_l.strategy, IntegerListAscendingStrategy)
-        w_l.sort(True)
-        assert isinstance(w_l.strategy, IntegerListStrategy)
-        assert space.listview_int(w_l) == [2, 1]
 
 
 class TestW_ListStrategiesDisabled:

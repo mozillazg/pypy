@@ -526,12 +526,6 @@ class AppTestW_ListObject(object):
         assert not l.__contains__(-20)
         assert not l.__contains__(-21)
 
-        l = list(range(1000))
-        assert l.index(123) == 123
-        del l[123]
-        raises(ValueError, "l.index(123)")
-        assert l.index(124) == 123
-
     def test_call_list(self):
         assert list('') == []
         assert list('abc') == ['a', 'b', 'c']
@@ -582,10 +576,6 @@ class AppTestW_ListObject(object):
         m[0] = 5
         assert m == [5,2,3]
         assert l == [1,2,3]
-
-        l = [1,2,3]
-        l.extend([3,4])
-        assert l == [1, 2, 3, 3, 4]
 
     def test_extend_tuple(self):
         l = l0 = [1]
