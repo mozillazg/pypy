@@ -15,9 +15,15 @@ def alloc_raw_storage(size, track_allocation=True, zero=False):
                          track_allocation=track_allocation,
                          zero=zero)
 
-def raw_storage_getitem(TP, storage, index):
+def raw_storage_getitem_unaligned(TP, storage, index):
     "NOT_RPYTHON"
     return rffi.cast(rffi.CArrayPtr(TP), rffi.ptradd(storage, index))[0]
+
+def raw_storage_getitem(TP, storage, index):
+    "NOT_RPYTHON"
+    ptr = rffi.ptradd(storage, index)
+    # TODO Check that pointer is aligned for TP
+    return rffi.cast(rffi.CArrayPtr(TP), ptr)[0]
 
 def raw_storage_setitem(storage, index, item):
     "NOT_RPYTHON"
@@ -28,6 +34,23 @@ def raw_storage_setitem(storage, index, item):
 def free_raw_storage(storage, track_allocation=True):
     lltype.free(storage, flavor='raw', track_allocation=track_allocation)
 
+class RawStorageGetitemEntryUnaligned(ExtRegistryEntry):
+    _about_ = raw_storage_getitem_unaligned
+
+    def compute_result_annotation(self, s_TP, s_storage, s_index):
+        assert s_TP.is_constant()
+        return annmodel.lltype_to_annotation(s_TP.const)
+
+    def specialize_call(self, hop):
+        assert hop.args_r[1].lowleveltype == RAW_STORAGE_PTR
+        v_storage = hop.inputarg(hop.args_r[1], arg=1)
+        v_index   = hop.inputarg(lltype.Signed, arg=2)
+        hop.exception_cannot_occur()
+        v_addr = hop.genop('cast_ptr_to_adr', [v_storage],
+                           resulttype=llmemory.Address)
+        return hop.genop('raw_load', [v_addr, v_index],
+                         resulttype=hop.r_result.lowleveltype)
+
 class RawStorageGetitemEntry(ExtRegistryEntry):
     _about_ = raw_storage_getitem
 
@@ -36,6 +59,7 @@ class RawStorageGetitemEntry(ExtRegistryEntry):
         return annmodel.lltype_to_annotation(s_TP.const)
 
     def specialize_call(self, hop):
+        # emit code that will 'automatically' copy memory if unaligned
         assert hop.args_r[1].lowleveltype == RAW_STORAGE_PTR
         v_storage = hop.inputarg(hop.args_r[1], arg=1)
         v_index   = hop.inputarg(lltype.Signed, arg=2)
