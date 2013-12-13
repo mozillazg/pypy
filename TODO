@@ -1,0 +1,3 @@
+ - fix jitted assembler
+ - add fast path for aligned float
+ - test non-aligned write, fix

@@ -5,9 +5,10 @@ from rpython.jit.backend.arm.registers import fp, all_regs
 from rpython.jit.backend.llsupport import jitframe
 from rpython.jit.backend.llsupport.llmodel import AbstractLLCPU
 from rpython.rlib.jit_hooks import LOOP_RUN_CONTAINER
-from rpython.rtyper.lltypesystem import lltype, llmemory
+from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from rpython.jit.backend.arm.detect import detect_hardfloat
 from rpython.jit.backend.arm.detect import detect_arch_version
+from rpython.jit.codewriter import longlong
 
 jitframe.STATICSIZE = JITFRAME_FIXED_SIZE
 
@@ -116,6 +117,21 @@ class AbstractARMCPU(AbstractLLCPU):
         from rpython.jit.backend.arm.regalloc import Regalloc
         assert self.assembler is not None
         return Regalloc(self.assembler)
+
+    def bh_raw_load_f(self, struct, offset, descr):
+        ll_p = rffi.cast(rffi.CCHARP, struct)
+        ll_p_offset = rffi.ptradd(ll_p, offset)
+	if rffi.cast(lltype.Signed, ll_p_offset) & 3:
+            with lltype.scoped_alloc(rffi.CArray(longlong.FLOATSTORAGE), 1) as s_array:
+		rffi.c_memcpy(rffi.cast(rffi.VOIDP, s_array),
+                              rffi.cast(rffi.VOIDP, ll_p_offset),
+                              rffi.sizeof(rffi.DOUBLE))
+        	ll_p = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE),
+                         s_array)
+		return ll_p[0]
+        ll_p = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE),
+                         ll_p_offset)
+        return ll_p[0]
 
 
 class CPU_ARM(AbstractARMCPU):

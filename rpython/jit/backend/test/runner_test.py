@@ -4024,6 +4024,38 @@ class LLtypeBackendTest(BaseBackendTest):
             assert result == rffi.cast(lltype.Float, value)
             rawstorage.free_raw_storage(p)
 
+    def test_raw_load_float_unaligned(self):
+        if not self.cpu.supports_floats:
+            py.test.skip("requires floats")
+        from rpython.rlib import rawstorage
+        for T in [rffi.DOUBLE]:
+            ops = """
+            [i0, i1]
+            f2 = raw_load(i0, i1, descr=arraydescr)
+            finish(f2)
+            """
+            arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
+            p_aligned = rawstorage.alloc_raw_storage(33)
+            for i in range(33):
+                p_aligned[i] = '\xDD'
+            value = rffi.cast(T, 1.12e20)
+            p = rffi.ptradd(p_aligned,1)
+            rawstorage.raw_storage_setitem(p, 16, value)
+            got = self.cpu.bh_raw_load_f(rffi.cast(lltype.Signed, p), 16,
+                                         arraydescr)
+            got = longlong.getrealfloat(got)
+            assert got == rffi.cast(lltype.Float, value)
+            #
+            loop = parse(ops, self.cpu, namespace=locals())
+            looptoken = JitCellToken()
+            self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
+            deadframe = self.cpu.execute_token(looptoken,
+                                               rffi.cast(lltype.Signed, p), 16)
+            result = self.cpu.get_float_value(deadframe, 0)
+            result = longlong.getrealfloat(result)
+            assert result == rffi.cast(lltype.Float, value)
+            rawstorage.free_raw_storage(p_aligned)
+
     def test_raw_load_singlefloat(self):
         if not self.cpu.supports_singlefloats:
             py.test.skip("requires singlefloats")
