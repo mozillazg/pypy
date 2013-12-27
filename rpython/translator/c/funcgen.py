@@ -695,6 +695,7 @@ class FunctionCodeGenerator(object):
     OP_BARE_RAW_STORE = OP_RAW_STORE
 
     def OP_RAW_LOAD(self, op):
+        xxx
         addr = self.expr(op.args[0])
         offset = self.expr(op.args[1])
         result = self.expr(op.result)

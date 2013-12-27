@@ -766,6 +766,7 @@ class ResOpAssembler(BaseAssembler):
     emit_op_getarrayitem_gc_pure = emit_op_getarrayitem_gc
 
     def emit_op_raw_load(self, op, arglocs, regalloc, fcond):
+        xxx
         res_loc, base_loc, ofs_loc, scale, ofs = arglocs
         assert ofs_loc.is_core_reg()
         # no base offset

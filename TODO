@@ -1,3 +1,5 @@
- - fix jitted assembler
+ - add test for unaligned OP_RAW_LOAD in translator/c/funcgen
+ - fix jitted assembler, new opcode?
  - add fast path for aligned float
- - test non-aligned write, fix
+ - repeat all this for raw_store
+ - use in pypy/module/_rawffi instead of write_ptr, read_ptr
