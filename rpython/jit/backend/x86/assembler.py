@@ -1409,7 +1409,6 @@ class Assembler386(BaseAssembler):
     genop_getarrayitem_raw_pure = genop_getarrayitem_gc
 
     def genop_raw_load(self, op, arglocs, resloc):
-        xxx # This seems to relate to pointers?
         base_loc, ofs_loc, size_loc, ofs, sign_loc = arglocs
         assert isinstance(ofs, ImmedLoc)
         src_addr = addr_add(base_loc, ofs_loc, ofs.value, 0)
