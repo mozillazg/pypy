@@ -19,7 +19,7 @@ class LivenessAnalyzer(AbstractResumeReader):
         self.framestack.append([None] * jitcode.num_regs())
 
     def resume_put(self, box, framepos, frontend_pos):
-        self.framestack[-framepos - 1][frontend_pos] = box
+        self.framestack[framepos][frontend_pos] = box
 
     def resume_new(self, result, descr):
         self.deps[result] = {}

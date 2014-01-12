@@ -30,6 +30,7 @@ class Frame(object):
 
 class MockMetaInterp(object):
     def __init__(self):
+        self.cpu = MockCPU()
         self.framestack = []
 
     def newframe(self, jitcode):
@@ -45,14 +46,23 @@ class MockCPU(object):
 
 class RebuildingResumeReader(BoxResumeReader):
     def __init__(self):
-        self.backend_values = {}
         self.metainterp = MockMetaInterp()
 
+    def put_box_int(self, frame, position, jitframe_pos):
+        frame.registers_i[position] = jitframe_pos
+
+    def put_box_float(self, frame, position, jitframe_pos):
+        xxx
+
+    def put_box_ref(self, frame, position, jitframe_pos):
+        xxx
+
     def finish(self):
-        l = []
+        framestack = []
         for frame in self.metainterp.framestack:
-            frame.dump_registers(l, self.backend_values)
-        return l
+            framestack.append(frame.registers_i + frame.registers_r +
+                              frame.registers_f)
+        return framestack
 
 def rebuild_locs_from_resumedata(faildescr):
     return RebuildingResumeReader().rebuild(faildescr)
@@ -161,27 +171,23 @@ class TestResumeDirect(object):
         """, namespace={'jitcode':jitcode1})
 
     def test_reconstructing_resume_reader(self):
-        py.test.skip("xxx")
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=2, num_regs_f=0, num_regs_r=0)
         jitcode2 = JitCode("jitcode2")
         jitcode2.setup(num_regs_i=1, num_regs_f=0, num_regs_r=0)
         resume_loop = parse("""
-        [i0, i1, i2, i3]
+        []
         enter_frame(-1, descr=jitcode1)
-        resume_put(i0, 0, 1)
-        backend_attach(i0, 11)
+        resume_put(11, 0, 1)
         enter_frame(12, descr=jitcode2)
-        resume_put(i1, 0, 0)
-        backend_attach(i1, 12)
-        resume_put(i3, 1, 0)
-        backend_attach(i3, 8)
+        resume_put(12, 1, 0)
+        resume_put(8, 0, 0)
         leave_frame()
         leave_frame()
         """, namespace={'jitcode1': jitcode1,
                         'jitcode2': jitcode2})
         descr = Descr()
         descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 8
+        descr.rd_bytecode_position = 5
         locs = rebuild_locs_from_resumedata(descr)
-        assert locs == [8, 11, 12]
+        assert locs == [[8, 11], [12]]

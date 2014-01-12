@@ -34,7 +34,7 @@ class AbstractResumeReader(object):
             elif op.getopnum() == rop.LEAVE_FRAME:
                 self.leave_frame()
             elif op.getopnum() == rop.RESUME_PUT:
-                self.resume_put(op.getarg(0).getint(), op.getarg(1).getint(),
+                self.resume_put(op.getarg(0), op.getarg(1).getint(),
                          op.getarg(2).getint())
             elif op.getopnum() == rop.RESUME_NEW:
                 self.resume_new(op.result, op.getdescr())
@@ -48,7 +48,8 @@ class AbstractResumeReader(object):
                 xxx
             pos += 1
 
-    def resume_put(self, jitframe_pos, depth, frontend_position):
+    def resume_put(self, jitframe_pos_const, depth, frontend_position):
+        jitframe_pos = jitframe_pos_const.getint()
         jitcode = self.metainterp.framestack[-1].jitcode
         frame = self.metainterp.framestack[depth]
         if frontend_position < jitcode.num_regs_i():

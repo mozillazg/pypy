@@ -339,16 +339,13 @@ class AbstractLLCPU(AbstractCPU):
         assert isinstance(res, history.AbstractFailDescr)
         return res
 
-    def get_int_value(self, deadframe, locs, pos):
+    def get_int_value(self, deadframe, pos):
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr
         ofs = self.unpack_arraydescr(descr)
-        if locs is None:
-            assert pos == 0
-        else:
-            pos = locs[pos] * WORD
-        return self.read_int_at_mem(deadframe, pos + ofs, WORD, 1)
+        return self.read_int_at_mem(deadframe, pos * WORD + ofs, WORD, 1)
 
     def get_ref_value(self, deadframe, locs, pos):
+        xxx
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr
         ofs = self.unpack_arraydescr(descr)
         if locs is None:
@@ -357,14 +354,10 @@ class AbstractLLCPU(AbstractCPU):
             pos = locs[pos] * WORD
         return self.read_ref_at_mem(deadframe, pos + ofs)
 
-    def get_float_value(self, deadframe, locs, pos):
+    def get_float_value(self, deadframe, pos):
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr
         ofs = self.unpack_arraydescr(descr)
-        if locs is None:
-            assert pos == 0
-        else:
-            pos = locs[pos] * WORD
-        return self.read_float_at_mem(deadframe, pos + ofs)
+        return self.read_float_at_mem(deadframe, pos * WORD + ofs)
 
     # ____________________ RAW PRIMITIVES ________________________
 

@@ -69,11 +69,11 @@ class Runner(object):
         else:
             self.guard_failed = True
         if result_type == 'int':
-            return BoxInt(self.cpu.get_int_value(deadframe, locs, 0))
+            return BoxInt(self.cpu.get_int_value(deadframe, 0))
         elif result_type == 'ref':
-            return BoxPtr(self.cpu.get_ref_value(deadframe, locs, 0))
+            return BoxPtr(self.cpu.get_ref_value(deadframe, 0))
         elif result_type == 'float':
-            return BoxFloat(self.cpu.get_float_value(deadframe, locs, 0))
+            return BoxFloat(self.cpu.get_float_value(deadframe, 0))
         elif result_type == 'void':
             return None
         else:
@@ -132,7 +132,7 @@ class BaseBackendTest(Runner):
         self.cpu.compile_loop(None, inputargs, operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
-        res = self.cpu.get_int_value(deadframe, None, 0)
+        res = self.cpu.get_int_value(deadframe, 0)
         assert res == 3
         assert fail.identifier == 1
 
@@ -151,7 +151,7 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken,
                                            longlong.getfloatstorage(2.8))
         fail = self.cpu.get_latest_descr(deadframe)
-        res = self.cpu.get_float_value(deadframe, None, 0)
+        res = self.cpu.get_float_value(deadframe, 0)
         assert longlong.getrealfloat(res) == 5.1
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 1
@@ -172,7 +172,6 @@ class BaseBackendTest(Runner):
             ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(0)],
                          None),
             ResOperation(rop.GUARD_TRUE, [i2], None, descr=BasicFailDescr(2)),
-            ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.JUMP, [i1], None, descr=targettoken),
             ]
         inputargs = [i0]
@@ -181,8 +180,7 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 2
-        locs = rebuild_locs_from_resumedata(fail)
-        res = self.cpu.get_int_value(deadframe, locs, 0)
+        res = self.cpu.get_int_value(deadframe, 0)
         assert res == 10
 
     def test_backends_dont_keep_loops_alive(self):
@@ -357,7 +355,7 @@ class BaseBackendTest(Runner):
             deadframe = self.cpu.execute_token(looptoken, value)
             fail = self.cpu.get_latest_descr(deadframe)
             assert fail is faildescr
-            res = self.cpu.get_float_value(deadframe, None, 0)
+            res = self.cpu.get_float_value(deadframe, 0)
             assert longlong.getrealfloat(res) == -61.25
 
             looptoken = JitCellToken()
@@ -368,7 +366,7 @@ class BaseBackendTest(Runner):
             deadframe = self.cpu.execute_token(looptoken)
             fail = self.cpu.get_latest_descr(deadframe)
             assert fail is faildescr
-            res = self.cpu.get_float_value(deadframe, None, 0)
+            res = self.cpu.get_float_value(deadframe, 0)
             assert longlong.getrealfloat(res) == 42.5
 
     def test_execute_operations_in_env(self):
