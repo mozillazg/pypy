@@ -260,7 +260,7 @@ class LLtypeMixin(object):
     register_known_gctype(cpu, ptrobj_immut_vtable,   PTROBJ_IMMUT)
 
     jitcode = JitCode('name')
-    jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
+    jitcode.setup(num_regs_i=2, num_regs_r=1, num_regs_f=0)
 
     namespace = locals()
 
