@@ -789,8 +789,11 @@ class LLFrame(object):
         values = []
         for i in range(len(self.current_op.failargs)):
             arg = self.current_op.failargs[i]
-            value = self.env[arg]
-            values.append(value)
+            if arg is None:
+                values.append(None)
+            else:
+                value = self.env[arg]
+                values.append(value)
         if hasattr(descr, '_llgraph_bridge'):
             target = (descr._llgraph_bridge, -1)
             raise Jump(target, values)

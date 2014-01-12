@@ -91,6 +91,10 @@ class DirectResumeReader(AbstractResumeReader):
         val = self.cpu.get_int_value(self.deadframe, jitframe_pos)
         self.bhinterp_stack[frame_no].registers_i[frontend_position] = val
 
+    def put_box_ref(self, frame_no, frontend_position, jitframe_pos):
+        val = self.cpu.get_ref_value(self.deadframe, jitframe_pos)
+        self.bhinterp_stack[frame_no].registers_r[frontend_position] = val
+
     def resume_set_pc(self, pc):
         self.bhinterp_stack[-1].position = pc
 
