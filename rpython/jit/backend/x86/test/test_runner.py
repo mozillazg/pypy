@@ -9,9 +9,11 @@ from rpython.jit.backend.detect_cpu import getcpuclass
 from rpython.jit.backend.x86.arch import WORD
 from rpython.jit.backend.x86.rx86 import fits_in_32bits
 from rpython.jit.backend.llsupport import symbolic
+from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.executor import execute
 from rpython.jit.backend.test.runner_test import LLtypeBackendTest
+from rpython.jit.metainterp.test.test_resume2 import rebuild_locs_from_resumedata
 from rpython.jit.tool.oparser import parse
 import ctypes
 
@@ -266,6 +268,8 @@ class TestX86(LLtypeBackendTest):
         p = lltype.cast_opaque_ptr(llmemory.GCREF,
                                    lltype.malloc(lltype.GcStruct('x')))
         nullptr = lltype.nullptr(llmemory.GCREF.TO)
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         f = BoxInt()
         for op in allops:
             for guard in guards:
@@ -278,18 +282,28 @@ class TestX86(LLtypeBackendTest):
                 for b in (bp, n):
                     i1 = BoxInt(1)
                     ops = [
+                        ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None,
+                                     descr=jitcode),
                         ResOperation(rop.SAME_AS, [ConstInt(1)], i1),
                         ResOperation(op, [b], f),
+                        ResOperation(rop.RESUME_PUT, [i1, ConstInt(0),
+                                                      ConstInt(0)],
+                                                      None),
                         ResOperation(guard, [f], None,
-                                     descr=BasicFailDescr()),
+                                     descr=BasicFailDescr(1)),
                         ResOperation(rop.FINISH, [ConstInt(0)], None,
-                                     descr=BasicFinalDescr()),
+                                     descr=BasicFinalDescr(0)),
                         ]
-                    ops[-2].setfailargs([i1])
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(None, [b], ops, looptoken)
                     deadframe = self.cpu.execute_token(looptoken, b.value)
-                    result = self.cpu.get_int_value(deadframe, 0)
+                    descr = self.cpu.get_latest_descr(deadframe)
+                    if isinstance(descr, BasicFinalDescr):
+                        pos = 0
+                    else:
+                        locs = rebuild_locs_from_resumedata(descr)
+                        pos = locs[0][0]
+                    result = self.cpu.get_int_value(deadframe, pos)
                     if guard == rop.GUARD_FALSE:
                         assert result == execute(self.cpu, None,
                                                  op, None, b).value
@@ -317,26 +331,38 @@ class TestX86(LLtypeBackendTest):
         guards = [rop.GUARD_FALSE, rop.GUARD_TRUE]
         all = [rop.INT_EQ, rop.INT_NE, rop.INT_LE, rop.INT_LT, rop.INT_GT,
                rop.INT_GE, rop.UINT_GT, rop.UINT_LT, rop.UINT_LE, rop.UINT_GE]
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         for a, b in boxes:
             for guard in guards:
                 for op in all:
                     res = BoxInt()
                     i1 = BoxInt(1)
                     ops = [
+                        ResOperation(rop.ENTER_FRAME, [ConstInt(-1)],
+                                     None, descr=jitcode),
                         ResOperation(rop.SAME_AS, [ConstInt(1)], i1),
                         ResOperation(op, [a, b], res),
+                        ResOperation(rop.RESUME_PUT, [i1, ConstInt(0),
+                                                      ConstInt(0)], None),
                         ResOperation(guard, [res], None,
-                                     descr=BasicFailDescr()),
+                                     descr=BasicFailDescr(1)),
                         ResOperation(rop.FINISH, [ConstInt(0)], None,
-                                     descr=BasicFinalDescr()),
+                                     descr=BasicFinalDescr(0)),
                         ]
-                    ops[-2].setfailargs([i1])
                     inputargs = [i for i in (a, b) if isinstance(i, Box)]
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(None, inputargs, ops, looptoken)
                     inputvalues = [box.value for box in inputargs]
                     deadframe = self.cpu.execute_token(looptoken, *inputvalues)
-                    result = self.cpu.get_int_value(deadframe, 0)
+
+                    descr = self.cpu.get_latest_descr(deadframe)
+                    if isinstance(descr, BasicFinalDescr):
+                        pos = 0
+                    else:
+                        locs = rebuild_locs_from_resumedata(descr)
+                        pos = locs[0][0]
+                    result = self.cpu.get_int_value(deadframe, pos)
                     expected = execute(self.cpu, None, op, None, a, b).value
                     if guard == rop.GUARD_FALSE:
                         assert result == expected
@@ -535,12 +561,12 @@ class TestDebuggingAssembler(object):
         debug_merge_point('xyz', 0, 0)
         i1 = int_add(i0, 1)
         i2 = int_ge(i1, 10)
-        guard_false(i2) []
+        guard_false(i2)
         label(i1, descr=targettoken)
         debug_merge_point('xyz', 0, 0)
         i11 = int_add(i1, 1)
         i12 = int_ge(i11, 10)
-        guard_false(i12) []
+        guard_false(i12)
         jump(i11, descr=targettoken)
         """
         ops = parse(loop, namespace={'targettoken': targettoken,
