@@ -252,7 +252,7 @@ class BaseBackendTest(Runner):
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 2
         locs = rebuild_locs_from_resumedata(fail)
-        res = self.cpu.get_int_value(deadframe, locs, 0)
+        res = self.cpu.get_int_value(deadframe, 0)
         assert res == 20
 
         assert self.cpu.tracker.total_compiled_loops == 1
@@ -285,7 +285,7 @@ class BaseBackendTest(Runner):
             bridge.append(ResOperation(rop.INT_ADD, [iprev, ConstInt(1)], i1))
             iprev = i1
         for i, i1 in enumerate(i1list):
-            bridge.append(ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(i)], None))
+            bridge.append(ResOperation(rop.RESUME_PUT, [i1, ConstInt(1), ConstInt(i)], None))
         bridge.append(ResOperation(rop.GUARD_FALSE, [i0], None,
                                    descr=BasicFailDescr(3)))
         bridge.append(ResOperation(rop.FINISH, [], None,
@@ -299,7 +299,7 @@ class BaseBackendTest(Runner):
         locs = rebuild_locs_from_resumedata(fail)
         assert fail.identifier == 3
         for i in range(len(i1list)):
-            res = self.cpu.get_int_value(deadframe, locs, i + 1)
+            res = self.cpu.get_int_value(deadframe, locs[1][i])
             assert res == 2 + i
 
     def test_finish(self):
@@ -321,7 +321,7 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, 99)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail is faildescr
-        res = self.cpu.get_int_value(deadframe, None, 0)
+        res = self.cpu.get_int_value(deadframe, 0)
         assert res == 99
 
         looptoken = JitCellToken()
@@ -332,7 +332,7 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail is faildescr
-        res = self.cpu.get_int_value(deadframe, None, 0)
+        res = self.cpu.get_int_value(deadframe, 0)
         assert res == 42
 
         looptoken = JitCellToken()
@@ -397,8 +397,8 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, 0, 10)
         fail = self.cpu.get_latest_descr(deadframe)
         locs = rebuild_locs_from_resumedata(fail)
-        assert self.cpu.get_int_value(deadframe, locs, 0) == 0
-        assert self.cpu.get_int_value(deadframe, locs, 1) == 55
+        assert self.cpu.get_int_value(deadframe, locs[0][0]) == 0
+        assert self.cpu.get_int_value(deadframe, locs[0][1]) == 55
 
     def test_int_operations(self):
         from rpython.jit.metainterp.test.test_executor import get_int_tests
@@ -469,12 +469,13 @@ class BaseBackendTest(Runner):
                 fail = self.cpu.get_latest_descr(deadframe)
                 if (z == boom) ^ reversed:
                     locs = rebuild_locs_from_resumedata(fail)
+                    pos = locs[0][0]
                     assert fail.identifier == 1
                 else:
-                    locs = None
+                    pos = 0
                     assert fail.identifier == 2
                 if z != boom:
-                    assert self.cpu.get_int_value(deadframe, locs, 0) == z
+                    assert self.cpu.get_int_value(deadframe, pos) == z
                 excvalue = self.cpu.grab_exc_value(deadframe)
                 assert not excvalue
 

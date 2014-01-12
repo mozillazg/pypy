@@ -522,8 +522,9 @@ class Assembler386(BaseAssembler):
             operations = self._inject_debugging_code(faildescr, operations,
                                                      'b', descr_number)
 
+        arglocs = self.rebuild_faillocs_from_descr(faildescr, inputframes,
+                                                   backend_positions)
         inputargs = flatten(inputframes)
-        arglocs = self.rebuild_faillocs_from_descr(faildescr, inputargs, backend_positions)
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         startpos = self.mc.get_relative_pos()
         operations = regalloc.prepare_bridge(inputframes, arglocs,
