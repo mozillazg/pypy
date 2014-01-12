@@ -71,6 +71,7 @@ class LLTrace(object):
         #
         self.inputargs = map(mapping, inputargs)
         self.operations = []
+        xxxx
         resumebuilder = LLGraphResumeBuilder()
         for op in operations:
             if op.is_resume():
@@ -231,7 +232,7 @@ class LLGraphCPU(model.AbstractCPU):
                      name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
         looptoken.compiled_loop_token = clt
-        lltrace = LLTrace(inputargs, operations)
+        lltrace = LLTrace(inputargs, operations, None)
         clt._llgraph_loop = lltrace
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
@@ -240,7 +241,7 @@ class LLGraphCPU(model.AbstractCPU):
                        original_loop_token, log=True):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
-        lltrace = LLTrace(inputargs, operations)
+        lltrace = LLTrace(inputargs, operations, faildescr)
         faildescr._llgraph_bridge = lltrace
         clt._llgraph_alltraces.append(lltrace)
         self._record_labels(lltrace)
