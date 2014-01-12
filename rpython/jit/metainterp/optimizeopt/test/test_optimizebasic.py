@@ -168,14 +168,20 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_simple(self):
         ops = """
         [i]
+        enter_frame(-1, descr=jitcode)
         i0 = int_sub(i, 1)
-        guard_value(i0, 0) [i0]
+        resume_put(i0, 0, 0)
+        guard_value(i0, 0)
+        leave_frame()
         jump(i)
         """
         expected = """
         [i]
+        enter_frame(-1, descr=jitcode)
         i0 = int_sub(i, 1)
-        guard_value(i0, 0) [i0]
+        resume_put(i0, 0, 0)
+        guard_value(i0, 0)
+        leave_frame()
         jump(1)
         """
         self.optimize_loop(ops, expected)

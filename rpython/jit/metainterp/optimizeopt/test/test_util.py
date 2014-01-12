@@ -19,6 +19,7 @@ from rpython.jit.metainterp.jitprof import EmptyProfiler
 from rpython.config.translationoption import get_combined_translation_config
 from rpython.jit.metainterp.resoperation import rop, opname, ResOperation
 from rpython.jit.metainterp.optimizeopt.unroll import Inliner
+from rpython.jit.codewriter.jitcode import JitCode
 
 def test_sort_descrs():
     class PseudoDescr(AbstractDescr):
@@ -50,26 +51,6 @@ def test_equaloplists():
     py.test.raises(AssertionError,
                    "equaloplists(loop1.operations, loop3.operations)")
 
-def test_equaloplists_fail_args():
-    ops = """
-    [i0]
-    i1 = int_add(i0, 1)
-    i2 = int_add(i1, 1)
-    guard_true(i1) [i2, i1]
-    jump(i1)
-    """
-    namespace = {}
-    loop1 = pure_parse(ops, namespace=namespace)
-    loop2 = pure_parse(ops.replace("[i2, i1]", "[i1, i2]"),
-                       namespace=namespace)
-    py.test.raises(AssertionError,
-                   "equaloplists(loop1.operations, loop2.operations)")
-    assert equaloplists(loop1.operations, loop2.operations,
-                        strict_fail_args=False)
-    loop3 = pure_parse(ops.replace("[i2, i1]", "[i2, i0]"),
-                       namespace=namespace)
-    py.test.raises(AssertionError,
-                   "equaloplists(loop1.operations, loop3.operations)")
 
 # ____________________________________________________________
 
@@ -278,6 +259,9 @@ class LLtypeMixin(object):
     register_known_gctype(cpu, intobj_immut_vtable,   INTOBJ_IMMUT)
     register_known_gctype(cpu, ptrobj_immut_vtable,   PTROBJ_IMMUT)
 
+    jitcode = JitCode('name')
+    jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
+
     namespace = locals()
 
 # ____________________________________________________________
@@ -325,21 +309,20 @@ def _sortboxes(boxes):
     _kind2count = {history.INT: 1, history.REF: 2, history.FLOAT: 3}
     return sorted(boxes, key=lambda box: _kind2count[box.type])
 
+fail_descr = history.BasicFailDescr(1)
+final_descr = history.BasicFinalDescr(2)
+
+def invent_fail_descr(model, opnum):
+    if opnum == rop.FINISH:
+        return final_descr
+    return fail_descr
+
 class BaseTest(object):
 
     def parse(self, s, boxkinds=None):
         return parse(s, self.cpu, self.namespace,
                      type_system=self.type_system,
-                     boxkinds=boxkinds,
-                     invent_fail_descr=self.invent_fail_descr)
-
-    def invent_fail_descr(self, model, opnum, fail_args):
-        if fail_args is None:
-            return None
-        descr = Storage()
-        descr.rd_frame_info_list = resume.FrameInfo(None, "code", 11)
-        descr.rd_snapshot = resume.Snapshot(None, _sortboxes(fail_args))
-        return descr
+                     boxkinds=boxkinds, invent_fail_descr=invent_fail_descr)
 
     def assert_equal(self, optimized, expected, text_right=None):
         from rpython.jit.metainterp.optimizeopt.util import equaloplists
@@ -349,7 +332,7 @@ class BaseTest(object):
             assert box1.__class__ == box2.__class__
             remap[box2] = box1
         assert equaloplists(optimized.operations,
-                            expected.operations, False, remap, text_right)
+                            expected.operations, remap, text_right)
 
     def _do_optimize_loop(self, loop, call_pure_results):
         from rpython.jit.metainterp.optimizeopt import optimize_trace
