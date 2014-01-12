@@ -26,7 +26,7 @@ class Frame(object):
     def dump_registers(self, lst, backend_values):
         lst += [backend_values[x] for x in self.registers_i]
         lst += [backend_values[x] for x in self.registers_r]
-        lst += [backend_values[x] for x in self.registers_f]        
+        lst += [backend_values[x] for x in self.registers_f]
 
 class MockMetaInterp(object):
     def __init__(self):

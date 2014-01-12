@@ -4,11 +4,15 @@ from rpython.jit.metainterp.history import ConstInt
 from rpython.jit.metainterp.resume2 import ResumeBytecode, AbstractResumeReader
 
 class LivenessAnalyzer(AbstractResumeReader):
-    def __init__(self):
+    def __init__(self, inputframes=None):
         self.liveness = {}
         self.frame_starts = [0]
         self.framestack = []
         self.deps = {}
+        if inputframes is not None:
+            for frame in inputframes:
+                self.frame_starts.append(self.frame_starts[-1] + len(frame))
+                self.framestack.append(frame)
 
     def enter_frame(self, pc, jitcode):
         self.frame_starts.append(self.frame_starts[-1] + jitcode.num_regs())
@@ -47,19 +51,33 @@ class ResumeBuilder(object):
         self.regalloc = regalloc
         self.current_attachment = {}
         self.frontend_liveness = frontend_liveness
+        self.frontend_pos = {}
 
     def process(self, op):
-        self.newops.append(op)
+        if op.getopnum() == rop.RESUME_PUT:
+            box = op.getarg(0)
+            args = op.getarglist()
+            pos = self.regalloc.loc(box).get_jitframe_position()
+            self.current_attachment[box] = pos
+            self.frontend_pos[box] = (args[1], args[2])
+            args[0] = ConstInt(pos)
+            newop = op.copy_and_change(rop.RESUME_PUT, args=args)
+        else:
+            newop = op
+        self.newops.append(newop)
 
     def _mark_visited(self, v, loc):
         pos = loc.get_jitframe_position()
         if (v not in self.frontend_liveness or
             self.frontend_liveness[v] < self.regalloc.rm.position):
             return
-        if (v not in self.current_attachment or
-            self.current_attachment[v] != pos):
-            self.newops.append(ResOperation(rop.BACKEND_ATTACH, [
-                v, ConstInt(pos)], None))
+        if v not in self.current_attachment:
+            return
+        if self.current_attachment[v] != pos:
+            frame_index, frame_pos = self.frontend_pos[v]
+            self.newops.append(ResOperation(rop.RESUME_PUT, [
+                ConstInt(pos), frame_index, frame_pos],
+                None))
         self.current_attachment[v] = pos
 
     def mark_resumable_position(self):

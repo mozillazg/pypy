@@ -35,19 +35,15 @@ class ResumeTest(object):
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
         descr = loop.operations[2].getdescr()
-        assert descr.rd_bytecode_position == 3
+        assert descr.rd_bytecode_position == 2
         expected_resume = parse("""
-        [i0]
+        []
         enter_frame(-1, descr=jitcode)
-        resume_put(i0, 0, 2)
-        backend_attach(i0, 28)
+        resume_put(28, 0, 2)
         leave_frame()
         """, namespace={'jitcode': jitcode})
-        i0 = descr.rd_resume_bytecode.opcodes[1].getarg(0)
-        i0b = expected_resume.inputargs[0]
         equaloplists(descr.rd_resume_bytecode.opcodes,
-                     expected_resume.operations,
-                     remap={i0b:i0})
+                     expected_resume.operations)
 
     def test_resume_new(self):
         jitcode = JitCode("name")
@@ -76,17 +72,13 @@ class ResumeTest(object):
         enter_frame(-1, descr=jitcode)
         p0 = resume_new(descr=structdescr)
         resume_setfield_gc(p0, i0, descr=fielddescr)
-        resume_put(p0, 0, 0)
-        backend_attach(i0, 28)
+        resume_put(30, 0, 0)
         leave_frame()
         """, namespace=namespace)
         descr = loop.operations[-3].getdescr()
-        assert descr.rd_bytecode_position == 5
-        i0 = descr.rd_resume_bytecode.opcodes[2].getarg(1)
-        i0b = expected_resume.inputargs[0]
+        assert descr.rd_bytecode_position == 4
         equaloplists(descr.rd_resume_bytecode.opcodes,
-                     expected_resume.operations,
-                     remap={i0b:i0})
+                     expected_resume.operations)
 
     def test_spill(self):
         jitcode = JitCode("name")
@@ -111,17 +103,13 @@ class ResumeTest(object):
         expected_resume = parse("""
         [i2]
         enter_frame(-1, descr=jitcode)
-        resume_put(i2, 0, 1)
-        backend_attach(i2, 1)
-        backend_attach(i2, 29)
+        resume_put(1, 0, 1)
+        resume_put(29, 0, 1)
         leave_frame()
         """, namespace={'jitcode':jitcode})
         descr1 = loop.operations[3].getdescr()
         descr2 = loop.operations[5].getdescr()
-        assert descr1.rd_bytecode_position == 3
-        assert descr2.rd_bytecode_position == 4
-        i0 = descr1.rd_resume_bytecode.opcodes[1].getarg(0)
-        i0b = expected_resume.inputargs[0]
+        assert descr1.rd_bytecode_position == 2
+        assert descr2.rd_bytecode_position == 3
         equaloplists(descr1.rd_resume_bytecode.opcodes,
-                     expected_resume.operations,
-                     remap={i0b:i0})
+                     expected_resume.operations)

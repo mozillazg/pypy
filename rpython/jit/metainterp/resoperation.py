@@ -472,10 +472,11 @@ _oplist = [
     # resume-only operations that never make it to the real assembler
     'ENTER_FRAME/1d',
     'LEAVE_FRAME/0',
-    'RESUME_PUT/3',
+    'RESUME_PUT/3', # arguments are as follows - box or position in the backend,
+                    # the frame index (counting from top) and position in the
+                    # frontend
     'RESUME_NEW/0d',
     'RESUME_SETFIELD_GC/2d',
-    'BACKEND_ATTACH/2',
     '_RESUME_LAST', # ----- end of resume only operations ------
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 

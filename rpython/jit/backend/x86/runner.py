@@ -93,11 +93,11 @@ class AbstractX86CPU(AbstractLLCPU):
         return self.assembler.assemble_loop(logger, name, inputargs, operations,
                                             looptoken, log=log)
 
-    def compile_bridge(self, logger, faildescr, inputargs, backend_positions,
+    def compile_bridge(self, logger, faildescr, inputframes, backend_positions,
                        operations, original_loop_token, log=True):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
-        return self.assembler.assemble_bridge(logger, faildescr, inputargs,
+        return self.assembler.assemble_bridge(logger, faildescr, inputframes,
                                               backend_positions, operations,
                                               original_loop_token, log=log)
 

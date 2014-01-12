@@ -248,7 +248,7 @@ class BaseBackendTest(Runner):
         ]
 
         locs = rebuild_locs_from_resumedata(faildescr1)
-        self.cpu.compile_bridge(None, faildescr1, [i1b], locs, bridge, looptoken)
+        self.cpu.compile_bridge(None, faildescr1, [[i1b]], locs, bridge, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
@@ -294,7 +294,7 @@ class BaseBackendTest(Runner):
                                    descr=BasicFinalDescr(4)))
 
         faillocs = rebuild_locs_from_resumedata(faildescr1)
-        self.cpu.compile_bridge(None, faildescr1, [i0], faillocs, bridge, looptoken)
+        self.cpu.compile_bridge(None, faildescr1, [[i0]], faillocs, bridge, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, 1)
         fail = self.cpu.get_latest_descr(deadframe)
@@ -1426,7 +1426,7 @@ class BaseBackendTest(Runner):
             ResOperation(rop.JUMP, [f3]+fboxes2[1:], None, descr=targettoken),
         ]
 
-        self.cpu.compile_bridge(None, faildescr1, fboxes2,
+        self.cpu.compile_bridge(None, faildescr1, [fboxes2],
                                 rebuild_locs_from_resumedata(faildescr1),
                                 bridge, looptoken)
 
@@ -1491,7 +1491,7 @@ class BaseBackendTest(Runner):
             ResOperation(rop.LEAVE_FRAME, [], None),
             ResOperation(rop.FINISH, [], None, descr=faildescr2),
             ]
-        self.cpu.compile_bridge(None, faildescr1, fboxes,
+        self.cpu.compile_bridge(None, faildescr1, [fboxes],
                                 locs, bridgeops, looptoken)
         args = [1,
                 longlong.getfloatstorage(132.25),
@@ -2953,7 +2953,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.GUARD_NOT_INVALIDATED, [],None, descr=faildescr2),
             ResOperation(rop.FINISH, [i2], None, descr=BasicFinalDescr(3))
         ]
-        self.cpu.compile_bridge(None, faildescr, [i2], locs, ops, looptoken)
+        self.cpu.compile_bridge(None, faildescr, [[i2]], locs, ops, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, -42, 9)
         fail = self.cpu.get_latest_descr(deadframe)
@@ -2993,7 +2993,7 @@ class LLtypeBackendTest(BaseBackendTest):
         ops2 = [
             ResOperation(rop.JUMP, [ConstInt(333)], None, descr=labeldescr),
         ]
-        self.cpu.compile_bridge(None, faildescr, [], [], ops2, looptoken)
+        self.cpu.compile_bridge(None, faildescr, [[]], [], ops2, looptoken)
         # run: must not be caught in an infinite loop
         deadframe = self.cpu.execute_token(looptoken, 16)
         fail = self.cpu.get_latest_descr(deadframe)
@@ -3872,7 +3872,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.INT_SUB, [i0, ConstInt(20)], i2),
             ResOperation(rop.JUMP, [i2], None, descr=targettoken2),
             ]
-        self.cpu.compile_bridge(None, faildescr, inputargs2, locs, operations2, looptoken)
+        self.cpu.compile_bridge(None, faildescr, [inputargs2], locs, operations2, looptoken)
 
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
@@ -3925,7 +3925,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.assembler.set_debug(False)
         info = self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
         locs = rebuild_locs_from_resumedata(faildescr)
-        bridge_info = self.cpu.compile_bridge(None, faildescr, bridge.inputargs,
+        bridge_info = self.cpu.compile_bridge(None, faildescr, [bridge.inputargs],
                                               locs, bridge.operations,
                                               looptoken)
         self.cpu.assembler.set_debug(True) # always on untranslated
@@ -4027,7 +4027,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.JUMP, [i19], None, descr=targettoken1),
             ]
         locs = rebuild_locs_from_resumedata(faildescr1)
-        self.cpu.compile_bridge(None, faildescr1, inputargs, locs, operations2, looptoken1)
+        self.cpu.compile_bridge(None, faildescr1, [inputargs], locs, operations2, looptoken1)
 
         looptoken2 = JitCellToken()
         inputargs = [BoxInt()]
@@ -4054,7 +4054,7 @@ class LLtypeBackendTest(BaseBackendTest):
         operations = [
             ResOperation(rop.FINISH, [], None, descr=BasicFinalDescr(99))
         ]
-        self.cpu.compile_bridge(None, faildescr, [], [], operations, looptoken)
+        self.cpu.compile_bridge(None, faildescr, [[]], [], operations, looptoken)
         deadframe = self.cpu.execute_token(looptoken, null_box.getref_base())
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 99
@@ -4291,8 +4291,6 @@ class LLtypeBackendTest(BaseBackendTest):
         assert values[0] == 0
 
     def test_compile_bridge_while_running(self):
-        XXX # it crashes because the regalloc does not inherit liveness
-        # rules from the parent, while it shoul
 
         def func():
             jitcode2 = JitCode('name2')
@@ -4333,7 +4331,7 @@ class LLtypeBackendTest(BaseBackendTest):
                             'guarddescr': guarddescr, 'func2_ptr': func2_ptr,
                             'jitcode2': jitcode2})
             locs = rebuild_locs_from_resumedata(faildescr)
-            self.cpu.compile_bridge(None, faildescr, bridge.inputargs, locs,
+            self.cpu.compile_bridge(None, faildescr, [bridge.inputargs], locs,
                                     bridge.operations, looptoken)
 
         cpu = self.cpu

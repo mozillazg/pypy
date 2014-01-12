@@ -11,7 +11,7 @@ except ImportError:
 
 class TempBox(Box):
     type = 't' # none of the types
-    
+
     def __init__(self):
         pass
 
@@ -688,8 +688,18 @@ class BaseRegalloc(object):
         else:
             return [self.loc(op.getarg(0))]
 
+def flatten(inputframes):
+    count = 0
+    for frame in inputframes:
+        count += len(frame)
+    inputargs = [None] * count
+    i = 0
+    for frame in inputframes:
+        inputargs[i:i + len(frame)] = frame
+        i += len(frame)
+    return inputargs
 
-def compute_vars_longevity(inputargs, operations, descr=None):
+def compute_vars_longevity(inputframes, operations, descr=None):
     # compute a dictionary that maps variables to index in
     # operations that is a "last-time-seen"
 
@@ -701,7 +711,12 @@ def compute_vars_longevity(inputargs, operations, descr=None):
     last_used = {}
     last_real_usage = {}
     frontend_alive = {}
-    liveness_analyzer = LivenessAnalyzer()
+    if descr is None:
+        inputargs = inputframes[0]
+        liveness_analyzer = LivenessAnalyzer()
+    else:
+        inputargs = flatten(inputframes)
+        liveness_analyzer = LivenessAnalyzer(inputframes)
     start_pos = 0
     for position, op in enumerate(operations):
         if op.is_guard():

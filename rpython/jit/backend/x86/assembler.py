@@ -3,14 +3,14 @@ import os
 
 from rpython.jit.backend.llsupport import symbolic, jitframe, rewrite
 from rpython.jit.backend.llsupport.assembler import (GuardToken, BaseAssembler,
-                                                DEBUG_COUNTER, debug_bridge)
+                                                     debug_bridge)
 from rpython.jit.backend.llsupport.asmmemmgr import MachineDataBlockWrapper
-from rpython.jit.backend.llsupport.gcmap import allocate_gcmap
+from rpython.jit.backend.llsupport.regalloc import flatten
 from rpython.jit.metainterp.history import Const, Box, VOID
 from rpython.jit.metainterp.history import AbstractFailDescr, INT, REF, FLOAT
 from rpython.rtyper.lltypesystem import lltype, rffi, rstr, llmemory
 from rpython.rtyper.lltypesystem.lloperation import llop
-from rpython.rtyper.annlowlevel import llhelper, cast_instance_to_gcref
+from rpython.rtyper.annlowlevel import cast_instance_to_gcref
 from rpython.rlib.jit import AsmInfo
 from rpython.jit.backend.model import CompiledLoopToken
 from rpython.jit.backend.x86.regalloc import (RegAlloc, get_ebp_ofs,
@@ -29,7 +29,6 @@ from rpython.jit.backend.x86 import rx86, codebuf, callbuilder
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.backend.x86 import support
 from rpython.rlib.debug import debug_print, debug_start, debug_stop
-from rpython.rlib import rgc
 from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.codewriter import longlong
 from rpython.rlib.rarithmetic import intmask, r_uint
@@ -514,11 +513,8 @@ class Assembler386(BaseAssembler):
         return AsmInfo(ops_offset, rawstart + looppos,
                        size_excluding_failure_stuff - looppos)
 
-    def assemble_bridge(self, logger, faildescr, inputargs, backend_positions,
+    def assemble_bridge(self, logger, faildescr, inputframes, backend_positions,
                         operations, original_loop_token, log):
-        if not we_are_translated():
-            # Arguments should be unique
-            assert len(set(inputargs)) == len(inputargs)
 
         self.setup(original_loop_token)
         descr_number = compute_unique_id(faildescr)
@@ -526,10 +522,11 @@ class Assembler386(BaseAssembler):
             operations = self._inject_debugging_code(faildescr, operations,
                                                      'b', descr_number)
 
+        inputargs = flatten(inputframes)
         arglocs = self.rebuild_faillocs_from_descr(faildescr, inputargs, backend_positions)
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         startpos = self.mc.get_relative_pos()
-        operations = regalloc.prepare_bridge(inputargs, arglocs,
+        operations = regalloc.prepare_bridge(inputframes, arglocs,
                                              operations,
                                              self.current_clt.allgcrefs,
                                              self.current_clt.frame_info,

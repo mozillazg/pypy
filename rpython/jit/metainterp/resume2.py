@@ -41,8 +41,6 @@ class AbstractResumeReader(object):
             elif op.getopnum() == rop.RESUME_SETFIELD_GC:
                 self.resume_setfield_gc(op.getarg(0), op.getarg(1),
                                         op.getdescr())
-            elif op.getopnum() == rop.BACKEND_ATTACH:
-                self.resume_backend_attach(op.getarg(0), op.getarg(1).getint())
             elif not op.is_resume():
                 pos += 1
                 continue
@@ -71,9 +69,6 @@ class BoxResumeReader(AbstractResumeReader):
         self.metainterp = metainterp
         self.deadframe = deadframe
         self.backend_values = {}
-
-    def resume_backend_attach(self, box, position):
-        self.backend_values[box] = position
 
     def enter_frame(self, pc, jitcode):
         if pc != -1:
