@@ -344,15 +344,10 @@ class AbstractLLCPU(AbstractCPU):
         ofs = self.unpack_arraydescr(descr)
         return self.read_int_at_mem(deadframe, pos * WORD + ofs, WORD, 1)
 
-    def get_ref_value(self, deadframe, locs, pos):
-        xxx
+    def get_ref_value(self, deadframe, pos):
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr
         ofs = self.unpack_arraydescr(descr)
-        if locs is None:
-            assert pos == 0
-        else:
-            pos = locs[pos] * WORD
-        return self.read_ref_at_mem(deadframe, pos + ofs)
+        return self.read_ref_at_mem(deadframe, pos * WORD + ofs)
 
     def get_float_value(self, deadframe, pos):
         descr = self.gc_ll_descr.getframedescrs(self).arraydescr

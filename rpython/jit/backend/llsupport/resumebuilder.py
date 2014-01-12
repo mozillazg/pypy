@@ -52,23 +52,31 @@ class ResumeBuilder(object):
         self.current_attachment = {}
         self.frontend_liveness = frontend_liveness
         self.frontend_pos = {}
+        self.virtuals = {}
 
     def process(self, op):
         if op.getopnum() == rop.RESUME_PUT:
             box = op.getarg(0)
             args = op.getarglist()
-            try:
-                pos = self.regalloc.loc(box, must_exist=True).get_jitframe_position()
-            except KeyError:
-                # the thing is not *yet* anywhere, which means we'll record
-                # we know about it, but not store the resume_put just yet
-                self.current_attachment[box] = -1
+            if box in self.virtuals:
+                newop = op
+            else:
+                try:
+                    loc = self.regalloc.loc(box, must_exist=True)
+                    pos = loc.get_jitframe_position()
+                except KeyError:
+                    # the thing is not *yet* anywhere, which means we'll record
+                    # we know about it, but not store the resume_put just yet
+                    self.current_attachment[box] = -1
+                    self.frontend_pos[box] = (args[1], args[2])
+                    return
+                self.current_attachment[box] = pos
                 self.frontend_pos[box] = (args[1], args[2])
-                return
-            self.current_attachment[box] = pos
-            self.frontend_pos[box] = (args[1], args[2])
-            args[0] = ConstInt(pos)
-            newop = op.copy_and_change(rop.RESUME_PUT, args=args)
+                args[0] = ConstInt(pos)
+                newop = op.copy_and_change(rop.RESUME_PUT, args=args)
+        elif op.getopnum() == rop.RESUME_NEW:
+            self.virtuals[op.result] = None
+            newop = op
         else:
             newop = op
         self.newops.append(newop)

@@ -52,10 +52,10 @@ class RebuildingResumeReader(BoxResumeReader):
         frame.registers_i[position] = jitframe_pos
 
     def put_box_float(self, frame, position, jitframe_pos):
-        xxx
+        frame.registers_f[position] = jitframe_pos
 
     def put_box_ref(self, frame, position, jitframe_pos):
-        xxx
+        frame.registers_r[position] = jitframe_pos
 
     def finish(self):
         framestack = []

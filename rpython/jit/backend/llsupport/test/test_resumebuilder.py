@@ -72,7 +72,7 @@ class ResumeTest(object):
         enter_frame(-1, descr=jitcode)
         p0 = resume_new(descr=structdescr)
         resume_setfield_gc(p0, i0, descr=fielddescr)
-        resume_put(30, 0, 0)
+        resume_put(p0, 0, 0)
         leave_frame()
         """, namespace=namespace)
         descr = loop.operations[-3].getdescr()
@@ -113,3 +113,19 @@ class ResumeTest(object):
         assert descr2.rd_bytecode_position == 3
         equaloplists(descr1.rd_resume_bytecode.opcodes,
                      expected_resume.operations)
+
+    def test_bridge(self):
+        jitcode = JitCode("name")
+        jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
+        loop = parse("""
+        [i0]
+        enter_frame(-1, descr=jitcode)
+        resume_put(i0, 0, 0)
+        i1 = int_lt(i0, 10)
+        guard_true(i1)
+        leave_frame()
+        """, namespace={'jitcode': jitcode})
+
+        looptoken = JitCellToken()
+        self.cpu.compile_loop(None, loop.inputargs, loop.operations,
+                              looptoken)
