@@ -2,7 +2,7 @@ import py, weakref
 from rpython.jit.backend import model
 from rpython.jit.backend.llgraph import support
 from rpython.jit.backend.resumebuilder import ResumeBuilder,\
-     LivenessAnalyzer
+     LivenessAnalyzer, compute_vars_longevity, flatten
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.history import Const, getkind
 from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID
@@ -16,47 +16,78 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from rpython.rlib.rarithmetic import ovfcheck, r_uint, r_ulonglong
 from rpython.rlib.rtimer import read_timestamp
 
+class Position(object):
+    def __init__(self, pos):
+        self.pos = pos
+
+    def get_jitframe_position(self):
+        return self.pos
+
+class ResumeFrame(object):
+    def __init__(self, num, start_pos):
+        self.registers = [None] * num
+        self.start_pos = start_pos
+
 class LLGraphResumeBuilder(ResumeBuilder):
-    def __init__(self):
-        ResumeBuilder.__init__(self, None)
+    def __init__(self, frontend_liveness, descr, inputframes, inputlocs):
         self.liveness = LivenessAnalyzer()
         self.numbering = {}
+        self.framestack = []
+        locs = []
+        start_pos = 0
+        for frame_pos, frame in enumerate(inputframes):
+            if inputlocs is not None:
+                self.framestack.append(ResumeFrame(len(frame), start_pos))
+            for pos_in_frame, box in enumerate(frame):
+                if inputlocs is not None:
+                    pos = inputlocs[frame_pos][pos_in_frame]
+                    self.framestack[-1].registers[pos_in_frame] = box
+                else:
+                    pos = len(self.numbering)
+                self.numbering[box] = pos
+                locs.append(Position(pos))
+            start_pos += len(frame)
+        ResumeBuilder.__init__(self, self, frontend_liveness, descr,
+                               inputframes, locs)
+
+    def loc(self, box, must_exist=True):
+        return Position(self.numbering[box])
 
     def process(self, op):
-        func = getattr(self, 'process_' + op.getopname(), None)
-        if func is not None:
-            func(op)
+        getattr(self, 'process_' + op.getopname())(op)
+        ResumeBuilder.process(self, op)
 
     def process_enter_frame(self, op):
-        self.liveness.enter_frame(op.getdescr())
-        ResumeBuilder.process_enter_frame(self, op)
+        if self.framestack:
+            prev_frame = self.framestack[-1]
+            start_pos = prev_frame.start_pos + len(prev_frame.registers)
+        else:
+            start_pos = 0
+        self.framestack.append(ResumeFrame(op.getdescr().num_regs(), start_pos))
 
     def process_leave_frame(self, op):
-        self.liveness.leave_frame()
-        ResumeBuilder.process_leave_frame(self, op)
+        self.framestack.pop()
 
     def process_resume_put(self, op):
-        self.liveness.put(op.getarg(0), op.getarg(1).getint(),
-                                  op.getarg(2).getint())
-        ResumeBuilder.process_resume_put(self, op)
-
-    def _find_position_for_box(self, v):
-        if v not in self.numbering:
-            self.numbering[v] = len(self.numbering)
-        return self.numbering[v]
+        box = op.getarg(0)
+        frame_pos = op.getarg(1).getint()
+        pos_in_frame = op.getarg(2).getint()
+        i = self.framestack[frame_pos].start_pos + pos_in_frame
+        self.numbering[box] = i
+        self.framestack[frame_pos].registers[pos_in_frame] = box
 
     def get_numbering(self, mapping, op):
-        numbering = []
-        for f in self.liveness.framestack:
-            for v in f:
-                numbering.append(mapping(v))
-        return numbering
-
+        lst = []
+        for frame in self.framestack:
+            for reg in frame.registers:
+                lst.append(mapping(reg))
+        return lst
+    
 class LLTrace(object):
     has_been_freed = False
     invalid = False
 
-    def __init__(self, inputargs, operations):
+    def __init__(self, inputframes, operations, descr, locs=None):
         # We need to clone the list of operations because the
         # front-end will mutate them under our feet again.  We also
         # need to make sure things get freed.
@@ -69,10 +100,13 @@ class LLTrace(object):
                 newbox = _cache[box] = box.__class__()
             return newbox
         #
-        self.inputargs = map(mapping, inputargs)
+        self.inputargs = map(mapping, flatten(inputframes))
         self.operations = []
-        xxxx
-        resumebuilder = LLGraphResumeBuilder()
+        x = compute_vars_longevity(inputframes, operations, descr)
+        longevity, last_real_usage, frontend_liveness = x
+
+        resumebuilder = LLGraphResumeBuilder(frontend_liveness, descr,
+                                             inputframes, locs)
         for op in operations:
             if op.is_resume():
                 resumebuilder.process(op)
@@ -90,9 +124,19 @@ class LLTrace(object):
                                        newdescr)
             if op.is_guard():
                 newop.failargs = resumebuilder.get_numbering(mapping, op)
-                newop.failarg_numbers = resumebuilder.get_numbering(
-                    lambda x: resumebuilder.numbering[x], op)
+                newop.getdescr().rd_bytecode_position = len(resumebuilder.newops)
             self.operations.append(newop)
+
+        if descr is None:
+            parent = None
+            parent_position = 0
+        else:
+            parent = descr.rd_resume_bytecode
+            parent_position = descr.rd_bytecode_position
+        bytecode = resumebuilder.finish(parent, parent_position, self)
+        for op in operations:
+            if op.is_guard():
+                op.getdescr().rd_resume_bytecode = bytecode
 
 class WeakrefDescr(AbstractDescr):
     def __init__(self, realdescr):
@@ -232,16 +276,16 @@ class LLGraphCPU(model.AbstractCPU):
                      name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
         looptoken.compiled_loop_token = clt
-        lltrace = LLTrace(inputargs, operations, None)
+        lltrace = LLTrace([inputargs], operations, None)
         clt._llgraph_loop = lltrace
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
 
-    def compile_bridge(self, logger, faildescr, inputargs, operations,
+    def compile_bridge(self, logger, faildescr, inputframes, locs, operations,
                        original_loop_token, log=True):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
-        lltrace = LLTrace(inputargs, operations, faildescr)
+        lltrace = LLTrace(inputframes, operations, faildescr, locs)
         faildescr._llgraph_bridge = lltrace
         clt._llgraph_alltraces.append(lltrace)
         self._record_labels(lltrace)
@@ -317,7 +361,7 @@ class LLGraphCPU(model.AbstractCPU):
         assert isinstance(frame, LLFrame)
         assert frame.forced_deadframe is None
         values = []
-        for box in frame.force_guard_op.getfailargs():
+        for box in frame.force_guard_op.failargs:
             if box is not None:
                 if box is not frame.current_op.result:
                     value = frame.env[box]
@@ -739,12 +783,11 @@ class LLFrame(object):
     # -----------------------------------------------------
 
     def fail_guard(self, descr, saved_data=None):
-        values = {}
+        values = []
         for i in range(len(self.current_op.failargs)):
             arg = self.current_op.failargs[i]
             value = self.env[arg]
-            index = self.current_op.failarg_numbers[i]
-            values[index] = value
+            values.append(value)
         if hasattr(descr, '_llgraph_bridge'):
             target = (descr._llgraph_bridge, -1)
             raise Jump(target, values)
