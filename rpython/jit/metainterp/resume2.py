@@ -48,10 +48,10 @@ class AbstractResumeReader(object):
                 xxx
             pos += 1
 
-    def resume_put(self, jitframe_pos_const, depth, frontend_position):
+    def resume_put(self, jitframe_pos_const, frame_no, frontend_position):
         jitframe_pos = jitframe_pos_const.getint()
-        jitcode = self.metainterp.framestack[-1].jitcode
-        frame = self.metainterp.framestack[depth]
+        jitcode = self.metainterp.framestack[frame_no].jitcode
+        frame = self.metainterp.framestack[frame_no]
         if frontend_position < jitcode.num_regs_i():
             self.put_box_int(frame, frontend_position, jitframe_pos)
         elif frontend_position < (jitcode.num_regs_r() + jitcode.num_regs_i()):

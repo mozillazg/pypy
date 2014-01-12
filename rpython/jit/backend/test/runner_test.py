@@ -4397,7 +4397,8 @@ class LLtypeBackendTest(BaseBackendTest):
         def raising():
             bridge = parse("""
             [i1, i2]
-            px = guard_exception(ConstClass(xtp), descr=faildescr2) [i1, i2]
+            enter_frame(1, descr=jitcode2)
+            px = guard_exception(ConstClass(xtp), descr=faildescr2)
             i3 = int_add(i1, i2)
             i4 = int_add(i1, i3)
             i5 = int_add(i1, i4)
@@ -4414,13 +4415,22 @@ class LLtypeBackendTest(BaseBackendTest):
             force_spill(i7)
             force_spill(i8)
             force_spill(i9)
-            guard_true(i9) [i3, i4, i5, i6, i7, i8, i9]
+            resume_put(i3, 1, 0)
+            resume_put(i4, 1, 1)
+            resume_put(i5, 1, 2)
+            resume_put(i6, 1, 3)
+            resume_put(i7, 1, 4)
+            resume_put(i8, 1, 5)
+            resume_put(i9, 1, 6)            
+            guard_true(i9)
+            leave_frame()
             finish(i9, descr=finaldescr)
             """, namespace={'finaldescr': BasicFinalDescr(42),
                             'faildescr2': BasicFailDescr(1),
-                            'xtp': xtp
+                            'xtp': xtp, 'jitcode2': jitcode2,
             })
-            self.cpu.compile_bridge(None, faildescr, bridge.inputargs,
+            locs = rebuild_locs_from_resumedata(faildescr)
+            self.cpu.compile_bridge(None, faildescr, [bridge.inputargs], locs,
                                     bridge.operations, looptoken)
             raise LLException(xtp, xptr)
 
@@ -4431,15 +4441,23 @@ class LLtypeBackendTest(BaseBackendTest):
                                          EffectInfo.MOST_GENERAL)
 
         looptoken = JitCellToken()
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
+        jitcode2 = JitCode('name2')
+        jitcode2.setup(num_regs_i=7, num_regs_r=0, num_regs_f=0)
         loop = parse("""
         [i0, i1, i2]
+        enter_frame(-1, descr=jitcode)
         call(ConstClass(raising_ptr), descr=calldescr)
-        guard_no_exception(descr=faildescr) [i1, i2]
+        resume_put(i1, 0, 0)
+        resume_put(i2, 0, 1)
+        guard_no_exception(descr=faildescr)
         finish(i2, descr=finaldescr2)
         """, namespace={'raising_ptr': raising_ptr,
                         'calldescr': calldescr,
                         'faildescr': faildescr,
-                        'finaldescr2': BasicFinalDescr(1)})
+                        'finaldescr2': BasicFinalDescr(1),
+                        'jitcode': jitcode})
 
         self.cpu.compile_loop(None, loop.inputargs, loop.operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 1, 2, 3)
