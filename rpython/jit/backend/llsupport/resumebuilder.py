@@ -46,13 +46,23 @@ class LivenessAnalyzer(AbstractResumeReader):
         self.framestack.pop()
 
 class ResumeBuilder(object):
-    def __init__(self, regalloc, frontend_liveness, descr):
+    def __init__(self, regalloc, frontend_liveness, descr, inputframes=None,
+                 inputlocs=None):
         self.newops = []
         self.regalloc = regalloc
         self.current_attachment = {}
         self.frontend_liveness = frontend_liveness
         self.frontend_pos = {}
         self.virtuals = {}
+        if inputlocs is not None:
+            i = 0
+            for frame_pos, frame in enumerate(inputframes):
+                for pos_in_frame, box in enumerate(frame):
+                    loc_pos = inputlocs[i].get_jitframe_position()
+                    self.current_attachment[box] = loc_pos
+                    self.frontend_pos[box] = (ConstInt(frame_pos),
+                                              ConstInt(pos_in_frame))
+                    i += 1
 
     def process(self, op):
         if op.getopnum() == rop.RESUME_PUT:

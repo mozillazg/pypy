@@ -4,6 +4,7 @@ from rpython.jit.metainterp.history import BasicFailDescr
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.tool.oparser import parse
 from rpython.jit.metainterp.optimizeopt.util import equaloplists
+from rpython.jit.metainterp.test.test_resume2 import rebuild_locs_from_resumedata
 from rpython.rtyper.lltypesystem import lltype
 
 class MockJitCode(JitCode):
@@ -116,12 +117,12 @@ class ResumeTest(object):
 
     def test_bridge(self):
         jitcode = JitCode("name")
-        jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
+        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         loop = parse("""
         [i0]
         enter_frame(-1, descr=jitcode)
-        resume_put(i0, 0, 0)
         i1 = int_lt(i0, 10)
+        resume_put(i1, 0, 0)
         guard_true(i1)
         leave_frame()
         """, namespace={'jitcode': jitcode})
@@ -129,3 +130,22 @@ class ResumeTest(object):
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
+
+        descr = loop.operations[3].getdescr()
+
+        bridge = parse("""
+        [i0]
+        force_spill(i0)
+        guard_false(i0)
+        """)
+        locs = rebuild_locs_from_resumedata(descr)
+        self.cpu.compile_bridge(None, descr, [bridge.inputargs], locs,
+                                bridge.operations, looptoken)
+
+        descr = bridge.operations[-1].getdescr()
+        expected_resume = parse("""
+        []
+        resume_put(28, 0, 0)
+        """)
+        equaloplists(descr.rd_resume_bytecode.opcodes,
+                     expected_resume.operations)

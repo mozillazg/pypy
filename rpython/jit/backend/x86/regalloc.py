@@ -133,7 +133,8 @@ class RegAlloc(BaseRegalloc):
         self.jump_target_descr = None
         self.final_jump_op = None
 
-    def _prepare(self, inputframes, operations, allgcrefs, descr=None):
+    def _prepare(self, inputframes, operations, allgcrefs, descr=None,
+                 locs=None):
         cpu = self.assembler.cpu
         self.fm = X86FrameManager(cpu.get_baseofs_of_frame_field())
         operations = cpu.gc_ll_descr.rewrite_assembler(cpu, operations,
@@ -141,7 +142,8 @@ class RegAlloc(BaseRegalloc):
         # compute longevity of variables
         x = compute_vars_longevity(inputframes, operations, descr)
         longevity, last_real_usage, frontend_liveness = x
-        self.resumebuilder = ResumeBuilder(self, frontend_liveness, descr)
+        self.resumebuilder = ResumeBuilder(self, frontend_liveness, descr,
+                                           inputframes, locs)
         self.longevity = longevity
         self.last_real_usage = last_real_usage
         self.rm = gpr_reg_mgr_cls(self.longevity,
@@ -165,7 +167,8 @@ class RegAlloc(BaseRegalloc):
 
     def prepare_bridge(self, inputframes, arglocs, operations, allgcrefs,
                        frame_info, descr):
-        operations = self._prepare(inputframes, operations, allgcrefs, descr)
+        operations = self._prepare(inputframes, operations, allgcrefs, descr,
+                                   locs=arglocs)
         self._update_bindings(arglocs, inputframes)
         self.min_bytes_before_label = 0
         return operations
