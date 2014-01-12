@@ -492,7 +492,10 @@ class RegisterManager(object):
             if box in self.bindings_to_frame_reg:
                 return self.frame_reg
             if must_exist:
-                return self.frame_manager.bindings[box]
+                try:
+                    return self.frame_manager.bindings[box]
+                except KeyError:
+                    raise
             return self.frame_manager.loc(box)
 
     def return_constant(self, v, forbidden_vars=[], selected_reg=None):

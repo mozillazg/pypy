@@ -362,12 +362,12 @@ class RegAlloc(BaseRegalloc):
         while mc.get_relative_pos() < self.min_bytes_before_label:
             mc.NOP()
 
-    def loc(self, v):
+    def loc(self, v, must_exist=False):
         if v is None: # xxx kludgy
             return None
         if v.type == FLOAT:
-            return self.xrm.loc(v)
-        return self.rm.loc(v)
+            return self.xrm.loc(v, must_exist=must_exist)
+        return self.rm.loc(v, must_exist=must_exist)
 
     def _consider_guard(self, op):
         loc = self.rm.make_sure_var_in_reg(op.getarg(0))

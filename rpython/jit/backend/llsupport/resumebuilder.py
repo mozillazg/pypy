@@ -57,7 +57,14 @@ class ResumeBuilder(object):
         if op.getopnum() == rop.RESUME_PUT:
             box = op.getarg(0)
             args = op.getarglist()
-            pos = self.regalloc.loc(box).get_jitframe_position()
+            try:
+                pos = self.regalloc.loc(box, must_exist=True).get_jitframe_position()
+            except KeyError:
+                # the thing is not *yet* anywhere, which means we'll record
+                # we know about it, but not store the resume_put just yet
+                self.current_attachment[box] = -1
+                self.frontend_pos[box] = (args[1], args[2])
+                return
             self.current_attachment[box] = pos
             self.frontend_pos[box] = (args[1], args[2])
             args[0] = ConstInt(pos)
