@@ -7,10 +7,10 @@ from rpython.jit.backend.llsupport import symbolic
 from rpython.jit.backend.llsupport.descr import (ArrayDescr, CallDescr,
     unpack_arraydescr, unpack_fielddescr, unpack_interiorfielddescr)
 from rpython.jit.backend.llsupport.gcmap import allocate_gcmap
-from rpython.jit.backend.llsupport.resumebuilder import ResumeBuilder
+from rpython.jit.backend.resumebuilder import ResumeBuilder,\
+     compute_vars_longevity, flatten
 from rpython.jit.backend.llsupport.regalloc import (FrameManager, BaseRegalloc,
-     RegisterManager, TempBox, compute_vars_longevity, is_comparison_or_ovf_op,
-    flatten)
+     RegisterManager, TempBox, is_comparison_or_ovf_op)
 from rpython.jit.backend.x86 import rx86
 from rpython.jit.backend.x86.arch import (WORD, JITFRAME_FIXED_SIZE, IS_X86_32,
     IS_X86_64)
