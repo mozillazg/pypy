@@ -5,7 +5,7 @@ import py
 from rpython.jit.codewriter import heaptracker
 from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.codewriter.jitcode import JitCode, SwitchDictDescr
-from rpython.jit.metainterp import history, compile, resume, executor, jitexc
+from rpython.jit.metainterp import history, compile, resume2, executor, jitexc
 from rpython.jit.metainterp.heapcache import HeapCache
 from rpython.jit.metainterp.history import (Const, ConstInt, ConstPtr,
     ConstFloat, Box, TargetToken)
@@ -41,9 +41,11 @@ class MIFrame(object):
         self.registers_i = [None] * 256
         self.registers_r = [None] * 256
         self.registers_f = [None] * 256
+        self.resume_cache = {}
 
     def setup(self, jitcode, greenkey=None):
         assert isinstance(jitcode, JitCode)
+        self.resume_cache = {}
         self.jitcode = jitcode
         self.bytecode = jitcode.code
         # this is not None for frames that are recursive portal calls
@@ -1458,6 +1460,31 @@ class MIFrame(object):
         # but we should not follow calls to that graph
         return self.do_residual_call(funcbox, argboxes, calldescr, pc)
 
+    def emit_resume_data(self, pos):
+        i = 0
+        history = self.metainterp.history
+        for i in range(self.jitcode.num_regs_i()):
+            box = self.registers_i[i]
+            if box is not None and box not in self.resume_cache:
+                history.record(rop.RESUME_PUT,
+                               [box, ConstInt(pos), ConstInt(i)], None)
+                self.resume_cache[box] = None
+        start = self.jitcode.num_regs_i()
+        for i in range(self.jitcode.num_regs_r()):
+            box = self.registers_r[i]
+            if box is not None and box not in self.resume_cache:
+                history.record(rop.RESUME_PUT,
+                               [box, ConstInt(pos), ConstInt(i + start)], None)
+                self.resume_cache[box] = None
+        start = self.jitcode.num_regs_i() + self.jitcode.num_regs_r()
+        for i in range(self.jitcode.num_regs_f()):
+            box = self.registers_f[i]
+            if box is not None and box not in self.resume_cache:
+                history.record(rop.RESUME_PUT,
+                               [box, ConstInt(pos), ConstInt(i + start)], None)
+                self.resume_cache[box] = None
+        history.record(rop.RESUME_SET_PC, [ConstInt(self.pc)], None)
+
 # ____________________________________________________________
 
 class MetaInterpStaticData(object):
@@ -1672,6 +1699,12 @@ class MetaInterp(object):
         return self.jitdriver_sd is not None and jitcode is self.jitdriver_sd.mainjitcode
 
     def newframe(self, jitcode, greenkey=None):
+        if self.framestack:
+            pc = self.framestack[-1].pc
+        else:
+            pc = -1
+        self.history.record(rop.ENTER_FRAME, [ConstInt(pc)], None,
+                            descr=jitcode)
         if jitcode.is_portal:
             self.portal_call_depth += 1
             self.call_ids.append(self.current_call_id)
@@ -1688,6 +1721,7 @@ class MetaInterp(object):
         return f
 
     def popframe(self):
+        self.history.record(rop.LEAVE_FRAME, [], None)
         frame = self.framestack.pop()
         jitcode = frame.jitcode
         if jitcode.is_portal:
@@ -1786,15 +1820,21 @@ class MetaInterp(object):
             resumedescr = compile.ResumeGuardNotInvalidated()
         else:
             resumedescr = compile.ResumeGuardDescr()
+            resumedescr.guard_opnum = opnum # XXX kill me
+        self.sync_resume_data(resumedescr, resumepc)
         guard_op = self.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
-        #self.capture_resumedata(resumedescr, resumepc)
         self.staticdata.profiler.count_ops(opnum, Counters.GUARDS)
         # count
         self.attach_debug_info(guard_op)
         return guard_op
-
+    
+    def sync_resume_data(self, resumedescr, resumepc):
+        for i, frame in enumerate(self.framestack):
+            frame.emit_resume_data(i)
+    
     def capture_resumedata(self, resumedescr, resumepc=-1):
+        XXXX
         virtualizable_boxes = None
         if (self.jitdriver_sd.virtualizable_info is not None or
             self.jitdriver_sd.greenfield_info is not None):
@@ -1805,6 +1845,7 @@ class MetaInterp(object):
             saved_pc = frame.pc
             if resumepc >= 0:
                 frame.pc = resumepc
+        xxx
         resume.capture_resumedata(self.framestack, virtualizable_boxes,
                                   self.virtualref_boxes, resumedescr)
         if self.framestack:
@@ -2490,6 +2531,7 @@ class MetaInterp(object):
         vinfo = self.jitdriver_sd.virtualizable_info
         ginfo = self.jitdriver_sd.greenfield_info
         self.framestack = []
+        xxx
         boxlists = resume.rebuild_from_resumedata(self, resumedescr, deadframe,
                                                   vinfo, ginfo)
         inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists

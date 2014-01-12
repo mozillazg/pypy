@@ -80,8 +80,6 @@ class AbstractResOp(object):
     def clone(self):
         args = self.getarglist()
         descr = self.getdescr()
-        if descr is not None:
-            descr = descr.clone_if_mutable()
         op = ResOperation(self.getopnum(), args[:], self.result, descr)
         if not we_are_translated():
             op.name = self.name
@@ -477,6 +475,7 @@ _oplist = [
                     # frontend
     'RESUME_NEW/0d',
     'RESUME_SETFIELD_GC/2d',
+    'RESUME_SET_PC/1',
     '_RESUME_LAST', # ----- end of resume only operations ------
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 

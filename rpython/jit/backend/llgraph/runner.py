@@ -68,6 +68,9 @@ class LLGraphResumeBuilder(ResumeBuilder):
     def process_leave_frame(self, op):
         self.framestack.pop()
 
+    def process_resume_set_pc(self, op):
+        pass
+
     def process_resume_put(self, op):
         box = op.getarg(0)
         frame_pos = op.getarg(1).getint()

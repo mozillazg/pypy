@@ -27,6 +27,9 @@ class LivenessAnalyzer(AbstractResumeReader):
     def resume_setfield_gc(self, arg0, arg1, descr):
         self.deps[arg0][descr] = arg1
 
+    def resume_set_pc(self, pc):
+        pass
+
     def _track(self, allboxes, box):
         if box in self.deps:
             for dep in self.deps[box].values():

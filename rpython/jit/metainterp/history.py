@@ -133,14 +133,6 @@ class AbstractDescr(AbstractValue):
     def repr_of_descr(self):
         return '%r' % (self,)
 
-    def _clone_if_mutable(self):
-        return self
-    def clone_if_mutable(self):
-        clone = self._clone_if_mutable()
-        if not we_are_translated():
-            assert clone.__class__ is self.__class__
-        return clone
-
     def hide(self, cpu):
         descr_ptr = cpu.ts.cast_instance_to_base_ref(self)
         return cpu.ts.cast_to_ref(descr_ptr)

@@ -2,7 +2,7 @@ from rpython.jit.codewriter import heaptracker, longlong
 from rpython.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 from rpython.jit.metainterp.compile import ResumeAtPositionDescr
 from rpython.jit.metainterp.jitexc import get_llexception, reraise
-from rpython.jit.metainterp import jitexc
+from rpython.jit.metainterp import jitexc, resume2
 from rpython.rlib import longlong2float
 from rpython.rlib.debug import ll_assert, make_sure_not_resized
 from rpython.rlib.objectmodel import we_are_translated
@@ -1608,11 +1608,10 @@ def _handle_jitexception(blackholeinterp, exc):
 
 def resume_in_blackhole(metainterp_sd, jitdriver_sd, resumedescr, deadframe,
                         all_virtuals=None):
-    from rpython.jit.metainterp.resume import blackhole_from_resumedata
     #debug_start('jit-blackhole')
-    blackholeinterp = blackhole_from_resumedata(
+    blackholeinterp = resume2.blackhole_from_resumedata(
         metainterp_sd.blackholeinterpbuilder,
-        jitdriver_sd,
+        metainterp_sd,
         resumedescr,
         deadframe,
         all_virtuals)
