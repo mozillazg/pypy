@@ -26,5 +26,4 @@ void RPyDebugReturnShowException(const char *msg, const char *filename,
 /* Hint: functions and macros not defined here, like RPyRaiseException,
    come from exctransformer via the table in extfunc.py. */
 
-#define RPyRaiseSimpleException(exc, msg)   _RPyRaiseSimpleException(R##exc)
 void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc);

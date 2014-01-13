@@ -111,7 +111,8 @@ class CBackend(object):
         return self.driver.c_entryp
 
     def create_exe(self):
-        """ Copy the compiled executable into translator/goal
+        """ Copy the compiled executable into current directory, which is
+            pypy/goal on nightly builds
         """
         if self.driver.exe_name is not None:
             exename = self.driver.c_entryp
@@ -125,8 +126,11 @@ class CBackend(object):
                 shutil.copy(str(soname), str(newsoname))
                 self.driver.log.info("copied: %s" % (newsoname,))
                 if sys.platform == 'win32':
-                    shutil.copyfile(str(soname.new(ext='lib')),
-                                    str(newsoname.new(ext='lib')))
+                    # the import library is named python27.lib, according
+                    # to the pragma in pyconfig.h
+                    libname = str(newsoname.dirpath().join('python27.lib'))
+                    shutil.copyfile(str(soname.new(ext='lib')), libname)
+                    self.log.info("copied: %s" % (libname,))
             self.driver.c_entryp = newexename
         self.driver.log.info('usession directory: %s' % (udir,))
         self.driver.log.info("created: %s" % (self.driver.c_entryp,))
