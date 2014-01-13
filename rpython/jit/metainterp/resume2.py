@@ -1,6 +1,6 @@
 
 from rpython.jit.metainterp.resoperation import rop
-from rpython.jit.metainterp.history import BoxInt
+from rpython.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.rlib import rstack
 
@@ -11,7 +11,16 @@ class ResumeBytecode(object):
         self.parent_position = parent_position
         self.loop = loop
 
+class ResumeFrame(object):
+    def __init__(self, jitcode):
+        self.registers = [-1] * jitcode.num_regs()
+        self.jitcode = jitcode
+        self.pc = -1
+        
 class AbstractResumeReader(object):
+    def __init__(self):
+        self.framestack = []
+
     def rebuild(self, faildescr):
         self._rebuild_until(faildescr.rd_resume_bytecode,
                             faildescr.rd_bytecode_position)
@@ -19,6 +28,22 @@ class AbstractResumeReader(object):
 
     def finish(self):
         pass
+
+    def enter_frame(self, pc, jitcode):
+        if self.framestack:
+            assert pc != -1
+            self.framestack[-1].pc = pc
+        self.framestack.append(ResumeFrame(jitcode))
+
+    def resume_put(self, jitframe_pos_const, frame_no, frontend_position):
+        jitframe_pos = jitframe_pos_const.getint()
+        self.framestack[frame_no].registers[frontend_position] = jitframe_pos
+
+    def resume_set_pc(self, pc):
+        self.framestack[-1].pc = pc
+
+    def leave_frame(self):
+        self.framestack.pop()
 
     def _rebuild_until(self, rb, position):
         if rb.parent is not None:
@@ -36,7 +61,7 @@ class AbstractResumeReader(object):
                 self.leave_frame()
             elif op.getopnum() == rop.RESUME_PUT:
                 self.resume_put(op.getarg(0), op.getarg(1).getint(),
-                         op.getarg(2).getint())
+                                 op.getarg(2).getint())
             elif op.getopnum() == rop.RESUME_NEW:
                 self.resume_new(op.result, op.getdescr())
             elif op.getopnum() == rop.RESUME_SETFIELD_GC:
@@ -51,20 +76,6 @@ class AbstractResumeReader(object):
                 xxx
             pos += 1
 
-    def resume_put(self, jitframe_pos_const, frame_no, frontend_position):
-        jitframe_pos = jitframe_pos_const.getint()
-        jitcode = self.get_jitcode(frame_no)
-        if frontend_position < jitcode.num_regs_i():
-            self.put_box_int(frame_no, frontend_position, jitframe_pos)
-        elif frontend_position < (jitcode.num_regs_r() + jitcode.num_regs_i()):
-            self.put_box_ref(frame_no, frontend_position - jitcode.num_regs_i(),
-                             jitframe_pos)
-        else:
-            assert frontend_position < jitcode.num_regs()
-            self.put_box_float(frame_no,
-                               frontend_position - jitcode.num_regs_r()
-                               - jitcode.num_regs_i(), jitframe_pos)
-
     def read_int(self, jitframe_pos):
         return self.metainterp.cpu.get_int_value(self.deadframe, jitframe_pos)
 
@@ -74,12 +85,6 @@ class DirectResumeReader(AbstractResumeReader):
         self.cpu = cpu
         self.deadframe = deadframe
         self.bhinterp_stack = []
-
-    def get_jitcode(self, no):
-        return self.bhinterp_stack[no].jitcode
-
-    def get_frame(self, no):
-        return self.bhinterp_stack[no]
 
     def enter_frame(self, pc, jitcode):
         if pc != -1:
@@ -112,34 +117,37 @@ class BoxResumeReader(AbstractResumeReader):
     def __init__(self, metainterp, deadframe):
         self.metainterp = metainterp
         self.deadframe = deadframe
+        AbstractResumeReader.__init__(self)
 
-    def enter_frame(self, pc, jitcode):
-        if pc != -1:
-            self.metainterp.framestack[-1].pc = pc
-        self.metainterp.newframe(jitcode)
+    def get_int_box(self, pos):
+        return BoxInt(self.metainterp.cpu.get_int_value(self.deadframe, pos))
 
-    def leave_frame(self):
-        self.metainterp.popframe()
+    def get_ref_box(self, pos):
+        return BoxPtr(self.metainterp.cpu.get_ref_value(self.deadframe, pos))
 
-    def put_box_int(self, frame_no, position, jitframe_pos):
-        frame = self.metainterp.framestack[frame_no]
-        frame.registers_i[position] = BoxInt(self.read_int(jitframe_pos))
-
-    def put_box_ref(self, frame_no, position, jitframe_pos):
-        frame = self.metainterp.framestack[frame_no]
-        xxx
-        frame.registers_r[position] = self.read_ref(jitframe_pos)
-
-    def put_box_float(self, frame_no, position, jitframe_pos):
-        frame = self.metainterp.framestack[frame_no]
-        xxx
-        frame.registers_f[position] = self.read_float(jitframe_pos)
+    def get_float_box(self, pos):
+        return BoxFloat(self.metainterp.cpu.get_float_value(self.deadframe,
+                                                            pos))
 
     def finish(self):
-        pass
-
+        for frame in self.framestack:
+            jitcode = frame.jitcode
+            miframe = self.metainterp.newframe(jitcode)
+            miframe.pc = frame.pc
+            pos = 0
+            for i in range(jitcode.num_regs_i()):
+                miframe.registers_i[i] = self.get_int_box(frame.registers[pos])
+                pos += 1
+            for i in range(jitcode.num_regs_r()):
+                miframe.registers_r[i] = self.get_ref_box(frame.registers[pos])
+                pos += 1
+            for i in range(jitcode.num_regs_f()):
+                jitframe_pos = frame.registers[pos]
+                miframe.registers_f[i] = self.get_float_box(jitframe_pos)
+                pos += 1
+            
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
-    BoxResumeReader(metainterp, deadframe).rebuild(faildescr)
+    return BoxResumeReader(metainterp, deadframe).rebuild(faildescr)
 
 def blackhole_from_resumedata(interpbuilder, metainterp_sd, faildescr,
                               deadframe, all_virtuals=None):

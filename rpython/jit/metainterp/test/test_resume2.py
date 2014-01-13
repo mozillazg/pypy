@@ -4,7 +4,7 @@ from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.resume2 import rebuild_from_resumedata,\
-     ResumeBytecode, BoxResumeReader
+     ResumeBytecode, AbstractResumeReader
 
 
 class Descr(AbstractDescr):
@@ -21,7 +21,7 @@ class Frame(object):
         self.registers_f = [None] * jitcode.num_regs_f()
 
     def num_nonempty_regs(self):
-        return len(filter(bool, self.registers_i))
+        return len([i for i in self.registers_i if i.getint() != 2])
 
     def dump_registers(self, lst, backend_values):
         lst += [backend_values[x] for x in self.registers_i]
@@ -34,7 +34,9 @@ class MockMetaInterp(object):
         self.framestack = []
 
     def newframe(self, jitcode):
-        self.framestack.append(Frame(jitcode))
+        f = Frame(jitcode)
+        self.framestack.append(f)
+        return f
 
     def popframe(self):
         self.framestack.pop()
@@ -44,25 +46,9 @@ class MockCPU(object):
         assert frame == "myframe"
         return index + 3
 
-class RebuildingResumeReader(BoxResumeReader):
-    def __init__(self):
-        self.metainterp = MockMetaInterp()
-
-    def put_box_int(self, frame, position, jitframe_pos):
-        frame.registers_i[position] = jitframe_pos
-
-    def put_box_float(self, frame, position, jitframe_pos):
-        frame.registers_f[position] = jitframe_pos
-
-    def put_box_ref(self, frame, position, jitframe_pos):
-        frame.registers_r[position] = jitframe_pos
-
+class RebuildingResumeReader(AbstractResumeReader):
     def finish(self):
-        framestack = []
-        for frame in self.metainterp.framestack:
-            framestack.append(frame.registers_i + frame.registers_r +
-                              frame.registers_f)
-        return framestack
+        return [f.registers for f in self.framestack]
 
 def rebuild_locs_from_resumedata(faildescr):
     return RebuildingResumeReader().rebuild(faildescr)
@@ -70,7 +56,7 @@ def rebuild_locs_from_resumedata(faildescr):
 class TestResumeDirect(object):
     def test_box_resume_reader(self):
         jitcode = JitCode("jitcode")
-        jitcode.setup(num_regs_i=13)
+        jitcode.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
         resume_loop = parse("""
         []
         enter_frame(-1, descr=jitcode1)
@@ -89,9 +75,9 @@ class TestResumeDirect(object):
 
     def test_nested_call(self):
         jitcode1 = JitCode("jitcode")
-        jitcode1.setup(num_regs_i=13)
+        jitcode1.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
         jitcode2 = JitCode("jitcode2")
-        jitcode2.setup(num_regs_i=9)
+        jitcode2.setup(num_regs_i=9, num_regs_r=0, num_regs_f=0)
         resume_loop = parse("""
         []
         enter_frame(-1, descr=jitcode1)
@@ -130,7 +116,7 @@ class TestResumeDirect(object):
 
     def test_bridge(self):
         jitcode1 = JitCode("jitcode")
-        jitcode1.setup(num_regs_i=13)
+        jitcode1.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
         base = parse("""
         []
         enter_frame(-1, descr=jitcode1)
@@ -160,7 +146,7 @@ class TestResumeDirect(object):
     def test_new(self):
         py.test.skip("finish")
         jitcode1 = JitCode("jitcode")
-        jitcode1.setup(num_regs_i=1)
+        jitcode1.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         base = parse("""
         []
         enter_frame(-1, descr=jitcode)

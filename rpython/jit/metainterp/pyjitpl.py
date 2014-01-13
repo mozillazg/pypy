@@ -2409,8 +2409,8 @@ class MetaInterp(object):
         try:
             self.portal_call_depth = -1 # always one portal around
             self.history = history.History()
-            inputargs_and_holes = self.rebuild_state_after_failure(resumedescr,
-                                                                   deadframe)
+            self.rebuild_state_after_failure(resumedescr, deadframe)
+            xxx
             self.history.inputargs = [box for box in inputargs_and_holes if box]
         finally:
             rstack._stack_criticalcode_stop()
@@ -2531,10 +2531,10 @@ class MetaInterp(object):
         vinfo = self.jitdriver_sd.virtualizable_info
         ginfo = self.jitdriver_sd.greenfield_info
         self.framestack = []
-        xxx
-        boxlists = resume.rebuild_from_resumedata(self, resumedescr, deadframe,
-                                                  vinfo, ginfo)
-        inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
+        inputframes = resume2.rebuild_from_resumedata(self, deadframe,
+                                                      resumedescr)
+        virtualizable_boxes = None
+        virtualref_boxes = None
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
         self.virtualref_boxes = virtualref_boxes
@@ -2565,7 +2565,7 @@ class MetaInterp(object):
         else:
             assert not virtualizable_boxes
         #
-        return inputargs_and_holes
+        return inputframes
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():

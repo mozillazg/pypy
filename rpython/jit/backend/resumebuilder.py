@@ -48,6 +48,9 @@ class LivenessAnalyzer(AbstractResumeReader):
     def leave_frame(self):
         self.framestack.pop()
 
+    def rebuild(self, faildescr):
+        raise Exception("should not be called")
+
 class ResumeBuilder(object):
     def __init__(self, regalloc, frontend_liveness, descr, inputframes=None,
                  inputlocs=None):
