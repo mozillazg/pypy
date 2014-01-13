@@ -16,7 +16,7 @@ from rpython.jit.metainterp.optimize import InvalidLoop
 from rpython.jit.metainterp.inliner import Inliner
 from rpython.jit.metainterp.resume import NUMBERING, PENDINGFIELDSP, ResumeDataDirectReader
 from rpython.jit.codewriter import heaptracker, longlong
-
+from rpython.jit.backend.resumebuilder import flatten
 
 def giveup():
     from rpython.jit.metainterp.pyjitpl import SwitchToBlackhole
@@ -306,12 +306,14 @@ def do_compile_loop(metainterp_sd, inputargs, operations, looptoken,
                                           inputargs, operations, looptoken,
                                           log=log, name=name)
 
-def do_compile_bridge(metainterp_sd, faildescr, inputargs, operations,
-                      original_loop_token, log=True):
-    metainterp_sd.logger_ops.log_bridge(inputargs, operations, "compiling")
+def do_compile_bridge(metainterp_sd, faildescr, inputframes,
+                      inputlocs, operations, original_loop_token, log=True):
+    metainterp_sd.logger_ops.log_bridge(flatten(inputframes), operations,
+                                        "compiling")
     assert isinstance(faildescr, AbstractFailDescr)
     return metainterp_sd.cpu.compile_bridge(metainterp_sd.logger_ops,
-                                            faildescr, inputargs, operations,
+                                            faildescr, inputframes,
+                                            inputlocs, operations,
                                             original_loop_token, log=log)
 
 def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
@@ -367,11 +369,11 @@ def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
     if metainterp_sd.warmrunnerdesc is not None:    # for tests
         metainterp_sd.warmrunnerdesc.memory_manager.keep_loop_alive(original_jitcell_token)
 
-def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
-                           operations, original_loop_token):
+def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputframes,
+                           inputlocs, operations, original_loop_token):
     if not we_are_translated():
         show_procedures(metainterp_sd)
-        seen = dict.fromkeys(inputargs)
+        seen = dict.fromkeys(flatten(inputframes))
         TreeLoop.check_consistency_of_branch(operations, seen)
     if metainterp_sd.warmrunnerdesc is not None:
         hooks = metainterp_sd.warmrunnerdesc.hooks
@@ -386,8 +388,8 @@ def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
-        asminfo = do_compile_bridge(metainterp_sd, faildescr, inputargs,
-                                    operations,
+        asminfo = do_compile_bridge(metainterp_sd, faildescr, inputframes,
+                                    inputlocs, operations,
                                     original_loop_token)
     finally:
         debug_stop("jit-backend")
@@ -403,8 +405,8 @@ def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
         ops_offset = asminfo.ops_offset
     else:
         ops_offset = None
-    metainterp_sd.logger_ops.log_bridge(inputargs, operations, None, faildescr,
-                                        ops_offset)
+    metainterp_sd.logger_ops.log_bridge(flatten(inputframes), operations,
+                                        None, faildescr, ops_offset)
     #
     #if metainterp_sd.warmrunnerdesc is not None:    # for tests
     #    metainterp_sd.warmrunnerdesc.memory_manager.keep_loop_alive(
@@ -612,12 +614,14 @@ class ResumeGuardDescr(ResumeDescr):
         # to the corresponding guard_op and compile from there
         assert metainterp.resumekey_original_loop_token is not None
         new_loop.original_jitcell_token = metainterp.resumekey_original_loop_token
-        inputargs = metainterp.history.inputargs
+        inputframes = metainterp.history.inputframes
+        inputlocs = metainterp.history.inputlocs
         if not we_are_translated():
             self._debug_suboperations = new_loop.operations
         propagate_original_jitcell_token(new_loop)
         send_bridge_to_backend(metainterp.jitdriver_sd, metainterp.staticdata,
-                               self, inputargs, new_loop.operations,
+                               self, inputframes, inputlocs,
+                               new_loop.operations,
                                new_loop.original_jitcell_token)
 
 class ResumeGuardNotInvalidated(ResumeGuardDescr):
@@ -804,7 +808,8 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     # Attempt to use optimize_bridge().  This may return None in case
     # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_trace = create_empty_loop(metainterp)
-    new_trace.inputargs = metainterp.history.inputargs[:]
+    new_trace.inputframes = metainterp.history.inputframes[:]
+    new_trace.inputlocs = metainterp.history.inputlocs[:]
     # clone ops, as optimize_bridge can mutate the ops
 
     new_trace.operations = [op.clone() for op in metainterp.history.operations]

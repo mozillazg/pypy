@@ -167,7 +167,7 @@ class UnrollOptimizer(Optimization):
         jump_args = [self.getvalue(a).get_key_box() for a in original_jump_args]
 
         assert self.optimizer.loop.resume_at_jump_descr
-        resume_at_jump_descr = self.optimizer.loop.resume_at_jump_descr.clone_if_mutable()
+        resume_at_jump_descr = self.optimizer.loop.resume_at_jump_descr
         assert isinstance(resume_at_jump_descr, ResumeGuardDescr)
         resume_at_jump_descr.rd_snapshot = self.fix_snapshot(jump_args, resume_at_jump_descr.rd_snapshot)
 
@@ -421,7 +421,7 @@ class UnrollOptimizer(Optimization):
             if op.is_guard():
                 op = op.clone()
                 op.setfailargs(None)
-                descr = target_token.resume_at_jump_descr.clone_if_mutable()
+                descr = target_token.resume_at_jump_descr
                 op.setdescr(descr)
                 short[i] = op
 
@@ -444,7 +444,7 @@ class UnrollOptimizer(Optimization):
             if op.result and op.result in self.short_boxes.assumed_classes:
                 target_token.assumed_classes[newop.result] = self.short_boxes.assumed_classes[op.result]
             short[i] = newop
-        target_token.resume_at_jump_descr = target_token.resume_at_jump_descr.clone_if_mutable()
+        target_token.resume_at_jump_descr = target_token.resume_at_jump_descr
         inliner.inline_descr_inplace(target_token.resume_at_jump_descr)
 
         # Forget the values to allow them to be freed
@@ -489,7 +489,7 @@ class UnrollOptimizer(Optimization):
             if not isinstance(a, Const) and a not in self.short_seen:
                 self.add_op_to_short(self.short_boxes.producer(a), emit, guards_needed)
         if op.is_guard():
-            descr = self.short_resume_at_jump_descr.clone_if_mutable()
+            descr = self.short_resume_at_jump_descr
             op.setdescr(descr)
 
         if guards_needed and self.short_boxes.has_producer(op.result):
@@ -588,7 +588,7 @@ class UnrollOptimizer(Optimization):
 
                 for guard in extra_guards:
                     if guard.is_guard():
-                        descr = target.resume_at_jump_descr.clone_if_mutable()
+                        descr = target.resume_at_jump_descr
                         inliner.inline_descr_inplace(descr)
                         guard.setdescr(descr)
                     self.optimizer.send_extra_operation(guard)

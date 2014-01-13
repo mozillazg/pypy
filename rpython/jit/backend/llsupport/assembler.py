@@ -111,35 +111,32 @@ class BaseAssembler(object):
         return r
 
     def rebuild_faillocs_from_descr(self, descr, inputframes, loc_positions):
-        lgt = 0
-        for frame in inputframes:
-            lgt += len(frame)
-        locs = [None] * lgt
+        locs = []
         GPR_REGS = len(self.cpu.gen_regs)
         XMM_REGS = len(self.cpu.float_regs)
         if self.cpu.IS_64_BIT:
             coeff = 1
         else:
             coeff = 2
-        locs_index = 0
         for i, frame in enumerate(inputframes):
             inputlocs = loc_positions[i]
             assert len(inputlocs) == len(frame)
             for j, item in enumerate(frame):
+                if item is None:
+                    continue
                 pos = inputlocs[j]
                 if pos < GPR_REGS:
-                    locs[locs_index] = self.cpu.gen_regs[pos]
+                    locs.append(self.cpu.gen_regs[pos])
                 elif pos < (GPR_REGS + XMM_REGS * coeff):
                     pos = (pos - GPR_REGS) // coeff
-                    locs[locs_index] = self.cpu.float_regs[pos]
+                    locs.append(self.cpu.float_regs[pos])
                 else:
                     stack_pos = pos - self.cpu.JITFRAME_FIXED_SIZE
                     assert stack_pos >= 0
                     tp = item.type
-                    locs[locs_index] = self.new_stack_loc(stack_pos,
-                                                          pos * WORD, tp)
-                locs_index += 1
-        return locs
+                    locs.append(self.new_stack_loc(stack_pos,
+                                pos * WORD, tp))
+        return locs[:]
 
     def store_info_on_descr(self, startspos, guardtok, resume_bytecode):
         withfloats = guardtok.has_floats

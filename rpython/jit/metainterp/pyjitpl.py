@@ -1698,13 +1698,14 @@ class MetaInterp(object):
     def is_main_jitcode(self, jitcode):
         return self.jitdriver_sd is not None and jitcode is self.jitdriver_sd.mainjitcode
 
-    def newframe(self, jitcode, greenkey=None):
+    def newframe(self, jitcode, greenkey=None, record_resume=True):
         if self.framestack:
             pc = self.framestack[-1].pc
         else:
             pc = -1
-        self.history.record(rop.ENTER_FRAME, [ConstInt(pc)], None,
-                            descr=jitcode)
+        if record_resume:
+            self.history.record(rop.ENTER_FRAME, [ConstInt(pc)], None,
+                                descr=jitcode)
         if jitcode.is_portal:
             self.portal_call_depth += 1
             self.call_ids.append(self.current_call_id)
@@ -2409,9 +2410,8 @@ class MetaInterp(object):
         try:
             self.portal_call_depth = -1 # always one portal around
             self.history = history.History()
-            self.rebuild_state_after_failure(resumedescr, deadframe)
-            xxx
-            self.history.inputargs = [box for box in inputargs_and_holes if box]
+            state = self.rebuild_state_after_failure(resumedescr, deadframe)
+            self.history.inputframes, self.history.inputlocs = state
         finally:
             rstack._stack_criticalcode_stop()
 
@@ -2531,10 +2531,10 @@ class MetaInterp(object):
         vinfo = self.jitdriver_sd.virtualizable_info
         ginfo = self.jitdriver_sd.greenfield_info
         self.framestack = []
-        inputframes = resume2.rebuild_from_resumedata(self, deadframe,
-                                                      resumedescr)
-        virtualizable_boxes = None
-        virtualref_boxes = None
+        inputlocs = resume2.rebuild_from_resumedata(self, deadframe,
+                                                    resumedescr)
+        virtualizable_boxes = []
+        virtualref_boxes = []
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
         self.virtualref_boxes = virtualref_boxes
@@ -2565,7 +2565,7 @@ class MetaInterp(object):
         else:
             assert not virtualizable_boxes
         #
-        return inputframes
+        return inputlocs
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():

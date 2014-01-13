@@ -238,6 +238,7 @@ class RegAlloc(BaseRegalloc):
         used = {}
         i = 0
         inputargs = flatten(inputframes)
+        assert len(inputargs) == len(locs)
         for loc in locs:
             if loc is None: # xxx bit kludgy
                 loc = ebp

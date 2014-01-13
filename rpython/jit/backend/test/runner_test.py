@@ -259,6 +259,52 @@ class BaseBackendTest(Runner):
         assert self.cpu.tracker.total_compiled_bridges == 1
         return looptoken
 
+    def test_compile_bridge_with_holes(self):
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        i3 = BoxInt()
+        faildescr1 = BasicFailDescr(1)
+        faildescr2 = BasicFailDescr(2)
+        looptoken = JitCellToken()
+        targettoken = TargetToken()
+        jitcode = JitCode('name')
+        jitcode.setup(num_regs_i=3, num_regs_r=0, num_regs_f=0)
+        operations = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None, descr=jitcode),
+            ResOperation(rop.INT_SUB, [i3, ConstInt(42)], i0),
+            ResOperation(rop.LABEL, [i0], None, descr=targettoken),
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.RESUME_PUT, [i1, ConstInt(0), ConstInt(1)],
+                         None),
+            ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
+            ResOperation(rop.JUMP, [i1], None, descr=targettoken),
+            ]
+        inputargs = [i3]
+        self.cpu.compile_loop(None, inputargs, operations, looptoken)
+
+        i1b = BoxInt()
+        i3 = BoxInt()
+        bridge = [
+            ResOperation(rop.INT_LE, [i1b, ConstInt(19)], i3),
+            ResOperation(rop.RESUME_PUT, [i3, ConstInt(0), ConstInt(2)],
+                         None),
+            ResOperation(rop.GUARD_TRUE, [i3], None, descr=faildescr2),
+            ResOperation(rop.JUMP, [i1b], None, descr=targettoken),
+        ]
+
+        locs = rebuild_locs_from_resumedata(faildescr1)
+        self.cpu.compile_bridge(None, faildescr1, [[None, i1b, None]],
+                                locs, bridge, looptoken)
+
+        deadframe = self.cpu.execute_token(looptoken, 2)
+        fail = self.cpu.get_latest_descr(deadframe)
+        assert fail.identifier == 2
+        locs = rebuild_locs_from_resumedata(fail)
+        res = self.cpu.get_int_value(deadframe, locs[0][1])
+        assert res == 20
+
     def test_compile_big_bridge_out_of_small_loop(self):
         jitcode = JitCode("name")
         jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)

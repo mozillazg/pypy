@@ -132,29 +132,35 @@ class BoxResumeReader(AbstractResumeReader):
                                                             pos))
 
     def finish(self):
+        res = []
         for frame in self.framestack:
             jitcode = frame.jitcode
-            miframe = self.metainterp.newframe(jitcode)
+            res.append([None] * jitcode.num_regs())
+            miframe = self.metainterp.newframe(jitcode, record_resume=False)
             miframe.pc = frame.pc
             pos = 0
             for i in range(jitcode.num_regs_i()):
                 jitframe_pos = frame.registers[pos]
-                if jitframe_pos == -1:
-                    continue
-                miframe.registers_i[i] = self.get_int_box(jitframe_pos)
+                if jitframe_pos != -1:
+                    box = self.get_int_box(jitframe_pos)
+                    miframe.registers_i[i] = box
+                    res[-1][pos] = box
                 pos += 1
             for i in range(jitcode.num_regs_r()):
                 jitframe_pos = frame.registers[pos]
-                if jitframe_pos == -1:
-                    continue
-                miframe.registers_r[i] = self.get_ref_box(jitframe_pos)
+                if jitframe_pos != -1:
+                    box = self.get_int_box(jitframe_pos)
+                    res[-1][pos] = box
+                    miframe.registers_r[i] = box
                 pos += 1
             for i in range(jitcode.num_regs_f()):
                 jitframe_pos = frame.registers[pos]
-                if jitframe_pos == -1:
-                    continue
-                miframe.registers_f[i] = self.get_float_box(jitframe_pos)
+                if jitframe_pos != -1:
+                    box = self.get_int_box(jitframe_pos)
+                    res[-1][pos] = box
+                    miframe.registers_f[i] = box
                 pos += 1
+        return res, [f.registers for f in self.framestack]
             
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     return BoxResumeReader(metainterp, deadframe).rebuild(faildescr)

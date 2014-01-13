@@ -21,7 +21,7 @@ class Frame(object):
         self.registers_f = [None] * jitcode.num_regs_f()
 
     def num_nonempty_regs(self):
-        return len([i for i in self.registers_i if i.getint() != 2])
+        return len([i for i in self.registers_i if i is not None])
 
     def dump_registers(self, lst, backend_values):
         lst += [backend_values[x] for x in self.registers_i]
@@ -33,7 +33,7 @@ class MockMetaInterp(object):
         self.cpu = MockCPU()
         self.framestack = []
 
-    def newframe(self, jitcode):
+    def newframe(self, jitcode, record_resume=False):
         f = Frame(jitcode)
         self.framestack.append(f)
         return f
@@ -94,7 +94,7 @@ class TestResumeDirect(object):
         descr = Descr()
         descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
         descr.rd_bytecode_position = 5
-        rebuild_from_resumedata(metainterp, "myframe", descr)
+        state = rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 2
         f = metainterp.framestack[-1]
         f2 = metainterp.framestack[0]
@@ -177,3 +177,6 @@ class TestResumeDirect(object):
         descr.rd_bytecode_position = 5
         locs = rebuild_locs_from_resumedata(descr)
         assert locs == [[8, 11], [12]]
+
+    def test_resume_put_const(self):
+        xxx

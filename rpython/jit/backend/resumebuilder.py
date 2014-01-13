@@ -12,7 +12,7 @@ class LivenessAnalyzer(AbstractResumeReader):
         if inputframes is not None:
             for frame in inputframes:
                 self.frame_starts.append(self.frame_starts[-1] + len(frame))
-                self.framestack.append(frame)
+                self.framestack.append(frame[:])
 
     def enter_frame(self, pc, jitcode):
         self.frame_starts.append(self.frame_starts[-1] + jitcode.num_regs())
@@ -64,11 +64,14 @@ class ResumeBuilder(object):
             i = 0
             for frame_pos, frame in enumerate(inputframes):
                 for pos_in_frame, box in enumerate(frame):
-                    loc_pos = inputlocs[i].get_jitframe_position()
+                    if box is None:
+                        loc_pos = -1
+                    else:
+                        loc_pos = inputlocs[i].get_jitframe_position()
+                        i += 1
+                        self.frontend_pos[box] = (ConstInt(frame_pos),
+                                                  ConstInt(pos_in_frame))
                     self.current_attachment[box] = loc_pos
-                    self.frontend_pos[box] = (ConstInt(frame_pos),
-                                              ConstInt(pos_in_frame))
-                    i += 1
 
     def process(self, op):
         if op.getopnum() == rop.RESUME_PUT:
@@ -131,12 +134,16 @@ class ResumeBuilder(object):
 def flatten(inputframes):
     count = 0
     for frame in inputframes:
-        count += len(frame)
+        for x in frame:
+            if x is not None:
+                count += 1
     inputargs = [None] * count
-    i = 0
+    pos = 0
     for frame in inputframes:
-        inputargs[i:i + len(frame)] = frame
-        i += len(frame)
+        for item in frame:
+            if item is not None:
+                inputargs[pos] = item
+                pos += 1
     return inputargs
 
 

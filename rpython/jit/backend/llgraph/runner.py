@@ -18,14 +18,15 @@ from rpython.rlib.rtimer import read_timestamp
 
 class Position(object):
     def __init__(self, pos):
+        assert pos != -1
         self.pos = pos
 
     def get_jitframe_position(self):
         return self.pos
 
 class ResumeFrame(object):
-    def __init__(self, num, start_pos):
-        self.registers = [None] * num
+    def __init__(self, no, start_pos):
+        self.registers = [None] * no
         self.start_pos = start_pos
 
 class LLGraphResumeBuilder(ResumeBuilder):
@@ -33,20 +34,20 @@ class LLGraphResumeBuilder(ResumeBuilder):
         self.liveness = LivenessAnalyzer()
         self.numbering = {}
         self.framestack = []
-        locs = []
+        locs = None
         start_pos = 0
-        for frame_pos, frame in enumerate(inputframes):
-            if inputlocs is not None:
+        if inputlocs is not None:
+            locs = []
+            for frame_pos, frame in enumerate(inputframes):
                 self.framestack.append(ResumeFrame(len(frame), start_pos))
-            for pos_in_frame, box in enumerate(frame):
-                if inputlocs is not None:
+                for pos_in_frame, box in enumerate(frame):
+                    if box is None:
+                        continue
                     pos = inputlocs[frame_pos][pos_in_frame]
                     self.framestack[-1].registers[pos_in_frame] = box
-                else:
-                    pos = len(self.numbering)
-                self.numbering[box] = pos
-                locs.append(Position(pos))
-            start_pos += len(frame)
+                    self.numbering[box] = pos
+                    locs.append(Position(pos))
+                    start_pos += 1
         ResumeBuilder.__init__(self, self, frontend_liveness, descr,
                                inputframes, locs)
 
@@ -83,7 +84,10 @@ class LLGraphResumeBuilder(ResumeBuilder):
         lst = []
         for frame in self.framestack:
             for reg in frame.registers:
-                lst.append(mapping(reg))
+                if reg is None:
+                    lst.append(None)
+                else:
+                    lst.append(mapping(reg))
         return lst
     
 class LLTrace(object):
@@ -365,13 +369,12 @@ class LLGraphCPU(model.AbstractCPU):
         assert frame.forced_deadframe is None
         values = []
         for box in frame.force_guard_op.failargs:
-            if box is not None:
-                if box is not frame.current_op.result:
-                    value = frame.env[box]
-                else:
-                    value = box.value    # 0 or 0.0 or NULL
-            else:
+            if box is None:
                 value = None
+            elif box is not frame.current_op.result:
+                value = frame.env[box]
+            else:
+                value = box.value    # 0 or 0.0 or NULL
             values.append(value)
         frame.forced_deadframe = LLDeadFrame(
             _getdescr(frame.force_guard_op), values)
@@ -777,11 +780,14 @@ class LLFrame(object):
             i += 1
 
     def do_renaming(self, newargs, newvalues):
-        assert len(newargs) == len(newvalues)
         self.env = {}
         self.framecontent = {}
-        for new, newvalue in zip(newargs, newvalues):
-            self.setenv(new, newvalue)
+        i = 0
+        for value in newvalues:
+            if value is None:
+                continue
+            self.setenv(newargs[i], value)
+            i += 1
 
     # -----------------------------------------------------
 
@@ -790,10 +796,10 @@ class LLFrame(object):
         for i in range(len(self.current_op.failargs)):
             arg = self.current_op.failargs[i]
             if arg is None:
-                values.append(None)
+                value = None
             else:
                 value = self.env[arg]
-                values.append(value)
+            values.append(value)
         if hasattr(descr, '_llgraph_bridge'):
             target = (descr._llgraph_bridge, -1)
             raise Jump(target, values)
