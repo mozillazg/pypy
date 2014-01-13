@@ -84,34 +84,36 @@ class DirectResumeReader(AbstractResumeReader):
         self.bhinterpbuilder = binterpbuilder
         self.cpu = cpu
         self.deadframe = deadframe
-        self.bhinterp_stack = []
-
-    def enter_frame(self, pc, jitcode):
-        if pc != -1:
-            self.bhinterp_stack[-1].position = pc
-        self.bhinterp_stack.append(self.bhinterpbuilder.acquire_interp())
-        self.bhinterp_stack[-1].setposition(jitcode, 0)
-
-    def put_box_int(self, frame_no, frontend_position, jitframe_pos):
-        val = self.cpu.get_int_value(self.deadframe, jitframe_pos)
-        self.bhinterp_stack[frame_no].registers_i[frontend_position] = val
-
-    def put_box_ref(self, frame_no, frontend_position, jitframe_pos):
-        val = self.cpu.get_ref_value(self.deadframe, jitframe_pos)
-        self.bhinterp_stack[frame_no].registers_r[frontend_position] = val
-
-    def resume_set_pc(self, pc):
-        self.bhinterp_stack[-1].position = pc
-
-    def leave_frame(self):
-        bhinterp = self.bhinterp_stack.pop()
-        self.bhinterpbuilder.release_interp(bhinterp)
+        AbstractResumeReader.__init__(self)
 
     def finish(self):
-        self.bhinterp_stack[0].nextblackholeinterp = None
-        for i in range(1, len(self.bhinterp_stack)):
-            self.bhinterp_stack[i].nextblackholeinterp = self.bhinterp_stack[i - 1]
-        return self.bhinterp_stack[-1]
+        nextbh = None
+        for frame in self.framestack:
+            curbh = self.bhinterpbuilder.acquire_interp()
+            curbh.nextblackholeinterp = nextbh
+            nextbh = curbh
+            jitcode = frame.jitcode
+            curbh.setposition(jitcode, frame.pc)
+            pos = 0
+            for i in range(jitcode.num_regs_i()):
+                jitframe_pos = frame.registers[pos]
+                if jitframe_pos != -1:
+                    curbh.registers_i[i] = self.cpu.get_int_value(
+                        self.deadframe, jitframe_pos)
+                pos += 1
+            for i in range(jitcode.num_regs_r()):
+                jitframe_pos = frame.registers[pos]
+                if jitframe_pos != -1:
+                    curbh.registers_r[i] = self.cpu.get_ref_value(
+                        self.deadframe, jitframe_pos)
+                pos += 1
+            for i in range(jitcode.num_regs_f()):
+                jitframe_pos = frame.registers[pos]
+                if jitframe_pos != -1:
+                    curbh.registers_f[i] = self.cpu.get_float_value(
+                        self.deadframe, jitframe_pos)
+                pos += 1
+        return curbh
 
 class BoxResumeReader(AbstractResumeReader):
     def __init__(self, metainterp, deadframe):
@@ -136,13 +138,21 @@ class BoxResumeReader(AbstractResumeReader):
             miframe.pc = frame.pc
             pos = 0
             for i in range(jitcode.num_regs_i()):
-                miframe.registers_i[i] = self.get_int_box(frame.registers[pos])
+                jitframe_pos = frame.registers[pos]
+                if jitframe_pos == -1:
+                    continue
+                miframe.registers_i[i] = self.get_int_box(jitframe_pos)
                 pos += 1
             for i in range(jitcode.num_regs_r()):
-                miframe.registers_r[i] = self.get_ref_box(frame.registers[pos])
+                jitframe_pos = frame.registers[pos]
+                if jitframe_pos == -1:
+                    continue
+                miframe.registers_r[i] = self.get_ref_box(jitframe_pos)
                 pos += 1
             for i in range(jitcode.num_regs_f()):
                 jitframe_pos = frame.registers[pos]
+                if jitframe_pos == -1:
+                    continue
                 miframe.registers_f[i] = self.get_float_box(jitframe_pos)
                 pos += 1
             
