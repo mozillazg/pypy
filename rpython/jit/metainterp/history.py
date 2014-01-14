@@ -756,6 +756,12 @@ class History(object):
         self.inputlocs = None
         self.operations = []
 
+    def any_operation(self):
+        for op in self.operations:
+            if not op.is_resume():
+                return True
+        return False
+
     def record(self, opnum, argboxes, resbox, descr=None):
         op = ResOperation(opnum, argboxes, resbox, descr)
         self.operations.append(op)

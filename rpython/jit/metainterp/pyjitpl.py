@@ -109,7 +109,9 @@ class MIFrame(object):
             elif box.type == history.FLOAT: self.registers_f[index] = box
             else: raise AssertionError(box.type)
 
-    def get_current_position_info(self):
+    def get_current_position_info(self, resumepc=-1):
+        if resumepc != -1:
+            return self.jitcode.get_live_vars_info(resumepc)
         return self.jitcode.get_live_vars_info(self.pc)
 
     def replace_active_box_in_frame(self, oldbox, newbox):
@@ -982,7 +984,7 @@ class MIFrame(object):
     @arguments("int", "boxes3", "jitcode_position", "boxes3", "orgpc")
     def opimpl_jit_merge_point(self, jdindex, greenboxes,
                                jcposition, redboxes, orgpc):
-        any_operation = len(self.metainterp.history.operations) > 0
+        any_operation = self.metainterp.history.any_operation()
         jitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         self.verify_green_args(jitdriver_sd, greenboxes)
         self.debug_merge_point(jitdriver_sd, jdindex,
@@ -1622,7 +1624,6 @@ class MetaInterp(object):
         self.retracing_from = -1
         self.call_pure_results = args_dict_box()
         self.heapcache = HeapCache()
-        self.resumerecorder = ResumeRecorder(self)
 
         self.call_ids = []
         self.current_call_id = 0
@@ -2038,6 +2039,7 @@ class MetaInterp(object):
                 duplicates[box] = None
 
     def reached_loop_header(self, greenboxes, redboxes, resumedescr):
+        self.resumerecorder.leave_frame()
         self.heapcache.reset()
 
         duplicates = {}
@@ -2102,6 +2104,7 @@ class MetaInterp(object):
         # Otherwise, no loop found so far, so continue tracing.
         start = len(self.history.operations)
         self.current_merge_points.append((live_arg_boxes, start))
+        self.resumerecorder.enter_frame(-1, self.jitdriver_sd.mainjitcode)
 
     def _unpack_boxes(self, boxes, start, stop):
         ints = []; refs = []; floats = []
@@ -2335,6 +2338,7 @@ class MetaInterp(object):
         # ----- make a new frame -----
         self.portal_call_depth = -1 # always one portal around
         self.framestack = []
+        self.resumerecorder = ResumeRecorder(self, False)
         f = self.newframe(self.jitdriver_sd.mainjitcode)
         f.setup_call(original_boxes)
         assert self.portal_call_depth == 0
@@ -2352,6 +2356,7 @@ class MetaInterp(object):
             self.history = history.History()
             state = self.rebuild_state_after_failure(resumedescr, deadframe)
             self.history.inputframes, self.history.inputlocs = state
+            self.resumerecorder = ResumeRecorder(self, True)
         finally:
             rstack._stack_criticalcode_stop()
 

@@ -236,9 +236,12 @@ def blackhole_from_resumedata(interpbuilder, metainterp_sd, faildescr,
 class ResumeRecorder(object):
     """ Created by metainterp to record the resume as we record operations
     """
-    def __init__(self, metainterp):
+    def __init__(self, metainterp, is_bridge=False):
         self.metainterp = metainterp
         self.cachestack = []
+        if is_bridge:
+            for frame in metainterp.framestack:
+                self.cachestack.append([None] * frame.jitcode.num_regs())
 
     def enter_frame(self, pc, jitcode):
         self.metainterp.history.record(rop.ENTER_FRAME, [ConstInt(pc)], None,
@@ -252,7 +255,8 @@ class ResumeRecorder(object):
     def resume_point(self, resumedescr, resumepc):
         framestack = self.metainterp.framestack
         for i, frame in enumerate(framestack):
-            self._emit_resume_data(resumepc, frame, i, not i == len(framestack))
+            in_a_call = not i == len(framestack) - 1
+            self._emit_resume_data(resumepc, frame, i, in_a_call)
 
     def process_box(self, index_in_frontend, frame_pos, box):
         cache = self.cachestack[frame_pos]
@@ -278,10 +282,13 @@ class ResumeRecorder(object):
             elif argcode == 'f': frame.registers_f[index] = history.CONST_FZERO
             frame._result_argcode = '?'     # done
         #
-        info = frame.get_current_position_info()
+        if not in_a_call and resume_pc != -1:
+            info = frame.get_current_position_info(resume_pc)
+        else:
+            info = frame.get_current_position_info()
         start_i = 0
-        start_r = start_i + info.get_register_count_i()
-        start_f = start_r + info.get_register_count_r()
+        start_r = start_i + frame.jitcode.num_regs_i()
+        start_f = start_r + frame.jitcode.num_regs_r()
         # fill it now
         for i in range(info.get_register_count_i()):
             index = info.get_register_index_i(i)
@@ -289,11 +296,11 @@ class ResumeRecorder(object):
         for i in range(info.get_register_count_r()):
             index = info.get_register_index_r(i)
             self.process_box(index + start_r, frame_pos,
-                             frame.registers_i[index])
+                             frame.registers_r[index])
         for i in range(info.get_register_count_f()):
             index = info.get_register_index_f(i)
             self.process_box(index + start_f, frame_pos,
-                             frame.registers_i[index])
+                             frame.registers_f[index])
 
         mi_history = self.metainterp.history
         cache = self.cachestack[frame_pos]
