@@ -1428,34 +1428,6 @@ class MIFrame(object):
         # but we should not follow calls to that graph
         return self.do_residual_call(funcbox, argboxes, calldescr, pc)
 
-    def emit_resume_data(self, pos, in_call):
-        i = 0
-        history = self.metainterp.history
-        boxes = self.get_list_of_active_boxes(in_call)
-        #xxx
-        #xxx
-        for i in range(self.jitcode.num_regs_i()):
-            box = self.registers_i[i]
-            if box is not None and (box, pos, i) not in self.resume_cache:
-                history.record(rop.RESUME_PUT,
-                               [box, ConstInt(pos), ConstInt(i)], None)
-                self.resume_cache[(box, pos, i)] = None
-        start = self.jitcode.num_regs_i()
-        for i in range(self.jitcode.num_regs_r()):
-            box = self.registers_r[i]
-            if box is not None and (box, pos, i) not in self.resume_cache:
-                history.record(rop.RESUME_PUT,
-                               [box, ConstInt(pos), ConstInt(i + start)], None)
-                self.resume_cache[(box, pos, i)] = None
-        start = self.jitcode.num_regs_i() + self.jitcode.num_regs_r()
-        for i in range(self.jitcode.num_regs_f()):
-            box = self.registers_f[i]
-            if box is not None and (box, pos, i) not in self.resume_cache:
-                history.record(rop.RESUME_PUT,
-                               [box, ConstInt(pos), ConstInt(i + start)], None)
-                self.resume_cache[(box, pos, i)] = None
-        history.record(rop.RESUME_SET_PC, [ConstInt(self.pc)], None)
-
 # ____________________________________________________________
 
 class MetaInterpStaticData(object):

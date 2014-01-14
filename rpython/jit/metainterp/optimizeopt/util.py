@@ -3,6 +3,7 @@ from rpython.rlib.objectmodel import r_dict, compute_identity_hash
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.jit.metainterp import resoperation
+from rpython.jit.metainterp.history import Box
 from rpython.rlib.debug import make_sure_not_resized
 from rpython.jit.metainterp.resoperation import rop
 from rpython.rlib.objectmodel import we_are_translated
@@ -150,7 +151,7 @@ def equaloplists(oplist1, oplist2, remap=None, text_right=None,
         for i in range(op1.numargs()):
             x = op1.getarg(i)
             y = op2.getarg(i)
-            if cache and y not in remap:
+            if cache and isinstance(y, Box) and y not in remap:
                 remap[y] = x
             assert x.same_box(remap.get(y, y))
         if op2.result in remap:

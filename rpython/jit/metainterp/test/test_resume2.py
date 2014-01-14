@@ -261,9 +261,9 @@ class TestResumeRecorder(object):
         expected = parse("""
         [i0, i1, i2]
         enter_frame(-1, descr=jitcode)
-        resume_put(i0, 0, 0)
+        resume_put(i0, 0, 2)
         resume_put(i1, 0, 1)
-        resume_put(i2, 0, 2)
+        resume_put(i2, 0, 0)
         resume_set_pc(24)
         """, namespace={'jitcode': jitcode})
         equaloplists(resume_ops, expected.operations, cache=True)
@@ -292,8 +292,8 @@ class TestResumeRecorder(object):
         expected = parse("""
         [i0, i1, i2]
         enter_frame(-1, descr=jitcode)
-        resume_put(i0, 0, 0)
-        resume_put(i1, 0, 1)
+        resume_put(i0, 0, 1)
+        resume_put(i1, 0, 0)
         resume_set_pc(16)
         leave_frame()
         """, namespace={'jitcode': jitcode})
@@ -325,12 +325,12 @@ class TestResumeRecorder(object):
         expected = parse("""
         [i0, i1, i2]
         enter_frame(-1, descr=jitcode)
-        resume_put(i0, 0, 0)
+        resume_put(i0, 0, 2)
         resume_put(i1, 0, 1)
-        resume_put(i2, 0, 2)
-        resume_set_pc(-1)
+        resume_put(i2, 0, 0)
+        resume_set_pc(16)
         resume_clear(0, 1)
-        resume_set_pc(-1)
+        resume_set_pc(21)
         leave_frame()
         """, namespace={'jitcode': jitcode})
         equaloplists(resume_ops, expected.operations, cache=True)

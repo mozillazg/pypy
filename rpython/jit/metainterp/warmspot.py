@@ -348,11 +348,11 @@ class WarmRunnerDesc(object):
                 len(self.jitdrivers_sd)), \
                 "there are multiple jit_merge_points with the same jitdriver"
 
-    def split_graph_and_record_jitdriver(self, graph, block, pos):
+    def split_graph_and_record_jitdriver(self, orig_graph, block, pos):
         op = block.operations[pos]
         args = op.args[2:]
         s_binding = self.translator.annotator.binding
-        graph = copygraph(graph)
+        graph = copygraph(orig_graph)
         [jmpp] = find_jit_merge_points([graph])
         graph.startblock = support.split_before_jit_merge_point(*jmpp)
         # XXX this is incredibly obscure, but this is sometiems necessary
@@ -371,11 +371,11 @@ class WarmRunnerDesc(object):
         assert hasattr(graph, "func")
         graph.func._dont_inline_ = True
         graph.func._jit_unroll_safe_ = True
-        result_type = history.getkind(graph.getreturnvar().concretetype)[0]
+        result_type = history.getkind(orig_graph.getreturnvar().concretetype)[0]
         jd = JitDriverStaticData(block.operations[pos].args[1].value, graph,
                                  result_type)
         jd._portal_args_s = [s_binding(v) for v in args]
-        jd._jit_merge_point_in = graph
+        jd._jit_merge_point_in = orig_graph
         jd.portal_runner_ptr = "<not set so far>"
         self.jitdrivers_sd.append(jd)
 

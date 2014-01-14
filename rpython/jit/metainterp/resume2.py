@@ -295,12 +295,14 @@ class ResumeRecorder(object):
             self.process_box(index + start_f, frame_pos,
                              frame.registers_i[index])
 
-        history = self.metainterp.history
+        mi_history = self.metainterp.history
         cache = self.cachestack[frame_pos]
         for i in range(len(self.marked)):
             if self.marked[i] is None and cache[i] is not None:
                 cache[i] = None
-                history.record(rop.RESUME_CLEAR, [ConstInt(frame_pos),
+                mi_history.record(rop.RESUME_CLEAR, [ConstInt(frame_pos),
                                                   ConstInt(i)], None)
-        history.record(rop.RESUME_SET_PC, [ConstInt(resume_pc)], None)
+        if resume_pc == -1:
+            resume_pc = self.metainterp.framestack[-1].pc
+        mi_history.record(rop.RESUME_SET_PC, [ConstInt(resume_pc)], None)
         self.marked = None
