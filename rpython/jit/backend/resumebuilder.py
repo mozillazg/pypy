@@ -71,16 +71,19 @@ class ResumeBuilder(object):
         self.virtuals = {}
         if inputlocs is not None:
             i = 0
+            all = {}
             for frame_pos, frame in enumerate(inputframes):
                 for pos_in_frame, box in enumerate(frame):
-                    if box is None:
+                    if box is None or isinstance(box, Const) or box in all:
                         loc_pos = -1
                     else:
                         loc_pos = inputlocs[i].get_jitframe_position()
                         i += 1
                         self.frontend_pos[box] = (ConstInt(frame_pos),
                                                   ConstInt(pos_in_frame))
-                    self.current_attachment[box] = loc_pos
+                        all[box] = None
+                    if box not in self.current_attachment:
+                        self.current_attachment[box] = loc_pos
 
     def process(self, op):
         if op.getopnum() == rop.RESUME_PUT:
@@ -144,16 +147,21 @@ class ResumeBuilder(object):
 
 def flatten(inputframes):
     count = 0
+    all = {}
     for frame in inputframes:
         for x in frame:
-            if x is not None and not isinstance(x, Const):
+            if x is not None and not isinstance(x, Const) and x not in all:
                 count += 1
+                all[x] = None
     inputargs = [None] * count
     pos = 0
+    all = {}
     for frame in inputframes:
         for item in frame:
-            if item is not None and not isinstance(item, Const):
+            if (item is not None and not isinstance(item, Const) and
+                item not in all):
                 inputargs[pos] = item
+                all[item] = None
                 pos += 1
     return inputargs
 

@@ -118,12 +118,14 @@ class BaseAssembler(object):
             coeff = 1
         else:
             coeff = 2
+        all = {}
         for i, frame in enumerate(inputframes):
             inputlocs = loc_positions[i]
             assert len(inputlocs) == len(frame)
             for j, item in enumerate(frame):
-                if item is None or isinstance(item, Const):
+                if item is None or isinstance(item, Const) or item in all:
                     continue
+                all[item] = None
                 pos = inputlocs[j]
                 if pos < GPR_REGS:
                     locs.append(self.cpu.gen_regs[pos])

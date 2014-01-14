@@ -161,40 +161,50 @@ class BoxResumeReader(AbstractResumeReader):
         AbstractResumeReader.__init__(self)
 
     def store_int_box(self, res, pos, miframe, i, jitframe_pos):
-        if jitframe_pos == -1:
+        if jitframe_pos in self.cache:
+            box = self.cache[jitframe_pos]
+        elif jitframe_pos == -1:
             return
-        if jitframe_pos >= 0:
+        elif jitframe_pos >= 0:
             box = BoxInt(self.metainterp.cpu.get_int_value(self.deadframe,
                                                            jitframe_pos))
         elif jitframe_pos <= -2:
             box = self.consts[-jitframe_pos - 2]
         miframe.registers_i[i] = box
+        self.cache[jitframe_pos] = box
         res[-1][pos] = box
 
     def store_ref_box(self, res, pos, miframe, i, jitframe_pos):
-        if jitframe_pos == -1:
+        if jitframe_pos in self.cache:
+            box = self.cache[jitframe_pos]
+        elif jitframe_pos == -1:
             return
-        if jitframe_pos >= 0:
+        elif jitframe_pos >= 0:
             box = BoxPtr(self.metainterp.cpu.get_ref_value(self.deadframe,
                                                            jitframe_pos))
         elif jitframe_pos <= -2:
             box = self.consts[-jitframe_pos - 2]
         miframe.registers_r[i] = box
+        self.cache[jitframe_pos] = box
         res[-1][pos] = box
 
     def store_float_box(self, res, pos, miframe, i, jitframe_pos):
-        if jitframe_pos == -1:
+        if jitframe_pos in self.cache:
+            box = self.cache[jitframe_pos]
+        elif jitframe_pos == -1:
             return
-        if jitframe_pos >= 0:
+        elif jitframe_pos >= 0:
             box = BoxFloat(self.metainterp.cpu.get_float_value(self.deadframe,
                                                              jitframe_pos))
         elif jitframe_pos <= -2:
             box = self.consts[-jitframe_pos - 2]
         miframe.registers_f[i] = box
+        self.cache[jitframe_pos] = box
         res[-1][pos] = box
 
     def finish(self):
         res = []
+        self.cache = {}
         for frame in self.framestack:
             jitcode = frame.jitcode
             res.append([None] * jitcode.num_regs())
@@ -210,6 +220,7 @@ class BoxResumeReader(AbstractResumeReader):
             for i in range(jitcode.num_regs_f()):
                 self.store_float_box(res, pos, miframe, i, frame.registers[pos])
                 pos += 1
+        self.cache = None
         return res, [f.registers for f in self.framestack]
             
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):

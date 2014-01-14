@@ -646,6 +646,7 @@ class BaseRegalloc(object):
         """
         locs = []
         base_ofs = self.assembler.cpu.get_baseofs_of_frame_field()
+
         for box in inputargs:
             assert isinstance(box, Box)
             loc = self.fm.get_new_loc(box)
