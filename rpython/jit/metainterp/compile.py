@@ -125,7 +125,7 @@ def compile_loop(metainterp, greenkey, start,
 
     jitcell_token = make_jitcell_token(jitdriver_sd)
     part = create_empty_loop(metainterp)
-    part.inputargs = inputargs[:]
+    part.inputframes = [inputargs[:]]
     h_ops = history.operations
     part.resume_at_jump_descr = resume_at_jump_descr
     part.operations = [ResOperation(rop.LABEL, inputargs, None, descr=TargetToken(jitcell_token))] + \
@@ -141,7 +141,7 @@ def compile_loop(metainterp, greenkey, start,
     all_target_tokens = [target_token]
 
     loop = create_empty_loop(metainterp)
-    loop.inputargs = part.inputargs
+    loop.inputframes = part.inputframes
     loop.operations = part.operations
     loop.quasi_immutable_deps = {}
     if part.quasi_immutable_deps:
@@ -170,8 +170,9 @@ def compile_loop(metainterp, greenkey, start,
 
     if not loop.quasi_immutable_deps:
         loop.quasi_immutable_deps = None
-    for box in loop.inputargs:
-        assert isinstance(box, Box)
+    for frame in loop.inputframes:
+        for box in frame:
+            assert isinstance(box, Box)
 
     loop.original_jitcell_token = jitcell_token
     for label in all_target_tokens:
@@ -201,7 +202,7 @@ def compile_retrace(metainterp, greenkey, start,
     assert partial_trace.operations[-1].getopnum() == rop.LABEL
 
     part = create_empty_loop(metainterp)
-    part.inputargs = inputargs[:]
+    part.inputframes = [inputargs[:]]
     part.resume_at_jump_descr = resume_at_jump_descr
     h_ops = history.operations
 
@@ -245,8 +246,9 @@ def compile_retrace(metainterp, greenkey, start,
     if quasi_immutable_deps:
         loop.quasi_immutable_deps = quasi_immutable_deps
 
-    for box in loop.inputargs:
-        assert isinstance(box, Box)
+    for frame in loop.inputframes:
+        for box in frame:
+            assert isinstance(box, Box)
 
     target_token = loop.operations[-1].getdescr()
     resumekey.compile_and_attach(metainterp, loop)
@@ -259,10 +261,10 @@ def compile_retrace(metainterp, greenkey, start,
 def patch_new_loop_to_load_virtualizable_fields(loop, jitdriver_sd):
     vinfo = jitdriver_sd.virtualizable_info
     extra_ops = []
-    inputargs = loop.inputargs
+    inputargs = loop.inputframes[0]
     vable_box = inputargs[jitdriver_sd.index_of_virtualizable]
     i = jitdriver_sd.num_red_args
-    loop.inputargs = inputargs[:i]
+    loop.inputframes = [inputargs[:i]]
     for descr in vinfo.static_field_descrs:
         assert i < len(inputargs)
         box = inputargs[i]
@@ -344,7 +346,8 @@ def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
-        asminfo = do_compile_loop(metainterp_sd, loop.inputargs,
+        assert len(loop.inputframes) == 1
+        asminfo = do_compile_loop(metainterp_sd, loop.inputframes[0],
                                   operations, original_jitcell_token,
                                   name=loopname)
     finally:
@@ -362,7 +365,7 @@ def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
         ops_offset = asminfo.ops_offset
     else:
         ops_offset = None
-    metainterp_sd.logger_ops.log_loop(loop.inputargs, loop.operations, n,
+    metainterp_sd.logger_ops.log_loop(loop.inputframes[0], loop.operations, n,
                                       type, ops_offset,
                                       name=loopname)
     #
@@ -809,7 +812,8 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_trace = create_empty_loop(metainterp)
     new_trace.inputframes = metainterp.history.inputframes[:]
-    new_trace.inputlocs = metainterp.history.inputlocs[:]
+    if metainterp.history.inputlocs is not None:
+        new_trace.inputlocs = metainterp.history.inputlocs[:]
     # clone ops, as optimize_bridge can mutate the ops
 
     new_trace.operations = [op.clone() for op in metainterp.history.operations]

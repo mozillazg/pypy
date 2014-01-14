@@ -13,6 +13,7 @@ from rpython.jit.metainterp.jitprof import EmptyProfiler
 from rpython.jit.metainterp.logger import Logger
 from rpython.jit.metainterp.optimizeopt.util import args_dict_box
 from rpython.jit.metainterp.resoperation import rop
+from rpython.jit.metainterp.resume2 import ResumeRecorder
 from rpython.rlib import nonconst, rstack
 from rpython.rlib.debug import debug_start, debug_stop, debug_print, make_sure_not_resized
 from rpython.rlib.jit import Counters
@@ -110,39 +111,6 @@ class MIFrame(object):
 
     def get_current_position_info(self):
         return self.jitcode.get_live_vars_info(self.pc)
-
-    def get_list_of_active_boxes(self, in_a_call):
-        if in_a_call:
-            # If we are not the topmost frame, self._result_argcode contains
-            # the type of the result of the call instruction in the bytecode.
-            # We use it to clear the box that will hold the result: this box
-            # is not defined yet.
-            argcode = self._result_argcode
-            index = ord(self.bytecode[self.pc - 1])
-            if   argcode == 'i': self.registers_i[index] = history.CONST_FALSE
-            elif argcode == 'r': self.registers_r[index] = history.CONST_NULL
-            elif argcode == 'f': self.registers_f[index] = history.CONST_FZERO
-            self._result_argcode = '?'     # done
-        #
-        info = self.get_current_position_info()
-        start_i = 0
-        start_r = start_i + info.get_register_count_i()
-        start_f = start_r + info.get_register_count_r()
-        total   = start_f + info.get_register_count_f()
-        # allocate a list of the correct size
-        env = [None] * total
-        make_sure_not_resized(env)
-        # fill it now
-        for i in range(info.get_register_count_i()):
-            index = info.get_register_index_i(i)
-            env[start_i + i] = self.registers_i[index]
-        for i in range(info.get_register_count_r()):
-            index = info.get_register_index_r(i)
-            env[start_r + i] = self.registers_r[index]
-        for i in range(info.get_register_count_f()):
-            index = info.get_register_index_f(i)
-            env[start_f + i] = self.registers_f[index]
-        return env
 
     def replace_active_box_in_frame(self, oldbox, newbox):
         if isinstance(oldbox, history.BoxInt):
@@ -1460,29 +1428,32 @@ class MIFrame(object):
         # but we should not follow calls to that graph
         return self.do_residual_call(funcbox, argboxes, calldescr, pc)
 
-    def emit_resume_data(self, pos):
+    def emit_resume_data(self, pos, in_call):
         i = 0
         history = self.metainterp.history
+        boxes = self.get_list_of_active_boxes(in_call)
+        #xxx
+        #xxx
         for i in range(self.jitcode.num_regs_i()):
             box = self.registers_i[i]
-            if box is not None and box not in self.resume_cache:
+            if box is not None and (box, pos, i) not in self.resume_cache:
                 history.record(rop.RESUME_PUT,
                                [box, ConstInt(pos), ConstInt(i)], None)
-                self.resume_cache[box] = None
+                self.resume_cache[(box, pos, i)] = None
         start = self.jitcode.num_regs_i()
         for i in range(self.jitcode.num_regs_r()):
             box = self.registers_r[i]
-            if box is not None and box not in self.resume_cache:
+            if box is not None and (box, pos, i) not in self.resume_cache:
                 history.record(rop.RESUME_PUT,
                                [box, ConstInt(pos), ConstInt(i + start)], None)
-                self.resume_cache[box] = None
+                self.resume_cache[(box, pos, i)] = None
         start = self.jitcode.num_regs_i() + self.jitcode.num_regs_r()
         for i in range(self.jitcode.num_regs_f()):
             box = self.registers_f[i]
-            if box is not None and box not in self.resume_cache:
+            if box is not None and (box, pos, i) not in self.resume_cache:
                 history.record(rop.RESUME_PUT,
                                [box, ConstInt(pos), ConstInt(i + start)], None)
-                self.resume_cache[box] = None
+                self.resume_cache[(box, pos, i)] = None
         history.record(rop.RESUME_SET_PC, [ConstInt(self.pc)], None)
 
 # ____________________________________________________________
@@ -1679,6 +1650,7 @@ class MetaInterp(object):
         self.retracing_from = -1
         self.call_pure_results = args_dict_box()
         self.heapcache = HeapCache()
+        self.resumerecorder = ResumeRecorder(self)
 
         self.call_ids = []
         self.current_call_id = 0
@@ -1704,8 +1676,7 @@ class MetaInterp(object):
         else:
             pc = -1
         if record_resume:
-            self.history.record(rop.ENTER_FRAME, [ConstInt(pc)], None,
-                                descr=jitcode)
+            self.resumerecorder.enter_frame(pc, jitcode)
         if jitcode.is_portal:
             self.portal_call_depth += 1
             self.call_ids.append(self.current_call_id)
@@ -1722,7 +1693,7 @@ class MetaInterp(object):
         return f
 
     def popframe(self):
-        self.history.record(rop.LEAVE_FRAME, [], None)
+        self.resumerecorder.leave_frame()
         frame = self.framestack.pop()
         jitcode = frame.jitcode
         if jitcode.is_portal:
@@ -1822,18 +1793,14 @@ class MetaInterp(object):
         else:
             resumedescr = compile.ResumeGuardDescr()
             resumedescr.guard_opnum = opnum # XXX kill me
-        self.sync_resume_data(resumedescr, resumepc)
+        self.resumerecorder.resume_point(resumedescr, resumepc)
         guard_op = self.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
         self.staticdata.profiler.count_ops(opnum, Counters.GUARDS)
         # count
         self.attach_debug_info(guard_op)
         return guard_op
-    
-    def sync_resume_data(self, resumedescr, resumepc):
-        for i, frame in enumerate(self.framestack):
-            frame.emit_resume_data(i)
-    
+        
     def capture_resumedata(self, resumedescr, resumepc=-1):
         XXXX
         virtualizable_boxes = None
@@ -2034,7 +2001,7 @@ class MetaInterp(object):
         num_green_args = self.jitdriver_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey)
-        self.history.inputargs = original_boxes[num_green_args:]
+        self.history.inputframes = [original_boxes[num_green_args:]]
         self.seen_loop_header_for_jdindex = -1
         try:
             self.interpret()
@@ -2175,7 +2142,8 @@ class MetaInterp(object):
         return ints[:], refs[:], floats[:]
 
     def raise_continue_running_normally(self, live_arg_boxes, loop_token):
-        self.history.inputargs = None
+        self.history.inputframes = None
+        self.history.inputlocs = None
         self.history.operations = None
         # For simplicity, we just raise ContinueRunningNormally here and
         # ignore the loop_token passed in.  It means that we go back to

@@ -125,11 +125,14 @@ def args_dict_box():
 
 # ____________________________________________________________
 
-def equaloplists(oplist1, oplist2, remap={}, text_right=None):
+def equaloplists(oplist1, oplist2, remap=None, text_right=None,
+                 cache=True):
     # try to use the full width of the terminal to display the list
     # unfortunately, does not work with the default capture method of py.test
     # (which is fd), you you need to use either -s or --capture=sys, else you
     # get the standard 80 columns width
+    if remap is None:
+        remap = {}
     totwidth = py.io.get_terminal_width()
     width = totwidth / 2 - 1
     print ' Comparing lists '.center(totwidth, '-')
@@ -147,11 +150,15 @@ def equaloplists(oplist1, oplist2, remap={}, text_right=None):
         for i in range(op1.numargs()):
             x = op1.getarg(i)
             y = op2.getarg(i)
+            if cache and y not in remap:
+                remap[y] = x
             assert x.same_box(remap.get(y, y))
         if op2.result in remap:
             if op2.result is None:
                 assert op1.result == remap[op2.result]
             else:
+                if cache and op2.result not in remap:
+                    remap[op2.result] = op1.result
                 assert op1.result.same_box(remap[op2.result])
         else:
             remap[op2.result] = op1.result

@@ -74,11 +74,18 @@ class LLGraphResumeBuilder(ResumeBuilder):
 
     def process_resume_put(self, op):
         box = op.getarg(0)
+        if isinstance(box, Const):
+            return
         frame_pos = op.getarg(1).getint()
         pos_in_frame = op.getarg(2).getint()
         i = self.framestack[frame_pos].start_pos + pos_in_frame
         self.numbering[box] = i
         self.framestack[frame_pos].registers[pos_in_frame] = box
+
+    def process_resume_clear(self, op):
+        frame_pos = op.getarg(0).getint()
+        frontend_pos = op.getarg(1).getint()
+        self.framestack[frame_pos].registers[frontend_pos] = None
 
     def get_numbering(self, mapping, op):
         lst = []
@@ -371,6 +378,8 @@ class LLGraphCPU(model.AbstractCPU):
         for box in frame.force_guard_op.failargs:
             if box is None:
                 value = None
+            elif isinstance(box, Const):
+                xxx
             elif box is not frame.current_op.result:
                 value = frame.env[box]
             else:
@@ -784,7 +793,7 @@ class LLFrame(object):
         self.framecontent = {}
         i = 0
         for value in newvalues:
-            if value is None:
+            if value is None or isinstance(value, Const):
                 continue
             self.setenv(newargs[i], value)
             i += 1
@@ -797,6 +806,8 @@ class LLFrame(object):
             arg = self.current_op.failargs[i]
             if arg is None:
                 value = None
+            elif isinstance(arg, Const):
+                value = arg
             else:
                 value = self.env[arg]
             values.append(value)

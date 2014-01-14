@@ -473,9 +473,11 @@ _oplist = [
     'RESUME_PUT/3', # arguments are as follows - box or position in the backend,
                     # the frame index (counting from top) and position in the
                     # frontend
+    'RESUME_PUT_CONST/3', # the same but for a constant
     'RESUME_NEW/0d',
     'RESUME_SETFIELD_GC/2d',
     'RESUME_SET_PC/1',
+    'RESUME_CLEAR/2',
     '_RESUME_LAST', # ----- end of resume only operations ------
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 

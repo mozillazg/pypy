@@ -98,7 +98,7 @@ def assert_format(ssarepr, expected):
             raise AssertionError('\n'.join(msg))
     assert len(asmlines) == len(explines)
 
-def unformat_assembler(text, registers=None):
+def unformat_assembler(text, registers=None, name=None):
     # XXX limited to simple assembler right now
     #
     def unformat_arg(s):
@@ -161,6 +161,8 @@ def unformat_assembler(text, registers=None):
                 extra = []
             insn = [opname] + [unformat_arg(s) for s in words] + extra
             ssarepr.insns.append(tuple(insn))
+    if name is not None:
+        ssarepr.name = name
     return ssarepr
 
 

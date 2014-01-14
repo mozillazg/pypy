@@ -2,9 +2,18 @@
 import py
 from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
-from rpython.jit.metainterp.history import AbstractDescr
+from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats
 from rpython.jit.metainterp.resume2 import rebuild_from_resumedata,\
      ResumeBytecode, AbstractResumeReader
+from rpython.jit.codewriter.format import unformat_assembler
+from rpython.jit.codewriter.codewriter import CodeWriter
+from rpython.jit.backend.llgraph.runner import LLGraphCPU
+from rpython.jit.metainterp.pyjitpl import MetaInterp, MetaInterpStaticData
+from rpython.jit.metainterp.jitdriver import JitDriverStaticData
+from rpython.jit.metainterp.warmstate import JitCell
+from rpython.jit.metainterp.jitexc import DoneWithThisFrameInt
+from rpython.jit.metainterp.optimizeopt.util import equaloplists
+from rpython.rlib.jit import JitDriver
 
 
 class Descr(AbstractDescr):
@@ -61,17 +70,20 @@ class TestResumeDirect(object):
         []
         enter_frame(-1, descr=jitcode1)
         resume_put(10, 0, 1)
+        resume_put_const(1, 0, 2)
         leave_frame()
-        """, namespace={'jitcode1': jitcode})
+        """, namespace= {'jitcode1': jitcode})
         descr = Descr()
         descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 2
+        descr.rd_bytecode_position = 3
         metainterp = MockMetaInterp()
         metainterp.cpu = MockCPU()
         rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 1
         f = metainterp.framestack[-1]
         assert f.registers_i[1].getint() == 13
+        assert isinstance(f.registers_i[2], Const)
+        assert f.registers_i[2].getint() == 1
 
     def test_nested_call(self):
         jitcode1 = JitCode("jitcode")
@@ -94,7 +106,7 @@ class TestResumeDirect(object):
         descr = Descr()
         descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
         descr.rd_bytecode_position = 5
-        state = rebuild_from_resumedata(metainterp, "myframe", descr)
+        rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 2
         f = metainterp.framestack[-1]
         f2 = metainterp.framestack[0]
@@ -178,5 +190,147 @@ class TestResumeDirect(object):
         locs = rebuild_locs_from_resumedata(descr)
         assert locs == [[8, 11], [12]]
 
-    def test_resume_put_const(self):
-        xxx
+class AssemblerExecuted(Exception):
+    pass
+
+class FakeWarmstate(object):
+    enable_opts = []
+    
+    def __init__(self):
+        self.jitcell = JitCell()
+    
+    def get_location_str(self, greenkey):
+        return "foo"
+
+    def jit_cell_at_key(self, greenkey):
+        return self.jitcell
+
+    def attach_procedure_to_interp(self, *args):
+        pass
+
+    def execute_assembler(self, token, *args):
+        raise AssemblerExecuted(*args)
+
+def get_metainterp(assembler, no_reds=0):
+    codewriter = CodeWriter()
+    ssarepr = unformat_assembler(assembler, name='one')
+    jitcode = codewriter.assembler.assemble(ssarepr)
+    jitcode.is_portal = True
+    reds = ['v' + str(i) for i in range(no_reds)]
+    jitdriver_sd = JitDriverStaticData(JitDriver(greens = [],
+                                                 reds = reds),
+                                       None, INT)
+    jitdriver_sd.mainjitcode = jitcode
+    jitdriver_sd.warmstate = FakeWarmstate()
+    jitdriver_sd.no_loop_header = False
+    jitdriver_sd._get_printable_location_ptr = None
+    codewriter.setup_jitdriver(jitdriver_sd)
+    stats = Stats()
+    cpu = LLGraphCPU(None, stats)
+    metainterp_sd = MetaInterpStaticData(cpu, None)
+    metainterp_sd.finish_setup(codewriter)
+    return MetaInterp(metainterp_sd, jitdriver_sd), stats, jitdriver_sd
+    
+class TestResumeRecorder(object):
+    def test_simple(self):
+        assembler = """
+        L1:
+        -live- %i0, %i1, %i2
+        jit_merge_point $0, I[], R[], F[], I[%i0, %i1, %i2], R[], F[]
+        -live- %i0, %i1, %i2
+        int_add %i2, %i0 -> %i2
+        int_sub %i1, $1 -> %i1
+        goto_if_not_int_gt %i1, $0, L2
+        -live- %i0, %i1, %i2, L2
+        loop_header $0
+        goto L1
+        ---
+        L2:
+        int_mul %i2, $2 -> %i0
+        int_return %i0
+        """
+        metainterp, stats, jitdriver_sd = get_metainterp(assembler, no_reds=3)
+        jitcode = jitdriver_sd.mainjitcode
+        try:
+            metainterp.compile_and_run_once(jitdriver_sd, 6, 7, 0)
+        except AssemblerExecuted, e:
+            assert e.args == (6, 6, 6)
+        else:
+            raise Exception("did not exit")
+        resume_ops = [o for o in stats.operations if o.is_resume()]
+        expected = parse("""
+        [i0, i1, i2]
+        enter_frame(-1, descr=jitcode)
+        resume_put(i0, 0, 0)
+        resume_put(i1, 0, 1)
+        resume_put(i2, 0, 2)
+        resume_set_pc(24)
+        """, namespace={'jitcode': jitcode})
+        equaloplists(resume_ops, expected.operations, cache=True)
+
+    def test_live_boxes(self):
+        assembler = """
+        L1:
+        -live- %i0, %i1, %i2
+        jit_merge_point $0, I[], R[], F[], I[%i0, %i1, %i2], R[], F[]
+        -live- %i0, %i1, %i2
+        goto_if_not_int_gt %i1, $0, L2
+        -live- %i0, %i1, L2
+        loop_header $0
+        goto L1
+        ---
+        L2:
+        int_return %i0
+        """
+        metainterp, stats, jitdriver_sd = get_metainterp(assembler, no_reds=3)
+        jitcode = jitdriver_sd.mainjitcode
+        try:
+            metainterp.compile_and_run_once(jitdriver_sd, -1, -1, 0)
+        except DoneWithThisFrameInt:
+            pass
+        resume_ops = [o for o in stats.operations if o.is_resume()]
+        expected = parse("""
+        [i0, i1, i2]
+        enter_frame(-1, descr=jitcode)
+        resume_put(i0, 0, 0)
+        resume_put(i1, 0, 1)
+        resume_set_pc(16)
+        leave_frame()
+        """, namespace={'jitcode': jitcode})
+        equaloplists(resume_ops, expected.operations, cache=True)
+
+    def test_live_boxes_2(self):
+        assembler = """
+        L1:
+        -live- %i0, %i1, %i2
+        jit_merge_point $0, I[], R[], F[], I[%i0, %i1, %i2], R[], F[]
+        -live- %i0, %i1, %i2
+        goto_if_not_int_gt %i1, $0, L2
+        -live- %i0, %i1, %i2, L2
+        goto_if_not_int_gt %i2, $0, L2
+        -live- %i0, %i2, L2
+        loop_header $0
+        goto L1
+        ---
+        L2:
+        int_return %i0
+        """
+        metainterp, stats, jitdriver_sd = get_metainterp(assembler, no_reds=3)
+        jitcode = jitdriver_sd.mainjitcode
+        try:
+            metainterp.compile_and_run_once(jitdriver_sd, -1, 13, -1)
+        except DoneWithThisFrameInt:
+            pass
+        resume_ops = [o for o in stats.operations if o.is_resume()]
+        expected = parse("""
+        [i0, i1, i2]
+        enter_frame(-1, descr=jitcode)
+        resume_put(i0, 0, 0)
+        resume_put(i1, 0, 1)
+        resume_put(i2, 0, 2)
+        resume_set_pc(-1)
+        resume_clear(0, 1)
+        resume_set_pc(-1)
+        leave_frame()
+        """, namespace={'jitcode': jitcode})
+        equaloplists(resume_ops, expected.operations, cache=True)

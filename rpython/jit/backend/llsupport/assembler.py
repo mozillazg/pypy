@@ -2,7 +2,7 @@ from rpython.jit.backend.llsupport import jitframe
 from rpython.jit.backend.llsupport.memcpy import memcpy_fn
 from rpython.jit.backend.llsupport.symbolic import WORD
 from rpython.jit.metainterp.history import (INT, REF, FLOAT, JitCellToken,
-    ConstInt, BoxInt, AbstractFailDescr)
+    ConstInt, BoxInt, AbstractFailDescr, Const)
 from rpython.jit.metainterp.resoperation import ResOperation, rop
 from rpython.rlib import rgc
 from rpython.rlib.debug import (debug_start, debug_stop, have_debug_prints,
@@ -122,7 +122,7 @@ class BaseAssembler(object):
             inputlocs = loc_positions[i]
             assert len(inputlocs) == len(frame)
             for j, item in enumerate(frame):
-                if item is None:
+                if item is None or isinstance(item, Const):
                     continue
                 pos = inputlocs[j]
                 if pos < GPR_REGS:

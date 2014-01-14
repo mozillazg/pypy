@@ -615,7 +615,8 @@ class TargetToken(AbstractDescr):
         return 'TargetToken(%d)' % compute_unique_id(self)
 
 class TreeLoop(object):
-    inputargs = None
+    inputframes = None
+    inputlocs = None
     operations = None
     call_pure_results = None
     logops = None
@@ -655,7 +656,7 @@ class TreeLoop(object):
         return self.operations
 
     def get_display_text(self):    # for graphpage.py
-        return self.name + '\n' + repr(self.inputargs)
+        return self.name + '\n' + repr(self.inputframes)
 
     def show(self, errmsg=None):
         "NOT_RPYTHON"
@@ -664,7 +665,7 @@ class TreeLoop(object):
 
     def check_consistency(self):     # for testing
         "NOT_RPYTHON"
-        self.check_consistency_of(self.inputargs, self.operations)
+        self.check_consistency_of(self.inputframes, self.operations)
         for op in self.operations:
             descr = op.getdescr()
             if op.getopnum() == rop.LABEL and isinstance(descr, TargetToken):
@@ -672,10 +673,14 @@ class TreeLoop(object):
 
     @staticmethod
     def check_consistency_of(inputargs, operations):
-        for box in inputargs:
-            assert isinstance(box, Box), "Loop.inputargs contains %r" % (box,)
-        seen = dict.fromkeys(inputargs)
-        assert len(seen) == len(inputargs), (
+        seen = {}
+        all = 0
+        for frame in inputargs:
+            for box in frame:
+                assert isinstance(box, Box), "Loop.inputargs contains %r" % (box,)
+                seen[box] = None
+                all += 1
+        assert len(seen) == all, (
                "duplicate Box in the Loop.inputargs")
         TreeLoop.check_consistency_of_branch(operations, seen)
 
@@ -713,7 +718,7 @@ class TreeLoop(object):
 
     def dump(self):
         # RPython-friendly
-        print '%r: inputargs =' % self, self._dump_args(self.inputargs)
+        print '%r: inputargs =' % self, self._dump_args(self.inputframes)
         for op in self.operations:
             args = op.getarglist()
             print '\t', op.getopname(), self._dump_args(args), \
@@ -735,7 +740,7 @@ def _list_all_operations(result, operations, omit_finish=True):
     if omit_finish and operations[-1].getopnum() == rop.FINISH:
         # xxx obscure
         return
-    result.extend(operations)
+    result.extend([op for op in operations if not op.is_resume()])
     for op in operations:
         if op.is_guard() and op.getdescr():
             if hasattr(op.getdescr(), '_debug_suboperations'):
@@ -747,7 +752,8 @@ def _list_all_operations(result, operations, omit_finish=True):
 
 class History(object):
     def __init__(self):
-        self.inputargs = None
+        self.inputframes = None
+        self.inputlocs = None
         self.operations = []
 
     def record(self, opnum, argboxes, resbox, descr=None):

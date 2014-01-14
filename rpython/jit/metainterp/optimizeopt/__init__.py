@@ -51,11 +51,13 @@ def build_opt_chain(metainterp_sd, enable_opts):
 def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True):
     """Optimize loop.operations to remove internal overheadish operations.
     """
+    from rpython.jit.backend.resumebuilder import flatten
 
     debug_start("jit-optimize")
     try:
-        loop.logops = metainterp_sd.logger_noopt.log_loop(loop.inputargs,
-                                                          loop.operations)
+        loop.logops = metainterp_sd.logger_noopt.log_loop(
+            flatten(loop.inputframes),
+            loop.operations)
         optimizations, unroll = build_opt_chain(metainterp_sd, enable_opts)
         if unroll:
             optimize_unroll(metainterp_sd, loop, optimizations, inline_short_preamble)

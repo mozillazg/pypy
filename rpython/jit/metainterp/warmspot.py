@@ -350,11 +350,8 @@ class WarmRunnerDesc(object):
 
     def split_graph_and_record_jitdriver(self, graph, block, pos):
         op = block.operations[pos]
-        jd = JitDriverStaticData()
-        jd._jit_merge_point_in = graph
         args = op.args[2:]
         s_binding = self.translator.annotator.binding
-        jd._portal_args_s = [s_binding(v) for v in args]
         graph = copygraph(graph)
         [jmpp] = find_jit_merge_points([graph])
         graph.startblock = support.split_before_jit_merge_point(*jmpp)
@@ -370,15 +367,16 @@ class WarmRunnerDesc(object):
             assert isinstance(v, Variable)
         assert len(dict.fromkeys(graph.getargs())) == len(graph.getargs())
         self.translator.graphs.append(graph)
-        jd.portal_graph = graph
         # it's a bit unbelievable to have a portal without func
         assert hasattr(graph, "func")
         graph.func._dont_inline_ = True
         graph.func._jit_unroll_safe_ = True
-        jd.jitdriver = block.operations[pos].args[1].value
+        result_type = history.getkind(graph.getreturnvar().concretetype)[0]
+        jd = JitDriverStaticData(block.operations[pos].args[1].value, graph,
+                                 result_type)
+        jd._portal_args_s = [s_binding(v) for v in args]
+        jd._jit_merge_point_in = graph
         jd.portal_runner_ptr = "<not set so far>"
-        jd.result_type = history.getkind(jd.portal_graph.getreturnvar()
-                                         .concretetype)[0]
         self.jitdrivers_sd.append(jd)
 
     def check_access_directly_sanity(self, graphs):
@@ -567,8 +565,6 @@ class WarmRunnerDesc(object):
         ALLARGS = [v.concretetype for v in (greens_v + reds_v)]
         jd._green_args_spec = [v.concretetype for v in greens_v]
         jd.red_args_types = [history.getkind(v.concretetype) for v in reds_v]
-        jd.num_green_args = len(jd._green_args_spec)
-        jd.num_red_args = len(jd.red_args_types)
         RESTYPE = graph.getreturnvar().concretetype
         (jd._JIT_ENTER_FUNCTYPE,
          jd._PTR_JIT_ENTER_FUNCTYPE) = self.cpu.ts.get_FuncType(ALLARGS, lltype.Void)

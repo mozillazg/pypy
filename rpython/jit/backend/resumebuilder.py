@@ -1,6 +1,6 @@
 
 from rpython.jit.metainterp.resoperation import rop, ResOperation
-from rpython.jit.metainterp.history import ConstInt, Box
+from rpython.jit.metainterp.history import ConstInt, Box, Const
 from rpython.jit.metainterp.resume2 import ResumeBytecode, AbstractResumeReader
 
 class LivenessAnalyzer(AbstractResumeReader):
@@ -19,7 +19,15 @@ class LivenessAnalyzer(AbstractResumeReader):
         self.framestack.append([None] * jitcode.num_regs())
 
     def resume_put(self, box, framepos, frontend_pos):
+        if isinstance(box, Const):
+            return
         self.framestack[framepos][frontend_pos] = box
+
+    def resume_clear(self, framepos, frontend_pos):
+        self.framestack[framepos][frontend_pos] = None
+
+    def resume_put_const(self, box, framepos, frontend_pos):
+        xxx
 
     def resume_new(self, result, descr):
         self.deps[result] = {}
@@ -34,7 +42,8 @@ class LivenessAnalyzer(AbstractResumeReader):
         if box in self.deps:
             for dep in self.deps[box].values():
                 self._track(allboxes, dep)
-        allboxes.append(box)
+        if not isinstance(box, Const) and box is not None:
+            allboxes.append(box)
 
     def all_boxes_from(self, frame):
         allboxes = []
@@ -77,7 +86,9 @@ class ResumeBuilder(object):
         if op.getopnum() == rop.RESUME_PUT:
             box = op.getarg(0)
             args = op.getarglist()
-            if box in self.virtuals:
+            if isinstance(box, Const):
+                newop = op.copy_and_change(rop.RESUME_PUT_CONST)
+            elif box in self.virtuals:
                 newop = op
             else:
                 try:
@@ -135,13 +146,13 @@ def flatten(inputframes):
     count = 0
     for frame in inputframes:
         for x in frame:
-            if x is not None:
+            if x is not None and not isinstance(x, Const):
                 count += 1
     inputargs = [None] * count
     pos = 0
     for frame in inputframes:
         for item in frame:
-            if item is not None:
+            if item is not None and not isinstance(item, Const):
                 inputargs[pos] = item
                 pos += 1
     return inputargs
@@ -173,9 +184,8 @@ def compute_vars_longevity(inputframes, operations, descr=None):
             framestack = liveness_analyzer.get_live_info()
             for frame in framestack:
                 for item in liveness_analyzer.all_boxes_from(frame):
-                    if item is not None:
-                        last_used[item] = position
-                        frontend_alive[item] = position
+                    last_used[item] = position
+                    frontend_alive[item] = position
 
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]

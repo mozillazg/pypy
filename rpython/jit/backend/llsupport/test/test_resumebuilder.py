@@ -29,18 +29,20 @@ class ResumeTest(object):
         [i0]
         enter_frame(-1, descr=jitcode)
         resume_put(i0, 0, 2)
+        resume_put(1, 0, 1)
         guard_true(i0)
         leave_frame()
         """, namespace={'jitcode': jitcode})
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
-        descr = loop.operations[2].getdescr()
-        assert descr.rd_bytecode_position == 2
+        descr = loop.operations[3].getdescr()
+        assert descr.rd_bytecode_position == 3
         expected_resume = parse("""
         []
         enter_frame(-1, descr=jitcode)
         resume_put(28, 0, 2)
+        resume_put_const(1, 0, 1)
         leave_frame()
         """, namespace={'jitcode': jitcode})
         equaloplists(descr.rd_resume_bytecode.opcodes,

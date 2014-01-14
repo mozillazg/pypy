@@ -199,6 +199,7 @@ class JitMixin:
     def meta_interp(self, *args, **kwds):
         kwds['CPUClass'] = self.CPUClass
         kwds['type_system'] = self.type_system
+        kwds['enable_opts'] = ''
         if "backendopt" not in kwds:
             kwds["backendopt"] = False
         old = codewriter.CodeWriter.debug
