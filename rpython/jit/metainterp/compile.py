@@ -170,9 +170,6 @@ def compile_loop(metainterp, greenkey, start,
 
     if not loop.quasi_immutable_deps:
         loop.quasi_immutable_deps = None
-    for frame in loop.inputframes:
-        for box in frame:
-            assert isinstance(box, Box)
 
     loop.original_jitcell_token = jitcell_token
     for label in all_target_tokens:
@@ -245,10 +242,6 @@ def compile_retrace(metainterp, greenkey, start,
         quasi_immutable_deps.update(part.quasi_immutable_deps)
     if quasi_immutable_deps:
         loop.quasi_immutable_deps = quasi_immutable_deps
-
-    for frame in loop.inputframes:
-        for box in frame:
-            assert isinstance(box, Box)
 
     target_token = loop.operations[-1].getdescr()
     resumekey.compile_and_attach(metainterp, loop)

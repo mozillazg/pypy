@@ -169,7 +169,6 @@ class UnrollOptimizer(Optimization):
         assert self.optimizer.loop.resume_at_jump_descr
         resume_at_jump_descr = self.optimizer.loop.resume_at_jump_descr
         assert isinstance(resume_at_jump_descr, ResumeGuardDescr)
-        resume_at_jump_descr.rd_snapshot = self.fix_snapshot(jump_args, resume_at_jump_descr.rd_snapshot)
 
         modifier = VirtualStateAdder(self.optimizer)
         virtual_state = modifier.get_virtual_state(jump_args)
@@ -293,8 +292,6 @@ class UnrollOptimizer(Optimization):
             op = newoperations[i]
             self.boxes_created_this_iteration[op.result] = None
             args = op.getarglist()
-            if op.is_guard():
-                args = args + op.getfailargs()
             for a in args:
                 self.import_box(a, inputargs, short_jumpargs, [])
             i += 1
@@ -365,8 +362,6 @@ class UnrollOptimizer(Optimization):
 
                 self.boxes_created_this_iteration[op.result] = None
                 args = op.getarglist()
-                if op.is_guard():
-                    args = args + op.getfailargs()
 
                 #if self.optimizer.loop.logops:
                 #    debug_print('OP: ' + self.optimizer.loop.logops.repr_of_resop(op))
@@ -445,7 +440,6 @@ class UnrollOptimizer(Optimization):
                 target_token.assumed_classes[newop.result] = self.short_boxes.assumed_classes[op.result]
             short[i] = newop
         target_token.resume_at_jump_descr = target_token.resume_at_jump_descr
-        inliner.inline_descr_inplace(target_token.resume_at_jump_descr)
 
         # Forget the values to allow them to be freed
         for box in short[0].getarglist():
@@ -604,8 +598,8 @@ class UnrollOptimizer(Optimization):
                                                   'of the bridge does not mach the class ' +
                                                   'it has at the start of the target loop')
                 except InvalidLoop:
-                    #debug_print("Inlining failed unexpectedly",
-                    #            "jumping to preamble instead")
+                    debug_print("Inlining failed unexpectedly",
+                                "jumping to preamble instead")
                     assert cell_token.target_tokens[0].virtual_state is None
                     jumpop.setdescr(cell_token.target_tokens[0])
                     self.optimizer.send_extra_operation(jumpop)

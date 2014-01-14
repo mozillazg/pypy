@@ -616,6 +616,7 @@ class TargetToken(AbstractDescr):
 
 class TreeLoop(object):
     inputframes = None
+    inputargs = None
     inputlocs = None
     operations = None
     call_pure_results = None

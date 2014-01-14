@@ -670,6 +670,9 @@ class Optimizer(Optimization):
         value = self.getvalue(op.getarg(0))
         self.optimizer.opaque_pointers[value] = True
 
+    def optimize_ENTER_FRAME(self, op):
+        self.optimize_default(op)
+
 dispatch_opt = make_dispatcher_method(Optimizer, 'optimize_',
         default=Optimizer.optimize_default)
 

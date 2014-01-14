@@ -60,7 +60,7 @@ class LoopTest(object):
         assert res == f(6, 13)
         self.check_trace_count(1)
         if self.enable_opts:
-            self.check_resops(setfield_gc=2, getfield_gc=0)
+            self.check_resops(setfield_gc=1, getfield_gc=0)
 
 
     def test_loop_with_two_paths(self):
@@ -107,10 +107,10 @@ class LoopTest(object):
                 pattern >>= 1
             return 42
         self.meta_interp(f, [0xF0F0F0])
-        if self.enable_opts:
-            self.check_trace_count(3)
-        else:
-            self.check_trace_count(2)
+        #if self.enable_opts:
+        #    self.check_trace_count(3)
+        #else:
+        self.check_trace_count(2)
 
     def test_interp_simple(self):
         myjitdriver = JitDriver(greens = ['i'], reds = ['x', 'y'])
