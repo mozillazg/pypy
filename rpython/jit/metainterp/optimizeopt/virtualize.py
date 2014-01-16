@@ -14,7 +14,7 @@ from rpython.rlib.objectmodel import we_are_translated
 
 
 class AbstractVirtualValue(optimizer.OptValue):
-    _attrs_ = ('keybox', 'source_op', '_cached_vinfo')
+    _attrs_ = ('keybox', 'source_op', '_cached_vinfo', 'resume_box')
     box = None
     level = optimizer.LEVEL_NONNULL
     is_about_raw = False
@@ -491,6 +491,7 @@ class OptVirtualize(optimizer.Optimization):
 
     def make_virtual(self, known_class, box, source_op=None):
         vvalue = VirtualValue(self.optimizer.cpu, known_class, box, source_op)
+        self.optimizer.resumebuilder.new_virtual(box)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -505,6 +506,8 @@ class OptVirtualize(optimizer.Optimization):
 
     def make_vstruct(self, structdescr, box, source_op=None):
         vvalue = VStructValue(self.optimizer.cpu, structdescr, box, source_op)
+        self.optimizer.resumebuilder.new_virtual_struct(box, vvalue,
+                                                        structdescr)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -824,6 +827,9 @@ class OptVirtualize(optimizer.Optimization):
                 return
         value.ensure_nonnull()
         self.emit_operation(op)
+
+    def optimize_RESUME_PUT(self, op):
+        self.optimizer.resumebuilder.resume_put(op)
 
 
 dispatch_opt = make_dispatcher_method(OptVirtualize, 'optimize_',

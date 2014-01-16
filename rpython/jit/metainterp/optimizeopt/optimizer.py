@@ -5,6 +5,7 @@ from rpython.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, 
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from rpython.jit.metainterp.optimizeopt.util import make_dispatcher_method
+from rpython.jit.metainterp.optimizeopt.resumeopt import OptResumeBuilder
 from rpython.jit.metainterp.resoperation import rop, ResOperation, AbstractResOp
 from rpython.jit.metainterp.typesystem import llhelper
 from rpython.tool.pairtype import extendabletype
@@ -363,7 +364,7 @@ class Optimizer(Optimization):
             self.call_pure_results = loop.call_pure_results
 
         self.set_optimizations(optimizations)
-        self.resume_stack = []
+        self.resumebuilder = OptResumeBuilder(self)
         self.setup()
 
     def set_optimizations(self, optimizations):
@@ -387,7 +388,7 @@ class Optimizer(Optimization):
             o.force_at_end_of_preamble()
 
     def flush(self):
-        self.resume_flush()
+        self.resumebuilder.resume_flush()
         for o in self.optimizations:
             o.flush()
 
@@ -547,11 +548,13 @@ class Optimizer(Optimization):
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_OPS)
         if op.is_guard():
             self.metainterp_sd.profiler.count(jitprof.Counters.OPT_GUARDS)
+            pendingfields = self.pendingfields
             self.pendingfields = None
             if self.replaces_guard and op in self.replaces_guard:
                 self.replace_op(self.replaces_guard[op], op)
                 del self.replaces_guard[op]
                 return
+            self.resumebuilder.guard_seen(op, pendingfields)
         elif op.can_raise():
             self.exception_might_have_happened = True
         if op.result:
@@ -676,22 +679,12 @@ class Optimizer(Optimization):
     # pending refactor
 
     def optimize_ENTER_FRAME(self, op):
-        self.resume_stack.append(op)
-
-    def optimize_LEAVE_FRAME(self, op):
-        if self.resume_stack:
-            self.resume_stack.pop()
-        else:
-            self.emit_operation(op)
-
-    def optimize_RESUME_PUT(self, op):
-        self.resume_flush()
+        self.resumebuilder.enter_frame(op.getarg(0).getint(), op.getdescr())
         self.optimize_default(op)
 
-    def resume_flush(self):
-        for op in self.resume_stack:
-            self.emit_operation(op)
-        self.resume_stack = []
+    def optimize_LEAVE_FRAME(self, op):
+        self.resumebuilder.leave_frame(op)
+        self.optimize_default(op)
 
 dispatch_opt = make_dispatcher_method(Optimizer, 'optimize_',
         default=Optimizer.optimize_default)
