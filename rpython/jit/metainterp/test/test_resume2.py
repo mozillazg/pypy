@@ -5,6 +5,7 @@ from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats
 from rpython.jit.metainterp.resume2 import rebuild_from_resumedata,\
      ResumeBytecode, AbstractResumeReader
+from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter.format import unformat_assembler
 from rpython.jit.codewriter.codewriter import CodeWriter
 from rpython.jit.backend.llgraph.runner import LLGraphCPU
@@ -37,10 +38,19 @@ class Frame(object):
         lst += [backend_values[x] for x in self.registers_r]
         lst += [backend_values[x] for x in self.registers_f]
 
+class AnyBox(object):
+    def __eq__(self, other):
+        return True
+        
 class MockMetaInterp(object):
     def __init__(self):
         self.cpu = MockCPU()
         self.framestack = []
+        self.history = []
+
+    def execute_and_record(self, *args):
+        self.history.append(args)
+        return AnyBox()
 
     def newframe(self, jitcode, record_resume=False):
         f = Frame(jitcode)
@@ -157,16 +167,23 @@ class TestResumeDirect(object):
 
     def test_new(self):
         jitcode1 = JitCode("jitcode")
-        jitcode1.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
+        jitcode1.setup(num_regs_i=0, num_regs_r=1, num_regs_f=0)
         base = parse("""
         []
         enter_frame(-1, descr=jitcode)
-        i0 = new(descr=structdescr)
-        resume_setfield(i0, 13, descr=fielddescr)
-        backend_put(12,
+        p0 = resume_new()
+        resume_setfield_gc(p0, 13)
+        resume_put(p0, 0, 0)
         leave_frame()
         """, namespace={'jitcode':jitcode1})
-        XXX
+        descr = Descr()
+        descr.rd_resume_bytecode = ResumeBytecode(base.operations)
+        descr.rd_bytecode_position = 4
+        metainterp = MockMetaInterp()
+        metainterp.cpu = MockCPU()
+        rebuild_from_resumedata(metainterp, "myframe", descr)
+        assert metainterp.history == [(rop.NEW, None),
+                                      (rop.SETFIELD_GC, None, AnyBox())]
 
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")

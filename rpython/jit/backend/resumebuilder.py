@@ -26,9 +26,6 @@ class LivenessAnalyzer(AbstractResumeReader):
     def resume_clear(self, framepos, frontend_pos):
         self.framestack[framepos][frontend_pos] = None
 
-    def resume_put_const(self, box, framepos, frontend_pos):
-        xxx
-
     def resume_new(self, result, descr):
         self.deps[result] = {}
 

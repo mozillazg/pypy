@@ -1,3 +1,9 @@
 
 * kill resumedescr.guard_opnum and replace by classes
 
+* in resume2.py, stuff stored on self.virtuals is inefficient
+
+* compress the resumedata in the backend
+
+* do escape analysis in the resumeopt.py
+

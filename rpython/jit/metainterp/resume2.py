@@ -1,6 +1,8 @@
 
+import sys
 from rpython.jit.metainterp.resoperation import rop
-from rpython.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, ConstInt
+from rpython.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, ConstInt,\
+     Box, INT, REF, FLOAT
 from rpython.jit.metainterp import history
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.rlib import rstack
@@ -17,7 +19,21 @@ class ResumeFrame(object):
         self.registers = [-1] * jitcode.num_regs()
         self.jitcode = jitcode
         self.pc = -1
-        
+
+TAGCONST = 0x0
+TAGVIRTUAL = 0x2
+TAGBOX = 0x3
+TAGSMALLINT = 0x1
+
+TAGOFFSET = 2
+
+class Virtual(object):
+    def __init__(self, pos, descr):
+        self.pos = pos
+        self.fields = {}
+        self.descr = descr
+
+
 class AbstractResumeReader(object):
     """ A resume reader that can follow resume until given point. Consult
     the concrete classes for details
@@ -26,6 +42,8 @@ class AbstractResumeReader(object):
     def __init__(self):
         self.framestack = []
         self.consts = [] # XXX cache?
+        self.virtuals = {}
+        self.virtual_list = []
 
     def rebuild(self, faildescr):
         self._rebuild_until(faildescr.rd_resume_bytecode,
@@ -41,16 +59,47 @@ class AbstractResumeReader(object):
             self.framestack[-1].pc = pc
         self.framestack.append(ResumeFrame(jitcode))
 
-    def resume_put(self, jitframe_pos_const, frame_no, frontend_position):
-        jitframe_pos = jitframe_pos_const.getint()
+    def encode_box(self, pos):
+        return TAGBOX | (pos << TAGOFFSET)
+
+    def encode_virtual(self, box):
+        return TAGVIRTUAL | (self.virtuals[box].pos << TAGOFFSET)
+
+    def encode_const(self, const):
+        if isinstance(const, ConstInt) and const.getint() < (sys.maxint >> 3):
+            return TAGSMALLINT | (const.getint() << TAGOFFSET)
+        self.consts.append(const)
+        return TAGCONST | ((len(self.consts) - 1) << TAGOFFSET)
+
+    def decode(self, pos):
+        return pos & 0x3, pos >> TAGOFFSET
+
+    def resume_put(self, jitframe_pos_box, frame_no, frontend_position):
+        if isinstance(jitframe_pos_box, Box):
+            jitframe_pos = self.encode_virtual(jitframe_pos_box)
+        else:
+            jitframe_pos = self.encode_box(jitframe_pos_box.getint())
         self.framestack[frame_no].registers[frontend_position] = jitframe_pos
+
+    def encode(self, box):
+        xxx
+
+    def resume_new(self, box, descr):
+        # XXX make it a list
+        v = Virtual(len(self.virtual_list), descr)
+        self.virtuals[box] = v
+        self.virtual_list.append(v)
+
+    def resume_setfield_gc(self, box, fieldbox, descr):
+        # XXX optimize fields
+        self.virtuals[box].fields[descr] = self.encode(fieldbox)
 
     def resume_clear(self, frame_no, frontend_position):
         self.framestack[frame_no].registers[frontend_position] = -1
 
     def resume_put_const(self, const, frame_no, frontend_position):
-        self.framestack[frame_no].registers[frontend_position] = - 2 - len(self.consts)
-        self.consts.append(const)
+        pos = self.encode_const(const)
+        self.framestack[frame_no].registers[frontend_position] = pos
 
     def resume_set_pc(self, pc):
         self.framestack[-1].pc = pc
@@ -160,21 +209,54 @@ class BoxResumeReader(AbstractResumeReader):
         self.deadframe = deadframe
         AbstractResumeReader.__init__(self)
 
+    def get_box_value(self, encoded_pos, TP):
+        if encoded_pos == -1:
+            return None
+        if encoded_pos in self.cache:
+            return self.cache[encoded_pos]
+        tag, pos = self.decode(encoded_pos)
+        if tag == TAGBOX:
+            if TP == INT:
+                val = self.metainterp.cpu.get_int_value(self.deadframe, pos)
+                res = BoxInt(val)
+            else:
+                xxx
+            self.cache[encoded_pos] = res
+            return res
+        elif tag == TAGSMALLINT:
+            return ConstInt(pos)
+        elif tag == TAGCONST:
+            return self.consts[pos]
+        else:
+            assert tag == TAGVIRTUAL
+            virtual = self.virtual_list[pos]
+            virtual_box = self.allocate_struct(virtual)
+            for fielddescr, encoded_field_pos in virtual.fields.iteritems():
+                self.setfield(virtual, fielddescr, encoded_field_pos)
+            self.cache[encoded_pos] = virtual_box
+            return virtual_box
+
+    def allocate_struct(self, virtual):
+        return self.metainterp.execute_and_record(rop.NEW, virtual.descr)
+
+    def setfield(self, virtual, fielddescr, encoded_field_pos):
+        xxx
+
     def store_int_box(self, res, pos, miframe, i, jitframe_pos):
-        if jitframe_pos in self.cache:
-            box = self.cache[jitframe_pos]
-        elif jitframe_pos == -1:
+        box = self.get_box_value(jitframe_pos, INT)
+        if box is None:
             return
-        elif jitframe_pos >= 0:
-            box = BoxInt(self.metainterp.cpu.get_int_value(self.deadframe,
-                                                           jitframe_pos))
-        elif jitframe_pos <= -2:
-            box = self.consts[-jitframe_pos - 2]
         miframe.registers_i[i] = box
-        self.cache[jitframe_pos] = box
         res[-1][pos] = box
 
     def store_ref_box(self, res, pos, miframe, i, jitframe_pos):
+        box = self.get_box_value(jitframe_pos, REF)
+        if box is None:
+            return
+        miframe.registers_r[i] = box
+        res[-1][pos] = box
+        return
+        xxx
         if jitframe_pos in self.cache:
             box = self.cache[jitframe_pos]
         elif jitframe_pos == -1:
@@ -189,6 +271,10 @@ class BoxResumeReader(AbstractResumeReader):
         res[-1][pos] = box
 
     def store_float_box(self, res, pos, miframe, i, jitframe_pos):
+        box = self.get_box_value(jitframe_pos)
+        if box is None:
+            return
+        xxx
         if jitframe_pos in self.cache:
             box = self.cache[jitframe_pos]
         elif jitframe_pos == -1:
