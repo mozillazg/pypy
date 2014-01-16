@@ -475,6 +475,10 @@ _oplist = [
                     # frontend
     'RESUME_PUT_CONST/3', # the same but for a constant
     'RESUME_NEW/0d',
+    'RESUME_NEW_WITH_VTABLE/1',
+    'RESUME_NEW_ARRAY/1d',
+    'RESUME_NEWSTR/1',
+    'RESUME_NEWUNICODE/1',
     'RESUME_SETFIELD_GC/2d',
     'RESUME_SET_PC/1',
     'RESUME_CLEAR/2',

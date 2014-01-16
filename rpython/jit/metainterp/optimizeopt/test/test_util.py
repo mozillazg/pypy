@@ -312,9 +312,10 @@ class BaseTest(object):
 
     def assert_equal(self, optimized, expected, text_right=None):
         from rpython.jit.metainterp.optimizeopt.util import equaloplists
-        assert len(optimized.inputargs) == len(expected.inputargs)
+        assert len(optimized.inputframes[0]) == len(expected.inputframes[0])
         remap = {}
-        for box1, box2 in zip(optimized.inputargs, expected.inputargs):
+        for box1, box2 in zip(optimized.inputframes[0],
+                              expected.inputframes[0]):
             assert box1.__class__ == box2.__class__
             remap[box2] = box1
         assert equaloplists(optimized.operations,
@@ -341,7 +342,7 @@ class BaseTest(object):
         operations =  loop.operations
         jumpop = operations[-1]
         assert jumpop.getopnum() == rop.JUMP
-        inputargs = loop.inputargs
+        inputargs = loop.inputframes[0]
 
         jump_args = jumpop.getarglist()[:]
         operations = operations[:-1]
@@ -368,7 +369,7 @@ class BaseTest(object):
                           #[inliner.inline_op(jumpop)]
         assert loop.operations[-1].getopnum() == rop.JUMP
         assert loop.operations[0].getopnum() == rop.LABEL
-        loop.inputargs = loop.operations[0].getarglist()
+        loop.inputframes = [loop.operations[0].getarglist()]
 
         self._do_optimize_loop(loop, call_pure_results)
         extra_same_as = []
@@ -384,13 +385,17 @@ class BaseTest(object):
 
         return preamble
 
-
+class FakeDescr(compile.ResumeGuardDescr):
+    def __eq__(self, other):
+        return isinstance(other, FakeDescr)
 
 def convert_old_style_to_targets(loop, jump):
     newloop = TreeLoop(loop.name)
-    newloop.inputargs = loop.inputargs
-    newloop.operations = [ResOperation(rop.LABEL, loop.inputargs, None, descr=FakeDescr())] + \
-                      loop.operations
+    newloop.inputframes = loop.inputframes
+    label = ResOperation(rop.LABEL, loop.inputframes[0], None,
+                         descr=FakeDescr())
+    newloop.operations = [label]
+    newloop.operations += loop.operations
     if not jump:
         assert newloop.operations[-1].getopnum() == rop.JUMP
         newloop.operations[-1] = ResOperation(rop.LABEL, newloop.operations[-1].getarglist(), None, descr=FakeDescr())

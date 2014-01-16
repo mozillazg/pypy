@@ -55,8 +55,7 @@ def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True)
     debug_start("jit-optimize")
     try:
         loop.logops = metainterp_sd.logger_noopt.log_loop(
-            flatten(loop.inputframes),
-            loop.operations)
+            flatten(loop.inputframes), loop.operations)
         optimizations, unroll = build_opt_chain(metainterp_sd, enable_opts)
         if unroll:
             optimize_unroll(metainterp_sd, loop, optimizations, inline_short_preamble)

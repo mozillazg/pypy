@@ -347,7 +347,6 @@ class Optimizer(Optimization):
         self.values = {}
         self.interned_refs = self.cpu.ts.new_ref_dict()
         self.interned_ints = {}
-        self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
         self.bool_boxes = {}
         self.producer = {}
         self.pendingfields = None # set temporarily to a list, normally by
@@ -364,6 +363,7 @@ class Optimizer(Optimization):
             self.call_pure_results = loop.call_pure_results
 
         self.set_optimizations(optimizations)
+        self.resume_stack = []
         self.setup()
 
     def set_optimizations(self, optimizations):
@@ -387,6 +387,7 @@ class Optimizer(Optimization):
             o.force_at_end_of_preamble()
 
     def flush(self):
+        self.resume_flush()
         for o in self.optimizations:
             o.flush()
 
@@ -410,7 +411,7 @@ class Optimizer(Optimization):
 
     def forget_numberings(self, virtualbox):
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_FORCINGS)
-        self.resumedata_memo.forget_numberings(virtualbox)
+        #self.resumedata_memo.forget_numberings(virtualbox)
 
     def getinterned(self, box):
         constbox = self.get_constant_box(box)
@@ -517,7 +518,7 @@ class Optimizer(Optimization):
         self.loop.operations = self.get_newoperations()
         self.loop.quasi_immutable_deps = self.quasi_immutable_deps
         # accumulate counters
-        self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
+        #self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
 
     def send_extra_operation(self, op):
         self.first_optimization.propagate_forward(op)
@@ -571,6 +572,7 @@ class Optimizer(Optimization):
             assert False
 
     def store_final_boxes_in_guard(self, op, pendingfields):
+        xxx
         assert pendingfields is not None
         descr = op.getdescr()
         assert isinstance(descr, compile.ResumeGuardDescr)
@@ -670,8 +672,26 @@ class Optimizer(Optimization):
         value = self.getvalue(op.getarg(0))
         self.optimizer.opaque_pointers[value] = True
 
+    # the following stuff should go to the default Optimization thing,
+    # pending refactor
+
     def optimize_ENTER_FRAME(self, op):
+        self.resume_stack.append(op)
+
+    def optimize_LEAVE_FRAME(self, op):
+        if self.resume_stack:
+            self.resume_stack.pop()
+        else:
+            self.emit_operation(op)
+
+    def optimize_RESUME_PUT(self, op):
+        self.resume_flush()
         self.optimize_default(op)
+
+    def resume_flush(self):
+        for op in self.resume_stack:
+            self.emit_operation(op)
+        self.resume_stack = []
 
 dispatch_opt = make_dispatcher_method(Optimizer, 'optimize_',
         default=Optimizer.optimize_default)

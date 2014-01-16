@@ -92,7 +92,8 @@ class BaseTestBasic(BaseTest):
     def optimize_loop(self, ops, optops, call_pure_results=None):
         loop = self.parse(ops)
         token = JitCellToken()
-        loop.operations = [ResOperation(rop.LABEL, loop.inputargs, None, descr=TargetToken(token))] + \
+        loop.operations = [ResOperation(rop.LABEL, loop.inputframes[0], None,
+                                        descr=TargetToken(token))] + \
                           loop.operations
         if loop.operations[-1].getopnum() == rop.JUMP:
             loop.operations[-1].setdescr(token)
@@ -152,8 +153,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         [i]
-        enter_frame(-1, descr=jitcode)
         i0 = int_sub(i, 1)
+        enter_frame(-1, descr=jitcode)
         resume_put(i0, 0, 0)
         guard_value(i0, 0)
         leave_frame()
@@ -176,8 +177,6 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         []
-        enter_frame(-1, descr=jitcode)
-        leave_frame()
         jump()
         """
         self.optimize_loop(ops, expected)
@@ -442,6 +441,19 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
+    def test_remove_enter_leave_frame(self):
+        ops = """
+        []
+        enter_frame(-1, descr=jitcode)
+        leave_frame()
+        finish()
+        """
+        expected = """
+        []
+        finish()
+        """
+        self.optimize_loop(ops, expected)
+
     def test_ooisnull_oononnull_via_virtual(self):
         ops = """
         [p0]
@@ -455,13 +467,12 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         leave_frame()
         jump(p0)
         """
-        xxx
         expected = """
         [p0]
         enter_frame(-1, descr=jitcode)
         resume_put(p0, 0, 2)
         pv = resume_new_with_vtable(ConstClass(node_vtable))
-        resume_setfield_gc(p0, pv, descr=...)
+        resume_setfield_gc(p0, pv, descr=valuedescr)
         guard_nonnull(p0)
         leave_frame()
         jump(p0)

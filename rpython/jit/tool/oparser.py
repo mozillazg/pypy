@@ -299,7 +299,7 @@ class OpParser(object):
         loop.comment = first_comment
         loop.original_jitcell_token = self.original_jitcell_token
         loop.operations = ops
-        loop.inputargs = inpargs
+        loop.inputframes = [inpargs]
         loop.last_offset = last_offset
         return loop
 
