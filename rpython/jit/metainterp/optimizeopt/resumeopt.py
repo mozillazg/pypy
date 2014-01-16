@@ -8,7 +8,7 @@ class ResumeFrame(object):
         self.pc = pc
         assert isinstance(jitcode, JitCode)
         self.jitcode = jitcode
-        self.boxes = [None] * jitcode.num_regs()
+        self.values = [None] * jitcode.num_regs()
 
 class OptResumeBuilder(object):
     def __init__(self, opt):
@@ -46,11 +46,10 @@ class OptResumeBuilder(object):
                                                op.getarg(1),
                                                op.getarg(2)], None)
             self.opt._newoperations.append(op)
+            no = op.getarg(2).getint()
+            self.framestack[op.getarg(1).getint()].values[no] = value
         else:
             self.opt.emit_operation(op)
-        #no = op.getarg(2).getint()
-        #box = self.opt.getvalue(op.getarg(0)).box
-        #self.framestack[op.getarg(1).getint()].boxes[no] = box
 
     def new_virtual(self, box):
         xxx
@@ -62,6 +61,18 @@ class OptResumeBuilder(object):
         op = ResOperation(rop.RESUME_NEW, [], newbox, descr=structdescr)
         self.opt._newoperations.append(op)
 
+    def setfield(self, box, fieldbox, descr):
+        op = ResOperation(rop.RESUME_SETFIELD_GC, [box, fieldbox], None,
+                          descr=descr)
+        self.opt._newoperations.append(op)
+
     def guard_seen(self, op, pendingfields):
-        #xxx
-        pass
+        for frame_pos, frame in enumerate(self.framestack):
+            for pos_in_frame, value in enumerate(frame.values):
+                if value is not None and value.is_forced_virtual():
+                    op = ResOperation(rop.RESUME_PUT, [value.get_resume_box(),
+                                                       ConstInt(frame_pos),
+                                                       ConstInt(pos_in_frame)],
+                                                       None)
+                    self.opt._newoperations.append(op)
+                    frame.values[pos_in_frame] = None

@@ -19,6 +19,7 @@ class AbstractVirtualValue(optimizer.OptValue):
     level = optimizer.LEVEL_NONNULL
     is_about_raw = False
     _cached_vinfo = None
+    resume_box = None
 
     def __init__(self, keybox, source_op=None):
         self.keybox = keybox   # only used as a key in dictionaries
@@ -27,6 +28,11 @@ class AbstractVirtualValue(optimizer.OptValue):
 
     def is_forced_virtual(self):
         return self.box is not None
+
+    def get_resume_box(self):
+        if self.is_forced_virtual():
+            return self.box
+        return self.resume_box
 
     def get_key_box(self):
         if self.box is None:
@@ -655,6 +661,9 @@ class OptVirtualize(optimizer.Optimization):
 
         if value.is_virtual():
             fieldvalue = self.getvalue(op.getarg(1))
+            self.optimizer.resumebuilder.setfield(value.resume_box,
+                                                  fieldvalue.get_resume_box(),
+                                                  op.getdescr())
             value.setfield(op.getdescr(), fieldvalue)
         else:
             value.ensure_nonnull()

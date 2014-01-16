@@ -454,27 +454,6 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
-    def test_virtual_resume_info(self):
-        ops = """
-        [i0]
-        enter_frame(-1, descr=jitcode)
-        p0 = new(descr=ssize)
-        resume_put(p0, 0, 0)
-        guard_true(i0)
-        leave_frame()
-        finish()
-        """
-        expected = """
-        [i0]
-        enter_frame(-1, descr=jitcode)
-        p0 = resume_new(descr=ssize)
-        resume_put(p0, 0, 0)
-        guard_true(i0)
-        leave_frame()
-        finish()
-        """
-        self.optimize_loop(ops, expected)
-
     def test_ooisnull_oononnull_via_virtual(self):
         ops = """
         [p0]
@@ -5139,3 +5118,78 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
 class TestLLtype(BaseTestOptimizeBasic, LLtypeMixin):
     pass
+
+class TestOptimizeResume(BaseTestBasic, LLtypeMixin):
+    def test_virtual_resume_info(self):
+        ops = """
+        [i0]
+        enter_frame(-1, descr=jitcode)
+        p0 = new(descr=ssize)
+        resume_put(p0, 0, 0)
+        guard_true(i0)
+        leave_frame()
+        finish()
+        """
+        expected = """
+        [i0]
+        enter_frame(-1, descr=jitcode)
+        p0 = resume_new(descr=ssize)
+        resume_put(p0, 0, 0)
+        guard_true(i0)
+        leave_frame()
+        finish()
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_virtual_resume_info_field(self):
+        ops = """
+        [i0]
+        enter_frame(-1, descr=jitcode)
+        p0 = new(descr=ssize)
+        setfield_gc(p0, 3, descr=valuedescr)
+        resume_put(p0, 0, 0)
+        guard_true(i0)
+        leave_frame()
+        finish()
+        """
+        expected = """
+        [i0]
+        enter_frame(-1, descr=jitcode)
+        p0 = resume_new(descr=ssize)
+        resume_setfield_gc(p0, 3, descr=valuedescr)
+        resume_put(p0, 0, 0)
+        guard_true(i0)
+        leave_frame()
+        finish()
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_forced_virtual(self):
+        ops = """
+        [i0, i1]
+        enter_frame(-1, descr=jitcode)
+        p0 = new(descr=ssize)
+        setfield_gc(p0, 3, descr=valuedescr)
+        resume_put(p0, 0, 0)
+        guard_true(i0)
+        escape(p0)
+        guard_true(i1)
+        leave_frame()
+        finish()
+        """
+        expected = """
+        [i0, i1]
+        enter_frame(-1, descr=jitcode)
+        p0 = resume_new(descr=ssize)
+        resume_setfield_gc(p0, 3, descr=valuedescr)
+        resume_put(p0, 0, 0)
+        guard_true(i0)
+        p1 = new(descr=ssize)
+        setfield_gc(p1, 3, descr=valuedescr)
+        escape(p1)
+        resume_put(p1, 0, 0)
+        guard_true(i1)
+        leave_frame()
+        finish()
+        """
+        self.optimize_loop(ops, expected)

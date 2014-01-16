@@ -59,6 +59,9 @@ class OptValue(object):
             self.make_constant(box)
         # invariant: box is a Const if and only if level == LEVEL_CONSTANT
 
+    def get_resume_box(self):
+        return self.box
+
     def make_len_gt(self, mode, descr, val):
         if self.lenbound:
             assert self.lenbound.mode == mode

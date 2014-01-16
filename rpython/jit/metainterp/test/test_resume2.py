@@ -156,7 +156,6 @@ class TestResumeDirect(object):
         assert f.registers_i[1].getint() == 2 + 3
 
     def test_new(self):
-        py.test.skip("finish")
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         base = parse("""
@@ -167,6 +166,7 @@ class TestResumeDirect(object):
         backend_put(12,
         leave_frame()
         """, namespace={'jitcode':jitcode1})
+        XXX
 
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")
