@@ -3,31 +3,8 @@ from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.jit.metainterp.history import ConstInt, Box, Const
 from rpython.jit.resume.rescode import ResumeBytecodeBuilder, TAGBOX,\
      ResumeBytecode, TAGVIRTUAL
+from rpython.jit.codewriter.jitcode import JitCode
 
-            # if op.getopnum() == rop.ENTER_FRAME:
-            #     descr = op.getdescr()
-            #     assert isinstance(descr, JitCode)
-            #     self.enter_frame(op.getarg(0).getint(), descr)
-            # elif op.getopnum() == rop.LEAVE_FRAME:
-            #     self.leave_frame()
-            # elif op.getopnum() == rop.RESUME_PUT:
-            #     self.resume_put(op.getarg(0), op.getarg(1).getint(),
-            #                      op.getarg(2).getint())
-            # elif op.getopnum() == rop.RESUME_NEW:
-            #     self.resume_new(op.result, op.getdescr())
-            # elif op.getopnum() == rop.RESUME_SETFIELD_GC:
-            #     self.resume_setfield_gc(op.getarg(0), op.getarg(1),
-            #                             op.getdescr())
-            # elif op.getopnum() == rop.RESUME_SET_PC:
-            #     self.resume_set_pc(op.getarg(0).getint())
-            # elif op.getopnum() == rop.RESUME_CLEAR:
-            #     self.resume_clear(op.getarg(0).getint(),
-            #                       op.getarg(1).getint())
-            # elif not op.is_resume():
-            #     pos += 1
-            #     continue
-            # else:
-            #     xxx
 
 class LivenessAnalyzer(object):
     def __init__(self, inputframes=None):
@@ -61,8 +38,37 @@ class LivenessAnalyzer(object):
     def resume_set_pc(self, pc):
         pass
 
-    def interpret_until(self, *args):
-        pass
+    def interpret_until(self, ops, until, pos=0):
+        while pos < until:
+            op = ops[pos]
+            if not op.is_resume():
+                pos += 1
+                continue
+            if op.getopnum() == rop.ENTER_FRAME:
+                descr = op.getdescr()
+                assert isinstance(descr, JitCode)
+                self.enter_frame(op.getarg(0).getint(), descr)
+            elif op.getopnum() == rop.LEAVE_FRAME:
+                self.leave_frame()
+            elif op.getopnum() == rop.RESUME_PUT:
+                self.resume_put(op.getarg(0), op.getarg(1).getint(),
+                                 op.getarg(2).getint())
+            elif op.getopnum() == rop.RESUME_NEW:
+                self.resume_new(op.result, op.getdescr())
+            elif op.getopnum() == rop.RESUME_SETFIELD_GC:
+                self.resume_setfield_gc(op.getarg(0), op.getarg(1),
+                                        op.getdescr())
+            elif op.getopnum() == rop.RESUME_SET_PC:
+                self.resume_set_pc(op.getarg(0).getint())
+            elif op.getopnum() == rop.RESUME_CLEAR:
+                self.resume_clear(op.getarg(0).getint(),
+                                  op.getarg(1).getint())
+            elif not op.is_resume():
+                pos += 1
+                continue
+            else:
+                xxx
+            pos += 1
 
     def _track(self, allboxes, box):
         if box in self.deps:
@@ -187,11 +193,8 @@ class ResumeBuilder(object):
             return
         pos = self.builder.encode(TAGBOX, pos)
         if self.current_attachment[v] != pos:
-            frame_index, frame_pos = self.frontend_pos[v]
-            xxx
-            self.newops.append(ResOperation(rop.RESUME_PUT, [
-                ConstInt(pos), frame_index, frame_pos],
-                None))
+            frame_index, pos_in_frame = self.frontend_pos[v]
+            self.builder.resume_put(pos, frame_index, pos_in_frame)
         self.current_attachment[v] = pos
 
     def mark_resumable_position(self):

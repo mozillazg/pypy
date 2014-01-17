@@ -8,10 +8,10 @@ from rpython.jit.resume.test.test_frontend import rebuild_locs_from_resumedata
 from rpython.rtyper.lltypesystem import lltype
 
 class MockJitCode(JitCode):
-    def __init__(self, no):
+    def __init__(self, no, index):
         self.no = no
-        self.global_index = no
-        self.name = 'frame-%d' % no
+        self.global_index = index
+        self.name = 'frame-%d' % index
 
     def num_regs(self):
         return self.no
@@ -33,7 +33,7 @@ class ResumeTest(object):
         self.cpu.setup_once()
 
     def test_simple(self):
-        jitcode = MockJitCode(1)
+        jitcode = MockJitCode(3, 1)
         loop = parse("""
         [i0]
         enter_frame(-1, descr=jitcode)
@@ -97,6 +97,7 @@ class ResumeTest(object):
     def test_spill(self):
         jitcode = JitCode("name")
         jitcode.setup(num_regs_i=2, num_regs_r=0, num_regs_f=0)
+        jitcode.global_index = 0
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
         loop = parse("""
@@ -114,19 +115,19 @@ class ResumeTest(object):
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
 
-        expected_resume = parse("""
-        [i2]
-        enter_frame(-1, descr=jitcode)
-        resume_put(1, 0, 1)
-        resume_put(29, 0, 1)
-        leave_frame()
-        """, namespace={'jitcode':jitcode})
+        staticdata = MockStaticData([jitcode], [])
+        expected_resume = preparse("""
+        enter_frame -1 name
+        resume_put (3, 1) 0 1
+        resume_put (3, 29) 0 1
+        """)
         descr1 = loop.operations[3].getdescr()
         descr2 = loop.operations[5].getdescr()
-        assert descr1.rd_bytecode_position == 2
-        assert descr2.rd_bytecode_position == 3
-        equaloplists(descr1.rd_resume_bytecode.opcodes,
-                     expected_resume.operations)
+        assert descr1.rd_bytecode_position == 10
+        assert descr2.rd_bytecode_position == 15
+        res = descr2.rd_resume_bytecode.dump(staticdata,
+                                             descr2.rd_bytecode_position)
+        assert res == expected_resume
 
     def test_bridge(self):
         jitcode = JitCode("name")
