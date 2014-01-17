@@ -473,6 +473,7 @@ _oplist = [
     'RESUME_PUT/3', # arguments are as follows - box or position in the backend,
                     # the frame index (counting from top) and position in the
                     # frontend
+    'RESUME_PUT_CONST/3',
     'RESUME_NEW/0d',
     'RESUME_NEW_WITH_VTABLE/1',
     'RESUME_NEW_ARRAY/1d',
