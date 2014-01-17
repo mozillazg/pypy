@@ -14,9 +14,8 @@ from rpython.jit.metainterp.history import (TreeLoop, Box, JitCellToken,
 from rpython.jit.metainterp import history, jitexc
 from rpython.jit.metainterp.optimize import InvalidLoop
 from rpython.jit.metainterp.inliner import Inliner
-from rpython.jit.metainterp.resume import NUMBERING, PENDINGFIELDSP, ResumeDataDirectReader
 from rpython.jit.codewriter import heaptracker, longlong
-from rpython.jit.backend.resumebuilder import flatten
+from rpython.jit.resume.backend import flatten
 
 def giveup():
     from rpython.jit.metainterp.pyjitpl import SwitchToBlackhole

@@ -124,9 +124,6 @@ class AbstractResumeReader(object):
             elif op.getopnum() == rop.RESUME_PUT:
                 self.resume_put(op.getarg(0), op.getarg(1).getint(),
                                  op.getarg(2).getint())
-            elif op.getopnum() == rop.RESUME_PUT_CONST:
-                self.resume_put_const(op.getarg(0), op.getarg(1).getint(),
-                                      op.getarg(2).getint())
             elif op.getopnum() == rop.RESUME_NEW:
                 self.resume_new(op.result, op.getdescr())
             elif op.getopnum() == rop.RESUME_SETFIELD_GC:

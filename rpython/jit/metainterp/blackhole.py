@@ -2,7 +2,8 @@ from rpython.jit.codewriter import heaptracker, longlong
 from rpython.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 from rpython.jit.metainterp.compile import ResumeAtPositionDescr
 from rpython.jit.metainterp.jitexc import get_llexception, reraise
-from rpython.jit.metainterp import jitexc, resume2
+from rpython.jit.metainterp import jitexc
+from rpython.jit.resume import frontend as resume2
 from rpython.rlib import longlong2float
 from rpython.rlib.debug import ll_assert, make_sure_not_resized
 from rpython.rlib.objectmodel import we_are_translated

@@ -1,7 +1,7 @@
 
 from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.jit.metainterp.history import ConstInt, Box, Const
-from rpython.jit.metainterp.resume2 import ResumeBytecode, AbstractResumeReader
+from rpython.jit.resume.frontend import ResumeBytecode, AbstractResumeReader
 
 class LivenessAnalyzer(AbstractResumeReader):
     def __init__(self, inputframes=None):
@@ -87,6 +87,7 @@ class ResumeBuilder(object):
             box = op.getarg(0)
             args = op.getarglist()
             if isinstance(box, Const):
+                XXX
                 newop = op.copy_and_change(rop.RESUME_PUT_CONST)
             elif box in self.virtuals:
                 newop = op

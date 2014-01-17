@@ -4,7 +4,7 @@ from rpython.jit.metainterp.history import BasicFailDescr
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.tool.oparser import parse
 from rpython.jit.metainterp.optimizeopt.util import equaloplists
-from rpython.jit.metainterp.test.test_resume2 import rebuild_locs_from_resumedata
+from rpython.jit.resume.test.test_frontend import rebuild_locs_from_resumedata
 from rpython.rtyper.lltypesystem import lltype
 
 class MockJitCode(JitCode):

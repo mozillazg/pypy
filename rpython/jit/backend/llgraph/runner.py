@@ -1,7 +1,7 @@
 import py, weakref
 from rpython.jit.backend import model
 from rpython.jit.backend.llgraph import support
-from rpython.jit.backend.resumebuilder import ResumeBuilder,\
+from rpython.jit.resume.backend import ResumeBuilder,\
      LivenessAnalyzer, compute_vars_longevity, flatten
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.history import Const, getkind

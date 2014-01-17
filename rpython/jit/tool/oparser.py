@@ -300,6 +300,7 @@ class OpParser(object):
         loop.original_jitcell_token = self.original_jitcell_token
         loop.operations = ops
         loop.inputframes = [inpargs]
+        loop.inputargs = inpargs # for the tests
         loop.last_offset = last_offset
         return loop
 

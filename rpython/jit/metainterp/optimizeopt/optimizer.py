@@ -5,7 +5,7 @@ from rpython.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, 
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from rpython.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from rpython.jit.metainterp.optimizeopt.resumeopt import OptResumeBuilder
+from rpython.jit.resume.optimizer import OptResumeBuilder
 from rpython.jit.metainterp.resoperation import rop, ResOperation, AbstractResOp
 from rpython.jit.metainterp.typesystem import llhelper
 from rpython.tool.pairtype import extendabletype
