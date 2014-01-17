@@ -102,7 +102,7 @@ class AbstractResumeReader(object):
         return ord(self.bytecode.opcodes[pos])
 
     def read_short(self, pos):
-        return self.read(pos) + (self.read(pos + 1) << 16)
+        return self.read(pos) + (self.read(pos + 1) << 8)
 
     def interpret_until(self, bytecode, until, pos=0):
         self.bytecode = bytecode

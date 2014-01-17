@@ -58,6 +58,7 @@ class ResumeTest(object):
 
     def test_resume_new(self):
         jitcode = JitCode("name")
+        jitcode.global_index = 1
         jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         S = lltype.GcStruct('S', ('field', lltype.Signed))
         structdescr = self.cpu.sizeof(S)
@@ -78,9 +79,9 @@ class ResumeTest(object):
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
-        expected_resume = parse("""
-        [i0]
-        enter_frame(-1, descr=jitcode)
+        xxx
+        expected_resume = preparse("""
+        enter_frame -1 frame-1
         p0 = resume_new(descr=structdescr)
         resume_setfield_gc(p0, i0, descr=fielddescr)
         resume_put(p0, 0, 0)

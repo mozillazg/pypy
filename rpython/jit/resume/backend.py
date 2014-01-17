@@ -118,6 +118,8 @@ class ResumeBuilder(object):
             frame_pos = op.getarg(1).getint()
             pos_in_frame = op.getarg(2).getint()
             box = op.getarg(0)
+            if box in self.virtuals:
+                xxx
             if isinstance(box, Const):
                 pos = self.builder.encode_const(box)
                 self.builder.resume_put(pos, frame_pos, pos_in_frame)                
@@ -132,6 +134,11 @@ class ResumeBuilder(object):
             self.frontend_pos[box] = (frame_pos, pos_in_frame)
         elif op.getopnum() == rop.LEAVE_FRAME:
             self.builder.leave_frame()
+        elif op.getopnum() == rop.RESUME_NEW:
+            v_pos = len(self.virtuals)
+            self.virtuals[op.result] = v_pos
+            XXX
+            self.builder.resume_new(v_pos, op.getdescr())
         else:
             xxx
         return
