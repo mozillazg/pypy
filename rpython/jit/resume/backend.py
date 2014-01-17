@@ -135,8 +135,13 @@ class ResumeBuilder(object):
         elif op.getopnum() == rop.RESUME_PUT:
             frame_pos = op.getarg(1).getint()
             pos_in_frame = op.getarg(2).getint()
-            pos = self.get_box_pos(op.getarg(0))
-            self.builder.resume_put(pos, frame_pos, pos_in_frame)
+            try:
+                pos = self.get_box_pos(op.getarg(0))
+            except KeyError:
+                pos = TAGBOX
+                self.current_attachment[op.getarg(0)] = -1
+            else:
+                self.builder.resume_put(pos, frame_pos, pos_in_frame)
             if pos & TAGBOX:
                 self.frontend_pos[op.getarg(0)] = (frame_pos, pos_in_frame)
         elif op.getopnum() == rop.LEAVE_FRAME:

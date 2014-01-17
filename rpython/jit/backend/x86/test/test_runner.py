@@ -12,8 +12,8 @@ from rpython.jit.backend.llsupport import symbolic
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.executor import execute
-from rpython.jit.backend.test.runner_test import LLtypeBackendTest
-from rpython.jit.metainterp.test.test_resume2 import rebuild_locs_from_resumedata
+from rpython.jit.backend.test.runner_test import LLtypeBackendTest, get_jitcode
+from rpython.jit.resume.test.test_frontend import rebuild_locs_from_resumedata
 from rpython.jit.tool.oparser import parse
 import ctypes
 
@@ -268,8 +268,7 @@ class TestX86(LLtypeBackendTest):
         p = lltype.cast_opaque_ptr(llmemory.GCREF,
                                    lltype.malloc(lltype.GcStruct('x')))
         nullptr = lltype.nullptr(llmemory.GCREF.TO)
-        jitcode = JitCode('name')
-        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
+        jitcode, staticdata = get_jitcode(1)
         f = BoxInt()
         for op in allops:
             for guard in guards:
@@ -301,7 +300,7 @@ class TestX86(LLtypeBackendTest):
                     if isinstance(descr, BasicFinalDescr):
                         pos = 0
                     else:
-                        locs = rebuild_locs_from_resumedata(descr)
+                        locs = rebuild_locs_from_resumedata(descr, staticdata)
                         pos = locs[0][0]
                     result = self.cpu.get_int_value(deadframe, pos)
                     if guard == rop.GUARD_FALSE:
@@ -331,8 +330,7 @@ class TestX86(LLtypeBackendTest):
         guards = [rop.GUARD_FALSE, rop.GUARD_TRUE]
         all = [rop.INT_EQ, rop.INT_NE, rop.INT_LE, rop.INT_LT, rop.INT_GT,
                rop.INT_GE, rop.UINT_GT, rop.UINT_LT, rop.UINT_LE, rop.UINT_GE]
-        jitcode = JitCode('name')
-        jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
+        jitcode, staticdata = get_jitcode(1)
         for a, b in boxes:
             for guard in guards:
                 for op in all:
@@ -360,7 +358,7 @@ class TestX86(LLtypeBackendTest):
                     if isinstance(descr, BasicFinalDescr):
                         pos = 0
                     else:
-                        locs = rebuild_locs_from_resumedata(descr)
+                        locs = rebuild_locs_from_resumedata(descr, staticdata)
                         pos = locs[0][0]
                     result = self.cpu.get_int_value(deadframe, pos)
                     expected = execute(self.cpu, None, op, None, a, b).value

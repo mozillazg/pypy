@@ -138,7 +138,7 @@ class LLTrace(object):
                                        newdescr)
             if op.is_guard():
                 newop.failargs = resumebuilder.get_numbering(mapping, op)
-                newop.getdescr().rd_bytecode_position = len(resumebuilder.newops)
+                newop.getdescr().rd_bytecode_position = resumebuilder.builder.getpos()
             self.operations.append(newop)
 
         if descr is None:
