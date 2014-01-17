@@ -6,6 +6,9 @@ from rpython.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, ConstInt,\
 from rpython.jit.metainterp import history
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.rlib import rstack
+from rpython.jit.resume.reader import ResumeFrame, Virtual
+from rpython.jit.resume.rescode import TAGBOX, TAGCONST, TAGVIRTUAL, TAGOFFSET
+
 
 
 
@@ -13,7 +16,7 @@ class AbstractResumeReader(object):
     """ A resume reader that can follow resume until given point. Consult
     the concrete classes for details
     """
-    
+
     def __init__(self):
         self.framestack = []
         self.consts = [] # XXX cache?
@@ -127,7 +130,7 @@ class DirectResumeReader(AbstractResumeReader):
     """ Directly read values from the jitframe and put them in the blackhole
     interpreter
     """
-    
+
     def __init__(self, binterpbuilder, cpu, deadframe):
         self.bhinterpbuilder = binterpbuilder
         self.cpu = cpu
@@ -179,7 +182,7 @@ class BoxResumeReader(AbstractResumeReader):
     """ Create boxes corresponding to the resume and store them in
     the metainterp
     """
-    
+
     def __init__(self, metainterp, deadframe):
         self.metainterp = metainterp
         self.deadframe = deadframe
@@ -284,7 +287,7 @@ class BoxResumeReader(AbstractResumeReader):
                 pos += 1
         self.cache = None
         return res, [f.registers for f in self.framestack]
-            
+
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     """ Reconstruct metainterp frames from the resumedata
     """
@@ -303,7 +306,7 @@ def blackhole_from_resumedata(interpbuilder, metainterp_sd, faildescr,
     cpu = metainterp_sd.cpu
     last_bhinterp = DirectResumeReader(interpbuilder, cpu,
                                        deadframe).rebuild(faildescr)
-    
+
     return last_bhinterp
 
 class ResumeRecorder(object):
