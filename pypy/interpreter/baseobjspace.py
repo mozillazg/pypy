@@ -199,7 +199,7 @@ class W_Root(object):
     def str_w(self, space):
         self._typed_unwrap_error(space, "string")
 
-    def unicode_w(self, space):
+    def utf8_w(self, space):
         self._typed_unwrap_error(space, "unicode")
 
     def int_w(self, space):
@@ -1376,11 +1376,11 @@ class ObjSpace(object):
                                  self.wrap('argument must be a string'))
         return self.str_w(w_obj)
 
-    def unicode_w(self, w_obj):
-        return w_obj.unicode_w(self)
+    def utf8_w(self, w_obj):
+        return w_obj.utf8_w(self)
 
-    def unicode0_w(self, w_obj):
-        "Like unicode_w, but rejects strings with NUL bytes."
+    def utf8_0_w(self, w_obj):
+        "Like utf8_w, but rejects strings with NUL bytes."
         from rpython.rlib import rstring
         result = w_obj.unicode_w(self)
         if u'\x00' in result:

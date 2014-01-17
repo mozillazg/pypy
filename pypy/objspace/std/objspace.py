@@ -158,7 +158,8 @@ class StdObjSpace(ObjSpace):
         if isinstance(x, str):
             return wrapstr(self, x)
         if isinstance(x, unicode):
-            return wrapunicode(self, x)
+            # we might want to kill support for wrap(u'...') eventually
+            return wrapunicode(self, x.encode('utf-8'))
         if isinstance(x, float):
             return W_FloatObject(x)
         if isinstance(x, W_Root):
@@ -180,6 +181,14 @@ class StdObjSpace(ObjSpace):
                 return W_LongObject.fromrarith_int(x)
         return self._wrap_not_rpython(x)
     wrap._annspecialcase_ = "specialize:wrap"
+
+    def wrap_utf8(self, utf8val):
+        """
+        Take an utf8-encoded RPython string an return an unicode applevel
+        object
+        """
+        # the constructor of W_UnicodeObject checks that it's valid UTF8
+        return wrapunicode(self, utf8val)
 
     def _wrap_not_rpython(self, x):
         "NOT_RPYTHON"

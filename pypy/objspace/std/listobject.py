@@ -1633,10 +1633,10 @@ class UnicodeListStrategy(ListStrategy):
     _applevel_repr = "unicode"
 
     def wrap(self, stringval):
-        return self.space.wrap(stringval)
+        return self.space.wrap_utf8(stringval)
 
     def unwrap(self, w_string):
-        return self.space.unicode_w(w_string)
+        return self.space.utf8_w(w_string)
 
     erase, unerase = rerased.new_erasing_pair("unicode")
     erase = staticmethod(erase)

@@ -61,3 +61,20 @@ def encode_utf8(space, uni):
         uni, len(uni), "strict",
         errorhandler=encode_error_handler(space),
         allow_surrogates=True)
+
+def ensure_ascii(space, s, errors='strict'):
+    # ASCII is equivalent to the first 128 ordinals in Unicode.
+    eh = decode_error_handler(space)
+    pos = 0
+    size = len(s)
+    while pos < size:
+        c = s[pos]
+        if ord(c) >= 128:
+            r, pos = eh(errors, "ascii", "ordinal not in range(128)",
+                        s,  pos, pos + 1)
+        pos += 1
+    return s
+
+def ensure_utf8(space, s, errors='strict'):
+    # XXXY implement me!
+    return s

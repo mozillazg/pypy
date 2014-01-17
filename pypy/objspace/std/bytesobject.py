@@ -658,8 +658,8 @@ class W_BytesObject(W_AbstractBytesObject):
         if space.isinstance_w(w_sub, space.w_unicode):
             from pypy.objspace.std.unicodeobject import W_UnicodeObject
             assert isinstance(w_sub, W_UnicodeObject)
-            self_as_unicode = unicode_from_encoded_object(space, self, None, None)
-            return space.newbool(self_as_unicode._value.find(w_sub._value) >= 0)
+            self_as_utf8 = unicode_from_encoded_object(space, self, None, None)
+            return space.newbool(self_as_utf8._utf8val.find(w_sub._utf8val) >= 0)
         return self._StringMethods_descr_contains(space, w_sub)
 
     _StringMethods_descr_replace = descr_replace
