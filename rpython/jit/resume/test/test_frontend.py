@@ -3,7 +3,7 @@ from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats
 from rpython.jit.resume.frontend import rebuild_from_resumedata
-from rpython.jit.resume.rescode import ResumeBytecode
+from rpython.jit.resume.rescode import ResumeBytecode, TAGBOX
 from rpython.jit.resume.reader import AbstractResumeReader
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter.format import unformat_assembler
@@ -66,11 +66,16 @@ class MockCPU(object):
         return index + 3
 
 class RebuildingResumeReader(AbstractResumeReader):
+    def unpack(self, r):
+        tag, index = self.decode(r)
+        assert tag == TAGBOX
+        return index
+    
     def finish(self):
-        return [f.registers for f in self.framestack]
+        return [[self.unpack(r) for r in f.registers] for f in self.framestack]
 
-def rebuild_locs_from_resumedata(faildescr):
-    return RebuildingResumeReader().rebuild(faildescr)
+def rebuild_locs_from_resumedata(faildescr, staticdata):
+    return RebuildingResumeReader(staticdata).rebuild(faildescr)
 
 class TestResumeDirect(object):
     def test_box_resume_reader(self):

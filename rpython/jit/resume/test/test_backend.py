@@ -131,6 +131,7 @@ class ResumeTest(object):
 
     def test_bridge(self):
         jitcode = JitCode("name")
+        jitcode.global_index = 0
         jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         loop = parse("""
         [i0]
@@ -152,14 +153,12 @@ class ResumeTest(object):
         force_spill(i0)
         guard_false(i0)
         """)
-        locs = rebuild_locs_from_resumedata(descr)
+        staticdata = MockStaticData([jitcode], [])
+        locs = rebuild_locs_from_resumedata(descr, staticdata)
         self.cpu.compile_bridge(None, descr, [bridge.inputargs], locs,
                                 bridge.operations, looptoken)
 
         descr = bridge.operations[-1].getdescr()
-        expected_resume = parse("""
-        []
-        resume_put(28, 0, 0)
-        """)
-        equaloplists(descr.rd_resume_bytecode.opcodes,
-                     expected_resume.operations)
+        res = descr.rd_resume_bytecode.dump(staticdata,
+                                            descr.rd_bytecode_position)
+        assert res == "resume_put (3, 28) 0 0"

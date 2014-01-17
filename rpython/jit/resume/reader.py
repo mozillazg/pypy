@@ -59,13 +59,8 @@ class AbstractResumeReader(object):
     def decode(self, pos):
         return pos & 0x3, pos >> rescode.TAGOFFSET
 
-    def resume_put(self, jitframe_pos_box, frame_no, frontend_position):
-        XXX
-        if isinstance(jitframe_pos_box, Box):
-            jitframe_pos = self.encode_virtual(jitframe_pos_box)
-        else:
-            jitframe_pos = self.encode_box(jitframe_pos_box.getint())
-        self.framestack[frame_no].registers[frontend_position] = jitframe_pos
+    def resume_put(self, encoded_pos, frame_no, frontend_position):
+        self.framestack[frame_no].registers[frontend_position] = encoded_pos
 
     def encode(self, box):
         xxx
@@ -83,11 +78,8 @@ class AbstractResumeReader(object):
         self.virtuals[box].fields[descr] = self.encode(fieldbox)
 
     def resume_clear(self, frame_no, frontend_position):
+        xxx
         self.framestack[frame_no].registers[frontend_position] = -1
-
-    def resume_put_const(self, const, frame_no, frontend_position):
-        pos = self.encode_const(const)
-        self.framestack[frame_no].registers[frontend_position] = pos
 
     def resume_set_pc(self, pc):
         self.framestack[-1].pc = pc
@@ -98,7 +90,7 @@ class AbstractResumeReader(object):
     def _rebuild_until(self, rb, position):
         if rb.parent is not None:
             self._rebuild_until(rb.parent, rb.parent_position)
-        self.interpret_until(rb.opcodes, position)
+        self.interpret_until(rb, position)
 
     def read(self, pos):
         return ord(self.bytecode.opcodes[pos])

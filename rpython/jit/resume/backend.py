@@ -111,8 +111,7 @@ class ResumeBuilder(object):
                     else:
                         loc_pos = inputlocs[i].get_jitframe_position()
                         i += 1
-                        self.frontend_pos[box] = (ConstInt(frame_pos),
-                                                  ConstInt(pos_in_frame))
+                        self.frontend_pos[box] = (frame_pos, pos_in_frame)
                         all[box] = None
                     if box not in self.current_attachment:
                         self.current_attachment[box] = loc_pos
