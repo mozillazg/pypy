@@ -155,23 +155,22 @@ class TestResumeDirect(object):
     def test_bridge(self):
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
-        base = parse("""
-        []
-        enter_frame(-1, descr=jitcode1)
-        resume_put(42, 0, 0)
-        # here is the split caused by a guard
-        resume_put(1, 0, 1)
-        leave_frame()
-        """, namespace={'jitcode1': jitcode1})
-        bridge = parse("""
-        []
-        resume_put(2, 0, 1)
-        """)
+        jitcode1.global_index = 0
+        builder = ResumeBytecodeBuilder()
+        builder.enter_frame(-1, jitcode1)
+        builder.resume_put(TAGBOX | (42 << 2), 0, 0)
+        rd1 = builder.build()
+        lgt1 = len(rd1.opcodes)
+
+        builder = ResumeBytecodeBuilder()
+        builder.resume_put(TAGBOX | (2 << 2), 0, 1)
+        rd2 = builder.build()
+        lgt2 = len(rd2.opcodes)
+        
         descr = Descr()
-        descr.rd_bytecode_position = 1
-        parent = ResumeBytecode(base.operations)
-        b = ResumeBytecode(bridge.operations, parent=parent,
-                           parent_position=2)
+        descr.rd_bytecode_position = lgt2
+        parent = ResumeBytecode(rd1, [])
+        b = ResumeBytecode(rd2, [], parent, parent_position=lgt1)
         descr.rd_resume_bytecode = b
         metainterp = MockMetaInterp()
         metainterp.cpu = MockCPU()
