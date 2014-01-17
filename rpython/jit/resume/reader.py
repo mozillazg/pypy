@@ -110,6 +110,9 @@ class AbstractResumeReader(object):
                 jitcode = self.staticdata.alljitcodes[self.read_short(pos + 3)]
                 self.enter_frame(pc, jitcode)
                 pos += 5
+            elif op == rescode.LEAVE_FRAME:
+                self.leave_frame()
+                pos += 1
             elif op == rescode.RESUME_PUT:
                 encoded = self.read_short(pos + 1)
                 frame_pos = self.read(pos + 3)

@@ -111,24 +111,22 @@ class TestResumeDirect(object):
     def test_nested_call(self):
         jitcode1 = JitCode("jitcode")
         jitcode1.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
+        jitcode1.global_index = 0
         jitcode2 = JitCode("jitcode2")
         jitcode2.setup(num_regs_i=9, num_regs_r=0, num_regs_f=0)
-        resume_loop = parse("""
-        []
-        enter_frame(-1, descr=jitcode1)
-        resume_put(11, 0, 2)
-        enter_frame(12, descr=jitcode2)
-        resume_put(12, 1, 3)
-        resume_put(8, 0, 4)
-        leave_frame()
-        resume_put(10, 0, 1)
-        leave_frame()
-        """, namespace={'jitcode1': jitcode1, 'jitcode2': jitcode2})
+        jitcode2.global_index = 1
+        builder = ResumeBytecodeBuilder()
+        builder.enter_frame(-1, jitcode1)
+        builder.resume_put(TAGBOX | (11 << 2), 0, 2)
+        builder.enter_frame(12, jitcode2)
+        builder.resume_put(TAGBOX | (12 << 2), 1, 3)
+        builder.resume_put(TAGBOX | (8 << 2), 0, 4)
         metainterp = MockMetaInterp()
+        metainterp.staticdata = MockStaticData([jitcode1, jitcode2], [])
         metainterp.cpu = MockCPU()
         descr = Descr()
-        descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 5
+        descr.rd_resume_bytecode = ResumeBytecode(builder.build(), [])
+        descr.rd_bytecode_position = len(descr.rd_resume_bytecode.opcodes)
         rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 2
         f = metainterp.framestack[-1]
@@ -138,8 +136,13 @@ class TestResumeDirect(object):
         assert f.registers_i[3].getint() == 12 + 3
         assert f2.registers_i[4].getint() == 8 + 3
         assert f2.registers_i[2].getint() == 11 + 3
+        
+        builder.leave_frame()
+        builder.resume_put(TAGBOX | (10 << 2), 0, 1)
 
-        descr.rd_bytecode_position = 7
+        descr.rd_resume_bytecode = ResumeBytecode(builder.build(), [])
+        descr.rd_bytecode_position = len(descr.rd_resume_bytecode.opcodes)
+        
         metainterp.framestack = []
         rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 1
