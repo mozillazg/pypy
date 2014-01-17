@@ -195,7 +195,8 @@ def flatten(inputframes):
     all = {}
     for frame in inputframes:
         for x in frame:
-            if x is not None and not isinstance(x, Const) and x not in all:
+            if x is not None and x not in all:
+                assert not isinstance(x, Const)
                 count += 1
                 all[x] = None
     inputargs = [None] * count
@@ -203,8 +204,7 @@ def flatten(inputframes):
     all = {}
     for frame in inputframes:
         for item in frame:
-            if (item is not None and not isinstance(item, Const) and
-                item not in all):
+            if item is not None and item not in all:
                 inputargs[pos] = item
                 all[item] = None
                 pos += 1

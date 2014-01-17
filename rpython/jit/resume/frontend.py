@@ -1,7 +1,7 @@
 
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, ConstInt,\
-     INT, REF
+     INT, REF, Const
 from rpython.jit.metainterp import history
 from rpython.jit.resume.reader import AbstractResumeReader
 from rpython.jit.resume.rescode import TAGBOX, TAGCONST, TAGSMALLINT, TAGVIRTUAL
@@ -219,7 +219,8 @@ class BoxResumeReader(AbstractResumeReader):
         if box is None:
             return
         miframe.registers_i[i] = box
-        res[-1][pos] = box
+        if not isinstance(box, Const):
+            res[-1][pos] = box
 
     def store_ref_box(self, res, pos, miframe, i, jitframe_pos):
         box = self.get_box_value(jitframe_pos, REF)
@@ -260,6 +261,12 @@ class BoxResumeReader(AbstractResumeReader):
         self.cache[jitframe_pos] = box
         res[-1][pos] = box
 
+    def get_loc(self, p):
+        tag, pos = self.decode(p)
+        if tag == TAGBOX:
+            return pos
+        return -1
+
     def finish(self):
         res = []
         self.cache = {}
@@ -279,7 +286,8 @@ class BoxResumeReader(AbstractResumeReader):
                 self.store_float_box(res, pos, miframe, i, frame.registers[pos])
                 pos += 1
         self.cache = None
-        return res, [f.registers for f in self.framestack]
+        return res, [[self.get_loc(r) for r in f.registers]
+                     for f in self.framestack]
 
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     """ Reconstruct metainterp frames from the resumedata

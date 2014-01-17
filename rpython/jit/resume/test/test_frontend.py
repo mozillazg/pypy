@@ -84,7 +84,7 @@ class TestResumeDirect(object):
     def test_box_resume_reader(self):
         jitcode = JitCode("jitcode")
         jitcode.global_index = 0
-        jitcode.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
+        jitcode.setup(num_regs_i=4, num_regs_r=0, num_regs_f=0)
         builder = ResumeBytecodeBuilder()
         builder.enter_frame(-1, jitcode)
         builder.resume_put(TAGBOX | (100 << 2), 0, 1)
@@ -98,13 +98,15 @@ class TestResumeDirect(object):
         metainterp = MockMetaInterp()
         metainterp.staticdata = MockStaticData([jitcode], [])
         metainterp.cpu = MockCPU()
-        rebuild_from_resumedata(metainterp, "myframe", descr)
+        inpframes, inplocs = rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 1
         f = metainterp.framestack[-1]
         assert f.registers_i[1].getint() == 103
         assert isinstance(f.registers_i[2], Const)
         assert f.registers_i[2].getint() == 15
         assert f.registers_i[3].getint() == 13
+        assert inpframes == [[None, AnyBox(), None, None]]
+        assert inplocs == [[-1, 100, -1, -1]]
 
     def test_nested_call(self):
         jitcode1 = JitCode("jitcode")
