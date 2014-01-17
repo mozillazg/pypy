@@ -10,7 +10,8 @@ from rpython.rtyper.lltypesystem import lltype
 class MockJitCode(JitCode):
     def __init__(self, no):
         self.no = no
-        self.name = 'frame %d' % no
+        self.global_index = no
+        self.name = 'frame-%d' % no
 
     def num_regs(self):
         return self.no
@@ -18,13 +19,20 @@ class MockJitCode(JitCode):
     def __repr__(self):
         return 'MockJitCode(%d)' % self.no
 
+class MockStaticData(object):
+    def __init__(self, *jitcodes):
+        self.alljitcodes = list(jitcodes)
+
+def preparse(inp):
+    return "\n".join([s.strip() for s in inp.split("\n") if s.strip()])
+
 class ResumeTest(object):
     def setup_method(self, meth):
         self.cpu = self.CPUClass(None, None)
         self.cpu.setup_once()
 
     def test_simple(self):
-        jitcode = MockJitCode(3)
+        jitcode = MockJitCode(1)
         loop = parse("""
         [i0]
         enter_frame(-1, descr=jitcode)
@@ -37,16 +45,16 @@ class ResumeTest(object):
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
         descr = loop.operations[3].getdescr()
-        assert descr.rd_bytecode_position == 3
-        expected_resume = parse("""
-        []
-        enter_frame(-1, descr=jitcode)
-        resume_put(28, 0, 2)
-        resume_put_const(1, 0, 1)
-        leave_frame()
-        """, namespace={'jitcode': jitcode})
-        equaloplists(descr.rd_resume_bytecode.opcodes,
-                     expected_resume.operations)
+        assert descr.rd_bytecode_position == 15
+        staticdata = MockStaticData(None, jitcode)
+        res = descr.rd_resume_bytecode.dump(staticdata,
+                                            descr.rd_bytecode_position)
+        expected_resume = preparse("""
+        enter_frame -1 frame-1
+        resume_put (3, 28) 0 2
+        resume_put (1, 1) 0 1
+        """)
+        assert res == expected_resume
 
     def test_resume_new(self):
         jitcode = JitCode("name")

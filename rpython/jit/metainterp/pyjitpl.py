@@ -1502,6 +1502,10 @@ class MetaInterpStaticData(object):
         self.setup_list_of_addr2name(asm.list_of_addr2name)
         #
         self.jitdrivers_sd = codewriter.callcontrol.jitdrivers_sd
+        self.alljitcodes = []
+        for jitcode in codewriter.callcontrol.jitcodes.itervalues():
+            jitcode.global_index = len(self.alljitcodes)
+            self.alljitcodes.append(jitcode)
         self.virtualref_info = codewriter.callcontrol.virtualref_info
         self.callinfocollection = codewriter.callcontrol.callinfocollection
         self.has_libffi_call = codewriter.callcontrol.has_libffi_call

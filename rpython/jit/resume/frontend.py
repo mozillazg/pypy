@@ -7,31 +7,6 @@ from rpython.jit.metainterp import history
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.rlib import rstack
 
-class ResumeBytecode(object):
-    def __init__(self, opcodes, parent=None, parent_position=-1, loop=None):
-        self.opcodes = opcodes
-        self.parent = parent
-        self.parent_position = parent_position
-        self.loop = loop
-
-class ResumeFrame(object):
-    def __init__(self, jitcode):
-        self.registers = [-1] * jitcode.num_regs()
-        self.jitcode = jitcode
-        self.pc = -1
-
-TAGCONST = 0x0
-TAGVIRTUAL = 0x2
-TAGBOX = 0x3
-TAGSMALLINT = 0x1
-
-TAGOFFSET = 2
-
-class Virtual(object):
-    def __init__(self, pos, descr):
-        self.pos = pos
-        self.fields = {}
-        self.descr = descr
 
 
 class AbstractResumeReader(object):
@@ -143,6 +118,10 @@ class AbstractResumeReader(object):
 
     def read_int(self, jitframe_pos):
         return self.metainterp.cpu.get_int_value(self.deadframe, jitframe_pos)
+
+class Dumper(AbstractResumeReader):
+    def __init__(self):
+        xxx
 
 class DirectResumeReader(AbstractResumeReader):
     """ Directly read values from the jitframe and put them in the blackhole

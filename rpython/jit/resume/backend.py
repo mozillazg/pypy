@@ -1,9 +1,35 @@
 
 from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.jit.metainterp.history import ConstInt, Box, Const
-from rpython.jit.resume.frontend import ResumeBytecode, AbstractResumeReader
+from rpython.jit.resume.rescode import ResumeBytecodeBuilder, TAGBOX,\
+     ResumeBytecode
 
-class LivenessAnalyzer(AbstractResumeReader):
+            # if op.getopnum() == rop.ENTER_FRAME:
+            #     descr = op.getdescr()
+            #     assert isinstance(descr, JitCode)
+            #     self.enter_frame(op.getarg(0).getint(), descr)
+            # elif op.getopnum() == rop.LEAVE_FRAME:
+            #     self.leave_frame()
+            # elif op.getopnum() == rop.RESUME_PUT:
+            #     self.resume_put(op.getarg(0), op.getarg(1).getint(),
+            #                      op.getarg(2).getint())
+            # elif op.getopnum() == rop.RESUME_NEW:
+            #     self.resume_new(op.result, op.getdescr())
+            # elif op.getopnum() == rop.RESUME_SETFIELD_GC:
+            #     self.resume_setfield_gc(op.getarg(0), op.getarg(1),
+            #                             op.getdescr())
+            # elif op.getopnum() == rop.RESUME_SET_PC:
+            #     self.resume_set_pc(op.getarg(0).getint())
+            # elif op.getopnum() == rop.RESUME_CLEAR:
+            #     self.resume_clear(op.getarg(0).getint(),
+            #                       op.getarg(1).getint())
+            # elif not op.is_resume():
+            #     pos += 1
+            #     continue
+            # else:
+            #     xxx
+
+class LivenessAnalyzer(object):
     def __init__(self, inputframes=None):
         self.liveness = {}
         self.frame_starts = [0]
@@ -35,6 +61,9 @@ class LivenessAnalyzer(AbstractResumeReader):
     def resume_set_pc(self, pc):
         pass
 
+    def interpret_until(self, *args):
+        pass
+
     def _track(self, allboxes, box):
         if box in self.deps:
             for dep in self.deps[box].values():
@@ -60,12 +89,12 @@ class LivenessAnalyzer(AbstractResumeReader):
 class ResumeBuilder(object):
     def __init__(self, regalloc, frontend_liveness, descr, inputframes=None,
                  inputlocs=None):
-        self.newops = []
         self.regalloc = regalloc
         self.current_attachment = {}
         self.frontend_liveness = frontend_liveness
         self.frontend_pos = {}
         self.virtuals = {}
+        self.builder = ResumeBytecodeBuilder()
         if inputlocs is not None:
             i = 0
             all = {}
@@ -83,6 +112,30 @@ class ResumeBuilder(object):
                         self.current_attachment[box] = loc_pos
 
     def process(self, op):
+        if op.getopnum() == rop.ENTER_FRAME:
+            self.builder.enter_frame(op.getarg(0).getint(), op.getdescr())
+        elif op.getopnum() == rop.RESUME_PUT:
+            frame_pos = op.getarg(1).getint()
+            pos_in_frame = op.getarg(2).getint()
+            box = op.getarg(0)
+            if isinstance(box, Const):
+                pos = self.builder.encode_const(box)
+                self.builder.resume_put(pos, frame_pos, pos_in_frame)                
+                return
+            try:
+                loc = self.regalloc.loc(box, must_exist=True).get_jitframe_position()
+                pos = self.builder.encode(TAGBOX, loc)
+                self.builder.resume_put(pos, frame_pos, pos_in_frame) 
+            except KeyError:
+                xxx
+            self.current_attachment[box] = pos
+            self.frontend_pos[box] = (frame_pos, pos_in_frame)
+        elif op.getopnum() == rop.LEAVE_FRAME:
+            self.builder.leave_frame()
+        else:
+            xxx
+        return
+        xxxx
         if op.getopnum() == rop.RESUME_PUT:
             box = op.getarg(0)
             args = op.getarglist()
@@ -119,8 +172,10 @@ class ResumeBuilder(object):
             return
         if v not in self.current_attachment:
             return
+        pos = self.builder.encode(TAGBOX, pos)
         if self.current_attachment[v] != pos:
             frame_index, frame_pos = self.frontend_pos[v]
+            xxx
             self.newops.append(ResOperation(rop.RESUME_PUT, [
                 ConstInt(pos), frame_index, frame_pos],
                 None))
@@ -137,10 +192,11 @@ class ResumeBuilder(object):
         for v, loc in self.regalloc.xrm.reg_bindings.iteritems():
             if v not in visited:
                 self._mark_visited(v, loc)
-        return len(self.newops)
+        return self.builder.getpos()
 
     def finish(self, parent, parent_position, clt):
-        return ResumeBytecode(self.newops, parent, parent_position, clt)
+        return ResumeBytecode(self.builder.build(), parent, parent_position,
+                              clt)
 
 
 def flatten(inputframes):

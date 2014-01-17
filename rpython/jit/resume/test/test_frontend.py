@@ -2,8 +2,9 @@
 from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats
-from rpython.jit.resume.frontend import rebuild_from_resumedata,\
-     ResumeBytecode, AbstractResumeReader
+from rpython.jit.resume.frontend import rebuild_from_resumedata
+from rpython.jit.resume.rescode import ResumeBytecode
+from rpython.jit.resume.reader import AbstractResumeReader
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter.format import unformat_assembler
 from rpython.jit.codewriter.codewriter import CodeWriter
