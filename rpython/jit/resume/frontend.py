@@ -1,141 +1,134 @@
 
-import sys
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, ConstInt,\
-     Box, INT, REF, FLOAT
+     INT, REF
 from rpython.jit.metainterp import history
-from rpython.jit.codewriter.jitcode import JitCode
-from rpython.rlib import rstack
-from rpython.jit.resume.reader import ResumeFrame, Virtual
-from rpython.jit.resume.rescode import TAGBOX, TAGCONST, TAGVIRTUAL, TAGOFFSET
+from rpython.jit.resume.reader import AbstractResumeReader
+from rpython.jit.resume.rescode import TAGBOX, TAGCONST, TAGSMALLINT, TAGVIRTUAL
 
 
+# class AbstractResumeReader(object):
+#     """ A resume reader that can follow resume until given point. Consult
+#     the concrete classes for details
+#     """
 
+#     def __init__(self):
+#         self.framestack = []
+#         self.consts = [] # XXX cache?
+#         self.virtuals = {}
+#         self.virtual_list = []
 
-class AbstractResumeReader(object):
-    """ A resume reader that can follow resume until given point. Consult
-    the concrete classes for details
-    """
+#     def rebuild(self, faildescr):
+#         self._rebuild_until(faildescr.rd_resume_bytecode,
+#                             faildescr.rd_bytecode_position)
+#         return self.finish()
 
-    def __init__(self):
-        self.framestack = []
-        self.consts = [] # XXX cache?
-        self.virtuals = {}
-        self.virtual_list = []
+#     def finish(self):
+#         pass
 
-    def rebuild(self, faildescr):
-        self._rebuild_until(faildescr.rd_resume_bytecode,
-                            faildescr.rd_bytecode_position)
-        return self.finish()
+#     def enter_frame(self, pc, jitcode):
+#         if self.framestack:
+#             assert pc != -1
+#             self.framestack[-1].pc = pc
+#         self.framestack.append(ResumeFrame(jitcode))
 
-    def finish(self):
-        pass
+#     def encode_box(self, pos):
+#         return TAGBOX | (pos << TAGOFFSET)
 
-    def enter_frame(self, pc, jitcode):
-        if self.framestack:
-            assert pc != -1
-            self.framestack[-1].pc = pc
-        self.framestack.append(ResumeFrame(jitcode))
+#     def encode_virtual(self, box):
+#         return TAGVIRTUAL | (self.virtuals[box].pos << TAGOFFSET)
 
-    def encode_box(self, pos):
-        return TAGBOX | (pos << TAGOFFSET)
+#     def encode_const(self, const):
+#         if isinstance(const, ConstInt) and const.getint() < (sys.maxint >> 3):
+#             return TAGSMALLINT | (const.getint() << TAGOFFSET)
+#         self.consts.append(const)
+#         return TAGCONST | ((len(self.consts) - 1) << TAGOFFSET)
 
-    def encode_virtual(self, box):
-        return TAGVIRTUAL | (self.virtuals[box].pos << TAGOFFSET)
+#     def decode(self, pos):
+#         return pos & 0x3, pos >> TAGOFFSET
 
-    def encode_const(self, const):
-        if isinstance(const, ConstInt) and const.getint() < (sys.maxint >> 3):
-            return TAGSMALLINT | (const.getint() << TAGOFFSET)
-        self.consts.append(const)
-        return TAGCONST | ((len(self.consts) - 1) << TAGOFFSET)
+#     def resume_put(self, jitframe_pos_box, frame_no, frontend_position):
+#         if isinstance(jitframe_pos_box, Box):
+#             jitframe_pos = self.encode_virtual(jitframe_pos_box)
+#         else:
+#             jitframe_pos = self.encode_box(jitframe_pos_box.getint())
+#         self.framestack[frame_no].registers[frontend_position] = jitframe_pos
 
-    def decode(self, pos):
-        return pos & 0x3, pos >> TAGOFFSET
+#     def encode(self, box):
+#         xxx
 
-    def resume_put(self, jitframe_pos_box, frame_no, frontend_position):
-        if isinstance(jitframe_pos_box, Box):
-            jitframe_pos = self.encode_virtual(jitframe_pos_box)
-        else:
-            jitframe_pos = self.encode_box(jitframe_pos_box.getint())
-        self.framestack[frame_no].registers[frontend_position] = jitframe_pos
+#     def resume_new(self, box, descr):
+#         # XXX make it a list
+#         v = Virtual(len(self.virtual_list), descr)
+#         self.virtuals[box] = v
+#         self.virtual_list.append(v)
 
-    def encode(self, box):
-        xxx
+#     def resume_setfield_gc(self, box, fieldbox, descr):
+#         # XXX optimize fields
+#         self.virtuals[box].fields[descr] = self.encode(fieldbox)
 
-    def resume_new(self, box, descr):
-        # XXX make it a list
-        v = Virtual(len(self.virtual_list), descr)
-        self.virtuals[box] = v
-        self.virtual_list.append(v)
+#     def resume_clear(self, frame_no, frontend_position):
+#         self.framestack[frame_no].registers[frontend_position] = -1
 
-    def resume_setfield_gc(self, box, fieldbox, descr):
-        # XXX optimize fields
-        self.virtuals[box].fields[descr] = self.encode(fieldbox)
+#     def resume_put_const(self, const, frame_no, frontend_position):
+#         pos = self.encode_const(const)
+#         self.framestack[frame_no].registers[frontend_position] = pos
 
-    def resume_clear(self, frame_no, frontend_position):
-        self.framestack[frame_no].registers[frontend_position] = -1
+#     def resume_set_pc(self, pc):
+#         self.framestack[-1].pc = pc
 
-    def resume_put_const(self, const, frame_no, frontend_position):
-        pos = self.encode_const(const)
-        self.framestack[frame_no].registers[frontend_position] = pos
+#     def leave_frame(self):
+#         self.framestack.pop()
 
-    def resume_set_pc(self, pc):
-        self.framestack[-1].pc = pc
+#     def _rebuild_until(self, rb, position):
+#         if rb.parent is not None:
+#             self._rebuild_until(rb.parent, rb.parent_position)
+#         self.interpret_until(rb.opcodes, position)
 
-    def leave_frame(self):
-        self.framestack.pop()
+#     def interpret_until(self, bytecode, until, pos=0):
+#         while pos < until:
+#             op = bytecode[pos]
+#             if op == rescode.ENTER_FRAME:
+#                 xxx
+#                 descr = op.getdescr()
+#                 assert isinstance(descr, JitCode)
+#                 self.enter_frame(op.getarg(0).getint(), descr)
+#             elif op.getopnum() == rop.LEAVE_FRAME:
+#                 self.leave_frame()
+#             elif op.getopnum() == rop.RESUME_PUT:
+#                 self.resume_put(op.getarg(0), op.getarg(1).getint(),
+#                                  op.getarg(2).getint())
+#             elif op.getopnum() == rop.RESUME_NEW:
+#                 self.resume_new(op.result, op.getdescr())
+#             elif op.getopnum() == rop.RESUME_SETFIELD_GC:
+#                 self.resume_setfield_gc(op.getarg(0), op.getarg(1),
+#                                         op.getdescr())
+#             elif op.getopnum() == rop.RESUME_SET_PC:
+#                 self.resume_set_pc(op.getarg(0).getint())
+#             elif op.getopnum() == rop.RESUME_CLEAR:
+#                 self.resume_clear(op.getarg(0).getint(),
+#                                   op.getarg(1).getint())
+#             elif not op.is_resume():
+#                 pos += 1
+#                 continue
+#             else:
+#                 xxx
+#             pos += 1
 
-    def _rebuild_until(self, rb, position):
-        if rb.parent is not None:
-            self._rebuild_until(rb.parent, rb.parent_position)
-        self.interpret_until(rb.opcodes, position)
+#     def read_int(self, jitframe_pos):
+#         return self.metainterp.cpu.get_int_value(self.deadframe, jitframe_pos)
 
-    def interpret_until(self, bytecode, until, pos=0):
-        while pos < until:
-            op = bytecode[pos]
-            if op.getopnum() == rop.ENTER_FRAME:
-                descr = op.getdescr()
-                assert isinstance(descr, JitCode)
-                self.enter_frame(op.getarg(0).getint(), descr)
-            elif op.getopnum() == rop.LEAVE_FRAME:
-                self.leave_frame()
-            elif op.getopnum() == rop.RESUME_PUT:
-                self.resume_put(op.getarg(0), op.getarg(1).getint(),
-                                 op.getarg(2).getint())
-            elif op.getopnum() == rop.RESUME_NEW:
-                self.resume_new(op.result, op.getdescr())
-            elif op.getopnum() == rop.RESUME_SETFIELD_GC:
-                self.resume_setfield_gc(op.getarg(0), op.getarg(1),
-                                        op.getdescr())
-            elif op.getopnum() == rop.RESUME_SET_PC:
-                self.resume_set_pc(op.getarg(0).getint())
-            elif op.getopnum() == rop.RESUME_CLEAR:
-                self.resume_clear(op.getarg(0).getint(),
-                                  op.getarg(1).getint())
-            elif not op.is_resume():
-                pos += 1
-                continue
-            else:
-                xxx
-            pos += 1
-
-    def read_int(self, jitframe_pos):
-        return self.metainterp.cpu.get_int_value(self.deadframe, jitframe_pos)
-
-class Dumper(AbstractResumeReader):
-    def __init__(self):
-        xxx
 
 class DirectResumeReader(AbstractResumeReader):
     """ Directly read values from the jitframe and put them in the blackhole
     interpreter
     """
 
-    def __init__(self, binterpbuilder, cpu, deadframe):
+    def __init__(self, metainterp_sd, binterpbuilder, cpu, deadframe):
         self.bhinterpbuilder = binterpbuilder
         self.cpu = cpu
         self.deadframe = deadframe
-        AbstractResumeReader.__init__(self)
+        AbstractResumeReader.__init__(self, metainterp_sd)
 
     def finish(self):
         nextbh = None
@@ -186,7 +179,7 @@ class BoxResumeReader(AbstractResumeReader):
     def __init__(self, metainterp, deadframe):
         self.metainterp = metainterp
         self.deadframe = deadframe
-        AbstractResumeReader.__init__(self)
+        AbstractResumeReader.__init__(self, metainterp.staticdata)
 
     def get_box_value(self, encoded_pos, TP):
         if encoded_pos == -1:

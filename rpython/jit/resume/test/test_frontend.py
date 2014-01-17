@@ -1,10 +1,13 @@
 
 from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
-from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats
+from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats,\
+     ConstInt
 from rpython.jit.resume.frontend import rebuild_from_resumedata
-from rpython.jit.resume.rescode import ResumeBytecode, TAGBOX
+from rpython.jit.resume.rescode import ResumeBytecode, TAGBOX,\
+     ResumeBytecodeBuilder, TAGCONST, TAGSMALLINT
 from rpython.jit.resume.reader import AbstractResumeReader
+from rpython.jit.resume.test.support import MockStaticData
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter.format import unformat_assembler
 from rpython.jit.codewriter.codewriter import CodeWriter
@@ -80,25 +83,28 @@ def rebuild_locs_from_resumedata(faildescr, staticdata):
 class TestResumeDirect(object):
     def test_box_resume_reader(self):
         jitcode = JitCode("jitcode")
+        jitcode.global_index = 0
         jitcode.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
-        resume_loop = parse("""
-        []
-        enter_frame(-1, descr=jitcode1)
-        resume_put(10, 0, 1)
-        resume_put_const(1, 0, 2)
-        leave_frame()
-        """, namespace= {'jitcode1': jitcode})
+        builder = ResumeBytecodeBuilder()
+        builder.enter_frame(-1, jitcode)
+        builder.resume_put(TAGBOX | (100 << 2), 0, 1)
+        builder.resume_put(TAGCONST | (0 << 2), 0, 2)
+        builder.resume_put(TAGSMALLINT | (13 << 2), 0, 3)
+        builder.consts.append(ConstInt(15))
         descr = Descr()
-        descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 3
+        descr.rd_resume_bytecode = ResumeBytecode(builder.build(),
+                                                  builder.consts)
+        descr.rd_bytecode_position = len(descr.rd_resume_bytecode.opcodes)
         metainterp = MockMetaInterp()
+        metainterp.staticdata = MockStaticData([jitcode], [])
         metainterp.cpu = MockCPU()
         rebuild_from_resumedata(metainterp, "myframe", descr)
         assert len(metainterp.framestack) == 1
         f = metainterp.framestack[-1]
-        assert f.registers_i[1].getint() == 13
+        assert f.registers_i[1].getint() == 103
         assert isinstance(f.registers_i[2], Const)
-        assert f.registers_i[2].getint() == 1
+        assert f.registers_i[2].getint() == 15
+        assert f.registers_i[3].getint() == 13
 
     def test_nested_call(self):
         jitcode1 = JitCode("jitcode")

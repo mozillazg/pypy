@@ -1,6 +1,6 @@
 
-from rpython.jit.metainterp.resoperation import rop, ResOperation
-from rpython.jit.metainterp.history import ConstInt, Box, Const
+from rpython.jit.metainterp.resoperation import rop
+from rpython.jit.metainterp.history import Box, Const
 from rpython.jit.resume.rescode import ResumeBytecodeBuilder, TAGBOX,\
      ResumeBytecode, TAGVIRTUAL
 from rpython.jit.codewriter.jitcode import JitCode
@@ -67,7 +67,7 @@ class LivenessAnalyzer(object):
                 pos += 1
                 continue
             else:
-                xxx
+                raise Exception("strange operation")
             pos += 1
 
     def _track(self, allboxes, box):
@@ -156,37 +156,7 @@ class ResumeBuilder(object):
             descr = op.getdescr()
             self.builder.resume_setfield_gc(structpos, fieldpos, descr)
         else:
-            xxx
-        return
-        xxxx
-        if op.getopnum() == rop.RESUME_PUT:
-            box = op.getarg(0)
-            args = op.getarglist()
-            if isinstance(box, Const):
-                XXX
-                newop = op.copy_and_change(rop.RESUME_PUT_CONST)
-            elif box in self.virtuals:
-                newop = op
-            else:
-                try:
-                    loc = self.regalloc.loc(box, must_exist=True)
-                    pos = loc.get_jitframe_position()
-                except KeyError:
-                    # the thing is not *yet* anywhere, which means we'll record
-                    # we know about it, but not store the resume_put just yet
-                    self.current_attachment[box] = -1
-                    self.frontend_pos[box] = (args[1], args[2])
-                    return
-                self.current_attachment[box] = pos
-                self.frontend_pos[box] = (args[1], args[2])
-                args[0] = ConstInt(pos)
-                newop = op.copy_and_change(rop.RESUME_PUT, args=args)
-        elif op.getopnum() == rop.RESUME_NEW:
-            self.virtuals[op.result] = None
-            newop = op
-        else:
-            newop = op
-        self.newops.append(newop)
+            raise Exception("strange operation")
 
     def _mark_visited(self, v, loc):
         pos = loc.get_jitframe_position()
@@ -215,7 +185,8 @@ class ResumeBuilder(object):
         return self.builder.getpos()
 
     def finish(self, parent, parent_position, clt):
-        return ResumeBytecode(self.builder.build(), parent, parent_position,
+        return ResumeBytecode(self.builder.build(), self.builder.consts,
+                              parent, parent_position,
                               clt)
 
 

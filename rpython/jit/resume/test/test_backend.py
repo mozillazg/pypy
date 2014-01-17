@@ -5,6 +5,7 @@ from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.tool.oparser import parse
 from rpython.jit.metainterp.optimizeopt.util import equaloplists
 from rpython.jit.resume.test.test_frontend import rebuild_locs_from_resumedata
+from rpython.jit.resume.test.support import MockStaticData
 from rpython.rtyper.lltypesystem import lltype
 
 class MockJitCode(JitCode):
@@ -18,11 +19,6 @@ class MockJitCode(JitCode):
 
     def __repr__(self):
         return 'MockJitCode(%d)' % self.no
-
-class MockStaticData(object):
-    def __init__(self, jitcodes, descrs):
-        self.alljitcodes = jitcodes
-        self.opcode_descrs = descrs
 
 def preparse(inp):
     return "\n".join([s.strip() for s in inp.split("\n") if s.strip()])

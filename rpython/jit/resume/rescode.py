@@ -12,9 +12,11 @@ TAGSMALLINT = 0x1
 TAGOFFSET = 2
 
 class ResumeBytecode(object):
-    def __init__(self, opcodes, parent=None, parent_position=-1, loop=None):
+    def __init__(self, opcodes, consts, parent=None, parent_position=-1,
+                 loop=None):
         self.opcodes = opcodes
         self.parent = parent
+        self.consts = consts
         self.parent_position = parent_position
         self.loop = loop
 
@@ -28,6 +30,7 @@ class ResumeBytecode(object):
 class ResumeBytecodeBuilder(object):
     def __init__(self):
         self.l = []
+        self.consts = []
 
     def getpos(self):
         return len(self.l)
