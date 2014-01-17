@@ -2,7 +2,7 @@
 from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.jit.metainterp.history import ConstInt, Box, Const
 from rpython.jit.resume.rescode import ResumeBytecodeBuilder, TAGBOX,\
-     ResumeBytecode
+     ResumeBytecode, TAGVIRTUAL
 
             # if op.getopnum() == rop.ENTER_FRAME:
             #     descr = op.getdescr()
@@ -111,34 +111,40 @@ class ResumeBuilder(object):
                     if box not in self.current_attachment:
                         self.current_attachment[box] = loc_pos
 
+    def get_box_pos(self, box):
+        if box in self.virtuals:
+            return TAGVIRTUAL | (self.virtuals[box] << 2)
+        if isinstance(box, Const):
+            return self.builder.encode_const(box)
+        try:
+            loc = self.regalloc.loc(box, must_exist=True).get_jitframe_position()
+            pos = self.builder.encode(TAGBOX, loc)
+            self.current_attachment[box] = pos
+            return pos
+        except KeyError:
+            raise
+
     def process(self, op):
         if op.getopnum() == rop.ENTER_FRAME:
             self.builder.enter_frame(op.getarg(0).getint(), op.getdescr())
         elif op.getopnum() == rop.RESUME_PUT:
             frame_pos = op.getarg(1).getint()
             pos_in_frame = op.getarg(2).getint()
-            box = op.getarg(0)
-            if box in self.virtuals:
-                xxx
-            if isinstance(box, Const):
-                pos = self.builder.encode_const(box)
-                self.builder.resume_put(pos, frame_pos, pos_in_frame)                
-                return
-            try:
-                loc = self.regalloc.loc(box, must_exist=True).get_jitframe_position()
-                pos = self.builder.encode(TAGBOX, loc)
-                self.builder.resume_put(pos, frame_pos, pos_in_frame) 
-            except KeyError:
-                xxx
-            self.current_attachment[box] = pos
-            self.frontend_pos[box] = (frame_pos, pos_in_frame)
+            pos = self.get_box_pos(op.getarg(0))
+            self.builder.resume_put(pos, frame_pos, pos_in_frame)
+            if pos & TAGBOX:
+                self.frontend_pos[op.getarg(0)] = (frame_pos, pos_in_frame)
         elif op.getopnum() == rop.LEAVE_FRAME:
             self.builder.leave_frame()
         elif op.getopnum() == rop.RESUME_NEW:
             v_pos = len(self.virtuals)
             self.virtuals[op.result] = v_pos
-            XXX
             self.builder.resume_new(v_pos, op.getdescr())
+        elif op.getopnum() == rop.RESUME_SETFIELD_GC:
+            structpos = self.get_box_pos(op.getarg(0))
+            fieldpos = self.get_box_pos(op.getarg(1))
+            descr = op.getdescr()
+            self.builder.resume_setfield_gc(structpos, fieldpos, descr)
         else:
             xxx
         return

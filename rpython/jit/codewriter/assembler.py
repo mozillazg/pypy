@@ -170,6 +170,7 @@ class Assembler(object):
             elif isinstance(x, AbstractDescr):
                 if x not in self._descr_dict:
                     self._descr_dict[x] = len(self.descrs)
+                    x.global_descr_index = len(self.descrs)
                     self.descrs.append(x)
                 if isinstance(x, SwitchDictDescr):
                     self.switchdictdescrs.append(x)

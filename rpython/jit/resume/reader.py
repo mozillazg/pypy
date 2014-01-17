@@ -71,6 +71,7 @@ class AbstractResumeReader(object):
         xxx
 
     def resume_new(self, box, descr):
+        xxx
         # XXX make it a list
         v = Virtual(len(self.virtual_list), descr)
         self.virtuals[box] = v
@@ -78,6 +79,7 @@ class AbstractResumeReader(object):
 
     def resume_setfield_gc(self, box, fieldbox, descr):
         # XXX optimize fields
+        xxx
         self.virtuals[box].fields[descr] = self.encode(fieldbox)
 
     def resume_clear(self, frame_no, frontend_position):
@@ -121,6 +123,18 @@ class AbstractResumeReader(object):
                 pos_in_frame = self.read(pos + 4)
                 self.resume_put(encoded, frame_pos, pos_in_frame)
                 pos += 5
+            elif op == rescode.RESUME_NEW:
+                tag, v_pos = self.decode(self.read_short(pos + 1))
+                assert tag == rescode.TAGVIRTUAL
+                descr = self.staticdata.opcode_descrs[self.read_short(pos + 3)]
+                self.resume_new(v_pos, descr)
+                pos += 5
+            elif op == rescode.RESUME_SETFIELD_GC:
+                structpos = self.read_short(pos + 1)
+                fieldpos = self.read_short(pos + 3)
+                descr = self.staticdata.opcode_descrs[self.read_short(pos + 5)]
+                self.resume_setfield_gc(structpos, fieldpos, descr)
+                pos += 7
             else:
                 xxx
         self.bytecode = None
@@ -140,6 +154,15 @@ class Dumper(AbstractResumeReader):
         tag, index = self.decode(encoded)
         self.l.append("resume_put (%d, %d) %d %d" % (tag, index, frame_pos,
                                                      pos_in_frame))
+
+    def resume_new(self, v_pos, descr):
+        self.l.append("%d = resume_new %d" % (v_pos, descr.global_descr_index))
+
+    def resume_setfield_gc(self, structpos, fieldpos, descr):
+        stag, sindex = self.decode(structpos)
+        ftag, findex = self.decode(fieldpos)
+        self.l.append("resume_setfield_gc (%d, %d) (%d, %d) %d" % (
+            stag, sindex, ftag, findex, descr.global_descr_index))
 
     def finish(self):
         return "\n".join(self.l)

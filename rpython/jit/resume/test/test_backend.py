@@ -20,8 +20,9 @@ class MockJitCode(JitCode):
         return 'MockJitCode(%d)' % self.no
 
 class MockStaticData(object):
-    def __init__(self, *jitcodes):
-        self.alljitcodes = list(jitcodes)
+    def __init__(self, jitcodes, descrs):
+        self.alljitcodes = jitcodes
+        self.opcode_descrs = descrs
 
 def preparse(inp):
     return "\n".join([s.strip() for s in inp.split("\n") if s.strip()])
@@ -46,7 +47,7 @@ class ResumeTest(object):
                               looptoken)
         descr = loop.operations[3].getdescr()
         assert descr.rd_bytecode_position == 15
-        staticdata = MockStaticData(None, jitcode)
+        staticdata = MockStaticData([None, jitcode], [])
         res = descr.rd_resume_bytecode.dump(staticdata,
                                             descr.rd_bytecode_position)
         expected_resume = preparse("""
@@ -62,7 +63,9 @@ class ResumeTest(object):
         jitcode.setup(num_regs_i=1, num_regs_r=0, num_regs_f=0)
         S = lltype.GcStruct('S', ('field', lltype.Signed))
         structdescr = self.cpu.sizeof(S)
+        structdescr.global_descr_index = 0
         fielddescr = self.cpu.fielddescrof(S, 'field')
+        fielddescr.global_descr_index = 1
         namespace = {'jitcode':jitcode, 'structdescr':structdescr,
                      'fielddescr':fielddescr}
         loop = parse("""
@@ -79,18 +82,17 @@ class ResumeTest(object):
         looptoken = JitCellToken()
         self.cpu.compile_loop(None, loop.inputargs, loop.operations,
                               looptoken)
-        xxx
+        staticdata = MockStaticData([None, jitcode], [structdescr, fielddescr])
+        descr = loop.operations[5].getdescr()
+        res = descr.rd_resume_bytecode.dump(staticdata,
+                                            descr.rd_bytecode_position)
         expected_resume = preparse("""
-        enter_frame -1 frame-1
-        p0 = resume_new(descr=structdescr)
-        resume_setfield_gc(p0, i0, descr=fielddescr)
-        resume_put(p0, 0, 0)
-        leave_frame()
-        """, namespace=namespace)
-        descr = loop.operations[-3].getdescr()
-        assert descr.rd_bytecode_position == 4
-        equaloplists(descr.rd_resume_bytecode.opcodes,
-                     expected_resume.operations)
+        enter_frame -1 name
+        0 = resume_new 0
+        resume_setfield_gc (2, 0) (3, 28) 1
+        resume_put (2, 0) 0 0
+        """)
+        assert res == expected_resume
 
     def test_spill(self):
         jitcode = JitCode("name")
