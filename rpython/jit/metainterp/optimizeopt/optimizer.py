@@ -344,7 +344,8 @@ class Optimization(object):
 
 class Optimizer(Optimization):
 
-    def __init__(self, metainterp_sd, loop, optimizations=None):
+    def __init__(self, metainterp_sd, loop, optimizations=None,
+                 inpframes=None):
         self.metainterp_sd = metainterp_sd
         self.cpu = metainterp_sd.cpu
         self.loop = loop
@@ -367,7 +368,7 @@ class Optimizer(Optimization):
             self.call_pure_results = loop.call_pure_results
 
         self.set_optimizations(optimizations)
-        self.resumebuilder = OptResumeBuilder(self)
+        self.resumebuilder = OptResumeBuilder(self, inpframes)
         self.setup()
 
     def set_optimizations(self, optimizations):

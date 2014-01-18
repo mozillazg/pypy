@@ -155,9 +155,13 @@ class DirectResumeReader(AbstractResumeReader):
         if encoded_pos == CLEAR_POSITION:
             return
         tag, index = self.decode(encoded_pos)
-        if tag & TAGBOX:
+        if tag == TAGBOX:
             curbh.registers_i[i] = self.cpu.get_int_value(self.deadframe, index)
-            return
+        elif tag == TAGSMALLINT:
+            curbh.registers_i[i] = index
+        else:
+            xxx
+        return
         xxx
         if jitframe_pos >= 0:
             curbh.registers_i[i] = self.cpu.get_int_value(
@@ -169,9 +173,13 @@ class DirectResumeReader(AbstractResumeReader):
         if encoded_pos == CLEAR_POSITION:
             return
         tag, index = self.decode(encoded_pos)
-        if tag & TAGBOX:
+        if tag == TAGBOX:
             curbh.registers_r[i] = self.cpu.get_ref_value(self.deadframe, index)
-            return
+        elif tag == TAGCONST:
+            curbh.registers_r[i] = self.consts[index].getref_base()
+        else:
+            xxx
+        return
         xxxx
         if jitframe_pos >= 0:
             curbh.registers_r[i] = self.cpu.get_ref_value(
@@ -207,6 +215,9 @@ class BoxResumeReader(AbstractResumeReader):
             if TP == INT:
                 val = self.metainterp.cpu.get_int_value(self.deadframe, pos)
                 res = BoxInt(val)
+            elif TP == REF:
+                val = self.metainterp.cpu.get_ref_value(self.deadframe, pos)
+                res = BoxPtr(val)
             else:
                 xxx
             self.cache[encoded_pos] = res

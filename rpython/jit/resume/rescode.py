@@ -63,7 +63,8 @@ class ResumeBytecodeBuilder(object):
     def encode_const(self, const):
         if isinstance(const, ConstInt) and 0 <= const.getint() < 0x4000:
             return TAGSMALLINT | (const.getint() << 2)
-        xxx
+        self.consts.append(const)
+        return TAGCONST | ((len(self.consts) - 1) << 2)
 
     def resume_set_pc(self, pc):
         self.write(RESUME_SET_PC)

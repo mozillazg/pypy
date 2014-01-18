@@ -47,7 +47,8 @@ def build_opt_chain(metainterp_sd, enable_opts):
 
     return optimizations, unroll
 
-def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True):
+def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True,
+                   inpframes=None):
     """Optimize loop.operations to remove internal overheadish operations.
     """
     from rpython.jit.resume.backend import flatten
@@ -60,7 +61,8 @@ def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True)
         if unroll:
             optimize_unroll(metainterp_sd, loop, optimizations, inline_short_preamble)
         else:
-            optimizer = Optimizer(metainterp_sd, loop, optimizations)
+            optimizer = Optimizer(metainterp_sd, loop, optimizations,
+                                  inpframes=inpframes)
             optimizer.propagate_all_forward()
     finally:
         debug_stop("jit-optimize")

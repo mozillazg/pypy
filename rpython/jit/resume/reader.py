@@ -58,8 +58,7 @@ class AbstractResumeReader(object):
         self.virtuals[index].fields[descr] = fieldpos
 
     def resume_clear(self, frame_no, frontend_position):
-        xxx
-        self.framestack[frame_no].registers[frontend_position] = -1
+        self.framestack[frame_no].registers[frontend_position] = rescode.CLEAR_POSITION
 
     def resume_set_pc(self, pc):
         self.framestack[-1].pc = pc
@@ -112,7 +111,10 @@ class AbstractResumeReader(object):
                 self.resume_setfield_gc(structpos, fieldpos, descr)
                 pos += 7
             elif op == rescode.RESUME_CLEAR:
-                xxx
+                frame_pos = self.read(pos + 1)
+                pos_in_frame = self.read(pos + 2)
+                self.resume_clear(frame_pos, pos_in_frame)
+                pos += 3
             elif op == rescode.RESUME_SET_PC:
                 pc = self.read_short(pos + 1)
                 self.resume_set_pc(pc)
@@ -140,11 +142,17 @@ class Dumper(AbstractResumeReader):
     def resume_new(self, v_pos, descr):
         self.l.append("%d = resume_new %d" % (v_pos, descr.global_descr_index))
 
+    def leave_frame(self):
+        self.l.append("leave_frame")
+
     def resume_setfield_gc(self, structpos, fieldpos, descr):
         stag, sindex = self.decode(structpos)
         ftag, findex = self.decode(fieldpos)
         self.l.append("resume_setfield_gc (%d, %d) (%d, %d) %d" % (
             stag, sindex, ftag, findex, descr.global_descr_index))
+
+    def resume_set_pc(self, pc):
+        self.l.append("set_resume_pc %d" % pc)
 
     def finish(self):
         return "\n".join(self.l)
