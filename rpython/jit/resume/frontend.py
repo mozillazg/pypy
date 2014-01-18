@@ -4,7 +4,8 @@ from rpython.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, ConstInt,\
      INT, REF, Const
 from rpython.jit.metainterp import history
 from rpython.jit.resume.reader import AbstractResumeReader
-from rpython.jit.resume.rescode import TAGBOX, TAGCONST, TAGSMALLINT, TAGVIRTUAL
+from rpython.jit.resume.rescode import TAGBOX, TAGCONST, TAGSMALLINT,\
+     TAGVIRTUAL, CLEAR_POSITION
 
 
 # class AbstractResumeReader(object):
@@ -150,14 +151,28 @@ class DirectResumeReader(AbstractResumeReader):
                 pos += 1
         return curbh
 
-    def store_int_value(self, curbh, i, jitframe_pos):
+    def store_int_value(self, curbh, i, encoded_pos):
+        if encoded_pos == CLEAR_POSITION:
+            return
+        tag, index = self.decode(encoded_pos)
+        if tag & TAGBOX:
+            curbh.registers_i[i] = self.cpu.get_int_value(self.deadframe, index)
+            return
+        xxx
         if jitframe_pos >= 0:
             curbh.registers_i[i] = self.cpu.get_int_value(
                 self.deadframe, jitframe_pos)
         elif jitframe_pos < -1:
             curbh.registers_i[i] = self.consts[-jitframe_pos - 2].getint()
 
-    def store_ref_value(self, curbh, i, jitframe_pos):
+    def store_ref_value(self, curbh, i, encoded_pos):
+        if encoded_pos == CLEAR_POSITION:
+            return
+        tag, index = self.decode(encoded_pos)
+        if tag & TAGBOX:
+            curbh.registers_r[i] = self.cpu.get_ref_value(self.deadframe, index)
+            return
+        xxxx
         if jitframe_pos >= 0:
             curbh.registers_r[i] = self.cpu.get_ref_value(
                 self.deadframe, jitframe_pos)
@@ -165,6 +180,7 @@ class DirectResumeReader(AbstractResumeReader):
             curbh.registers_r[i] = self.consts[-jitframe_pos - 2].getref_base()
 
     def store_float_value(self, curbh, i, jitframe_pos):
+        xxx
         if jitframe_pos >= 0:
             curbh.registers_f[i] = self.cpu.get_float_value(
                 self.deadframe, jitframe_pos)
@@ -182,7 +198,7 @@ class BoxResumeReader(AbstractResumeReader):
         AbstractResumeReader.__init__(self, metainterp.staticdata)
 
     def get_box_value(self, encoded_pos, TP):
-        if encoded_pos == -1:
+        if encoded_pos == CLEAR_POSITION:
             return None
         if encoded_pos in self.cache:
             return self.cache[encoded_pos]
@@ -314,7 +330,7 @@ def blackhole_from_resumedata(interpbuilder, metainterp_sd, faildescr,
     #finally:
     #    rstack._stack_criticalcode_stop()
     cpu = metainterp_sd.cpu
-    last_bhinterp = DirectResumeReader(interpbuilder, cpu,
+    last_bhinterp = DirectResumeReader(metainterp_sd, interpbuilder, cpu,
                                        deadframe).rebuild(faildescr)
 
     return last_bhinterp

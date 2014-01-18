@@ -11,6 +11,8 @@ TAGSMALLINT = 0x1
 
 TAGOFFSET = 2
 
+CLEAR_POSITION = 0xffff
+
 class ResumeBytecode(object):
     def __init__(self, opcodes, consts, parent=None, parent_position=-1,
                  loop=None):

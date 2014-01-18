@@ -1,11 +1,9 @@
 
-import sys
-from rpython.jit.metainterp.history import ConstInt
 from rpython.jit.resume import rescode
 
 class ResumeFrame(object):
     def __init__(self, jitcode):
-        self.registers = [-1] * jitcode.num_regs()
+        self.registers = [rescode.CLEAR_POSITION] * jitcode.num_regs()
         self.jitcode = jitcode
         self.pc = -1
 
@@ -113,6 +111,12 @@ class AbstractResumeReader(object):
                 descr = self.staticdata.opcode_descrs[self.read_short(pos + 5)]
                 self.resume_setfield_gc(structpos, fieldpos, descr)
                 pos += 7
+            elif op == rescode.RESUME_CLEAR:
+                xxx
+            elif op == rescode.RESUME_SET_PC:
+                pc = self.read_short(pos + 1)
+                self.resume_set_pc(pc)
+                pos += 3
             else:
                 xxx
         self.bytecode = None

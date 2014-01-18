@@ -13,7 +13,8 @@ from rpython.jit.metainterp.jitprof import EmptyProfiler
 from rpython.jit.metainterp.logger import Logger
 from rpython.jit.metainterp.optimizeopt.util import args_dict_box
 from rpython.jit.metainterp.resoperation import rop
-from rpython.jit.resume.frontend import ResumeRecorder
+from rpython.jit.resume.frontend import ResumeRecorder,\
+     rebuild_from_resumedata
 from rpython.rlib import nonconst, rstack
 from rpython.rlib.debug import debug_start, debug_stop, debug_print, make_sure_not_resized
 from rpython.rlib.jit import Counters
@@ -2479,8 +2480,8 @@ class MetaInterp(object):
         vinfo = self.jitdriver_sd.virtualizable_info
         ginfo = self.jitdriver_sd.greenfield_info
         self.framestack = []
-        inputlocs = resume2.rebuild_from_resumedata(self, deadframe,
-                                                    resumedescr)
+        inputlocs = rebuild_from_resumedata(self, deadframe,
+                                            resumedescr)
         virtualizable_boxes = []
         virtualref_boxes = []
         #
