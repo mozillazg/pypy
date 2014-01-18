@@ -41,27 +41,11 @@ class AbstractResumeReader(object):
             self.framestack[-1].pc = pc
         self.framestack.append(ResumeFrame(jitcode))
 
-    def encode_box(self, pos):
-        return rescode.TAGBOX | (pos << rescode.TAGOFFSET)
-
-    def encode_virtual(self, box):
-        return rescode.TAGVIRTUAL | (self.virtuals[box].pos << rescode.TAGOFFSET)
-
-    def encode_const(self, const):
-        XXX
-        if isinstance(const, ConstInt) and const.getint() < (sys.maxint >> 3):
-            return rescode.TAGSMALLINT | (const.getint() << rescode.TAGOFFSET)
-        self.consts.append(const)
-        return rescode.TAGCONST | ((len(self.consts) - 1) << TAGOFFSET)
-
     def decode(self, pos):
         return pos & 0x3, pos >> rescode.TAGOFFSET
 
     def resume_put(self, encoded_pos, frame_no, frontend_position):
         self.framestack[frame_no].registers[frontend_position] = encoded_pos
-
-    def encode(self, box):
-        xxx
 
     def resume_new(self, v_pos, descr):
         v = Virtual(v_pos, descr)

@@ -264,6 +264,7 @@ def get_metainterp(assembler, no_reds=0):
     codewriter = CodeWriter()
     ssarepr = unformat_assembler(assembler, name='one')
     jitcode = codewriter.assembler.assemble(ssarepr)
+    jitcode.global_index = 0
     jitcode.is_portal = True
     reds = ['v' + str(i) for i in range(no_reds)]
     jitdriver_sd = JitDriverStaticData(JitDriver(greens = [],
@@ -278,6 +279,7 @@ def get_metainterp(assembler, no_reds=0):
     cpu = LLGraphCPU(None, stats)
     metainterp_sd = MetaInterpStaticData(cpu, None)
     metainterp_sd.finish_setup(codewriter)
+    metainterp_sd.alljitcodes = [jitcode]
     return MetaInterp(metainterp_sd, jitdriver_sd), stats, jitdriver_sd
     
 class TestResumeRecorder(object):
@@ -314,6 +316,7 @@ class TestResumeRecorder(object):
         resume_put(i1, 0, 1)
         resume_put(i2, 0, 0)
         resume_set_pc(24)
+        leave_frame()
         """, namespace={'jitcode': jitcode})
         equaloplists(resume_ops, expected.operations, cache=True)
 

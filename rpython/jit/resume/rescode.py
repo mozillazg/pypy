@@ -2,7 +2,7 @@
 from rpython.jit.metainterp.history import ConstInt
 
 (UNUSED, ENTER_FRAME, LEAVE_FRAME, RESUME_PUT,
- RESUME_NEW, RESUME_SETFIELD_GC) = range(6)
+ RESUME_NEW, RESUME_SETFIELD_GC, RESUME_SET_PC) = range(7)
 
 TAGCONST = 0x0
 TAGVIRTUAL = 0x2
@@ -62,6 +62,10 @@ class ResumeBytecodeBuilder(object):
         if isinstance(const, ConstInt) and 0 <= const.getint() < 0x4000:
             return TAGSMALLINT | (const.getint() << 2)
         xxx
+
+    def resume_set_pc(self, pc):
+        self.write(RESUME_SET_PC)
+        self.write_short(pc)
 
     def resume_put(self, pos, frame_pos, pos_in_frame):
         self.write(RESUME_PUT)

@@ -155,6 +155,8 @@ class ResumeBuilder(object):
             fieldpos = self.get_box_pos(op.getarg(1))
             descr = op.getdescr()
             self.builder.resume_setfield_gc(structpos, fieldpos, descr)
+        elif op.getopnum() == rop.RESUME_SET_PC:
+            self.builder.resume_set_pc(op.getarg(0).getint())
         else:
             raise Exception("strange operation")
 
