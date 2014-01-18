@@ -220,24 +220,23 @@ class TestResumeDirect(object):
 
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")
+        jitcode1.global_index = 0
         jitcode1.setup(num_regs_i=2, num_regs_f=0, num_regs_r=0)
         jitcode2 = JitCode("jitcode2")
+        jitcode2.global_index = 1
         jitcode2.setup(num_regs_i=1, num_regs_f=0, num_regs_r=0)
-        resume_loop = parse("""
-        []
-        enter_frame(-1, descr=jitcode1)
-        resume_put(11, 0, 1)
-        enter_frame(12, descr=jitcode2)
-        resume_put(12, 1, 0)
-        resume_put(8, 0, 0)
-        leave_frame()
-        leave_frame()
-        """, namespace={'jitcode1': jitcode1,
-                        'jitcode2': jitcode2})
+        builder = ResumeBytecodeBuilder()
+        builder.enter_frame(-1, jitcode1)
+        builder.resume_put(TAGBOX | (11 << 2), 0, 1)
+        builder.enter_frame(12, jitcode2)
+        builder.resume_put(TAGBOX | (12 << 2), 1, 0)
+        builder.resume_put(TAGBOX | (8 << 2), 0, 0)
         descr = Descr()
-        descr.rd_resume_bytecode = ResumeBytecode(resume_loop.operations)
-        descr.rd_bytecode_position = 5
-        locs = rebuild_locs_from_resumedata(descr)
+        rd = builder.build()
+        descr.rd_resume_bytecode = ResumeBytecode(rd, [])
+        descr.rd_bytecode_position = len(rd)
+        staticdata = MockStaticData([jitcode1, jitcode2], [])
+        locs = rebuild_locs_from_resumedata(descr, staticdata)
         assert locs == [[8, 11], [12]]
 
 class AssemblerExecuted(Exception):
