@@ -205,7 +205,7 @@ class BoxResumeReader(AbstractResumeReader):
         self.deadframe = deadframe
         AbstractResumeReader.__init__(self, metainterp.staticdata)
 
-    def get_box_value(self, pos_in_frame, frame_pos, encoded_pos, TP):
+    def get_box_value(self, frame_pos, pos_in_frame, encoded_pos, TP):
         if encoded_pos == CLEAR_POSITION:
             return None
         if encoded_pos in self.cache:
@@ -257,19 +257,19 @@ class BoxResumeReader(AbstractResumeReader):
         self.metainterp.execute_and_record(rop.SETFIELD_GC, fielddescr,
                                            box, field_box)
 
-    def store_int_box(self, pos, miframe, i, jitframe_pos):
-        box = self.get_box_value(pos, i, jitframe_pos, INT)
+    def store_int_box(self, frame_pos, pos, miframe, i, jitframe_pos):
+        box = self.get_box_value(frame_pos, pos, jitframe_pos, INT)
         if box is None:
             return
         miframe.registers_i[i] = box
 
-    def store_ref_box(self, pos, miframe, i, jitframe_pos):
-        box = self.get_box_value(pos, i, jitframe_pos, REF)
+    def store_ref_box(self, frame_pos, pos, miframe, i, jitframe_pos):
+        box = self.get_box_value(frame_pos, pos, jitframe_pos, REF)
         if box is None:
             return
         miframe.registers_r[i] = box
 
-    def store_float_box(self, res, pos, miframe, i, jitframe_pos):
+    def store_float_box(self, frame_pos, pos, miframe, i, jitframe_pos):
         box = self.get_box_value(jitframe_pos)
         if box is None:
             return
@@ -297,19 +297,22 @@ class BoxResumeReader(AbstractResumeReader):
         self.result = []
         self.cache = {}
         self.locs = []
-        for frame in self.framestack:
+        for frame_pos, frame in enumerate(self.framestack):
             jitcode = frame.jitcode
-            miframe = self.metainterp.newframe(jitcode, record_resume=False)
+            miframe = self.metainterp.newframe(jitcode)
             miframe.pc = frame.pc
             pos = 0
             for i in range(jitcode.num_regs_i()):
-                self.store_int_box(pos, miframe, i, frame.registers[pos])
+                self.store_int_box(frame_pos, pos, miframe, i,
+                                   frame.registers[pos])
                 pos += 1
             for i in range(jitcode.num_regs_r()):
-                self.store_ref_box(pos, miframe, i, frame.registers[pos])
+                self.store_ref_box(frame_pos, pos, miframe, i,
+                                   frame.registers[pos])
                 pos += 1
             for i in range(jitcode.num_regs_f()):
-                self.store_float_box(pos, miframe, i, frame.registers[pos])
+                self.store_float_box(frame_pos, pos, miframe, i,
+                                     frame.registers[pos])
                 pos += 1
         self.cache = None
         state = self.result, self.locs
@@ -341,12 +344,9 @@ def blackhole_from_resumedata(interpbuilder, metainterp_sd, faildescr,
 class ResumeRecorder(object):
     """ Created by metainterp to record the resume as we record operations
     """
-    def __init__(self, metainterp, is_bridge=False):
+    def __init__(self, metainterp):
         self.metainterp = metainterp
         self.cachestack = []
-        if is_bridge:
-            for frame in metainterp.framestack:
-                self.cachestack.append([None] * frame.jitcode.num_regs())
 
     def enter_frame(self, pc, jitcode):
         self.metainterp.history.record(rop.ENTER_FRAME, [ConstInt(pc)], None,

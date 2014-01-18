@@ -1648,13 +1648,12 @@ class MetaInterp(object):
     def is_main_jitcode(self, jitcode):
         return self.jitdriver_sd is not None and jitcode is self.jitdriver_sd.mainjitcode
 
-    def newframe(self, jitcode, greenkey=None, record_resume=True):
+    def newframe(self, jitcode, greenkey=None):
         if self.framestack:
             pc = self.framestack[-1].pc
         else:
             pc = -1
-        if record_resume:
-            self.resumerecorder.enter_frame(pc, jitcode)
+        self.resumerecorder.enter_frame(pc, jitcode)
         if jitcode.is_portal:
             self.portal_call_depth += 1
             self.call_ids.append(self.current_call_id)
@@ -2342,7 +2341,7 @@ class MetaInterp(object):
         # ----- make a new frame -----
         self.portal_call_depth = -1 # always one portal around
         self.framestack = []
-        self.resumerecorder = ResumeRecorder(self, False)
+        self.resumerecorder = ResumeRecorder(self)
         f = self.newframe(self.jitdriver_sd.mainjitcode)
         f.setup_call(original_boxes)
         assert self.portal_call_depth == 0
@@ -2358,9 +2357,9 @@ class MetaInterp(object):
         try:
             self.portal_call_depth = -1 # always one portal around
             self.history = history.History()
+            self.resumerecorder = ResumeRecorder(self)
             state = self.rebuild_state_after_failure(resumedescr, deadframe)
             self.history.inputargs, self.history.inputlocs = state
-            self.resumerecorder = ResumeRecorder(self, True)
         finally:
             rstack._stack_criticalcode_stop()
 
