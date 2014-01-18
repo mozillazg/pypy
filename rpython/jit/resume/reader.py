@@ -25,9 +25,7 @@ class AbstractResumeReader(object):
     def __init__(self, staticdata):
         self.framestack = []
         self.staticdata = staticdata
-        self.consts = [] # XXX cache?
-        self.virtuals = {}
-        self.virtual_list = []
+        self.virtuals = []
 
     def rebuild(self, faildescr):
         self._rebuild_until(faildescr.rd_resume_bytecode,
@@ -65,17 +63,17 @@ class AbstractResumeReader(object):
     def encode(self, box):
         xxx
 
-    def resume_new(self, box, descr):
-        xxx
-        # XXX make it a list
-        v = Virtual(len(self.virtual_list), descr)
-        self.virtuals[box] = v
-        self.virtual_list.append(v)
+    def resume_new(self, v_pos, descr):
+        v = Virtual(v_pos, descr)
+        if v_pos >= len(self.virtuals):
+            self.virtuals += [None] * (len(self.virtuals) - v_pos + 1)
+        self.virtuals[v_pos] = v
 
-    def resume_setfield_gc(self, box, fieldbox, descr):
+    def resume_setfield_gc(self, pos, fieldpos, descr):
         # XXX optimize fields
-        xxx
-        self.virtuals[box].fields[descr] = self.encode(fieldbox)
+        tag, index = self.decode(pos)
+        assert tag == rescode.TAGVIRTUAL # for now
+        self.virtuals[index].fields[descr] = fieldpos
 
     def resume_clear(self, frame_no, frontend_position):
         xxx

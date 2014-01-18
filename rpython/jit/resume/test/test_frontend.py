@@ -5,7 +5,7 @@ from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats,\
      ConstInt
 from rpython.jit.resume.frontend import rebuild_from_resumedata
 from rpython.jit.resume.rescode import ResumeBytecode, TAGBOX,\
-     ResumeBytecodeBuilder, TAGCONST, TAGSMALLINT
+     ResumeBytecodeBuilder, TAGCONST, TAGSMALLINT, TAGVIRTUAL
 from rpython.jit.resume.reader import AbstractResumeReader
 from rpython.jit.resume.test.support import MockStaticData
 from rpython.jit.metainterp.resoperation import rop
@@ -44,12 +44,20 @@ class Frame(object):
 class AnyBox(object):
     def __eq__(self, other):
         return True
-        
+
+class EqConstInt(ConstInt):
+    def __eq__(self, other):
+        return self.same_box(other)
+
+class mylist(list):
+    def record(self, opnum, argboxes, resbox, descr):
+        self.append(tuple([opnum, descr] + argboxes))
+    
 class MockMetaInterp(object):
     def __init__(self):
         self.cpu = MockCPU()
         self.framestack = []
-        self.history = []
+        self.history = mylist()
 
     def execute_and_record(self, *args):
         self.history.append(args)
@@ -160,12 +168,12 @@ class TestResumeDirect(object):
         builder.enter_frame(-1, jitcode1)
         builder.resume_put(TAGBOX | (42 << 2), 0, 0)
         rd1 = builder.build()
-        lgt1 = len(rd1.opcodes)
+        lgt1 = len(rd1)
 
         builder = ResumeBytecodeBuilder()
         builder.resume_put(TAGBOX | (2 << 2), 0, 1)
         rd2 = builder.build()
-        lgt2 = len(rd2.opcodes)
+        lgt2 = len(rd2)
         
         descr = Descr()
         descr.rd_bytecode_position = lgt2
@@ -173,6 +181,7 @@ class TestResumeDirect(object):
         b = ResumeBytecode(rd2, [], parent, parent_position=lgt1)
         descr.rd_resume_bytecode = b
         metainterp = MockMetaInterp()
+        metainterp.staticdata = MockStaticData([jitcode1], [])
         metainterp.cpu = MockCPU()
         rebuild_from_resumedata(metainterp, "myframe", descr)
         f = metainterp.framestack[-1]
@@ -182,23 +191,32 @@ class TestResumeDirect(object):
 
     def test_new(self):
         jitcode1 = JitCode("jitcode")
+        jitcode1.global_index = 0
         jitcode1.setup(num_regs_i=0, num_regs_r=1, num_regs_f=0)
-        base = parse("""
-        []
-        enter_frame(-1, descr=jitcode)
-        p0 = resume_new()
-        resume_setfield_gc(p0, 13)
-        resume_put(p0, 0, 0)
-        leave_frame()
-        """, namespace={'jitcode':jitcode1})
+        builder = ResumeBytecodeBuilder()
         descr = Descr()
-        descr.rd_resume_bytecode = ResumeBytecode(base.operations)
-        descr.rd_bytecode_position = 4
+        descr.global_descr_index = 0
+        builder.enter_frame(-1, jitcode1)
+        builder.resume_new(0, descr)
+        d2 = Descr()
+        d2.kind = INT
+        d2.global_descr_index = 1
+        builder.resume_setfield_gc(TAGVIRTUAL | (0 << 2),
+                                   TAGSMALLINT | (1 << 2), d2)
+        builder.resume_put(TAGVIRTUAL | (0 << 2), 0, 0)
+        rd = builder.build()
+        descr = Descr()
+        descr.rd_resume_bytecode = ResumeBytecode(rd, [])
+        descr.rd_bytecode_position = len(rd)
         metainterp = MockMetaInterp()
+        metainterp.staticdata = MockStaticData([jitcode1], [descr, d2])
         metainterp.cpu = MockCPU()
         rebuild_from_resumedata(metainterp, "myframe", descr)
-        assert metainterp.history == [(rop.NEW, None),
-                                      (rop.SETFIELD_GC, None, AnyBox())]
+        expected = [(rop.NEW, descr),
+                    (rop.SETFIELD_GC, d2, AnyBox(), EqConstInt(1)),
+                    (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0),
+                     EqConstInt(0))]
+        assert metainterp.history == expected
 
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")

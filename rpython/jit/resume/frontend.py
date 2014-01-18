@@ -201,18 +201,20 @@ class BoxResumeReader(AbstractResumeReader):
             return self.consts[pos]
         else:
             assert tag == TAGVIRTUAL
-            virtual = self.virtual_list[pos]
+            virtual = self.virtuals[pos]
             virtual_box = self.allocate_struct(virtual)
             for fielddescr, encoded_field_pos in virtual.fields.iteritems():
-                self.setfield(virtual, fielddescr, encoded_field_pos)
+                self.setfield_gc(virtual_box, encoded_field_pos, fielddescr)
             self.cache[encoded_pos] = virtual_box
             return virtual_box
 
     def allocate_struct(self, virtual):
         return self.metainterp.execute_and_record(rop.NEW, virtual.descr)
 
-    def setfield(self, virtual, fielddescr, encoded_field_pos):
-        xxx
+    def setfield_gc(self, box, encoded_field_pos, fielddescr):
+        field_box = self.get_box_value(encoded_field_pos, fielddescr.kind)
+        self.metainterp.execute_and_record(rop.SETFIELD_GC, fielddescr,
+                                           box, field_box)
 
     def store_int_box(self, res, pos, miframe, i, jitframe_pos):
         box = self.get_box_value(jitframe_pos, INT)
@@ -227,7 +229,14 @@ class BoxResumeReader(AbstractResumeReader):
         if box is None:
             return
         miframe.registers_r[i] = box
-        res[-1][pos] = box
+        tag, index = self.decode(jitframe_pos)
+        if tag == TAGBOX:
+            res[-1][pos] = box
+        elif tag == TAGVIRTUAL:
+            self.metainterp.history.record(rop.RESUME_PUT,
+                                           [box, ConstInt(len(res) - 1),
+                                            ConstInt(pos)], None, None)
+            # we can't have virtual ints
         return
         xxx
         if jitframe_pos in self.cache:

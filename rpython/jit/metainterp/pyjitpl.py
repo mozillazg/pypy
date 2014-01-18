@@ -1873,7 +1873,6 @@ class MetaInterp(object):
         self.attach_debug_info(op)
         return resbox
 
-
     def attach_debug_info(self, op):
         if (not we_are_translated() and op is not None
             and getattr(self, 'framestack', None)):
