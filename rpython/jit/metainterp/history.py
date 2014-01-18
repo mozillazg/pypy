@@ -675,11 +675,10 @@ class TreeLoop(object):
     def check_consistency_of(inputargs, operations):
         seen = {}
         all = 0
-        for frame in inputargs:
-            for box in frame:
-                assert isinstance(box, Box), "Loop.inputargs contains %r" % (box,)
-                seen[box] = None
-                all += 1
+        for box in inputargs:
+            assert isinstance(box, Box), "Loop.inputargs contains %r" % (box,)
+            seen[box] = None
+            all += 1
         assert len(seen) == all, (
                "duplicate Box in the Loop.inputargs")
         TreeLoop.check_consistency_of_branch(operations, seen)

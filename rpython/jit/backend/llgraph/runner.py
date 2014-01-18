@@ -34,23 +34,10 @@ class LLGraphResumeBuilder(ResumeBuilder):
         self.liveness = LivenessAnalyzer()
         self.numbering = {}
         self.framestack = []
-        locs = None
-        start_pos = 0
-        xxx
         if inputlocs is not None:
-            locs = []
-            for frame_pos, frame in enumerate(inputframes):
-                self.framestack.append(ResumeFrame(len(frame), start_pos))
-                for pos_in_frame, box in enumerate(frame):
-                    if box is None:
-                        continue
-                    pos = inputlocs[frame_pos][pos_in_frame]
-                    self.framestack[-1].registers[pos_in_frame] = box
-                    self.numbering[box] = pos
-                    locs.append(Position(pos))
-                    start_pos += 1
-        ResumeBuilder.__init__(self, self, frontend_liveness, descr,
-                               inputframes, locs)
+            for arg, loc in zip(inputargs, inputlocs):
+                self.numbering[arg] = loc
+        ResumeBuilder.__init__(self, self, frontend_liveness, descr)
 
     def loc(self, box, must_exist=True):
         return Position(self.numbering[box])
@@ -142,13 +129,7 @@ class LLTrace(object):
                 newop.getdescr().rd_bytecode_position = resumebuilder.builder.getpos()
             self.operations.append(newop)
 
-        if descr is None:
-            parent = None
-            parent_position = 0
-        else:
-            parent = descr.rd_resume_bytecode
-            parent_position = descr.rd_bytecode_position
-        bytecode = resumebuilder.finish(parent, parent_position, self)
+        bytecode = resumebuilder.finish(self)
         for op in operations:
             if op.is_guard():
                 op.getdescr().rd_resume_bytecode = bytecode
@@ -291,7 +272,7 @@ class LLGraphCPU(model.AbstractCPU):
                      name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
         looptoken.compiled_loop_token = clt
-        lltrace = LLTrace([inputargs], operations, None)
+        lltrace = LLTrace(inputargs, operations, None)
         clt._llgraph_loop = lltrace
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)

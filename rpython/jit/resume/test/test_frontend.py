@@ -111,15 +111,16 @@ class TestResumeDirect(object):
         metainterp = MockMetaInterp()
         metainterp.staticdata = MockStaticData([jitcode], [])
         metainterp.cpu = MockCPU()
-        inpframes, inplocs = rebuild_from_resumedata(metainterp, "myframe", descr)
+        inputargs, inplocs = rebuild_from_resumedata(metainterp, "myframe",
+                                                     descr)
         assert len(metainterp.framestack) == 1
         f = metainterp.framestack[-1]
         assert f.registers_i[1].getint() == 103
         assert isinstance(f.registers_i[2], Const)
         assert f.registers_i[2].getint() == 15
         assert f.registers_i[3].getint() == 13
-        assert inpframes == [[None, AnyBox(), None, None]]
-        assert inplocs == [[-1, 100, -1, -1]]
+        assert len(inputargs) == 1
+        assert inplocs == [100]
 
     def test_nested_call(self):
         jitcode1 = JitCode("jitcode")
@@ -164,35 +165,6 @@ class TestResumeDirect(object):
         assert f.registers_i[1].getint() == 10 + 3
         assert f.registers_i[2].getint() == 11 + 3
         assert f.registers_i[4].getint() == 8 + 3
-
-    def test_bridge(self):
-        jitcode1 = JitCode("jitcode")
-        jitcode1.setup(num_regs_i=13, num_regs_r=0, num_regs_f=0)
-        jitcode1.global_index = 0
-        builder = ResumeBytecodeBuilder()
-        builder.enter_frame(-1, jitcode1)
-        builder.resume_put(TAGBOX | (42 << 2), 0, 0)
-        rd1 = builder.build()
-        lgt1 = len(rd1)
-
-        builder = ResumeBytecodeBuilder()
-        builder.resume_put(TAGBOX | (2 << 2), 0, 1)
-        rd2 = builder.build()
-        lgt2 = len(rd2)
-        
-        descr = Descr()
-        descr.rd_bytecode_position = lgt2
-        parent = ResumeBytecode(rd1, [])
-        b = ResumeBytecode(rd2, [], parent, parent_position=lgt1)
-        descr.rd_resume_bytecode = b
-        metainterp = MockMetaInterp()
-        metainterp.staticdata = MockStaticData([jitcode1], [])
-        metainterp.cpu = MockCPU()
-        rebuild_from_resumedata(metainterp, "myframe", descr)
-        f = metainterp.framestack[-1]
-        assert f.num_nonempty_regs() == 2
-        assert f.registers_i[0].getint() == 42 + 3
-        assert f.registers_i[1].getint() == 2 + 3
 
     def test_new(self):
         jitcode1 = JitCode("jitcode")
@@ -242,7 +214,7 @@ class TestResumeDirect(object):
         descr.rd_bytecode_position = len(rd)
         staticdata = MockStaticData([jitcode1, jitcode2], [])
         locs = rebuild_locs_from_resumedata(descr, staticdata)
-        assert locs == [[8, 11], [12]]
+        assert locs == [8, 11, 12]
 
 class AssemblerExecuted(Exception):
     pass

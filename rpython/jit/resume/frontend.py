@@ -205,7 +205,7 @@ class BoxResumeReader(AbstractResumeReader):
         self.deadframe = deadframe
         AbstractResumeReader.__init__(self, metainterp.staticdata)
 
-    def get_box_value(self, encoded_pos, TP):
+    def get_box_value(self, pos_in_frame, frame_pos, encoded_pos, TP):
         if encoded_pos == CLEAR_POSITION:
             return None
         if encoded_pos in self.cache:
@@ -214,14 +214,21 @@ class BoxResumeReader(AbstractResumeReader):
         if tag == TAGBOX:
             if TP == INT:
                 val = self.metainterp.cpu.get_int_value(self.deadframe, pos)
-                res = BoxInt(val)
+                box = BoxInt(val)
             elif TP == REF:
                 val = self.metainterp.cpu.get_ref_value(self.deadframe, pos)
-                res = BoxPtr(val)
+                box = BoxPtr(val)
             else:
                 xxx
-            self.cache[encoded_pos] = res
-            return res
+            if pos_in_frame != -1:
+                self.metainterp.history.record(rop.RESUME_PUT,
+                                               [box, ConstInt(frame_pos),
+                                                ConstInt(pos_in_frame)],
+                                                None, None)
+            self.result.append(box)
+            self.locs.append(pos)
+            self.cache[encoded_pos] = box
+            return box
         elif tag == TAGSMALLINT:
             return ConstInt(pos)
         elif tag == TAGCONST:
@@ -233,51 +240,34 @@ class BoxResumeReader(AbstractResumeReader):
             for fielddescr, encoded_field_pos in virtual.fields.iteritems():
                 self.setfield_gc(virtual_box, encoded_field_pos, fielddescr)
             self.cache[encoded_pos] = virtual_box
+            if pos_in_frame != -1:
+                self.metainterp.history.record(rop.RESUME_PUT,
+                                               [virtual_box,
+                                                ConstInt(frame_pos),
+                                                ConstInt(pos_in_frame)],
+                                                None, None)
             return virtual_box
 
     def allocate_struct(self, virtual):
         return self.metainterp.execute_and_record(rop.NEW, virtual.descr)
 
     def setfield_gc(self, box, encoded_field_pos, fielddescr):
-        field_box = self.get_box_value(encoded_field_pos, fielddescr.kind)
+        field_box = self.get_box_value(-1, -1, encoded_field_pos,
+                                       fielddescr.kind)
         self.metainterp.execute_and_record(rop.SETFIELD_GC, fielddescr,
                                            box, field_box)
 
-    def store_int_box(self, res, pos, miframe, i, jitframe_pos):
-        box = self.get_box_value(jitframe_pos, INT)
+    def store_int_box(self, pos, miframe, i, jitframe_pos):
+        box = self.get_box_value(pos, i, jitframe_pos, INT)
         if box is None:
             return
         miframe.registers_i[i] = box
-        if not isinstance(box, Const):
-            res[-1][pos] = box
 
-    def store_ref_box(self, res, pos, miframe, i, jitframe_pos):
-        box = self.get_box_value(jitframe_pos, REF)
+    def store_ref_box(self, pos, miframe, i, jitframe_pos):
+        box = self.get_box_value(pos, i, jitframe_pos, REF)
         if box is None:
             return
         miframe.registers_r[i] = box
-        tag, index = self.decode(jitframe_pos)
-        if tag == TAGBOX:
-            res[-1][pos] = box
-        elif tag == TAGVIRTUAL:
-            self.metainterp.history.record(rop.RESUME_PUT,
-                                           [box, ConstInt(len(res) - 1),
-                                            ConstInt(pos)], None, None)
-            # we can't have virtual ints
-        return
-        xxx
-        if jitframe_pos in self.cache:
-            box = self.cache[jitframe_pos]
-        elif jitframe_pos == -1:
-            return
-        elif jitframe_pos >= 0:
-            box = BoxPtr(self.metainterp.cpu.get_ref_value(self.deadframe,
-                                                           jitframe_pos))
-        elif jitframe_pos <= -2:
-            box = self.consts[-jitframe_pos - 2]
-        miframe.registers_r[i] = box
-        self.cache[jitframe_pos] = box
-        res[-1][pos] = box
 
     def store_float_box(self, res, pos, miframe, i, jitframe_pos):
         box = self.get_box_value(jitframe_pos)
@@ -304,26 +294,28 @@ class BoxResumeReader(AbstractResumeReader):
         return -1
 
     def finish(self):
-        res = []
+        self.result = []
         self.cache = {}
+        self.locs = []
         for frame in self.framestack:
             jitcode = frame.jitcode
-            res.append([None] * jitcode.num_regs())
             miframe = self.metainterp.newframe(jitcode, record_resume=False)
             miframe.pc = frame.pc
             pos = 0
             for i in range(jitcode.num_regs_i()):
-                self.store_int_box(res, pos, miframe, i, frame.registers[pos])
+                self.store_int_box(pos, miframe, i, frame.registers[pos])
                 pos += 1
             for i in range(jitcode.num_regs_r()):
-                self.store_ref_box(res, pos, miframe, i, frame.registers[pos])
+                self.store_ref_box(pos, miframe, i, frame.registers[pos])
                 pos += 1
             for i in range(jitcode.num_regs_f()):
-                self.store_float_box(res, pos, miframe, i, frame.registers[pos])
+                self.store_float_box(pos, miframe, i, frame.registers[pos])
                 pos += 1
         self.cache = None
-        return res, [[self.get_loc(r) for r in f.registers]
-                     for f in self.framestack]
+        state = self.result, self.locs
+        self.result = None
+        self.locs = None
+        return state
 
 def rebuild_from_resumedata(metainterp, deadframe, faildescr):
     """ Reconstruct metainterp frames from the resumedata

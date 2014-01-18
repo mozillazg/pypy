@@ -250,6 +250,10 @@ class BaseBackendTest(Runner):
         i1b = BoxInt()
         i3 = BoxInt()
         bridge = [
+            ResOperation(rop.ENTER_FRAME, [ConstInt(-1)], None,
+                         descr=jitcode),
+            ResOperation(rop.RESUME_PUT, [i1b, ConstInt(0), ConstInt(0)],
+                         None),
             ResOperation(rop.INT_LE, [i1b, ConstInt(19)], i3),
             ResOperation(rop.GUARD_TRUE, [i3], None, descr=faildescr2),
             ResOperation(rop.LEAVE_FRAME, [], None),

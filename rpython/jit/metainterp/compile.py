@@ -124,7 +124,7 @@ def compile_loop(metainterp, greenkey, start,
 
     jitcell_token = make_jitcell_token(jitdriver_sd)
     part = create_empty_loop(metainterp)
-    part.inputframes = [inputargs[:]]
+    part.inputargs = inputargs[:]
     h_ops = history.operations
     part.resume_at_jump_descr = resume_at_jump_descr
     part.operations = [ResOperation(rop.LABEL, inputargs, None, descr=TargetToken(jitcell_token))] + \
@@ -140,7 +140,7 @@ def compile_loop(metainterp, greenkey, start,
     all_target_tokens = [target_token]
 
     loop = create_empty_loop(metainterp)
-    loop.inputframes = part.inputframes
+    loop.inputargs = part.inputargs
     loop.operations = part.operations
     loop.quasi_immutable_deps = {}
     if part.quasi_immutable_deps:
@@ -198,7 +198,7 @@ def compile_retrace(metainterp, greenkey, start,
     assert partial_trace.operations[-1].getopnum() == rop.LABEL
 
     part = create_empty_loop(metainterp)
-    part.inputframes = [inputargs[:]]
+    part.inputargs = inputargs[:]
     part.resume_at_jump_descr = resume_at_jump_descr
     h_ops = history.operations
 
@@ -253,10 +253,10 @@ def compile_retrace(metainterp, greenkey, start,
 def patch_new_loop_to_load_virtualizable_fields(loop, jitdriver_sd):
     vinfo = jitdriver_sd.virtualizable_info
     extra_ops = []
-    inputargs = loop.inputframes[0]
+    inputargs = loop.inputargs
     vable_box = inputargs[jitdriver_sd.index_of_virtualizable]
     i = jitdriver_sd.num_red_args
-    loop.inputframes = [inputargs[:i]]
+    loop.inputargs = inputargs[:i]
     for descr in vinfo.static_field_descrs:
         assert i < len(inputargs)
         box = inputargs[i]
@@ -338,8 +338,7 @@ def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
-        assert len(loop.inputframes) == 1
-        asminfo = do_compile_loop(metainterp_sd, loop.inputframes[0],
+        asminfo = do_compile_loop(metainterp_sd, loop.inputargs,
                                   operations, original_jitcell_token,
                                   name=loopname)
     finally:
@@ -357,7 +356,7 @@ def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
         ops_offset = asminfo.ops_offset
     else:
         ops_offset = None
-    metainterp_sd.logger_ops.log_loop(loop.inputframes[0], loop.operations, n,
+    metainterp_sd.logger_ops.log_loop(loop.inputargs, loop.operations, n,
                                       type, ops_offset,
                                       name=loopname)
     #
@@ -383,7 +382,7 @@ def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
-        asminfo = do_compile_bridge(metainterp_sd, faildescr, inputframes,
+        asminfo = do_compile_bridge(metainterp_sd, faildescr, inputargs,
                                     inputlocs, operations,
                                     original_loop_token)
     finally:
@@ -609,13 +608,13 @@ class ResumeGuardDescr(ResumeDescr):
         # to the corresponding guard_op and compile from there
         assert metainterp.resumekey_original_loop_token is not None
         new_loop.original_jitcell_token = metainterp.resumekey_original_loop_token
-        inputframes = metainterp.history.inputframes
+        inputargs = metainterp.history.inputargs
         inputlocs = metainterp.history.inputlocs
         if not we_are_translated():
             self._debug_suboperations = new_loop.operations
         propagate_original_jitcell_token(new_loop)
         send_bridge_to_backend(metainterp.jitdriver_sd, metainterp.staticdata,
-                               self, inputframes, inputlocs,
+                               self, inputargs, inputlocs,
                                new_loop.operations,
                                new_loop.original_jitcell_token)
 
@@ -803,7 +802,7 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     # Attempt to use optimize_bridge().  This may return None in case
     # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_trace = create_empty_loop(metainterp)
-    new_trace.inputframes = metainterp.history.inputframes[:]
+    new_trace.inputargs = metainterp.history.inputargs[:]
     if metainterp.history.inputlocs is not None:
         new_trace.inputlocs = metainterp.history.inputlocs[:]
     # clone ops, as optimize_bridge can mutate the ops
@@ -817,7 +816,8 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     else:
         inline_short_preamble = True
     try:
-        optimize_trace(metainterp_sd, new_trace, state.enable_opts, inline_short_preamble, inpframes=new_trace.inputframes)
+        optimize_trace(metainterp_sd, new_trace, state.enable_opts,
+                       inline_short_preamble)
     except InvalidLoop:
         debug_print("compile_new_bridge: got an InvalidLoop")
         # XXX I am fairly convinced that optimize_bridge cannot actually raise
