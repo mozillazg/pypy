@@ -5,7 +5,6 @@ from rpython.jit.backend.llsupport import symbolic, jitframe, rewrite
 from rpython.jit.backend.llsupport.assembler import (GuardToken, BaseAssembler,
                                                      debug_bridge)
 from rpython.jit.backend.llsupport.asmmemmgr import MachineDataBlockWrapper
-from rpython.jit.resume.backend import flatten
 from rpython.jit.metainterp.history import Const, Box, VOID
 from rpython.jit.metainterp.history import AbstractFailDescr, INT, REF, FLOAT
 from rpython.rtyper.lltypesystem import lltype, rffi, rstr, llmemory
@@ -475,7 +474,7 @@ class Assembler386(BaseAssembler):
         self.update_frame_depth(frame_depth_no_fixed_size + JITFRAME_FIXED_SIZE)
         #
         size_excluding_failure_stuff = self.mc.get_relative_pos()
-        self.resume_bytecode = regalloc.resumebuilder.finish(None, 0, looptoken)
+        self.resume_bytecode = regalloc.resumebuilder.finish(looptoken)
         self.write_pending_failure_recoveries()
         full_size = self.mc.get_relative_pos()
         #
@@ -513,7 +512,7 @@ class Assembler386(BaseAssembler):
         return AsmInfo(ops_offset, rawstart + looppos,
                        size_excluding_failure_stuff - looppos)
 
-    def assemble_bridge(self, logger, faildescr, inputframes, backend_positions,
+    def assemble_bridge(self, logger, faildescr, inputargs, backend_positions,
                         operations, original_loop_token, log):
 
         self.setup(original_loop_token)
@@ -522,12 +521,11 @@ class Assembler386(BaseAssembler):
             operations = self._inject_debugging_code(faildescr, operations,
                                                      'b', descr_number)
 
-        arglocs = self.rebuild_faillocs_from_descr(faildescr, inputframes,
+        arglocs = self.rebuild_faillocs_from_descr(faildescr, inputargs,
                                                    backend_positions)
-        inputargs = flatten(inputframes)
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         startpos = self.mc.get_relative_pos()
-        operations = regalloc.prepare_bridge(inputframes, arglocs,
+        operations = regalloc.prepare_bridge(inputargs, arglocs,
                                              operations,
                                              self.current_clt.allgcrefs,
                                              self.current_clt.frame_info,
@@ -536,7 +534,7 @@ class Assembler386(BaseAssembler):
         frame_depth_no_fixed_size = self._assemble(regalloc, inputargs, operations)
         codeendpos = self.mc.get_relative_pos()
         self.resume_bytecode = regalloc.resumebuilder.finish(
-            faildescr.rd_resume_bytecode, faildescr.rd_bytecode_position, original_loop_token)
+            original_loop_token)
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
         #

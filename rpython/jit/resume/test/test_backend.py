@@ -146,15 +146,22 @@ class ResumeTest(object):
 
         bridge = parse("""
         [i0]
+        enter_frame(-1, descr=jitcode)
+        resume_put(i0, 0, 0)
         force_spill(i0)
         guard_false(i0)
-        """)
+        """, namespace={'jitcode': jitcode})
         staticdata = MockStaticData([jitcode], [])
         locs = rebuild_locs_from_resumedata(descr, staticdata)
-        self.cpu.compile_bridge(None, descr, [bridge.inputargs], locs,
+        self.cpu.compile_bridge(None, descr, bridge.inputargs, locs,
                                 bridge.operations, looptoken)
 
         descr = bridge.operations[-1].getdescr()
         res = descr.rd_resume_bytecode.dump(staticdata,
                                             descr.rd_bytecode_position)
-        assert res == "resume_put (3, 28) 0 0"
+        exp = preparse("""
+        enter_frame -1 name
+        resume_put (3, 1) 0 0
+        resume_put (3, 28) 0 0
+        """)
+        assert res == exp

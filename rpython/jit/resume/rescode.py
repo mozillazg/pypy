@@ -14,12 +14,9 @@ TAGOFFSET = 2
 CLEAR_POSITION = 0xffff
 
 class ResumeBytecode(object):
-    def __init__(self, opcodes, consts, parent=None, parent_position=-1,
-                 loop=None):
+    def __init__(self, opcodes, consts, loop=None):
         self.opcodes = opcodes
-        self.parent = parent
         self.consts = consts
-        self.parent_position = parent_position
         self.loop = loop
 
     def dump(self, staticdata, resume_pos):

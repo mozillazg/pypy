@@ -15,7 +15,7 @@ from rpython.jit.metainterp import history, jitexc
 from rpython.jit.metainterp.optimize import InvalidLoop
 from rpython.jit.metainterp.inliner import Inliner
 from rpython.jit.codewriter import heaptracker, longlong
-from rpython.jit.resume.backend import flatten
+
 
 def giveup():
     from rpython.jit.metainterp.pyjitpl import SwitchToBlackhole
@@ -300,13 +300,13 @@ def do_compile_loop(metainterp_sd, inputargs, operations, looptoken,
                                           inputargs, operations, looptoken,
                                           log=log, name=name)
 
-def do_compile_bridge(metainterp_sd, faildescr, inputframes,
+def do_compile_bridge(metainterp_sd, faildescr, inputargs,
                       inputlocs, operations, original_loop_token, log=True):
-    metainterp_sd.logger_ops.log_bridge(flatten(inputframes), operations,
+    metainterp_sd.logger_ops.log_bridge(inputargs, operations,
                                         "compiling")
     assert isinstance(faildescr, AbstractFailDescr)
     return metainterp_sd.cpu.compile_bridge(metainterp_sd.logger_ops,
-                                            faildescr, inputframes,
+                                            faildescr, inputargs,
                                             inputlocs, operations,
                                             original_loop_token, log=log)
 
@@ -364,11 +364,11 @@ def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
     if metainterp_sd.warmrunnerdesc is not None:    # for tests
         metainterp_sd.warmrunnerdesc.memory_manager.keep_loop_alive(original_jitcell_token)
 
-def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputframes,
+def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
                            inputlocs, operations, original_loop_token):
     if not we_are_translated():
         show_procedures(metainterp_sd)
-        seen = dict.fromkeys(flatten(inputframes))
+        seen = dict.fromkeys(inputargs)
         TreeLoop.check_consistency_of_branch(operations, seen)
     if metainterp_sd.warmrunnerdesc is not None:
         hooks = metainterp_sd.warmrunnerdesc.hooks
@@ -400,7 +400,7 @@ def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputframes,
         ops_offset = asminfo.ops_offset
     else:
         ops_offset = None
-    metainterp_sd.logger_ops.log_bridge(flatten(inputframes), operations,
+    metainterp_sd.logger_ops.log_bridge(inputargs, operations,
                                         None, faildescr, ops_offset)
     #
     #if metainterp_sd.warmrunnerdesc is not None:    # for tests

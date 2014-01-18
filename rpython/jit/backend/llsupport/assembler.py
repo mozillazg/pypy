@@ -110,7 +110,7 @@ class BaseAssembler(object):
         self._debug = v
         return r
 
-    def rebuild_faillocs_from_descr(self, descr, inputframes, loc_positions):
+    def rebuild_faillocs_from_descr(self, descr, inputargs, loc_positions):
         locs = []
         GPR_REGS = len(self.cpu.gen_regs)
         XMM_REGS = len(self.cpu.float_regs)
@@ -118,27 +118,23 @@ class BaseAssembler(object):
             coeff = 1
         else:
             coeff = 2
-        all = {}
-        for i, frame in enumerate(inputframes):
-            inputlocs = loc_positions[i]
-            assert len(inputlocs) == len(frame)
-            for j, item in enumerate(frame):
-                if item is None or isinstance(item, Const) or item in all:
-                    continue
-                all[item] = None
-                pos = inputlocs[j]
-                if pos < GPR_REGS:
-                    locs.append(self.cpu.gen_regs[pos])
-                elif pos < (GPR_REGS + XMM_REGS * coeff):
-                    pos = (pos - GPR_REGS) // coeff
-                    locs.append(self.cpu.float_regs[pos])
-                else:
-                    stack_pos = pos - self.cpu.JITFRAME_FIXED_SIZE
-                    assert stack_pos >= 0
-                    tp = item.type
-                    locs.append(self.new_stack_loc(stack_pos,
-                                pos * WORD, tp))
-        return locs[:]
+        assert len(inputargs) == len(loc_positions)
+        locs = [None] * len(inputargs)
+        for i in range(len(inputargs)):
+            pos = loc_positions[i]
+            item = inputargs[i]
+            if pos < GPR_REGS:
+                locs[i] = self.cpu.gen_regs[pos]
+            elif pos < (GPR_REGS + XMM_REGS * coeff):
+                pos = (pos - GPR_REGS) // coeff
+                locs[i] = self.cpu.float_regs[pos]
+            else:
+                stack_pos = pos - self.cpu.JITFRAME_FIXED_SIZE
+                assert stack_pos >= 0
+                tp = item.type
+                locs[i] = self.new_stack_loc(stack_pos,
+                                             pos * WORD, tp)
+        return locs
 
     def store_info_on_descr(self, startspos, guardtok, resume_bytecode):
         withfloats = guardtok.has_floats

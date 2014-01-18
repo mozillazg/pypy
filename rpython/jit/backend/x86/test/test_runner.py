@@ -301,7 +301,7 @@ class TestX86(LLtypeBackendTest):
                         pos = 0
                     else:
                         locs = rebuild_locs_from_resumedata(descr, staticdata)
-                        pos = locs[0][0]
+                        pos = locs[0]
                     result = self.cpu.get_int_value(deadframe, pos)
                     if guard == rop.GUARD_FALSE:
                         assert result == execute(self.cpu, None,
@@ -359,7 +359,7 @@ class TestX86(LLtypeBackendTest):
                         pos = 0
                     else:
                         locs = rebuild_locs_from_resumedata(descr, staticdata)
-                        pos = locs[0][0]
+                        pos = locs[0]
                     result = self.cpu.get_int_value(deadframe, pos)
                     expected = execute(self.cpu, None, op, None, a, b).value
                     if guard == rop.GUARD_FALSE:

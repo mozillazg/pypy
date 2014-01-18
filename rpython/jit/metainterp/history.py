@@ -615,7 +615,6 @@ class TargetToken(AbstractDescr):
         return 'TargetToken(%d)' % compute_unique_id(self)
 
 class TreeLoop(object):
-    inputframes = None
     inputargs = None
     inputlocs = None
     operations = None
@@ -657,7 +656,7 @@ class TreeLoop(object):
         return self.operations
 
     def get_display_text(self):    # for graphpage.py
-        return self.name + '\n' + repr(self.inputframes)
+        return self.name + '\n' + repr(self.inputargs)
 
     def show(self, errmsg=None):
         "NOT_RPYTHON"
@@ -666,7 +665,7 @@ class TreeLoop(object):
 
     def check_consistency(self):     # for testing
         "NOT_RPYTHON"
-        self.check_consistency_of(self.inputframes, self.operations)
+        self.check_consistency_of(self.inputargs, self.operations)
         for op in self.operations:
             descr = op.getdescr()
             if op.getopnum() == rop.LABEL and isinstance(descr, TargetToken):
@@ -719,7 +718,7 @@ class TreeLoop(object):
 
     def dump(self):
         # RPython-friendly
-        print '%r: inputargs =' % self, self._dump_args(self.inputframes)
+        print '%r: inputargs =' % self, self._dump_args(self.inputargs)
         for op in self.operations:
             args = op.getarglist()
             print '\t', op.getopname(), self._dump_args(args), \
@@ -753,7 +752,7 @@ def _list_all_operations(result, operations, omit_finish=True):
 
 class History(object):
     def __init__(self):
-        self.inputframes = None
+        self.inputargs = None
         self.inputlocs = None
         self.operations = []
 

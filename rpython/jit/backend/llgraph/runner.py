@@ -2,7 +2,7 @@ import py, weakref
 from rpython.jit.backend import model
 from rpython.jit.backend.llgraph import support
 from rpython.jit.resume.backend import ResumeBuilder,\
-     LivenessAnalyzer, compute_vars_longevity, flatten
+     LivenessAnalyzer, compute_vars_longevity
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.history import Const, getkind
 from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID
@@ -30,12 +30,13 @@ class ResumeFrame(object):
         self.start_pos = start_pos
 
 class LLGraphResumeBuilder(ResumeBuilder):
-    def __init__(self, frontend_liveness, descr, inputframes, inputlocs):
+    def __init__(self, frontend_liveness, descr, inputargs, inputlocs):
         self.liveness = LivenessAnalyzer()
         self.numbering = {}
         self.framestack = []
         locs = None
         start_pos = 0
+        xxx
         if inputlocs is not None:
             locs = []
             for frame_pos, frame in enumerate(inputframes):
@@ -101,7 +102,7 @@ class LLTrace(object):
     has_been_freed = False
     invalid = False
 
-    def __init__(self, inputframes, operations, descr, locs=None):
+    def __init__(self, inputargs, operations, descr, locs=None):
         # We need to clone the list of operations because the
         # front-end will mutate them under our feet again.  We also
         # need to make sure things get freed.
@@ -114,13 +115,13 @@ class LLTrace(object):
                 newbox = _cache[box] = box.__class__()
             return newbox
         #
-        self.inputargs = map(mapping, flatten(inputframes))
+        self.inputargs = map(mapping, inputargs)
         self.operations = []
-        x = compute_vars_longevity(inputframes, operations, descr)
+        x = compute_vars_longevity(inputargs, operations, descr)
         longevity, last_real_usage, frontend_liveness = x
 
         resumebuilder = LLGraphResumeBuilder(frontend_liveness, descr,
-                                             inputframes, locs)
+                                             inputargs, locs)
         for op in operations:
             if op.is_resume():
                 resumebuilder.process(op)
@@ -295,11 +296,11 @@ class LLGraphCPU(model.AbstractCPU):
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
 
-    def compile_bridge(self, logger, faildescr, inputframes, locs, operations,
+    def compile_bridge(self, logger, faildescr, inputargs, locs, operations,
                        original_loop_token, log=True):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
-        lltrace = LLTrace(inputframes, operations, faildescr, locs)
+        lltrace = LLTrace(inputargs, operations, faildescr, locs)
         faildescr._llgraph_bridge = lltrace
         clt._llgraph_alltraces.append(lltrace)
         self._record_labels(lltrace)

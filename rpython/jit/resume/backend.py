@@ -7,15 +7,11 @@ from rpython.jit.codewriter.jitcode import JitCode
 
 
 class LivenessAnalyzer(object):
-    def __init__(self, inputframes=None):
+    def __init__(self):
         self.liveness = {}
         self.frame_starts = [0]
         self.framestack = []
         self.deps = {}
-        if inputframes is not None:
-            for frame in inputframes:
-                self.frame_starts.append(self.frame_starts[-1] + len(frame))
-                self.framestack.append(frame[:])
 
     def enter_frame(self, pc, jitcode):
         self.frame_starts.append(self.frame_starts[-1] + jitcode.num_regs())
@@ -93,28 +89,13 @@ class LivenessAnalyzer(object):
         raise Exception("should not be called")
 
 class ResumeBuilder(object):
-    def __init__(self, regalloc, frontend_liveness, descr, inputframes=None,
-                 inputlocs=None):
+    def __init__(self, regalloc, frontend_liveness, descr):
         self.regalloc = regalloc
         self.current_attachment = {}
         self.frontend_liveness = frontend_liveness
         self.frontend_pos = {}
         self.virtuals = {}
         self.builder = ResumeBytecodeBuilder()
-        if inputlocs is not None:
-            i = 0
-            all = {}
-            for frame_pos, frame in enumerate(inputframes):
-                for pos_in_frame, box in enumerate(frame):
-                    if box is None or isinstance(box, Const) or box in all:
-                        loc_pos = -1
-                    else:
-                        loc_pos = inputlocs[i].get_jitframe_position()
-                        i += 1
-                        self.frontend_pos[box] = (frame_pos, pos_in_frame)
-                        all[box] = None
-                    if box not in self.current_attachment:
-                        self.current_attachment[box] = loc_pos
 
     def get_box_pos(self, box):
         if box in self.virtuals:
@@ -189,34 +170,11 @@ class ResumeBuilder(object):
                 self._mark_visited(v, loc)
         return self.builder.getpos()
 
-    def finish(self, parent, parent_position, clt):
-        return ResumeBytecode(self.builder.build(), self.builder.consts,
-                              parent, parent_position,
-                              clt)
+    def finish(self, clt):
+        return ResumeBytecode(self.builder.build(), self.builder.consts, clt)
 
 
-def flatten(inputframes):
-    count = 0
-    all = {}
-    for frame in inputframes:
-        for x in frame:
-            if x is not None and x not in all:
-                assert not isinstance(x, Const)
-                count += 1
-                all[x] = None
-    inputargs = [None] * count
-    pos = 0
-    all = {}
-    for frame in inputframes:
-        for item in frame:
-            if item is not None and item not in all:
-                inputargs[pos] = item
-                all[item] = None
-                pos += 1
-    return inputargs
-
-
-def compute_vars_longevity(inputframes, operations, descr=None):
+def compute_vars_longevity(inputargs, operations, descr=None):
     # compute a dictionary that maps variables to index in
     # operations that is a "last-time-seen"
 
@@ -228,12 +186,7 @@ def compute_vars_longevity(inputframes, operations, descr=None):
     last_used = {}
     last_real_usage = {}
     frontend_alive = {}
-    if descr is None:
-        inputargs = inputframes[0]
-        liveness_analyzer = LivenessAnalyzer()
-    else:
-        inputargs = flatten(inputframes)
-        liveness_analyzer = LivenessAnalyzer(inputframes)
+    liveness_analyzer = LivenessAnalyzer()
     start_pos = 0
     for position, op in enumerate(operations):
         if op.is_guard():

@@ -1978,7 +1978,7 @@ class MetaInterp(object):
         num_green_args = self.jitdriver_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey)
-        self.history.inputframes = [original_boxes[num_green_args:]]
+        self.history.inputargs = original_boxes[num_green_args:][:]
         self.seen_loop_header_for_jdindex = -1
         try:
             self.interpret()
@@ -2121,7 +2121,7 @@ class MetaInterp(object):
         return ints[:], refs[:], floats[:]
 
     def raise_continue_running_normally(self, live_arg_boxes, loop_token):
-        self.history.inputframes = None
+        self.history.inputargs = None
         self.history.inputlocs = None
         self.history.operations = None
         # For simplicity, we just raise ContinueRunningNormally here and
@@ -2359,7 +2359,7 @@ class MetaInterp(object):
             self.portal_call_depth = -1 # always one portal around
             self.history = history.History()
             state = self.rebuild_state_after_failure(resumedescr, deadframe)
-            self.history.inputframes, self.history.inputlocs = state
+            self.history.inputargs, self.history.inputlocs = state
             self.resumerecorder = ResumeRecorder(self, True)
         finally:
             rstack._stack_criticalcode_stop()

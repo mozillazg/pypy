@@ -68,8 +68,6 @@ class AbstractResumeReader(object):
 
     def _rebuild_until(self, rb, position):
         self.consts = rb.consts
-        if rb.parent is not None:
-            self._rebuild_until(rb.parent, rb.parent_position)
         self.interpret_until(rb, position)
 
     def read(self, pos):

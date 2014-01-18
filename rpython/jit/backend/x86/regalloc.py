@@ -8,7 +8,7 @@ from rpython.jit.backend.llsupport.descr import (ArrayDescr, CallDescr,
     unpack_arraydescr, unpack_fielddescr, unpack_interiorfielddescr)
 from rpython.jit.backend.llsupport.gcmap import allocate_gcmap
 from rpython.jit.resume.backend import ResumeBuilder,\
-     compute_vars_longevity, flatten
+     compute_vars_longevity
 from rpython.jit.backend.llsupport.regalloc import (FrameManager, BaseRegalloc,
      RegisterManager, TempBox, is_comparison_or_ovf_op)
 from rpython.jit.backend.x86 import rx86
@@ -133,17 +133,16 @@ class RegAlloc(BaseRegalloc):
         self.jump_target_descr = None
         self.final_jump_op = None
 
-    def _prepare(self, inputframes, operations, allgcrefs, descr=None,
+    def _prepare(self, inputargs, operations, allgcrefs, descr=None,
                  locs=None):
         cpu = self.assembler.cpu
         self.fm = X86FrameManager(cpu.get_baseofs_of_frame_field())
         operations = cpu.gc_ll_descr.rewrite_assembler(cpu, operations,
                                                        allgcrefs)
         # compute longevity of variables
-        x = compute_vars_longevity(inputframes, operations, descr)
+        x = compute_vars_longevity(inputargs, operations, descr)
         longevity, last_real_usage, frontend_liveness = x
-        self.resumebuilder = ResumeBuilder(self, frontend_liveness, descr,
-                                           inputframes, locs)
+        self.resumebuilder = ResumeBuilder(self, frontend_liveness, descr)
         self.longevity = longevity
         self.last_real_usage = last_real_usage
         self.rm = gpr_reg_mgr_cls(self.longevity,
@@ -154,7 +153,7 @@ class RegAlloc(BaseRegalloc):
         return operations
 
     def prepare_loop(self, inputargs, operations, looptoken, allgcrefs):
-        operations = self._prepare([inputargs], operations, allgcrefs)
+        operations = self._prepare(inputargs, operations, allgcrefs)
         self._set_initial_bindings(inputargs, looptoken)
         # note: we need to make a copy of inputargs because possibly_free_vars
         # is also used on op args, which is a non-resizable list
@@ -165,11 +164,11 @@ class RegAlloc(BaseRegalloc):
             self.min_bytes_before_label = 13
         return operations
 
-    def prepare_bridge(self, inputframes, arglocs, operations, allgcrefs,
+    def prepare_bridge(self, inputargs, arglocs, operations, allgcrefs,
                        frame_info, descr):
-        operations = self._prepare(inputframes, operations, allgcrefs, descr,
+        operations = self._prepare(inputargs, operations, allgcrefs, descr,
                                    locs=arglocs)
-        self._update_bindings(arglocs, inputframes)
+        self._update_bindings(arglocs, inputargs)
         self.min_bytes_before_label = 0
         return operations
 
@@ -233,11 +232,10 @@ class RegAlloc(BaseRegalloc):
         else:
             return self.xrm.make_sure_var_in_reg(var, forbidden_vars)
 
-    def _update_bindings(self, locs, inputframes):
+    def _update_bindings(self, locs, inputargs):
         # XXX this should probably go to llsupport/regalloc.py
         used = {}
         i = 0
-        inputargs = flatten(inputframes)
         assert len(inputargs) == len(locs)
         for loc in locs:
             if loc is None: # xxx bit kludgy

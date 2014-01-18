@@ -6,23 +6,16 @@ from rpython.jit.codewriter.jitcode import JitCode
 class ResumeFrame(object):
     def __init__(self, pc, jitcode, no=-1):
         self.pc = pc
-        if jitcode is None:
-            assert no >= 0
-            self.values = [None] * no
-        else:
-            assert isinstance(jitcode, JitCode)
-            self.jitcode = jitcode
-            self.values = [None] * jitcode.num_regs()
+        assert isinstance(jitcode, JitCode)
+        self.jitcode = jitcode
+        self.values = [None] * jitcode.num_regs()
 
 class OptResumeBuilder(object):
-    def __init__(self, opt, inpframes=None):
+    def __init__(self, opt):
         self.framestack = []
         self.last_flushed_pos = 0
         self.opt = opt
         self.virtuals = {}
-        if inpframes is not None:
-            for frame in inpframes:
-                self.framestack.append(ResumeFrame(0, None, len(frame)))
 
     def enter_frame(self, pc, jitcode):
         self.framestack.append(ResumeFrame(pc, jitcode))

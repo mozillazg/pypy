@@ -5,7 +5,7 @@ from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats,\
      ConstInt
 from rpython.jit.resume.frontend import rebuild_from_resumedata
 from rpython.jit.resume.rescode import ResumeBytecode, TAGBOX,\
-     ResumeBytecodeBuilder, TAGCONST, TAGSMALLINT, TAGVIRTUAL
+     ResumeBytecodeBuilder, TAGCONST, TAGSMALLINT, TAGVIRTUAL, CLEAR_POSITION
 from rpython.jit.resume.reader import AbstractResumeReader
 from rpython.jit.resume.test.support import MockStaticData
 from rpython.jit.metainterp.resoperation import rop
@@ -77,13 +77,18 @@ class MockCPU(object):
         return index + 3
 
 class RebuildingResumeReader(AbstractResumeReader):
-    def unpack(self, r):
-        tag, index = self.decode(r)
-        assert tag == TAGBOX
-        return index
-    
     def finish(self):
-        return [[self.unpack(r) for r in f.registers] for f in self.framestack]
+        res = []
+        all = {}
+        for f in self.framestack:
+            for reg in f.registers:
+                if reg == CLEAR_POSITION:
+                    continue
+                tag, index = self.decode(reg)
+                if tag == TAGBOX and index not in all:
+                    all[index] = None # no duplicates
+                    res.append(index)
+        return res
 
 def rebuild_locs_from_resumedata(faildescr, staticdata):
     return RebuildingResumeReader(staticdata).rebuild(faildescr)
