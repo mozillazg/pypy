@@ -157,6 +157,9 @@ class ResumeBuilder(object):
             self.builder.resume_setfield_gc(structpos, fieldpos, descr)
         elif op.getopnum() == rop.RESUME_SET_PC:
             self.builder.resume_set_pc(op.getarg(0).getint())
+        elif op.getopnum() == rop.RESUME_CLEAR:
+            self.builder.resume_clear(op.getarg(0).getint(),
+                                      op.getarg(1).getint())
         else:
             raise Exception("strange operation")
 

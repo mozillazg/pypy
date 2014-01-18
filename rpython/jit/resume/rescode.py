@@ -2,7 +2,7 @@
 from rpython.jit.metainterp.history import ConstInt
 
 (UNUSED, ENTER_FRAME, LEAVE_FRAME, RESUME_PUT,
- RESUME_NEW, RESUME_SETFIELD_GC, RESUME_SET_PC) = range(7)
+ RESUME_NEW, RESUME_SETFIELD_GC, RESUME_SET_PC, RESUME_CLEAR) = range(8)
 
 TAGCONST = 0x0
 TAGVIRTUAL = 0x2
@@ -83,3 +83,9 @@ class ResumeBytecodeBuilder(object):
         self.write_short(structpos)
         self.write_short(fieldpos)
         self.write_short(descr.global_descr_index)
+
+    def resume_clear(self, frame_pos, pos_in_frame):
+        self.write(RESUME_CLEAR)
+        self.write(frame_pos)
+        self.write(pos_in_frame)
+        
