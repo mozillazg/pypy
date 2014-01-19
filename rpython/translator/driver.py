@@ -465,3 +465,12 @@ class TranslationDriver(object):
     def prereq_checkpt_rtype(self):
         assert 'rpython.rtyper.rmodel' not in sys.modules, (
             "cannot fork because the rtyper has already been imported")
+
+if os.name == 'posix':
+    def shutil_copy(src, dst):
+        # this version handles the case where 'dst' is an executable
+        # currently being executed
+        shutil.copy(src, dst + '~')
+        os.rename(dst + '~', dst)
+else:
+    shutil_copy = shutil.copy
