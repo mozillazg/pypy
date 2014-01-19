@@ -914,7 +914,6 @@ def select_function_code_generators(fnobj, db, functionname):
     if hasattr(fnobj, '_external_name'):
         if sandbox:
             return sandbox_stub(fnobj, db)
-        db.externalfuncs[fnobj._external_name] = fnobj
         return []
     elif hasattr(fnobj, 'graph'):
         if sandbox and sandbox != "if_external":
