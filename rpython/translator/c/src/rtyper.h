@@ -11,4 +11,3 @@
 
 char *RPyString_AsCharP(RPyString *rps);
 void RPyString_FreeCache(void);
-RPyString *RPyString_FromString(char *buf);

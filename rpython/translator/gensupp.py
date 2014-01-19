@@ -2,6 +2,13 @@
 Some support for genxxx implementations of source generators.
 Another name could be genEric, but well...
 """
+from os import write
+
+from rpython.annotator import model as annmodel
+from rpython.rtyper.annlowlevel import MixLevelHelperAnnotator
+from rpython.rtyper.lltypesystem import rffi, lltype
+from rpython.rtyper.lltypesystem.lloperation import llop
+
 
 def uniquemodulename(name, SEEN=set()):
     # never reuse the same module name within a Python session!
@@ -116,3 +123,35 @@ class _LocalScope(object):
         self.mapping[name] = ret
         return ret
 
+
+rpython_special_startup = rffi.llexternal(
+    'rpython_special_startup', [], lltype.Void, _nowrapper=True)
+rpython_special_shutdown = rffi.llexternal(
+    'rpython_special_shutdown', [], lltype.Void, _nowrapper=True)
+
+def make_main(translator, setup, entrypoint):
+    def rpython_main(argc, argv):
+        rffi.stackcounter.stacks_counter += 1
+        llop.gc_stack_bottom(lltype.Void)
+        rpython_special_startup()
+        try:
+            if setup is not None:
+                setup()
+            args = [rffi.charp2str(argv[i]) for i in range(argc)]
+            exitcode = entrypoint(args)
+        except Exception as e:
+            write(2, 'DEBUG: An uncaught exception was raised in entrypoint: '
+                      + str(e) + '\n')
+            return 1
+        rpython_special_shutdown();
+        return exitcode
+    rpython_main.c_name = 'rpython_main'
+
+    mixlevelannotator = MixLevelHelperAnnotator(translator.rtyper)
+    arg1 = annmodel.lltype_to_annotation(rffi.INT)
+    arg2 = annmodel.lltype_to_annotation(rffi.CCHARPP)
+    res = annmodel.lltype_to_annotation(lltype.Signed)
+    graph = mixlevelannotator.getgraph(rpython_main, [arg1, arg2], res)
+    mixlevelannotator.finish()
+    mixlevelannotator.backend_optimize()
+    return graph

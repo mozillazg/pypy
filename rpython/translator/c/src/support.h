@@ -63,3 +63,6 @@ void RPyAbort(void);
 #  define RPyNLenItem(array, index)          ((array)->items[index])
 #  define RPyBareItem(array, index)          ((array)[index])
 #endif
+
+void rpython_special_startup();
+void rpython_special_shutdown();

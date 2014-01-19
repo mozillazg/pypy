@@ -1,6 +1,5 @@
 /* allocation functions */
 #include "common_header.h"
-#ifdef PYPY_STANDALONE
 #include <stdlib.h>
 
 #if defined(PYPY_USE_TRIVIAL_MALLOC)
@@ -24,5 +23,3 @@
 #  include "src/obmalloc.c"
 
 #endif
-
-#endif  /* PYPY_STANDALONE */

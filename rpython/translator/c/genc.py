@@ -226,7 +226,6 @@ class CBuilder(object):
 
         if db is None:
             db = self.build_database()
-        pf = self.getentrypointptr()
         if self.modulename is None:
             self.modulename = uniquemodulename('testing')
         modulename = self.modulename
@@ -248,16 +247,14 @@ class CBuilder(object):
         if not self.standalone:
             assert not self.config.translation.instrument
         else:
-            defines['PYPY_STANDALONE'] = db.get(pf)
             if self.config.translation.instrument:
                 defines['PYPY_INSTRUMENT'] = 1
             if CBuilder.have___thread:
                 if not self.config.translation.no__thread:
                     defines['USE___THREAD'] = 1
             if self.config.translation.shared:
-                defines['PYPY_MAIN_FUNCTION'] = "pypy_main_startup"
                 self.eci = self.eci.merge(ExternalCompilationInfo(
-                    export_symbols=["pypy_main_startup", "pypy_debug_file"]))
+                    export_symbols=["rpython_main", "pypy_debug_file"]))
         self.eci, cfile, extra = gen_source(db, modulename, targetdir,
                                             self.eci, defines=defines,
                                             split=self.split)
@@ -303,10 +300,11 @@ class CStandaloneBuilder(CBuilder):
                 and profbased[0] is ProfOpt)
 
     def getentrypointptr(self):
-        # XXX check that the entrypoint has the correct
-        # signature:  list-of-strings -> int
-        bk = self.translator.annotator.bookkeeper
-        return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
+        from rpython.translator.gensupp import make_main
+        # XXX: only framework for now
+        setup = self.db.gctransformer.frameworkgc_setup_ptr.value
+        graph = make_main(self.translator, setup, self.entrypoint)
+        return getfunctionptr(graph)
 
     def cmdexec(self, args='', env=None, err=False, expect_crash=False):
         assert self._compiled
@@ -742,8 +740,8 @@ def commondefs(defines):
 def add_extra_files(eci):
     srcdir = py.path.local(__file__).join('..', 'src')
     files = [
-        srcdir / 'entrypoint.c',       # ifdef PYPY_STANDALONE
-        srcdir / 'allocator.c',        # ifdef PYPY_STANDALONE
+        srcdir / 'main.c',
+        srcdir / 'allocator.c',
         srcdir / 'mem.c',
         srcdir / 'exception.c',
         srcdir / 'rtyper.c',

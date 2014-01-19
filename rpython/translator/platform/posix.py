@@ -172,12 +172,6 @@ class BasePosix(Platform):
 
         if shared:
             m.definition('SHARED_IMPORT_LIB', libname),
-            m.definition('PYPY_MAIN_FUNCTION', "pypy_main_startup")
-            m.rule('main.c', '',
-                   'echo "'
-                   'int $(PYPY_MAIN_FUNCTION)(int, char*[]); '
-                   'int main(int argc, char* argv[]) '
-                   '{ return $(PYPY_MAIN_FUNCTION)(argc, argv); }" > $@')
             m.rule('$(DEFAULT_TARGET)', ['$(TARGET)', 'main.o'],
                    '$(CC_LINK) $(LDFLAGS_LINK) main.o -L. -l$(SHARED_IMPORT_LIB) -o $@')
 

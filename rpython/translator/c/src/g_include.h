@@ -32,9 +32,6 @@
 #  include "src/debug_traceback.h"
 
 #  include "src/allocator.h"
-#ifdef PYPY_STANDALONE
-#  include "src/entrypoint.h"
-#endif
 
 /* suppress a few warnings in the generated code */
 #ifdef MS_WINDOWS
