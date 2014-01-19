@@ -89,7 +89,7 @@ class CBackend(object):
             targetdir = cbuilder.targetdir
             fname = dump_static_data_info(self.driver.log, database, targetdir)
             dstname = self.driver.compute_exe_name() + '.staticdata.info'
-            shutil.copy(str(fname), str(dstname))
+            shutil_copy(str(fname), str(dstname))
             self.driver.log.info('Static data info written to %s' % dstname)
 
     @taskdef("Compiling c source")
@@ -119,11 +119,11 @@ class CBackend(object):
             newexename = self.driver.compute_exe_name()
             if sys.platform == 'win32':
                 newexename = newexename.new(ext='exe')
-            shutil.copy(str(exename), str(newexename))
+            shutil_copy(str(exename), str(newexename))
             if self.cbuilder.shared_library_name is not None:
                 soname = self.cbuilder.shared_library_name
                 newsoname = newexename.new(basename=soname.basename)
-                shutil.copy(str(soname), str(newsoname))
+                shutil_copy(str(soname), str(newsoname))
                 self.driver.log.info("copied: %s" % (newsoname,))
                 if sys.platform == 'win32':
                     # the import library is named python27.lib, according
