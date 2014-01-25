@@ -315,6 +315,7 @@ class RegAlloc(BaseRegalloc):
             self.xrm.position = i
             if op.is_resume():
                 self.resumebuilder.process(op)
+                self.possibly_free_vars_for_op(op)
                 i += 1
                 continue
             if op.has_no_side_effect() and op.result not in self.longevity:
