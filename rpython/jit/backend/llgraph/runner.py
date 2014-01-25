@@ -42,6 +42,9 @@ class LLGraphResumeBuilder(ResumeBuilder):
             assert len(inputargs) == len(inputlocs)
             for arg, loc in zip(inputargs, inputlocs):
                 self.numbering[self.mapping(arg)] = loc
+            max_no = max(self.numbering.values())
+            while max_no >= len(self.numbering):
+                self.numbering[Box()] = -1
         ResumeBuilder.__init__(self, self, frontend_liveness, descr)
 
     def loc(self, box, must_exist=True):
