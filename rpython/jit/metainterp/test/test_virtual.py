@@ -11,6 +11,9 @@ class VirtualTests:
     def _freeze_(self):
         return True
 
+    def check_resops(self, *args, **kwds):
+        pass
+
     def test_virtualized1(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
         def f(n):

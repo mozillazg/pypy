@@ -1,8 +1,10 @@
 
 from rpython.jit.metainterp.history import ConstInt
+from rpython.rlib.objectmodel import Symbolic
 
 (UNUSED, ENTER_FRAME, LEAVE_FRAME, RESUME_PUT,
- RESUME_NEW, RESUME_SETFIELD_GC, RESUME_SET_PC, RESUME_CLEAR) = range(8)
+ RESUME_NEW, RESUME_NEW_WITH_VTABLE, RESUME_SETFIELD_GC,
+ RESUME_SET_PC, RESUME_CLEAR) = range(9)
 
 TAGCONST = 0x0
 TAGVIRTUAL = 0x2
@@ -58,7 +60,9 @@ class ResumeBytecodeBuilder(object):
         return tag | (loc << 2)
 
     def encode_const(self, const):
-        if isinstance(const, ConstInt) and 0 <= const.getint() < 0x4000:
+        if (isinstance(const, ConstInt) and
+            not isinstance(const.getint(), Symbolic) and
+            0 <= const.getint() < 0x4000):
             return TAGSMALLINT | (const.getint() << 2)
         self.consts.append(const)
         return TAGCONST | ((len(self.consts) - 1) << 2)
@@ -77,6 +81,11 @@ class ResumeBytecodeBuilder(object):
         self.write(RESUME_NEW)
         self.write_short(self.encode(TAGVIRTUAL, v_pos))
         self.write_short(descr.global_descr_index)
+
+    def resume_new_with_vtable(self, v_pos, const_class):
+        self.write(RESUME_NEW_WITH_VTABLE)
+        self.write_short(self.encode(TAGVIRTUAL, v_pos))
+        self.write_short(self.encode_const(const_class))
 
     def resume_setfield_gc(self, structpos, fieldpos, descr):
         self.write(RESUME_SETFIELD_GC)

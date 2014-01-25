@@ -5,7 +5,7 @@ from rpython.jit.resume.backend import ResumeBuilder,\
      LivenessAnalyzer, compute_vars_longevity
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.history import Const, getkind
-from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID
+from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID, Box
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter import longlong, heaptracker
 from rpython.jit.codewriter.effectinfo import EffectInfo
@@ -24,23 +24,28 @@ class Position(object):
     def get_jitframe_position(self):
         return self.pos
 
+    def __repr__(self):
+        return '<Pos %d>' % self.pos
+
 class ResumeFrame(object):
     def __init__(self, no, start_pos):
         self.registers = [None] * no
         self.start_pos = start_pos
 
 class LLGraphResumeBuilder(ResumeBuilder):
-    def __init__(self, frontend_liveness, descr, inputargs, inputlocs):
+    def __init__(self, mapping, frontend_liveness, descr, inputargs, inputlocs):
         self.liveness = LivenessAnalyzer()
         self.numbering = {}
+        self.mapping = mapping
         self.framestack = []
         if inputlocs is not None:
+            assert len(inputargs) == len(inputlocs)
             for arg, loc in zip(inputargs, inputlocs):
-                self.numbering[arg] = loc
+                self.numbering[self.mapping(arg)] = loc
         ResumeBuilder.__init__(self, self, frontend_liveness, descr)
 
     def loc(self, box, must_exist=True):
-        return Position(self.numbering[box])
+        return Position(self.numbering[self.mapping(box)])
 
     def process(self, op):
         getattr(self, 'process_' + op.getopname())(op)
@@ -60,14 +65,17 @@ class LLGraphResumeBuilder(ResumeBuilder):
     def process_resume_set_pc(self, op):
         pass
 
+    def process_resume_setfield_gc(self, op):
+        xxx
+
     def process_resume_put(self, op):
         box = op.getarg(0)
         if isinstance(box, Const):
             return
+        if self.mapping(box) not in self.numbering:
+            self.numbering[self.mapping(box)] = len(self.numbering)
         frame_pos = op.getarg(1).getint()
         pos_in_frame = op.getarg(2).getint()
-        i = self.framestack[frame_pos].start_pos + pos_in_frame
-        self.numbering[box] = i
         self.framestack[frame_pos].registers[pos_in_frame] = box
 
     def process_resume_clear(self, op):
@@ -76,14 +84,14 @@ class LLGraphResumeBuilder(ResumeBuilder):
         self.framestack[frame_pos].registers[frontend_pos] = None
 
     def get_numbering(self, mapping, op):
-        lst = []
+        res = []
+        all = {}
         for frame in self.framestack:
             for reg in frame.registers:
-                if reg is None:
-                    lst.append(None)
-                else:
-                    lst.append(mapping(reg))
-        return lst
+                if reg is not None and isinstance(reg, Box) and reg not in all:
+                    res.append(mapping(reg))
+                    all[reg] = None
+        return res
     
 class LLTrace(object):
     has_been_freed = False
@@ -107,8 +115,9 @@ class LLTrace(object):
         x = compute_vars_longevity(inputargs, operations, descr)
         longevity, last_real_usage, frontend_liveness = x
 
-        resumebuilder = LLGraphResumeBuilder(frontend_liveness, descr,
+        resumebuilder = LLGraphResumeBuilder(mapping, frontend_liveness, descr,
                                              inputargs, locs)
+        self.numbering = resumebuilder.numbering
         for op in operations:
             if op.is_resume():
                 resumebuilder.process(op)
@@ -144,9 +153,9 @@ class ExecutionFinished(Exception):
         self.deadframe = deadframe
 
 class Jump(Exception):
-    def __init__(self, jump_target, args):
+    def __init__(self, jump_target, values):
         self.jump_target = jump_target
-        self.args = args
+        self.values = values
 
 class CallDescr(AbstractDescr):
     def __init__(self, RESULT, ARGS, extrainfo):
@@ -319,7 +328,7 @@ class LLGraphCPU(model.AbstractCPU):
 
     def _execute_token(self, loop_token, *args):
         lltrace = loop_token.compiled_loop_token._llgraph_loop
-        frame = LLFrame(self, lltrace.inputargs, args)
+        frame = LLFrame(self, lltrace.inputargs, args, lltrace.numbering)
         try:
             frame.execute(lltrace)
             assert False
@@ -356,7 +365,7 @@ class LLGraphCPU(model.AbstractCPU):
         frame = force_token
         assert isinstance(frame, LLFrame)
         assert frame.forced_deadframe is None
-        values = []
+        values = {}
         for box in frame.force_guard_op.failargs:
             if box is None:
                 value = None
@@ -366,7 +375,7 @@ class LLGraphCPU(model.AbstractCPU):
                 value = frame.env[box]
             else:
                 value = box.value    # 0 or 0.0 or NULL
-            values.append(value)
+            values[frame.numbering[box]] = value
         frame.forced_deadframe = LLDeadFrame(
             _getdescr(frame.force_guard_op), values)
         return frame.forced_deadframe
@@ -697,9 +706,10 @@ class LLFrame(object):
     last_exception = None
     force_guard_op = None
 
-    def __init__(self, cpu, argboxes, args):
+    def __init__(self, cpu, argboxes, args, numbering):
         self.env = {}
         self.cpu = cpu
+        self.numbering = numbering
         assert len(argboxes) == len(args)
         for box, arg in zip(argboxes, args):
             self.setenv(box, arg)
@@ -755,6 +765,7 @@ class LLFrame(object):
                 resval = execute(_getdescr(op), *args)
             except Jump, j:
                 self.lltrace, i = j.jump_target
+                self.numbering = self.lltrace.numbering
                 if i >= 0:
                     label_op = self.lltrace.operations[i]
                     i += 1
@@ -762,7 +773,7 @@ class LLFrame(object):
                 else:
                     targetargs = self.lltrace.inputargs
                     i = 0
-                self.do_renaming(targetargs, j.args)
+                self.do_renaming(targetargs, j.values)
                 continue
             if op.result is not None:
                 self.setenv(op.result, resval)
@@ -774,25 +785,24 @@ class LLFrame(object):
         self.env = {}
         self.framecontent = {}
         i = 0
-        for value in newvalues:
-            if value is None or isinstance(value, Const):
-                continue
-            self.setenv(newargs[i], value)
-            i += 1
+        if isinstance(newvalues, dict):
+            for k, v in newvalues.iteritems():
+                self.setenv(newargs[k], v)
+        else:
+            for value in newvalues:
+                assert value is not None
+                assert not isinstance(value, Const)
+                self.setenv(newargs[i], value)
+                i += 1
 
     # -----------------------------------------------------
 
     def fail_guard(self, descr, saved_data=None):
-        values = []
+        values = {}
         for i in range(len(self.current_op.failargs)):
             arg = self.current_op.failargs[i]
-            if arg is None:
-                value = None
-            elif isinstance(arg, Const):
-                value = arg
-            else:
-                value = self.env[arg]
-            values.append(value)
+            value = self.env[arg]
+            values[self.numbering[arg]] = value
         if hasattr(descr, '_llgraph_bridge'):
             target = (descr._llgraph_bridge, -1)
             raise Jump(target, values)

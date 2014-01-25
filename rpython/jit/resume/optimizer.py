@@ -55,6 +55,12 @@ class OptResumeBuilder(object):
         xxx
         self.optimizer.emit_operation(rop.RESUME_NEW)
 
+    def new_virtual_with_vtable(self, box, vtable, vvalue):
+        virtualbox = BoxPtr()
+        op = ResOperation(rop.RESUME_NEW_WITH_VTABLE, [vtable], virtualbox)
+        vvalue.resume_box = virtualbox
+        self.opt._newoperations.append(op)
+
     def new_virtual_struct(self, box, vstruct, structdescr):
         newbox = BoxPtr()
         vstruct.resume_box = newbox

@@ -28,6 +28,9 @@ class LivenessAnalyzer(object):
     def resume_new(self, result, descr):
         self.deps[result] = {}
 
+    def resume_new_with_vtable(self, result, klass):
+        self.deps[result] = {}
+
     def resume_setfield_gc(self, arg0, arg1, descr):
         self.deps[arg0][descr] = arg1
 
@@ -51,6 +54,8 @@ class LivenessAnalyzer(object):
                                  op.getarg(2).getint())
             elif op.getopnum() == rop.RESUME_NEW:
                 self.resume_new(op.result, op.getdescr())
+            elif op.getopnum() == rop.RESUME_NEW_WITH_VTABLE:
+                self.resume_new_with_vtable(op.result, op.getarg(0))
             elif op.getopnum() == rop.RESUME_SETFIELD_GC:
                 self.resume_setfield_gc(op.getarg(0), op.getarg(1),
                                         op.getdescr())
@@ -131,6 +136,10 @@ class ResumeBuilder(object):
             v_pos = len(self.virtuals)
             self.virtuals[op.result] = v_pos
             self.builder.resume_new(v_pos, op.getdescr())
+        elif op.getopnum() == rop.RESUME_NEW_WITH_VTABLE:
+            v_pos = len(self.virtuals)
+            self.virtuals[op.result] = v_pos
+            self.builder.resume_new_with_vtable(v_pos, op.getarg(0))
         elif op.getopnum() == rop.RESUME_SETFIELD_GC:
             structpos = self.get_box_pos(op.getarg(0))
             fieldpos = self.get_box_pos(op.getarg(1))

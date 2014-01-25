@@ -497,7 +497,8 @@ class OptVirtualize(optimizer.Optimization):
 
     def make_virtual(self, known_class, box, source_op=None):
         vvalue = VirtualValue(self.optimizer.cpu, known_class, box, source_op)
-        self.optimizer.resumebuilder.new_virtual(box)
+        self.optimizer.resumebuilder.new_virtual_with_vtable(box, known_class,
+                                                             vvalue)
         self.make_equal_to(box, vvalue)
         return vvalue
 
