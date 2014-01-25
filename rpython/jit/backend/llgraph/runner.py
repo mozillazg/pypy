@@ -786,8 +786,8 @@ class LLFrame(object):
         self.framecontent = {}
         i = 0
         if isinstance(newvalues, dict):
-            for k, v in newvalues.iteritems():
-                self.setenv(newargs[k], v)
+            for arg in newargs:
+                self.setenv(arg, newvalues[self.numbering[arg]])
         else:
             for value in newvalues:
                 assert value is not None
