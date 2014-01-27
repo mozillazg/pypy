@@ -23,10 +23,10 @@ class AbstractLLCPU(AbstractCPU):
 
     def __init__(self, rtyper, stats, opts, translate_support_code=False,
                  gcdescr=None):
+        from rpython.jit.backend.llsupport.gc import get_ll_description
+
         assert type(opts) is not bool
         self.opts = opts
-
-        from rpython.jit.backend.llsupport.gc import get_ll_description
         AbstractCPU.__init__(self)
         self.rtyper = rtyper
         self.stats = stats

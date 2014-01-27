@@ -1,6 +1,7 @@
 
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.history import ConstInt
+from rpython.jit.codewriter import heaptracker
 from rpython.jit.resume import rescode
 
 class ResumeFrame(object):
@@ -35,7 +36,8 @@ class VirtualWithVtable(BaseVirtual):
                                              ConstInt(self.const_class))
 
     def allocate_direct(self, cpu):
-        return cpu.bh_new_with_vtable(self.const_class)
+        descr = heaptracker.vtable2descr(cpu, self.const_class)
+        return cpu.bh_new_with_vtable(self.const_class, descr)
 
 class AbstractResumeReader(object):
     """ A resume reader that can follow resume until given point. Consult

@@ -84,13 +84,13 @@ class DirectResumeReader(AbstractResumeReader):
         return val
 
     def setfield_gc(self, struct, encoded_field_pos, fielddescr):
-        if fielddescr.kind == INT:
+        if fielddescr.is_field_signed():
             intval = self.getint(encoded_field_pos)
             self.cpu.bh_setfield_gc_i(struct, intval, fielddescr)
-        elif fielddescr.kind == REF:
+        elif fielddescr.is_pointer_field():
             refval = self.getref(encoded_field_pos)
             self.cpu.bh_setfield_gc_r(struct, refval, fielddescr)
-        elif fielddescr.kind == FLOAT:
+        elif fielddescr.is_float_field():
             xxx
 
     def store_float_value(self, curbh, i, jitframe_pos):

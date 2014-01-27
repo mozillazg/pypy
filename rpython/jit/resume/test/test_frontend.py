@@ -12,6 +12,7 @@ from rpython.jit.resume.test.support import MockStaticData
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter.format import unformat_assembler
 from rpython.jit.codewriter.codewriter import CodeWriter
+from rpython.jit.codewriter import heaptracker
 from rpython.jit.backend.llgraph.runner import LLGraphCPU
 from rpython.jit.metainterp.pyjitpl import MetaInterp, MetaInterpStaticData
 from rpython.jit.metainterp.jitdriver import JitDriverStaticData
@@ -19,10 +20,15 @@ from rpython.jit.metainterp.warmstate import JitCell
 from rpython.jit.metainterp.jitexc import DoneWithThisFrameInt
 from rpython.jit.metainterp.optimizeopt.util import equaloplists
 from rpython.rlib.jit import JitDriver
+from rpython.rtyper.lltypesystem import rclass, lltype, llmemory
 
 
 class Descr(AbstractDescr):
-    pass
+    def is_pointer_field(self):
+        return self.kind == REF
+
+    def is_field_signed(self):
+        return self.kind == INT
 
 class MockLoop(object):
     pass
@@ -90,7 +96,7 @@ class MockCPU(object):
     def bh_setfield_gc_r(self, struct, refval, fielddescr):
         self.history.append(("setfield_gc_r", struct, refval, fielddescr))
 
-    def bh_new_with_vtable(self, const_class):
+    def bh_new_with_vtable(self, const_class, descr):
         self.history.append(("new_with_vtable", const_class))
         return "new_with_vtable"
 
@@ -206,7 +212,10 @@ class TestResumeDirect(object):
         jitcode1.setup(num_regs_i=0, num_regs_r=1, num_regs_f=0)
         builder = ResumeBytecodeBuilder()
         descr = Descr()
-        const_class = ConstInt(13)
+        cls = lltype.malloc(rclass.OBJECT_VTABLE, flavor='raw',
+                            immortal=True)
+        cls_as_int = heaptracker.adr2int(llmemory.cast_ptr_to_adr(cls))
+        const_class = ConstInt(cls_as_int)
         descr.global_descr_index = 0
         builder.enter_frame(-1, jitcode1)
         builder.resume_new(0, descr)
@@ -230,16 +239,24 @@ class TestResumeDirect(object):
         metainterp = MockMetaInterp()
         metainterp.staticdata = MockStaticData([jitcode1], [descr, d2, d3])
         metainterp.cpu = MockCPU()
+
+        class MockTracker(object):
+            pass
+
+        tr = MockTracker()
+        tr._all_size_descrs_with_vtable = [descr]
+        descr._corresponding_vtable = cls
+        metainterp.cpu.tracker = tr
         metainterp.staticdata.cpu = metainterp.cpu
         rebuild_from_resumedata(metainterp, "myframe", descr)
         expected = [(rop.NEW, descr),
                     (rop.SETFIELD_GC, d2, AnyBox(), EqConstInt(1)),
-                    (rop.NEW_WITH_VTABLE, EqConstInt(13)),
+                    (rop.NEW_WITH_VTABLE, EqConstInt(cls_as_int)),
                     (rop.SETFIELD_GC, d3, AnyBox(), AnyBox()),
                     (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0),
                      EqConstInt(0))]
         expected2 = [(rop.NEW, descr),
-                     (rop.NEW_WITH_VTABLE, EqConstInt(13)),
+                     (rop.NEW_WITH_VTABLE, EqConstInt(cls_as_int)),
                      (rop.SETFIELD_GC, d3, AnyBox(), AnyBox()),
                      (rop.SETFIELD_GC, d2, AnyBox(), EqConstInt(1)),
                      (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0),
@@ -251,14 +268,14 @@ class TestResumeDirect(object):
         hist = metainterp.cpu.history
         dir_expected2 = [
             ("new", descr),
-            ("new_with_vtable", 13),
+            ("new_with_vtable", cls_as_int),
             ("setfield_gc_r", "new", "new_with_vtable", d3),
             ("setfield_gc_i", "new", 1, d2),
         ]
         dir_expected = [
             ("new", descr),
             ("setfield_gc_i", "new", 1, d2),
-            ("new_with_vtable", 13),
+            ("new_with_vtable", cls_as_int),
             ("setfield_gc_r", "new", "new_with_vtable", d3),
         ]
         assert hist == dir_expected or hist == dir_expected2

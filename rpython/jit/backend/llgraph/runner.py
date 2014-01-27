@@ -6,6 +6,7 @@ from rpython.jit.resume.backend import ResumeBuilder,\
 from rpython.jit.metainterp.history import AbstractDescr
 from rpython.jit.metainterp.history import Const, getkind
 from rpython.jit.metainterp.history import INT, REF, FLOAT, VOID, Box
+from rpython.jit.metainterp.history import getkind
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.codewriter import longlong, heaptracker
 from rpython.jit.codewriter.effectinfo import EffectInfo
@@ -36,6 +37,7 @@ class LLGraphResumeBuilder(ResumeBuilder):
     def __init__(self, mapping, frontend_liveness, descr, inputargs, inputlocs):
         self.liveness = LivenessAnalyzer()
         self.numbering = {}
+        self.deps = {}
         self.mapping = mapping
         self.framestack = []
         if inputlocs is not None:
@@ -68,15 +70,24 @@ class LLGraphResumeBuilder(ResumeBuilder):
     def process_resume_set_pc(self, op):
         pass
 
+    def process_resume_new_with_vtable(self, op):
+        self._add_box_to_numbering(op.result)
+        self.deps[op.result] = {}
+
     def process_resume_setfield_gc(self, op):
-        xxx
+        self._add_box_to_numbering(op.getarg(1))
+        self.deps[op.getarg(0)][op.getdescr()] = op.getarg(1)
+
+    def _add_box_to_numbering(self, box):
+        if box not in self.deps:
+            if self.mapping(box) not in self.numbering:
+                self.numbering[self.mapping(box)] = len(self.numbering)
 
     def process_resume_put(self, op):
         box = op.getarg(0)
         if isinstance(box, Const):
             return
-        if self.mapping(box) not in self.numbering:
-            self.numbering[self.mapping(box)] = len(self.numbering)
+        self._add_box_to_numbering(box)
         frame_pos = op.getarg(1).getint()
         pos_in_frame = op.getarg(2).getint()
         self.framestack[frame_pos].registers[pos_in_frame] = box
@@ -86,13 +97,23 @@ class LLGraphResumeBuilder(ResumeBuilder):
         frontend_pos = op.getarg(1).getint()
         self.framestack[frame_pos].registers[frontend_pos] = None
 
+    def extend_from_virtual(self, r, box):
+        for v in sorted(self.deps[box].values()):
+            if v in self.deps:
+                self.extend_from_virtual(r, v)
+            else:
+                r.append(self.mapping(v))
+
     def get_numbering(self, mapping, op):
         res = []
         all = {}
         for frame in self.framestack:
             for reg in frame.registers:
                 if reg is not None and isinstance(reg, Box) and reg not in all:
-                    res.append(mapping(reg))
+                    if reg in self.deps:
+                        self.extend_from_virtual(res, reg)
+                    else:
+                        res.append(mapping(reg))
                     all[reg] = None
         return res
     
