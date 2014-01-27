@@ -64,8 +64,14 @@ class ResumeBytecodeBuilder(object):
             not isinstance(const.getint(), Symbolic) and
             0 <= const.getint() < 0x4000):
             return TAGSMALLINT | (const.getint() << 2)
+        assert len(self.consts) < 0x4000
         self.consts.append(const)
         return TAGCONST | ((len(self.consts) - 1) << 2)
+
+    def encode_const_not_small(self, const):
+        assert len(self.consts) < 0x4000
+        self.consts.append(const)
+        return len(self.consts) - 1
 
     def resume_set_pc(self, pc):
         self.write(RESUME_SET_PC)
@@ -79,13 +85,13 @@ class ResumeBytecodeBuilder(object):
 
     def resume_new(self, v_pos, descr):
         self.write(RESUME_NEW)
-        self.write_short(self.encode(TAGVIRTUAL, v_pos))
+        self.write_short(v_pos) # XXX byte virtuals?
         self.write_short(descr.global_descr_index)
 
     def resume_new_with_vtable(self, v_pos, const_class):
         self.write(RESUME_NEW_WITH_VTABLE)
-        self.write_short(self.encode(TAGVIRTUAL, v_pos))
-        self.write_short(self.encode_const(const_class))
+        self.write_short(v_pos) # XXX byte virtuals?
+        self.write_short(self.encode_const_not_small(const_class))
 
     def resume_setfield_gc(self, structpos, fieldpos, descr):
         self.write(RESUME_SETFIELD_GC)

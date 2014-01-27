@@ -1,4 +1,6 @@
 
+from rpython.jit.metainterp.resoperation import rop
+from rpython.jit.metainterp.history import ConstInt
 from rpython.jit.resume import rescode
 
 class ResumeFrame(object):
@@ -7,13 +9,33 @@ class ResumeFrame(object):
         self.jitcode = jitcode
         self.pc = -1
 
+class BaseVirtual(object):
+    pass
 
-class Virtual(object):
+class VirtualStruct(BaseVirtual):
     def __init__(self, pos, descr):
         self.pos = pos
         self.fields = {}
         self.descr = descr
 
+    def allocate_box(self, metainterp):
+        return metainterp.execute_and_record(rop.NEW, self.descr)
+
+    def allocate_direct(self, cpu):
+        return cpu.bh_new(self.descr)
+    
+class VirtualWithVtable(BaseVirtual):
+    def __init__(self, pos, const_class):
+        self.pos = pos
+        self.const_class = const_class
+        self.fields = {}
+
+    def allocate_box(self, metainterp):
+        return metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
+                                             ConstInt(self.const_class))
+
+    def allocate_direct(self, cpu):
+        return cpu.bh_new_with_vtable(self.const_class)
 
 class AbstractResumeReader(object):
     """ A resume reader that can follow resume until given point. Consult
@@ -46,11 +68,19 @@ class AbstractResumeReader(object):
         self.framestack[frame_no].registers[frontend_position] = encoded_pos
 
     def resume_new(self, v_pos, descr):
-        v = Virtual(v_pos, descr)
+        v = VirtualStruct(v_pos, descr)
+        self._add_to_virtuals(v, v_pos)
+
+    def resume_new_with_vtable(self, v_pos, c_const_class):
+        const_class = c_const_class.getint()
+        v = VirtualWithVtable(v_pos, const_class)
+        self._add_to_virtuals(v, v_pos)
+
+    def _add_to_virtuals(self, v, v_pos):
         if v_pos >= len(self.virtuals):
             self.virtuals += [None] * (len(self.virtuals) - v_pos + 1)
         self.virtuals[v_pos] = v
-
+        
     def resume_setfield_gc(self, pos, fieldpos, descr):
         # XXX optimize fields
         tag, index = self.decode(pos)
@@ -97,10 +127,14 @@ class AbstractResumeReader(object):
                 self.resume_put(encoded, frame_pos, pos_in_frame)
                 pos += 5
             elif op == rescode.RESUME_NEW:
-                tag, v_pos = self.decode(self.read_short(pos + 1))
-                assert tag == rescode.TAGVIRTUAL
+                v_pos = self.read_short(pos + 1)
                 descr = self.staticdata.opcode_descrs[self.read_short(pos + 3)]
                 self.resume_new(v_pos, descr)
+                pos += 5
+            elif op == rescode.RESUME_NEW_WITH_VTABLE:
+                v_pos = self.read_short(pos + 1)
+                const_class = self.consts[self.read_short(pos + 3)]
+                self.resume_new_with_vtable(v_pos, const_class)
                 pos += 5
             elif op == rescode.RESUME_SETFIELD_GC:
                 structpos = self.read_short(pos + 1)
@@ -139,6 +173,10 @@ class Dumper(AbstractResumeReader):
 
     def resume_new(self, v_pos, descr):
         self.l.append("%d = resume_new %d" % (v_pos, descr.global_descr_index))
+
+    def resume_new_with_vtable(self, v_pos, c_const_class):
+        self.l.append("%d = resume_new_with_vtable %d" % (v_pos,
+                                                c_const_class.getint()))
 
     def leave_frame(self):
         self.l.append("leave_frame")

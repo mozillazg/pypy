@@ -2,8 +2,9 @@
 from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats,\
-     ConstInt
-from rpython.jit.resume.frontend import rebuild_from_resumedata
+     ConstInt, REF
+from rpython.jit.resume.frontend import rebuild_from_resumedata,\
+     blackhole_from_resumedata
 from rpython.jit.resume.rescode import ResumeBytecode, TAGBOX,\
      ResumeBytecodeBuilder, TAGCONST, TAGSMALLINT, TAGVIRTUAL, CLEAR_POSITION
 from rpython.jit.resume.reader import AbstractResumeReader
@@ -72,9 +73,41 @@ class MockMetaInterp(object):
         self.framestack.pop()
 
 class MockCPU(object):
+    def __init__(self):
+        self.history = []
+    
     def get_int_value(self, frame, index):
         assert frame == "myframe"
         return index + 3
+
+    def bh_new(self, descr):
+        self.history.append(("new", descr))
+        return "new"
+
+    def bh_setfield_gc_i(self, struct, intval, fielddescr):
+        self.history.append(("setfield_gc_i", struct, intval, fielddescr))
+
+    def bh_setfield_gc_r(self, struct, refval, fielddescr):
+        self.history.append(("setfield_gc_r", struct, refval, fielddescr))
+
+    def bh_new_with_vtable(self, const_class):
+        self.history.append(("new_with_vtable", const_class))
+        return "new_with_vtable"
+
+class MockBlackholeInterp(object):
+    def __init__(self):
+        pass
+
+    def setposition(self, jitcode, pos):
+        self.positions = pos
+        self.jitcode = jitcode
+        self.registers_i = [-1] * jitcode.num_regs_i()
+        self.registers_r = [None] * jitcode.num_regs_r()
+    
+class FakeInterpBuilder(object):
+    def acquire_interp(self):
+        self.interp = MockBlackholeInterp()
+        return self.interp
 
 class RebuildingResumeReader(AbstractResumeReader):
     def finish(self):
@@ -111,6 +144,7 @@ class TestResumeDirect(object):
         metainterp = MockMetaInterp()
         metainterp.staticdata = MockStaticData([jitcode], [])
         metainterp.cpu = MockCPU()
+        metainterp.staticdata.cpu = metainterp.cpu
         inputargs, inplocs = rebuild_from_resumedata(metainterp, "myframe",
                                                      descr)
         assert len(metainterp.framestack) == 1
@@ -172,28 +206,63 @@ class TestResumeDirect(object):
         jitcode1.setup(num_regs_i=0, num_regs_r=1, num_regs_f=0)
         builder = ResumeBytecodeBuilder()
         descr = Descr()
+        const_class = ConstInt(13)
         descr.global_descr_index = 0
         builder.enter_frame(-1, jitcode1)
         builder.resume_new(0, descr)
+        builder.resume_new_with_vtable(1, const_class)
         d2 = Descr()
         d2.kind = INT
         d2.global_descr_index = 1
+        d3 = Descr()
+        d3.kind = REF
+        d3.global_descr_index = 2
         builder.resume_setfield_gc(TAGVIRTUAL | (0 << 2),
                                    TAGSMALLINT | (1 << 2), d2)
+        builder.resume_setfield_gc(TAGVIRTUAL | (0 << 2),
+                                   TAGVIRTUAL | (1 << 2), d3)
+
         builder.resume_put(TAGVIRTUAL | (0 << 2), 0, 0)
         rd = builder.build()
         descr = Descr()
-        descr.rd_resume_bytecode = ResumeBytecode(rd, [])
+        descr.rd_resume_bytecode = ResumeBytecode(rd, [const_class])
         descr.rd_bytecode_position = len(rd)
         metainterp = MockMetaInterp()
-        metainterp.staticdata = MockStaticData([jitcode1], [descr, d2])
+        metainterp.staticdata = MockStaticData([jitcode1], [descr, d2, d3])
         metainterp.cpu = MockCPU()
+        metainterp.staticdata.cpu = metainterp.cpu
         rebuild_from_resumedata(metainterp, "myframe", descr)
         expected = [(rop.NEW, descr),
                     (rop.SETFIELD_GC, d2, AnyBox(), EqConstInt(1)),
+                    (rop.NEW_WITH_VTABLE, EqConstInt(13)),
+                    (rop.SETFIELD_GC, d3, AnyBox(), AnyBox()),
                     (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0),
                      EqConstInt(0))]
-        assert metainterp.history == expected
+        expected2 = [(rop.NEW, descr),
+                     (rop.NEW_WITH_VTABLE, EqConstInt(13)),
+                     (rop.SETFIELD_GC, d3, AnyBox(), AnyBox()),
+                     (rop.SETFIELD_GC, d2, AnyBox(), EqConstInt(1)),
+                     (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0),
+                     EqConstInt(0))]
+        assert metainterp.history == expected or metainterp.history == expected2
+        ib = FakeInterpBuilder()
+        blackhole_from_resumedata(ib, metainterp.staticdata,
+                                  descr, "myframe")
+        hist = metainterp.cpu.history
+        dir_expected2 = [
+            ("new", descr),
+            ("new_with_vtable", 13),
+            ("setfield_gc_r", "new", "new_with_vtable", d3),
+            ("setfield_gc_i", "new", 1, d2),
+        ]
+        dir_expected = [
+            ("new", descr),
+            ("setfield_gc_i", "new", 1, d2),
+            ("new_with_vtable", 13),
+            ("setfield_gc_r", "new", "new_with_vtable", d3),
+        ]
+        assert hist == dir_expected or hist == dir_expected2
+        assert ib.interp.registers_r[0] == "new"
 
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")
