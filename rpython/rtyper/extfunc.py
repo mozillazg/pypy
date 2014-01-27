@@ -162,34 +162,6 @@ class ExtFuncEntry(ExtRegistryEntry):
         impl = getattr(self, method_name, None)
         fakeimpl = getattr(self, fake_method_name, self.instance)
         if impl:
-            if hasattr(self, fake_method_name):
-                # If we have both an llimpl and an llfakeimpl,
-                # we need a wrapper that selects the proper one and calls it
-                from rpython.tool.sourcetools import func_with_new_name
-                # Using '*args' is delicate because this wrapper is also
-                # created for init-time functions like llarena.arena_malloc
-                # which are called before the GC is fully initialized
-                args = ', '.join(['arg%d' % i for i in range(len(args_ll))])
-                d = {'original_impl': impl,
-                     's_result': s_result,
-                     'fakeimpl': fakeimpl,
-                     '__name__': __name__,
-                     }
-                exec py.code.compile("""
-                    from rpython.rlib.objectmodel import running_on_llinterp
-                    from rpython.rlib.debug import llinterpcall
-                    from rpython.rlib.jit import dont_look_inside
-                    # note: we say 'dont_look_inside' mostly because the
-                    # JIT does not support 'running_on_llinterp', but in
-                    # theory it is probably right to stop jitting anyway.
-                    @dont_look_inside
-                    def ll_wrapper(%s):
-                        if running_on_llinterp:
-                            return llinterpcall(s_result, fakeimpl, %s)
-                        else:
-                            return original_impl(%s)
-                """ % (args, args, args)) in d
-                impl = func_with_new_name(d['ll_wrapper'], name + '_wrapper')
             if rtyper.annotator.translator.config.translation.sandbox:
                 impl._dont_inline_ = True
             # store some attributes to the 'impl' function, where
@@ -199,6 +171,8 @@ class ExtFuncEntry(ExtRegistryEntry):
                 '_name': self.name,
                 '_safe_not_sandboxed': self.safe_not_sandboxed,
                 }
+            if hasattr(self, fake_method_name):
+                impl._llfnobjattrs_['_fakeimpl'] = fakeimpl
             obj = rtyper.getannmixlevel().delayedfunction(
                 impl, signature_args, hop.s_result)
         else:
