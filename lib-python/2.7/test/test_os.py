@@ -75,7 +75,7 @@ class TemporaryFileTests(unittest.TestCase):
         self.assertFalse(os.path.exists(name),
                     "file already exists for temporary file")
         # make sure we can create the file
-        open(name, "w")
+        open(name, "w").close()
         self.files.append(name)
 
     def test_tempnam(self):
@@ -275,7 +275,7 @@ class StatAttributeTests(unittest.TestCase):
         try:
             result.f_bfree = 1
             self.fail("No exception thrown")
-        except TypeError:
+        except (TypeError, AttributeError):
             pass
 
         try:

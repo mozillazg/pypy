@@ -245,6 +245,8 @@ class PythonCodeMaker(ast.ASTVisitor):
         if w_len is None:
             w_len = space.len(self.w_consts)
             space.setitem(self.w_consts, w_key, w_len)
+        if space.int_w(w_len) == 0:
+            self.scope.doc_removable = False
         return space.int_w(w_len)
 
     def _make_key(self, obj):
@@ -410,7 +412,7 @@ class PythonCodeMaker(ast.ASTVisitor):
                     done = True
                     break
         if block.next_block and not done:
-            max_depth = self._next_stack_depth_walk(block.next_block, depth)
+            self._next_stack_depth_walk(block.next_block, depth)
 
     def _build_lnotab(self, blocks):
         """Build the line number table for tracebacks and tracing."""
@@ -632,6 +634,7 @@ _static_opcode_stack_effects = {
     ops.JUMP_IF_FALSE_OR_POP : 0,
     ops.POP_JUMP_IF_TRUE : -1,
     ops.POP_JUMP_IF_FALSE : -1,
+    ops.JUMP_IF_NOT_DEBUG : 0,
 
     ops.BUILD_LIST_FROM_ARG: 1,
 }

@@ -303,7 +303,7 @@ def absolute_import_with_lock(space, modulename, baselevel,
         return _absolute_import(space, modulename, baselevel,
                                 fromlist_w, tentative)
     finally:
-        lock.release_lock()
+        lock.release_lock(silent_after_fork=True)
 
 @jit.unroll_safe
 def absolute_import_try(space, modulename, baselevel, fromlist_w):
@@ -788,10 +788,10 @@ class ImportRLock:
             self.lockowner = me
         self.lockcounter += 1
 
-    def release_lock(self):
+    def release_lock(self, silent_after_fork):
         me = self.space.getexecutioncontext()   # used as thread ident
         if self.lockowner is not me:
-            if self.lockowner is None:
+            if self.lockowner is None and silent_after_fork:
                 # Too bad.  This situation can occur if a fork() occurred
                 # with the import lock held, and we're the child.
                 return
@@ -833,21 +833,15 @@ def getimportlock(space):
 """
 
 # picking a magic number is a mess.  So far it works because we
-# have only one extra opcode, which bumps the magic number by +2, and CPython
-# leaves a gap of 10 when it increases
-# its own magic number.  To avoid assigning exactly the same numbers
-# as CPython we always add a +2.  We'll have to think again when we
-# get three more new opcodes
+# have only one extra opcode which might or might not be present.
+# CPython leaves a gap of 10 when it increases its own magic number.
+# To avoid assigning exactly the same numbers as CPython, we can pick
+# any number between CPython + 2 and CPython + 9.  Right now,
+# default_magic = CPython + 7.
 #
-#  * CALL_METHOD            +2
-#
-# In other words:
-#
-#     default_magic        -- used by CPython without the -U option
-#     default_magic + 1    -- used by CPython with the -U option
-#     default_magic + 2    -- used by PyPy without any extra opcode
-#     ...
-#     default_magic + 5    -- used by PyPy with both extra opcodes
+#     CPython + 0                  -- used by CPython without the -U option
+#     CPython + 1                  -- used by CPython with the -U option
+#     CPython + 7 = default_magic  -- used by PyPy (incompatible!)
 #
 from pypy.interpreter.pycode import default_magic
 MARSHAL_VERSION_FOR_PYC = 2
@@ -860,10 +854,7 @@ def get_pyc_magic(space):
             magic = __import__('imp').get_magic()
             return struct.unpack('<i', magic)[0]
 
-    result = default_magic
-    if space.config.objspace.opcodes.CALL_METHOD:
-        result += 2
-    return result
+    return default_magic
 
 
 def parse_source_module(space, pathname, source):
@@ -914,6 +905,14 @@ def load_source_module(space, w_modulename, w_mod, pathname, source, fd,
         if space.config.objspace.usepycfiles and write_pyc:
             if not space.is_true(space.sys.get('dont_write_bytecode')):
                 write_compiled_module(space, code_w, cpathname, mode, mtime)
+
+    try:
+        optimize = space.sys.get_flag('optimize')
+    except RuntimeError:
+        # during bootstrapping
+        optimize = 0
+    if optimize >= 2:
+        code_w.remove_docstrings(space)
 
     update_code_filenames(space, code_w, pathname)
     exec_code_module(space, w_mod, code_w)
@@ -1009,6 +1008,14 @@ def load_compiled_module(space, w_modulename, w_mod, cpathname, magic,
                               "Bad magic number in %s", cpathname)
     #print "loading pyc file:", cpathname
     code_w = read_compiled_module(space, cpathname, source)
+    try:
+        optimize = space.sys.get_flag('optimize')
+    except RuntimeError:
+        # during bootstrapping
+        optimize = 0
+    if optimize >= 2:
+        code_w.remove_docstrings(space)
+
     exec_code_module(space, w_mod, code_w)
 
     return w_mod

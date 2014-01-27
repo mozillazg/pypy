@@ -37,7 +37,7 @@ so if we precalculate the overflow backstride as
 we can go faster.
 All the calculations happen in next()
 
-next_skip_x() tries to do the iteration for a number of steps at once,
+next_skip_x(steps) tries to do the iteration for a number of steps at once,
 but then we cannot gaurentee that we only overflow one single shape
 dimension, perhaps we could overflow times in one big step.
 """
@@ -46,6 +46,7 @@ from pypy.module.micronumpy.strides import enumerate_chunks,\
      calculate_slice_strides
 from pypy.module.micronumpy.base import W_NDimArray
 from pypy.module.micronumpy.arrayimpl import base
+from pypy.module.micronumpy.support import product
 from rpython.rlib import jit
 
 # structures to describe slicing
@@ -57,13 +58,24 @@ class RecordChunk(BaseChunk):
     def __init__(self, name):
         self.name = name
 
-    def apply(self, orig_arr):
+    def apply(self, space, orig_arr):
         arr = orig_arr.implementation
         ofs, subdtype = arr.dtype.fields[self.name]
-        # strides backstrides are identical, ofs only changes start
-        return W_NDimArray.new_slice(arr.start + ofs, arr.get_strides(),
-                                     arr.get_backstrides(),
-                                     arr.shape, arr, orig_arr, subdtype)
+        # ofs only changes start
+        # create a view of the original array by extending
+        # the shape, strides, backstrides of the array
+        from pypy.module.micronumpy.support import calc_strides
+        strides, backstrides = calc_strides(subdtype.shape,
+                                            subdtype.subdtype, arr.order)
+        final_shape = arr.shape + subdtype.shape
+        final_strides = arr.get_strides() + strides
+        final_backstrides = arr.get_backstrides() + backstrides
+        final_dtype = subdtype
+        if subdtype.subdtype:
+            final_dtype = subdtype.subdtype
+        return W_NDimArray.new_slice(space, arr.start + ofs, final_strides,
+                                     final_backstrides,
+                                     final_shape, arr, orig_arr, final_dtype)
 
 class Chunks(BaseChunk):
     def __init__(self, l):
@@ -80,13 +92,13 @@ class Chunks(BaseChunk):
         assert s >= 0
         return shape[:] + old_shape[s:]
 
-    def apply(self, orig_arr):
+    def apply(self, space, orig_arr):
         arr = orig_arr.implementation
         shape = self.extend_shape(arr.shape)
         r = calculate_slice_strides(arr.shape, arr.start, arr.get_strides(),
                                     arr.get_backstrides(), self.l)
         _, start, strides, backstrides = r
-        return W_NDimArray.new_slice(start, strides[:], backstrides[:],
+        return W_NDimArray.new_slice(space, start, strides[:], backstrides[:],
                                      shape[:], arr, orig_arr)
 
 
@@ -158,23 +170,21 @@ class PureShapeIterator(object):
         return [space.wrap(self.indexes[i]) for i in range(shapelen)]
 
 class ConcreteArrayIterator(base.BaseArrayIterator):
-    _immutable_fields_ = ['dtype', 'skip', 'size']
+    _immutable_fields_ = ['array', 'skip', 'size']
     def __init__(self, array):
         self.array = array
         self.offset = 0
-        self.dtype = array.dtype
-        self.skip = self.dtype.itemtype.get_element_size()
+        self.skip = array.dtype.get_size()
         self.size = array.size
 
     def setitem(self, elem):
-        self.dtype.setitem(self.array, self.offset, elem)
+        self.array.setitem(self.offset, elem)
 
     def getitem(self):
-        item = self.dtype.getitem(self.array, self.offset)
-        return item
+        return self.array.getitem(self.offset)
 
     def getitem_bool(self):
-        return self.dtype.getitem_bool(self.array, self.offset)
+        return self.array.getitem_bool(self.offset)
 
     def next(self):
         self.offset += self.skip
@@ -189,12 +199,8 @@ class ConcreteArrayIterator(base.BaseArrayIterator):
         self.offset %= self.size
 
 class OneDimViewIterator(ConcreteArrayIterator):
-    ''' The view iterator dtype can be different from the
-    array.dtype, this is what makes it a View
-    '''
-    def __init__(self, array, dtype, start, strides, shape):
+    def __init__(self, array, start, strides, shape):
         self.array = array
-        self.dtype = dtype
         self.offset = start
         self.skip = strides[0]
         self.index = 0
@@ -214,18 +220,17 @@ class OneDimViewIterator(ConcreteArrayIterator):
     def reset(self):
         self.offset %= self.size
 
+    def get_index(self, d):
+        return self.index
+
 class MultiDimViewIterator(ConcreteArrayIterator):
-    ''' The view iterator dtype can be different from the
-    array.dtype, this is what makes it a View
-    '''
-    def __init__(self, array, dtype, start, strides, backstrides, shape):
+    def __init__(self, array, start, strides, backstrides, shape):
         self.indexes = [0] * len(shape)
         self.array = array
-        self.dtype = dtype
         self.shape = shape
         self.offset = start
         self.shapelen = len(shape)
-        self._done = False
+        self._done = self.shapelen == 0 or product(shape) == 0
         self.strides = strides
         self.backstrides = backstrides
         self.size = array.size
@@ -267,12 +272,15 @@ class MultiDimViewIterator(ConcreteArrayIterator):
     def reset(self):
         self.offset %= self.size
 
+    def get_index(self, d):
+        return self.indexes[d]
+
 class AxisIterator(base.BaseArrayIterator):
-    def __init__(self, array, shape, dim, cumultative):
+    def __init__(self, array, shape, dim, cumulative):
         self.shape = shape
         strides = array.get_strides()
         backstrides = array.get_backstrides()
-        if cumultative:
+        if cumulative:
             self.strides = strides
             self.backstrides = backstrides
         elif len(shape) == len(strides):
@@ -284,18 +292,16 @@ class AxisIterator(base.BaseArrayIterator):
             self.backstrides = backstrides[:dim] + [0] + backstrides[dim:]
         self.first_line = True
         self.indices = [0] * len(shape)
-        self._done = False
+        self._done = array.get_size() == 0
         self.offset = array.start
         self.dim = dim
         self.array = array
-        self.dtype = array.dtype
 
     def setitem(self, elem):
-        self.dtype.setitem(self.array, self.offset, elem)
+        self.array.setitem(self.offset, elem)
 
     def getitem(self):
-        item = self.dtype.getitem(self.array, self.offset)
-        return item
+        return self.array.getitem(self.offset)
 
     @jit.unroll_safe
     def next(self):

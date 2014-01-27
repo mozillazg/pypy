@@ -16,8 +16,13 @@ def excepthook(exctype, value, traceback):
         pass
 
     try:
+        encoding = sys.stderr.encoding
+    except:
+        encoding = None
+
+    try:
         from traceback import print_exception
-        print_exception(exctype, value, traceback)
+        print_exception(exctype, value, traceback, _encoding=encoding)
     except:
         if not excepthook_failsafe(exctype, value):
             raise
@@ -29,14 +34,13 @@ def excepthook_failsafe(exctype, value):
     try:
         # first try to print the exception's class name
         stderr = sys.stderr
-        stderr.write(getattr(exctype, '__name__', exctype))
+        stderr.write(str(getattr(exctype, '__name__', exctype)))
         # then attempt to get the str() of the exception
         try:
             s = str(value)
         except:
             s = '<failure of str() on the exception instance>'
-        # then print it, and don't worry too much about the extra space
-        # between the exception class and the ':'
+        # then print it
         if s:
             stderr.write(': %s\n' % (s,))
         else:
@@ -66,11 +70,11 @@ def callstats():
     return None
 
 copyright_str = """
-Copyright 2003-2013 PyPy development team.
+Copyright 2003-2014 PyPy development team.
 All Rights Reserved.
 For further information, see <http://pypy.org>
 
-Portions Copyright (c) 2001-2013 Python Software Foundation.
+Portions Copyright (c) 2001-2014 Python Software Foundation.
 All Rights Reserved.
 
 Portions Copyright (c) 2000 BeOpen.com.

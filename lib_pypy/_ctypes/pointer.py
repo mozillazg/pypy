@@ -1,6 +1,6 @@
 
 import _rawffi
-import _ffi
+from _rawffi import alt as _ffi
 from _ctypes.basics import _CData, _CDataMeta, cdata_from_address, ArgumentError
 from _ctypes.basics import keepalive_key, store_reference, ensure_objects
 from _ctypes.basics import sizeof, byref, as_ffi_pointer
@@ -120,6 +120,7 @@ class _Pointer(_CData):
         return self._buffer[0] != 0
 
     contents = property(getcontents, setcontents)
+    _obj = property(getcontents) # byref interface
 
     def _as_ffi_pointer_(self, ffitype):
         return as_ffi_pointer(self, ffitype)

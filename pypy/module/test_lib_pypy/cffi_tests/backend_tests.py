@@ -199,6 +199,9 @@ class BackendTests:
         typerepr = self.TypeRepr
         ffi = FFI(backend=self.Backend())
         ffi.cdef("struct foo { short a, b, c; };")
+        p = ffi.cast("short unsigned int", 0)
+        assert repr(p) == "<cdata 'unsigned short' 0>"
+        assert repr(ffi.typeof(p)) == typerepr % "unsigned short"
         p = ffi.cast("unsigned short int", 0)
         assert repr(p) == "<cdata 'unsigned short' 0>"
         assert repr(ffi.typeof(p)) == typerepr % "unsigned short"
@@ -535,13 +538,13 @@ class BackendTests:
         for c_type, expected_size in [
             ('char', 1),
             ('unsigned int', 4),
-            ('char *', SIZE_OF_LONG),
+            ('char *', SIZE_OF_PTR),
             ('int[5]', 20),
             ('struct foo', 12),
             ('union foo', 4),
             ]:
             size = ffi.sizeof(c_type)
-            assert size == expected_size
+            assert size == expected_size, (size, expected_size, ctype)
 
     def test_sizeof_cdata(self):
         ffi = FFI(backend=self.Backend())
@@ -990,7 +993,7 @@ class BackendTests:
         assert f.a == 12345
         assert b.b == b"B"
         assert b.c == b"C"
-        assert repr(b).startswith("<cdata 'struct $bar_t *'")
+        assert repr(b).startswith("<cdata 'bar_t *'")
 
     def test_struct_with_two_usages(self):
         for name in ['foo_s', '']:    # anonymous or not
@@ -1300,9 +1303,9 @@ class BackendTests:
         ffi = FFI(backend=self.Backend())
         ffi.cdef("typedef enum { Value0 = 0 } e, *pe;\n"
                  "typedef enum { Value1 = 1 } e1;")
-        assert ffi.getctype("e*") == 'enum $e *'
-        assert ffi.getctype("pe") == 'enum $e *'
-        assert ffi.getctype("e1*") == 'enum $e1 *'
+        assert ffi.getctype("e*") == 'e *'
+        assert ffi.getctype("pe") == 'e *'
+        assert ffi.getctype("e1*") == 'e1 *'
 
     def test_new_ctype(self):
         ffi = FFI(backend=self.Backend())

@@ -84,12 +84,21 @@ class AppTestNumSupport(BaseNumpyAppTest):
         c = array(3.0).dot(array(4))
         assert c == 12.0
 
+    def test_dot_out(self):
+        from numpypy import arange, dot
+        a = arange(12).reshape(3, 4)
+        b = arange(12).reshape(4, 3)
+        out = arange(9).reshape(3, 3)
+        c = dot(a, b, out=out)
+        assert (c == out).all()
+        out = arange(9,dtype=float).reshape(3, 3)
+        exc = raises(ValueError, dot, a, b, out)
+        assert exc.value[0].find('not acceptable') > 0
+
     def test_choose_basic(self):
-        from numpypy import array, choose
+        from numpypy import array
         a, b, c = array([1, 2, 3]), array([4, 5, 6]), array([7, 8, 9])
         r = array([2, 1, 0]).choose([a, b, c])
-        assert (r == [7, 5, 3]).all()
-        r = choose(array([2, 1, 0]), [a, b, c])
         assert (r == [7, 5, 3]).all()
 
     def test_choose_broadcast(self):
@@ -132,3 +141,33 @@ class AppTestNumSupport(BaseNumpyAppTest):
         x = array([0, 0, 0], dtype='i2')
         r = array([2, 1, 0]).choose([a, b, c], out=x)
         assert r.dtype == 'i2'
+
+    def test_put_basic(self):
+        from numpypy import arange, array
+        a = arange(5)
+        a.put([0, 2], [-44, -55])
+        assert (a == array([-44, 1, -55, 3, 4])).all()
+        a = arange(5)
+        a.put([3, 4], 9)
+        assert (a == array([0, 1, 2, 9, 9])).all()
+        a = arange(5)
+        a.put(1, [7, 8])
+        assert (a == array([0, 7, 2, 3, 4])).all()
+
+    def test_put_modes(self):
+        from numpypy import array, arange
+        a = arange(5)
+        a.put(22, -5, mode='clip')
+        assert (a == array([0, 1, 2, 3, -5])).all()
+        a = arange(5)
+        a.put(22, -5, mode='wrap')
+        assert (a == array([0, 1, -5, 3, 4])).all()
+        raises(IndexError, "arange(5).put(22, -5, mode='raise')")
+        raises(IndexError, "arange(5).put(22, -5, mode=2)")  # raise
+        a.put(22, -10, mode='wrongmode_starts_with_w_so_wrap')
+        assert (a == array([0, 1, -10, 3, 4])).all()
+        a.put(22, -15, mode='cccccccc')
+        assert (a == array([0, 1, -10, 3, -15])).all()
+        a.put(23, -1, mode=1)  # wrap
+        assert (a == array([0, 1, -10, -1, -15])).all()
+        raises(TypeError, "arange(5).put(22, -5, mode='zzzz')")  # unrecognized mode

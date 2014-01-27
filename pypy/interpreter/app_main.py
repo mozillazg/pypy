@@ -2,8 +2,8 @@
 # App-level version of py.py.
 # See test/test_app_main.
 
-# Missing vs CPython: -d, -OO, -t, -v, -x, -3
-"""\
+# Missing vs CPython: -d, -t, -v, -x, -3
+USAGE1 = __doc__ = """\
 Options and arguments (and corresponding environment variables):
 -B     : don't write .py[co] files on import; also PYTHONDONTWRITEBYTECODE=x
 -c cmd : program passed in as string (terminates option list)
@@ -12,7 +12,8 @@ Options and arguments (and corresponding environment variables):
 -i     : inspect interactively after running script; forces a prompt even
          if stdin does not appear to be a terminal; also PYTHONINSPECT=x
 -m mod : run library module as a script (terminates option list)
--O     : dummy optimization flag for compatibility with CPython
+-O     : skip assert statements
+-OO    : remove docstrings when importing modules in addition to -O
 -R     : ignored (see http://bugs.python.org/issue14621)
 -Q arg : division options: -Qold (default), -Qwarn, -Qwarnall, -Qnew
 -s     : don't add user site directory to sys.path; also PYTHONNOUSERSITE
@@ -27,7 +28,6 @@ arg ...: arguments passed to program in sys.argv[1:]
 PyPy options and arguments:
 --info : print translation information about this PyPy executable
 """
-USAGE1 = __doc__
 # Missing vs CPython: PYTHONHOME, PYTHONCASEOK
 USAGE2 = """
 Other environment variables:
@@ -119,13 +119,12 @@ def display_exception():
     except:
         try:
             stderr = sys.stderr
-        except AttributeError:
-            pass   # too bad
-        else:
             print >> stderr, 'Error calling sys.excepthook:'
             originalexcepthook(*sys.exc_info())
             print >> stderr
             print >> stderr, 'Original exception was:'
+        except:
+            pass   # too bad
 
     # we only get here if sys.excepthook didn't do its job
     originalexcepthook(etype, evalue, etraceback)
@@ -195,6 +194,11 @@ def _print_jit_help():
 def print_version(*args):
     print >> sys.stderr, "Python", sys.version
     raise SystemExit
+
+
+def funroll_loops(*args):
+    print("Vroom vroom, I'm a racecar!")
+
 
 def set_jit_option(options, jitparam, *args):
     if jitparam == 'help':
@@ -381,6 +385,7 @@ cmdline_options = {
     'Q':         (div_option,      Ellipsis),
     '--info':    (print_info,      None),
     '--jit':     (set_jit_option,  Ellipsis),
+    '-funroll-loops': (funroll_loops, None),
     '--':        (end_options,     None),
     }
 
@@ -470,6 +475,10 @@ def parse_command_line(argv):
         sys.py3kwarning = bool(sys.flags.py3k_warning)
         sys.dont_write_bytecode = bool(sys.flags.dont_write_bytecode)
 
+        if sys.flags.optimize >= 1:
+            import __pypy__
+            __pypy__.set_debug(False)
+
         if sys.py3kwarning:
             print >> sys.stderr, (
                 "Warning: pypy does not implement py3k warnings")
@@ -546,8 +555,15 @@ def run_command_line(interactive,
         # or
         #     * PYTHONINSPECT is set and stdin is a tty.
         #
+        try:
+            # we need a version of getenv that bypasses Python caching
+            from __pypy__.os import real_getenv
+        except ImportError:
+            # dont fail on CPython here
+            real_getenv = os.getenv
+
         return (interactive or
-                ((inspect or (readenv and os.getenv('PYTHONINSPECT')))
+                ((inspect or (readenv and real_getenv('PYTHONINSPECT')))
                  and sys.stdin.isatty()))
 
     success = True

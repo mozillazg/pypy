@@ -3,13 +3,12 @@ from rpython.rlib.objectmodel import instantiate
 from rpython.jit.metainterp.optimizeopt.test.test_util import (
     LLtypeMixin, BaseTest, FakeMetaInterpStaticData, convert_old_style_to_targets)
 from rpython.jit.metainterp.history import TargetToken, JitCellToken
-from rpython.jit.metainterp.test.test_compile import FakeLogger
 import rpython.jit.metainterp.optimizeopt.optimizer as optimizeopt
 import rpython.jit.metainterp.optimizeopt.virtualize as virtualize
 from rpython.jit.metainterp.optimize import InvalidLoop
-from rpython.jit.metainterp.history import AbstractDescr, ConstInt, BoxInt, get_const_ptr_for_string
-from rpython.jit.metainterp import executor, compile, resume, history
-from rpython.jit.metainterp.resoperation import rop, opname, ResOperation
+from rpython.jit.metainterp.history import ConstInt, BoxInt, get_const_ptr_for_string
+from rpython.jit.metainterp import executor, compile, resume
+from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.rlib.rarithmetic import LONG_BIT
 
 def test_store_final_boxes_in_guard():
@@ -27,7 +26,7 @@ def test_store_final_boxes_in_guard():
     snapshot0 = resume.Snapshot(None, [b0])
     fdescr.rd_snapshot = resume.Snapshot(snapshot0, [b1])
     #
-    opt.store_final_boxes_in_guard(op)
+    opt.store_final_boxes_in_guard(op, [])
     if op.getfailargs() == [b0, b1]:
         assert list(fdescr.rd_numb.nums)      == [tag(1, TAGBOX)]
         assert list(fdescr.rd_numb.prev.nums) == [tag(0, TAGBOX)]
@@ -3671,6 +3670,20 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
+    def test_int_add_commutative(self):
+        ops = """
+        [i0, i1]
+        i2 = int_add(i0, i1)
+        i3 = int_add(i1, i0)
+        jump(i2, i3)
+        """
+        expected = """
+        [i0, i1]
+        i2 = int_add(i0, i1)
+        jump(i2, i2)
+        """
+        self.optimize_loop(ops, expected)
+
     def test_framestackdepth_overhead(self):
         ops = """
         [p0, i22]
@@ -3733,6 +3746,33 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         guard_no_overflow() []
         i2 = int_add(i1, 5)
         jump(i2)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_sub_identity(self):
+        ops = """
+        [i0]
+        i1 = int_sub(i0, i0)
+        i2 = int_sub(i1, i0)
+        jump(i1, i2)
+        """
+        expected = """
+        [i0]
+        i2 = int_neg(i0)
+        jump(0, i2)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_shift_zero(self):
+        ops = """
+        [i0]
+        i1 = int_lshift(0, i0)
+        i2 = int_rshift(0, i0)
+        jump(i1, i2)
+        """
+        expected = """
+        [i0]
+        jump(0, 0)
         """
         self.optimize_loop(ops, expected)
 
@@ -4991,6 +5031,19 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_strunicode_loop(ops, expected)
 
+    def test_copy_long_string_to_virtual(self):
+        ops = """
+        []
+        p0 = newstr(20)
+        copystrcontent(s"aaaaaaaaaaaaaaaaaaaa", p0, 0, 0, 20)
+        jump(p0)
+        """
+        expected = """
+        []
+        jump(s"aaaaaaaaaaaaaaaaaaaa")
+        """
+        self.optimize_strunicode_loop(ops, expected)
+
     def test_ptr_eq_str_constant(self):
         ops = """
         []
@@ -5082,6 +5135,42 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_strunicode_loop(ops, expected)
 
+    def test_str_copy_virtual_src_concrete_dst(self):
+        ops = """
+        [p0]
+        p1 = newstr(2)
+        strsetitem(p1, 0, 101)
+        strsetitem(p1, 1, 102)
+        copystrcontent(p1, p0, 0, 0, 2)
+        finish(p0)
+        """
+        expected = """
+        [p0]
+        strsetitem(p0, 0, 101)
+        strsetitem(p0, 1, 102)
+        finish(p0)
+        """
+        self.optimize_strunicode_loop(ops, expected)
+
+    def test_str_copy_bug1(self):
+        ops = """
+        [i0]
+        p1 = newstr(1)
+        strsetitem(p1, 0, i0)
+        p2 = newstr(1)
+        escape(p2)
+        copystrcontent(p1, p2, 0, 0, 1)
+        finish()
+        """
+        expected = """
+        [i0]
+        p2 = newstr(1)
+        escape(p2)
+        strsetitem(p2, 0, i0)
+        finish()
+        """
+        self.optimize_strunicode_loop(ops, expected)
+
     def test_call_pure_vstring_const(self):
         py.test.skip("implement me")
         ops = """
@@ -5102,35 +5191,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         }
         self.optimize_loop(ops, expected, call_pure_results)
 
+    def test_guard_not_forced_2_virtual(self):
+        ops = """
+        [i0]
+        p0 = new_array(3, descr=arraydescr)
+        guard_not_forced_2() [p0]
+        finish(p0)
+        """
+        self.optimize_loop(ops, ops)
+
 
 class TestLLtype(BaseTestOptimizeBasic, LLtypeMixin):
     pass
-
-##class TestOOtype(BaseTestOptimizeBasic, OOtypeMixin):
-
-##    def test_instanceof(self):
-##        ops = """
-##        [i0]
-##        p0 = new_with_vtable(ConstClass(node_vtable))
-##        i1 = instanceof(p0, descr=nodesize)
-##        jump(i1)
-##        """
-##        expected = """
-##        [i0]
-##        jump(1)
-##        """
-##        self.optimize_loop(ops, expected)
-
-##    def test_instanceof_guard_class(self):
-##        ops = """
-##        [i0, p0]
-##        guard_class(p0, ConstClass(node_vtable)) []
-##        i1 = instanceof(p0, descr=nodesize)
-##        jump(i1, p0)
-##        """
-##        expected = """
-##        [i0, p0]
-##        guard_class(p0, ConstClass(node_vtable)) []
-##        jump(1, p0)
-##        """
-##        self.optimize_loop(ops, expected)

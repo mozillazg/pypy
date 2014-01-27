@@ -215,7 +215,8 @@ class SomeBool(SomeInteger):
 
 
 class SomeStringOrUnicode(SomeObject):
-    """Base class for shared implementation of SomeString and SomeUnicodeString.
+    """Base class for shared implementation of SomeString,
+    SomeUnicodeString and SomeByteArray.
 
     Cannot be an annotation."""
 
@@ -228,6 +229,7 @@ class SomeStringOrUnicode(SomeObject):
         if can_be_None:
             self.can_be_None = True
         if no_nul:
+            assert self.immutable   #'no_nul' cannot be used with SomeByteArray
             self.no_nul = True
 
     def can_be_none(self):
@@ -263,6 +265,7 @@ class SomeUnicodeString(SomeStringOrUnicode):
 
 
 class SomeByteArray(SomeStringOrUnicode):
+    immutable = False
     knowntype = bytearray
 
 
@@ -355,6 +358,22 @@ class SomeDict(SomeObject):
         else:
             return '{...%s...}' % (len(const),)
 
+class SomeOrderedDict(SomeDict):
+    try:
+        from collections import OrderedDict as knowntype
+    except ImportError:    # Python 2.6
+        class PseudoOrderedDict(dict): pass
+        knowntype = PseudoOrderedDict
+
+    def method_copy(dct):
+        return SomeOrderedDict(dct.dictdef)
+
+    def method_update(dct1, dct2):
+        if s_None.contains(dct2):
+            return SomeImpossibleValue()
+        assert isinstance(dct2, SomeOrderedDict), "OrderedDict.update(dict) not allowed"
+        dct1.dictdef.union(dct2.dictdef)
+
 
 class SomeIterator(SomeObject):
     "Stands for an iterator returning objects from a given container."
@@ -441,15 +460,15 @@ class SomePBC(SomeObject):
 
     def getKind(self):
         "Return the common Desc class of all descriptions in this PBC."
-        kinds = {}
+        kinds = set()
         for x in self.descriptions:
             assert type(x).__name__.endswith('Desc')  # avoid import nightmares
-            kinds[x.__class__] = True
-        assert len(kinds) <= 1, (
-            "mixing several kinds of PBCs: %r" % (kinds.keys(),))
+            kinds.add(x.__class__)
+        if len(kinds) > 1:
+            raise AnnotatorError("mixing several kinds of PBCs: %r" % kinds)
         if not kinds:
             raise ValueError("no 'kind' on the 'None' PBC")
-        return kinds.keys()[0]
+        return kinds.pop()
 
     def simplify(self):
         if self.descriptions:
@@ -485,6 +504,14 @@ class SomePBC(SomeObject):
             return None
         else:
             return kt.__name__
+
+class SomeConstantType(SomePBC):
+    can_be_None = False
+    subset_of = None
+    def __init__(self, x, bk):
+        self.descriptions = set([bk.getdesc(x)])
+        self.knowntype = type(x)
+        self.const = x
 
 
 class SomeBuiltin(SomeObject):
@@ -603,36 +630,6 @@ class SomeLLADTMeth(SomeObject):
         return False
 
 
-class SomeOOObject(SomeObject):
-    def __init__(self):
-        from rpython.rtyper.ootypesystem import ootype
-        self.ootype = ootype.Object
-
-
-class SomeOOClass(SomeObject):
-    def __init__(self, ootype):
-        self.ootype = ootype
-
-
-class SomeOOInstance(SomeObject):
-    def __init__(self, ootype, can_be_None=False):
-        self.ootype = ootype
-        self.can_be_None = can_be_None
-
-
-class SomeOOBoundMeth(SomeObject):
-    immutable = True
-
-    def __init__(self, ootype, name):
-        self.ootype = ootype
-        self.name = name
-
-
-class SomeOOStaticMeth(SomeObject):
-    immutable = True
-
-    def __init__(self, method):
-        self.method = method
 
 annotation_to_ll_map = [
     (SomeSingleFloat(), lltype.SingleFloat),
@@ -647,16 +644,6 @@ annotation_to_ll_map = [
 
 
 def annotation_to_lltype(s_val, info=None):
-    from rpython.rtyper.ootypesystem import ootype
-
-    if isinstance(s_val, SomeOOInstance):
-        return s_val.ootype
-    if isinstance(s_val, SomeOOStaticMeth):
-        return s_val.method
-    if isinstance(s_val, SomeOOClass):
-        return ootype.Class
-    if isinstance(s_val, SomeOOObject):
-        return s_val.ootype
     if isinstance(s_val, SomeInteriorPtr):
         p = s_val.ll_ptrtype
         if 0 in p.offsets:
@@ -683,8 +670,6 @@ ll_to_annotation_map = dict([(ll, ann) for ann, ll in annotation_to_ll_map])
 
 
 def lltype_to_annotation(T):
-    from rpython.rtyper.ootypesystem import ootype
-
     try:
         s = ll_to_annotation_map.get(T)
     except TypeError:
@@ -694,14 +679,6 @@ def lltype_to_annotation(T):
             return lltype_to_annotation(T.OF)
         if isinstance(T, lltype.Number):
             return SomeInteger(knowntype=T._type)
-        if isinstance(T, (ootype.Instance, ootype.BuiltinType)):
-            return SomeOOInstance(T)
-        elif isinstance(T, ootype.StaticMethod):
-            return SomeOOStaticMeth(T)
-        elif T == ootype.Class:
-            return SomeOOClass(ootype.ROOT)
-        elif T == ootype.Object:
-            return SomeOOObject()
         elif isinstance(T, lltype.InteriorPtr):
             return SomeInteriorPtr(T)
         else:
@@ -726,10 +703,42 @@ def ll_to_annotation(v):
 
 # ____________________________________________________________
 
-class UnionError(Exception):
+
+class AnnotatorError(Exception):
+    def __init__(self, msg=None):
+        self.msg = msg
+        self.source = None
+
+    def __str__(self):
+        s = "\n\n%s" % self.msg
+        if self.source is not None:
+            s += "\n\n"
+            s += self.source
+
+        return s
+
+class UnionError(AnnotatorError):
     """Signals an suspicious attempt at taking the union of
     deeply incompatible SomeXxx instances."""
 
+    def __init__(self, s_obj1, s_obj2, msg=None):
+        """
+        This exception expresses the fact that s_obj1 and s_obj2 cannot be unified.
+        The msg paramter is appended to a generic message. This can be used to
+        give the user a little more information.
+        """
+        s = ""
+        if msg is not None:
+            s += "%s\n\n" % msg
+        s += "Offending annotations:\n"
+        s += "  %s\n  %s" % (s_obj1, s_obj2)
+        self.s_obj1 = s_obj1
+        self.s_obj2 = s_obj2
+        self.msg = s
+        self.source = None
+
+    def __repr__(self):
+        return str(self)
 
 def unionof(*somevalues):
     "The most precise SomeValue instance that contains all the values."
@@ -788,21 +797,6 @@ def commonbase(cls1, cls2):   # XXX single inheritance only  XXX hum
         if x in l2:
             return x
     assert 0, "couldn't get to commonbase of %r and %r" % (cls1, cls2)
-
-
-def missing_operation(cls, name):
-    def default_op(*args):
-        if args and isinstance(args[0], tuple):
-            flattened = tuple(args[0]) + args[1:]
-        else:
-            flattened = args
-        for arg in flattened:
-            if arg.__class__ is SomeObject and arg.knowntype is not type:
-                return SomeObject()
-        bookkeeper = rpython.annotator.bookkeeper.getbookkeeper()
-        bookkeeper.warning("no precise annotation supplied for %s%r" % (name, args))
-        return s_ImpossibleValue
-    setattr(cls, name, default_op)
 
 
 class HarmlesslyBlocked(Exception):

@@ -151,7 +151,7 @@ def external(name, args, result, eci=CConfig._compilation_info_):
     return rffi.llexternal(name, args, result,
                            compilation_info=eci,
                            calling_conv=calling_conv,
-                           threadsafe=False)
+                           releasegil=False)
 
 if _POSIX:
     cConfig.timeval.__name__ = "_timeval"
@@ -209,12 +209,12 @@ def _init_timezone(space):
     tzname = ["", ""]
 
     if _WIN:
-         c_tzset()
-         timezone = c_get_timezone()
-         altzone = timezone - 3600
-         daylight = c_get_daylight()
-         tzname_ptr = c_get_tzname()
-         tzname = rffi.charp2str(tzname_ptr[0]), rffi.charp2str(tzname_ptr[1])
+        c_tzset()
+        timezone = c_get_timezone()
+        altzone = timezone - 3600
+        daylight = c_get_daylight()
+        tzname_ptr = c_get_tzname()
+        tzname = rffi.charp2str(tzname_ptr[0]), rffi.charp2str(tzname_ptr[1])
 
     if _POSIX:
         if _CYGWIN:

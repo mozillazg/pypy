@@ -58,7 +58,7 @@ class W_DictMultiObject(W_Root):
             strategy = space.fromcache(MapDictStrategy)
         elif instance or strdict or module:
             assert w_type is None
-            strategy = space.fromcache(StringDictStrategy)
+            strategy = space.fromcache(BytesDictStrategy)
         elif kwargs:
             assert w_type is None
             from pypy.objspace.std.kwargsdict import EmptyKwargsDictStrategy
@@ -80,6 +80,7 @@ class W_DictMultiObject(W_Root):
 
     def __repr__(w_self):
         """representation for debugging purposes"""
+        #print('XXXXXXX', w_self.dstorage)
         return "%s(%s)" % (w_self.__class__.__name__, w_self.strategy)
 
     def unwrap(w_dict, space):
@@ -116,9 +117,9 @@ class W_DictMultiObject(W_Root):
         if space.is_w(w_type, space.w_dict):
             w_dict = W_DictMultiObject.allocate_and_init_instance(space, w_type)
 
-            strlist = space.listview_str(w_keys)
-            if strlist is not None:
-                for key in strlist:
+            byteslist = space.listview_bytes(w_keys)
+            if byteslist is not None:
+                for key in byteslist:
                     w_dict.setitem_str(key, w_fill)
             else:
                 for w_key in space.listview(w_keys):
@@ -225,8 +226,8 @@ class W_DictMultiObject(W_Root):
             space.raise_key_error(w_key)
 
     def descr_reversed(self, space):
-        raise OperationError(space.w_TypeError, space.wrap(
-                'argument to reversed() must be a sequence'))
+        raise operationerrfmt(space.w_TypeError,
+                              'argument to reversed() must be a sequence')
 
     def descr_copy(self, space):
         """D.copy() -> a shallow copy of D"""
@@ -332,7 +333,7 @@ def _add_indirections():
                     popitem delitem clear \
                     length w_keys values items \
                     iterkeys itervalues iteritems \
-                    listview_str listview_unicode listview_int \
+                    listview_bytes listview_unicode listview_int \
                     view_as_kwargs".split()
 
     def make_method(method):
@@ -433,6 +434,8 @@ class DictStrategy(object):
     def get_empty_storage(self):
         raise NotImplementedError
 
+    @jit.look_inside_iff(lambda self, w_dict:
+                         w_dict_unrolling_heuristic(w_dict))
     def w_keys(self, w_dict):
         iterator = self.iterkeys(w_dict)
         result = newlist_hint(self.length(w_dict))
@@ -479,7 +482,7 @@ class DictStrategy(object):
         w_dict.strategy = strategy
         w_dict.dstorage = storage
 
-    def listview_str(self, w_dict):
+    def listview_bytes(self, w_dict):
         return None
 
     def listview_unicode(self, w_dict):
@@ -503,7 +506,7 @@ class EmptyDictStrategy(DictStrategy):
     def switch_to_correct_strategy(self, w_dict, w_key):
         withidentitydict = self.space.config.objspace.std.withidentitydict
         if type(w_key) is self.space.StringObjectCls:
-            self.switch_to_string_strategy(w_dict)
+            self.switch_to_bytes_strategy(w_dict)
             return
         elif type(w_key) is self.space.UnicodeObjectCls:
             self.switch_to_unicode_strategy(w_dict)
@@ -516,8 +519,8 @@ class EmptyDictStrategy(DictStrategy):
         else:
             self.switch_to_object_strategy(w_dict)
 
-    def switch_to_string_strategy(self, w_dict):
-        strategy = self.space.fromcache(StringDictStrategy)
+    def switch_to_bytes_strategy(self, w_dict):
+        strategy = self.space.fromcache(BytesDictStrategy)
         storage = strategy.get_empty_storage()
         w_dict.strategy = strategy
         w_dict.dstorage = storage
@@ -569,7 +572,7 @@ class EmptyDictStrategy(DictStrategy):
         w_dict.setitem(w_key, w_value)
 
     def setitem_str(self, w_dict, key, w_value):
-        self.switch_to_string_strategy(w_dict)
+        self.switch_to_bytes_strategy(w_dict)
         w_dict.setitem_str(key, w_value)
 
     def delitem(self, w_dict, w_key):
@@ -871,8 +874,8 @@ class ObjectDictStrategy(AbstractTypedStrategy, DictStrategy):
 create_iterator_classes(ObjectDictStrategy)
 
 
-class StringDictStrategy(AbstractTypedStrategy, DictStrategy):
-    erase, unerase = rerased.new_erasing_pair("string")
+class BytesDictStrategy(AbstractTypedStrategy, DictStrategy):
+    erase, unerase = rerased.new_erasing_pair("bytes")
     erase = staticmethod(erase)
     unerase = staticmethod(unerase)
 
@@ -910,11 +913,11 @@ class StringDictStrategy(AbstractTypedStrategy, DictStrategy):
         assert key is not None
         return self.unerase(w_dict.dstorage).get(key, None)
 
-    def listview_str(self, w_dict):
+    def listview_bytes(self, w_dict):
         return self.unerase(w_dict.dstorage).keys()
 
     def w_keys(self, w_dict):
-        return self.space.newlist_str(self.listview_str(w_dict))
+        return self.space.newlist_bytes(self.listview_bytes(w_dict))
 
     def wrapkey(space, key):
         return space.wrap(key)
@@ -932,7 +935,7 @@ class StringDictStrategy(AbstractTypedStrategy, DictStrategy):
             i += 1
         return keys, values
 
-create_iterator_classes(StringDictStrategy)
+create_iterator_classes(BytesDictStrategy)
 
 
 class UnicodeDictStrategy(AbstractTypedStrategy, DictStrategy):
@@ -958,7 +961,7 @@ class UnicodeDictStrategy(AbstractTypedStrategy, DictStrategy):
     def _never_equal_to(self, w_lookup_type):
         return _never_equal_to_string(self.space, w_lookup_type)
 
-    # we should implement the same shortcuts as we do for StringDictStrategy
+    # we should implement the same shortcuts as we do for BytesDictStrategy
 
     ## def setitem_str(self, w_dict, key, w_value):
     ##     assert key is not None
@@ -980,7 +983,7 @@ class UnicodeDictStrategy(AbstractTypedStrategy, DictStrategy):
         return self.unerase(w_dict.dstorage).keys()
 
     ## def w_keys(self, w_dict):
-    ##     return self.space.newlist_str(self.listview_str(w_dict))
+    ##     return self.space.newlist_bytes(self.listview_bytes(w_dict))
 
     def wrapkey(space, key):
         return space.wrap(key)
@@ -1039,15 +1042,18 @@ create_iterator_classes(IntDictStrategy)
 
 
 def update1(space, w_dict, w_data):
-    if space.findattr(w_data, space.wrap("keys")) is None:
+    if isinstance(w_data, W_DictMultiObject):    # optimization case only
+        update1_dict_dict(space, w_dict, w_data)
+        return
+    w_method = space.findattr(w_data, space.wrap("keys"))
+    if w_method is None:
         # no 'keys' method, so we assume it is a sequence of pairs
-        update1_pairs(space, w_dict, w_data)
+        data_w = space.listview(w_data)
+        update1_pairs(space, w_dict, data_w)
     else:
-        if isinstance(w_data, W_DictMultiObject):    # optimization case only
-            update1_dict_dict(space, w_dict, w_data)
-        else:
-            # general case -- "for k in o.keys(): dict.__setitem__(d, k, o[k])"
-            update1_keys(space, w_dict, w_data)
+        # general case -- "for k in o.keys(): dict.__setitem__(d, k, o[k])"
+        data_w = space.listview(space.call_function(w_method))
+        update1_keys(space, w_dict, w_data, data_w)
 
 
 @jit.look_inside_iff(lambda space, w_dict, w_data:
@@ -1061,8 +1067,8 @@ def update1_dict_dict(space, w_dict, w_data):
         w_dict.setitem(w_key, w_value)
 
 
-def update1_pairs(space, w_dict, w_data):
-    for w_pair in space.listview(w_data):
+def update1_pairs(space, w_dict, data_w):
+    for w_pair in data_w:
         pair = space.fixedview(w_pair)
         if len(pair) != 2:
             raise OperationError(space.w_ValueError,
@@ -1071,9 +1077,8 @@ def update1_pairs(space, w_dict, w_data):
         w_dict.setitem(w_key, w_value)
 
 
-def update1_keys(space, w_dict, w_data):
-    w_keys = space.call_method(w_data, "keys")
-    for w_key in space.listview(w_keys):
+def update1_keys(space, w_dict, w_data, data_w):
+    for w_key in data_w:
         w_value = space.getitem(w_data, w_key)
         w_dict.setitem(w_key, w_value)
 
@@ -1274,10 +1279,7 @@ class SetLikeDictView(object):
             return _all_contained_in(space, self, w_other)
         return space.w_False
 
-    def descr_ne(self, space, w_other):
-        if not _is_set_like(w_other):
-            return space.w_NotImplemented
-        return space.not_(space.eq(self, w_other))
+    descr_ne = negate(descr_eq)
 
     def descr_lt(self, space, w_other):
         if not _is_set_like(w_other):
