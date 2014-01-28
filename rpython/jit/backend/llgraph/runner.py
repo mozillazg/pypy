@@ -28,25 +28,16 @@ class Position(object):
     def __repr__(self):
         return '<Pos %d>' % self.pos
 
-class ResumeFrame(object):
-    def __init__(self, no, start_pos):
-        self.registers = [None] * no
-        self.start_pos = start_pos
 
 class LLGraphResumeBuilder(ResumeBuilder):
     def __init__(self, mapping, frontend_liveness, descr, inputargs, inputlocs):
         self.liveness = LivenessAnalyzer()
         self.numbering = {}
-        self.deps = {}
         self.mapping = mapping
-        self.framestack = []
-        if inputlocs is not None:
-            assert len(inputargs) == len(inputlocs)
-            for arg, loc in zip(inputargs, inputlocs):
-                self.numbering[self.mapping(arg)] = loc
-            max_no = max(self.numbering.values())
-            while max_no >= len(self.numbering):
-                self.numbering[Box()] = -1
+        self.inputlocs = inputlocs
+        self.inputargs = inputargs
+        for arg in self.inputargs:
+            self.numbering[self.mapping(arg)] = len(self.numbering)
         ResumeBuilder.__init__(self, self, frontend_liveness, descr)
 
     def loc(self, box, must_exist=True):
@@ -57,65 +48,31 @@ class LLGraphResumeBuilder(ResumeBuilder):
         ResumeBuilder.process(self, op)
 
     def process_enter_frame(self, op):
-        if self.framestack:
-            prev_frame = self.framestack[-1]
-            start_pos = prev_frame.start_pos + len(prev_frame.registers)
-        else:
-            start_pos = 0
-        self.framestack.append(ResumeFrame(op.getdescr().num_regs(), start_pos))
+        pass
 
     def process_leave_frame(self, op):
-        self.framestack.pop()
+        pass
 
     def process_resume_set_pc(self, op):
         pass
 
     def process_resume_new_with_vtable(self, op):
-        self._add_box_to_numbering(op.result)
-        self.deps[op.result] = {}
+        pass
 
     def process_resume_setfield_gc(self, op):
         self._add_box_to_numbering(op.getarg(1))
-        self.deps[op.getarg(0)][op.getdescr()] = op.getarg(1)
 
     def _add_box_to_numbering(self, box):
-        if box not in self.deps:
-            if self.mapping(box) not in self.numbering:
-                self.numbering[self.mapping(box)] = len(self.numbering)
-
-    def process_resume_put(self, op):
-        box = op.getarg(0)
         if isinstance(box, Const):
             return
-        self._add_box_to_numbering(box)
-        frame_pos = op.getarg(1).getint()
-        pos_in_frame = op.getarg(2).getint()
-        self.framestack[frame_pos].registers[pos_in_frame] = box
+        if self.mapping(box) not in self.numbering:
+            self.numbering[self.mapping(box)] = len(self.numbering)
+
+    def process_resume_put(self, op):
+        self._add_box_to_numbering(op.getarg(0))
 
     def process_resume_clear(self, op):
-        frame_pos = op.getarg(0).getint()
-        frontend_pos = op.getarg(1).getint()
-        self.framestack[frame_pos].registers[frontend_pos] = None
-
-    def extend_from_virtual(self, r, box):
-        for v in sorted(self.deps[box].values()):
-            if v in self.deps:
-                self.extend_from_virtual(r, v)
-            else:
-                r.append(self.mapping(v))
-
-    def get_numbering(self, mapping, op):
-        res = []
-        all = {}
-        for frame in self.framestack:
-            for reg in frame.registers:
-                if reg is not None and isinstance(reg, Box) and reg not in all:
-                    if reg in self.deps:
-                        self.extend_from_virtual(res, reg)
-                    else:
-                        res.append(mapping(reg))
-                    all[reg] = None
-        return res
+        pass
     
 class LLTrace(object):
     has_been_freed = False
@@ -142,6 +99,7 @@ class LLTrace(object):
         resumebuilder = LLGraphResumeBuilder(mapping, frontend_liveness, descr,
                                              inputargs, locs)
         self.numbering = resumebuilder.numbering
+        self.inputlocs = resumebuilder.inputlocs
         for op in operations:
             if op.is_resume():
                 resumebuilder.process(op)
@@ -158,7 +116,6 @@ class LLTrace(object):
                                        mapping(op.result),
                                        newdescr)
             if op.is_guard():
-                newop.failargs = resumebuilder.get_numbering(mapping, op)
                 newop.getdescr().rd_bytecode_position = resumebuilder.builder.getpos()
             self.operations.append(newop)
 
@@ -352,7 +309,7 @@ class LLGraphCPU(model.AbstractCPU):
 
     def _execute_token(self, loop_token, *args):
         lltrace = loop_token.compiled_loop_token._llgraph_loop
-        frame = LLFrame(self, lltrace.inputargs, args, lltrace.numbering)
+        frame = LLFrame(self, lltrace.inputargs, args)
         try:
             frame.execute(lltrace)
             assert False
@@ -390,16 +347,13 @@ class LLGraphCPU(model.AbstractCPU):
         assert isinstance(frame, LLFrame)
         assert frame.forced_deadframe is None
         values = {}
-        for box in frame.force_guard_op.failargs:
-            if box is None:
-                value = None
-            elif isinstance(box, Const):
-                xxx
-            elif box is not frame.current_op.result:
-                value = frame.env[box]
-            else:
-                value = box.value    # 0 or 0.0 or NULL
-            values[frame.numbering[box]] = value
+        import pdb
+        pdb.set_trace()
+        for k, v in frame.lltrace.numbering.iteritems():
+            try:
+                values[v] = frame.env[k]
+            except KeyError:
+                pass
         frame.forced_deadframe = LLDeadFrame(
             _getdescr(frame.force_guard_op), values)
         return frame.forced_deadframe
@@ -730,10 +684,9 @@ class LLFrame(object):
     last_exception = None
     force_guard_op = None
 
-    def __init__(self, cpu, argboxes, args, numbering):
+    def __init__(self, cpu, argboxes, args):
         self.env = {}
         self.cpu = cpu
-        self.numbering = numbering
         assert len(argboxes) == len(args)
         for box, arg in zip(argboxes, args):
             self.setenv(box, arg)
@@ -789,7 +742,6 @@ class LLFrame(object):
                 resval = execute(_getdescr(op), *args)
             except Jump, j:
                 self.lltrace, i = j.jump_target
-                self.numbering = self.lltrace.numbering
                 if i >= 0:
                     label_op = self.lltrace.operations[i]
                     i += 1
@@ -810,8 +762,8 @@ class LLFrame(object):
         self.framecontent = {}
         i = 0
         if isinstance(newvalues, dict):
-            for arg in newargs:
-                self.setenv(arg, newvalues[self.numbering[arg]])
+            for arg, loc in zip(newargs, self.lltrace.inputlocs):
+                self.setenv(arg, newvalues[loc])
         else:
             for value in newvalues:
                 assert value is not None
@@ -823,10 +775,11 @@ class LLFrame(object):
 
     def fail_guard(self, descr, saved_data=None):
         values = {}
-        for i in range(len(self.current_op.failargs)):
-            arg = self.current_op.failargs[i]
-            value = self.env[arg]
-            values[self.numbering[arg]] = value
+        for k, v in self.lltrace.numbering.iteritems():
+            try:
+                values[v] = self.env[k]
+            except KeyError:
+                pass
         if hasattr(descr, '_llgraph_bridge'):
             target = (descr._llgraph_bridge, -1)
             raise Jump(target, values)

@@ -190,7 +190,9 @@ class BaseBackendTest(Runner):
         deadframe = self.cpu.execute_token(looptoken, 2)
         fail = self.cpu.get_latest_descr(deadframe)
         assert fail.identifier == 2
-        res = self.cpu.get_int_value(deadframe, 0)
+        staticdata = MockStaticData([jitcode], [])
+        locs = rebuild_locs_from_resumedata(fail, staticdata)
+        res = self.cpu.get_int_value(deadframe, locs[0])
         assert res == 10
 
     def test_backends_dont_keep_loops_alive(self):
@@ -4309,6 +4311,11 @@ class LLtypeBackendTest(BaseBackendTest):
             rawstorage.free_raw_storage(p)
 
     def test_forcing_op_with_fail_arg_in_reg(self):
+        from rpython.jit.backend.llsupport.llmodel import AbstractLLCPU
+        
+        if not isinstance(self.cpu, AbstractLLCPU):
+            py.test.skip("llgraph can't read data in between (it's not correctly zeroed), don't care")
+
         values = []
         def maybe_force(token, flag):
             deadframe = self.cpu.force(token)
