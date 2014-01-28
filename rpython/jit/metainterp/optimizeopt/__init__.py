@@ -19,7 +19,8 @@ ALL_OPTS = [('intbounds', OptIntBounds),
             ('string', OptString),
             ('earlyforce', OptEarlyForce),
             ('pure', OptPure),
-            ('heap', OptHeap)]
+            ('heap', OptHeap),
+            ('unroll', None)]
 # no direct instantiation of unroll
 unroll_all_opts = unrolling_iterable(ALL_OPTS)
 
