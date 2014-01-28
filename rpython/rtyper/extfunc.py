@@ -5,6 +5,7 @@ from rpython.annotator import model as annmodel
 from rpython.annotator.signature import annotation
 
 import py, sys
+from types import FunctionType
 
 class extdef(object):
 
@@ -162,6 +163,20 @@ class ExtFuncEntry(ExtRegistryEntry):
         impl = getattr(self, method_name, None)
         fakeimpl = getattr(self, fake_method_name, self.instance)
         if impl:
+            if not isinstance(impl, FunctionType):
+                # We can't add the _fakeimpl attribute on lltype function ptrs,
+                # so instead we create a wrapper with that attribute.
+                from rpython.tool.sourcetools import func_with_new_name
+                # Using '*args' is delicate because this wrapper is also
+                # created for init-time functions like llarena.arena_malloc
+                # which are called before the GC is fully initialized
+                args = ', '.join(['arg%d' % i for i in range(len(args_ll))])
+                d = {'original_impl': impl, '__name__': __name__}
+                exec py.code.compile("""
+                    def ll_wrapper(%s):
+                        return original_impl(%s)
+                """ % (args, args)) in d
+                impl = func_with_new_name(d['ll_wrapper'], name + '_wrapper')
             if rtyper.annotator.translator.config.translation.sandbox:
                 impl._dont_inline_ = True
             # store some attributes to the 'impl' function, where
