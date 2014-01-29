@@ -82,10 +82,6 @@ class BasicTests:
             found = 0
             for op in get_stats().get_all_loops()[0]._all_operations():
                 if op.getopname() == 'guard_true':
-                    liveboxes = op.getfailargs()
-                    assert len(liveboxes) == 3
-                    for box in liveboxes:
-                        assert isinstance(box, history.BoxInt)
                     found += 1
             assert found == 2
 

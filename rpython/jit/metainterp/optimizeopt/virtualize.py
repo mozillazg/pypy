@@ -842,7 +842,9 @@ class OptVirtualize(optimizer.Optimization):
         self.emit_operation(op)
 
     def optimize_RESUME_PUT(self, op):
-        self.optimizer.resumebuilder.resume_put(op)
+        if op.getarg(0) in self.optimizer.producer:
+            self.optimizer.resumebuilder.resume_put(op)
+            # otherwise we did not emit the operation just yet
 
 
 dispatch_opt = make_dispatcher_method(OptVirtualize, 'optimize_',
