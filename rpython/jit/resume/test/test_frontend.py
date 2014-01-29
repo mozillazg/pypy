@@ -93,6 +93,14 @@ class MockCPU(object):
         self.history.append(("new", descr))
         return "new"
 
+    def bh_newstr(self, lgt):
+        self.history.append(("newstr", lgt))
+        return "newstr"
+
+    def bh_strsetitem(self, val, i, char):
+        assert val == "newstr"
+        self.history.append(("strsetitem", i, char))
+
     def bh_setfield_gc_i(self, struct, intval, fielddescr):
         self.history.append(("setfield_gc_i", struct, intval, fielddescr))
 
@@ -283,6 +291,43 @@ class TestResumeDirect(object):
         ]
         assert hist == dir_expected or hist == dir_expected2
         assert ib.interp.registers_r[0] == "new"
+
+    def test_newstr_unicode(self):
+        jitcode1 = JitCode("jitcode")
+        jitcode1.global_index = 0
+        jitcode1.setup(num_regs_i=0, num_regs_r=1, num_regs_f=0)
+        builder = ResumeBytecodeBuilder()
+        builder.enter_frame(-1, jitcode1)
+        builder.resume_newstr(0, 5)
+        builder.resume_strsetitem(0, 0, TAGBOX | (13 << 2))
+        builder.resume_put(TAGVIRTUAL | (0 << 2), 0, 0)
+
+        metainterp = MockMetaInterp()
+        metainterp.staticdata = MockStaticData([jitcode1], [])
+        metainterp.cpu = MockCPU()
+        metainterp.staticdata.cpu = metainterp.cpu
+        rd = builder.build()
+        descr = Descr()
+        descr.rd_resume_bytecode = ResumeBytecode(rd, [])
+        descr.rd_bytecode_position = len(rd)
+
+        rebuild_from_resumedata(metainterp, "myframe", descr)
+        expected = [
+            (rop.NEWSTR, [EqConstInt(5)]),
+            (rop.STRSETITEM, None, AnyBox(), EqConstInt(0), AnyBox()),
+            (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0), EqConstInt(0)),
+        ]
+        assert expected == metainterp.history
+        ib = FakeInterpBuilder()
+        blackhole_from_resumedata(ib, metainterp.staticdata,
+                                  descr, "myframe")
+        hist = metainterp.cpu.history
+        dir_expected = [
+            ("newstr", 5),
+            ("strsetitem", 0, 16)
+        ]
+        assert hist == dir_expected
+        assert ib.interp.registers_r[0] == "newstr"
 
     def test_reconstructing_resume_reader(self):
         jitcode1 = JitCode("jitcode")

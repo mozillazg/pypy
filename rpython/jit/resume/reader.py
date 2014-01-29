@@ -3,7 +3,7 @@ from rpython.rtyper.lltypesystem import lltype, rstr, llmemory
 
 from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.metainterp.resoperation import rop
-from rpython.jit.metainterp.history import ConstInt
+from rpython.jit.metainterp.history import ConstInt, INT
 from rpython.jit.codewriter import heaptracker
 from rpython.jit.resume import rescode
 
@@ -22,6 +22,10 @@ class BaseVirtualStruct(BaseVirtual):
         fields = self.fields
         for fielddescr, encoded_field_pos in fields.iteritems():
             reader.setfield_gc(val, encoded_field_pos, fielddescr)
+
+    def populate_fields_boxes(self, box, reader):
+        for fielddescr, encoded_field_pos in self.fields.iteritems():
+            reader.setfield_gc(box, encoded_field_pos, fielddescr)
 
 class VirtualStruct(BaseVirtualStruct):
     def __init__(self, pos, descr):
@@ -54,6 +58,33 @@ class VirtualStr(BaseVirtual):
         self.pos = pos
         self.lgt = lgt
         self.mode = mode
+        self.chars = [-1] * lgt
+
+    def populate_fields_boxes(self, box, reader):
+        for i in range(len(self.chars)):
+            ch = self.chars[i]
+            if ch != -1:
+                vbox = reader.get_box_value(-1, -1, ch, INT)
+                reader.strsetitem(box, ConstInt(i), vbox, self.mode)
+
+    def populate_fields(self, val, reader):
+        for i in range(len(self.chars)):
+            ch = self.chars[i]
+            if ch != -1:
+                itemval = reader.getint(ch)
+                reader.strsetitem(val, i, itemval, self.mode)
+
+    def allocate_box(self, metainterp):
+        if self.mode == 's':
+            resop = rop.NEWSTR
+        else:
+            resop = rop.NEWUNICODE
+        return metainterp.execute_and_record(resop, [ConstInt(self.lgt)])
+
+    def allocate_direct(self, reader, cpu):
+        if self.mode == 's':
+            return cpu.bh_newstr(self.lgt)
+        return cpu.bh_newunicode(self.lgt)
 
 class VirtualConcat(BaseVirtual):
     def __init__(self, pos, left, right, mode):
@@ -61,6 +92,12 @@ class VirtualConcat(BaseVirtual):
         self.left = left
         self.right = right
         self.mode = mode
+
+    def populate_fields_boxes(self, box, reader):
+        pass
+
+    def populate_fields(self, val, reader):
+        pass
 
     def allocate_direct(self, reader, cpu):
         leftval = reader.getref(self.left)
@@ -74,7 +111,6 @@ class VirtualConcat(BaseVirtual):
             return lltype.cast_opaque_ptr(llmemory.GCREF, result)
         else:
             xxx
-        xxx
 
 class AbstractResumeReader(object):
     """ A resume reader that can follow resume until given point. Consult
@@ -125,6 +161,11 @@ class AbstractResumeReader(object):
     def resume_concatunicode(self, v_pos, leftpos, rightpos):
         v = VirtualConcat(v_pos, leftpos, rightpos, 'u')
         self._add_to_virtuals(v, v_pos)
+
+    def resume_strsetitem(self, v_pos, index, sourcepos):
+        v = self.virtuals[v_pos]
+        assert isinstance(v, VirtualStr)
+        v.chars[index] = sourcepos
 
     def resume_new_with_vtable(self, v_pos, c_const_class):
         const_class = c_const_class.getint()
@@ -207,7 +248,10 @@ class AbstractResumeReader(object):
                 self.resume_set_pc(pc)
                 pos += 3
             elif op == rescode.RESUME_NEWSTR:
-                xxx
+                v_pos = self.read_short(pos + 1)
+                lgt = self.read(pos + 3)
+                self.resume_newstr(v_pos, lgt)
+                pos += 4
             elif op == rescode.RESUME_NEWUNICODE:
                 v_pos = self.read_short(pos + 1)
                 lgt = self.read(pos + 3)
@@ -221,6 +265,12 @@ class AbstractResumeReader(object):
                 right = self.read_short(pos + 5)
                 self.resume_concatunicode(v_pos, left, right)
                 pos += 7
+            elif op == rescode.RESUME_STRSETITEM:
+                v_pos = self.read_short(pos + 1)
+                index = self.read(pos + 3)
+                source = self.read(pos + 4)
+                self.resume_strsetitem(v_pos, index, source)
+                pos += 6
             else:
                 xxx
         self.bytecode = None

@@ -81,6 +81,12 @@ class DirectResumeReader(AbstractResumeReader):
         self.virtuals[index].populate_fields(val, self)
         return val
 
+    def strsetitem(self, str, index, char, mode):
+        if mode == 's':
+            self.cpu.bh_strsetitem(str, index, char)
+        else:
+            self.cpu.bh_unicodesetitem(str, index, char)
+
     def setfield_gc(self, struct, encoded_field_pos, fielddescr):
         if fielddescr.is_field_signed():
             intval = self.getint(encoded_field_pos)
@@ -142,8 +148,7 @@ class BoxResumeReader(AbstractResumeReader):
             virtual = self.virtuals[pos]
             virtual_box = virtual.allocate_box(self.metainterp)
             self.cache[encoded_pos] = virtual_box
-            for fielddescr, encoded_field_pos in virtual.fields.iteritems():
-                self.setfield_gc(virtual_box, encoded_field_pos, fielddescr)
+            virtual.populate_fields_boxes(virtual_box, self)
             if pos_in_frame != -1:
                 self.metainterp.history.record(rop.RESUME_PUT,
                                                [virtual_box,
@@ -166,6 +171,13 @@ class BoxResumeReader(AbstractResumeReader):
                                        self.getkind(fielddescr))
         self.metainterp.execute_and_record(rop.SETFIELD_GC, fielddescr,
                                            box, field_box)
+
+    def strsetitem(self, box, ibox, vbox, mode):
+        if mode == 's':
+            resop = rop.STRSETITEM
+        else:
+            resop = rop.UNICODESETITEM
+        self.metainterp.execute_and_record(resop, None, box, ibox, vbox)
 
     def store_int_box(self, frame_pos, pos, miframe, i, jitframe_pos):
         box = self.get_box_value(frame_pos, pos, jitframe_pos, INT)

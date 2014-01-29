@@ -18,14 +18,27 @@ class DepsFields(BaseDeps):
     def __init__(self):
         self.fields = {}
 
+    def foreach(self, callback, arg):
+        for v in self.fields.itervalues():
+            callback(arg, v)
+
 class DepsConcat(BaseDeps):
     def __init__(self, left, right):
         self.left = left
         self.right = right
 
+    def foreach(self, callback, arg):
+        callback(arg, self.left)
+        callback(arg, self.right)
+
 class DepsArray(BaseDeps):
     def __init__(self, size):
         self.l = [None] * size
+
+    def foreach(self, callback, arg):
+        for item in self.l:
+            if item is not None:
+                callback(arg, item)
 
 class LivenessAnalyzer(object):
     def __init__(self):
@@ -113,8 +126,7 @@ class LivenessAnalyzer(object):
 
     def _track(self, allboxes, box):
         if box in self.deps:
-            for dep in self.deps[box].values():
-                self._track(allboxes, dep)
+            self.deps[box].foreach(self._track, allboxes)
         if not isinstance(box, Const) and box is not None:
             allboxes.append(box)
 
