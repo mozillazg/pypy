@@ -19,6 +19,7 @@ MAX_CONST_LEN = 100
 class StrOrUnicode(object):
     def __init__(self, LLTYPE, hlstr, emptystr, chr,
                  NEWSTR, STRLEN, STRGETITEM, STRSETITEM, COPYSTRCONTENT,
+                 RESUME_NEW, RESUME_CONCAT,
                  OS_offset):
         self.LLTYPE = LLTYPE
         self.hlstr = hlstr
@@ -29,6 +30,8 @@ class StrOrUnicode(object):
         self.STRGETITEM = STRGETITEM
         self.STRSETITEM = STRSETITEM
         self.COPYSTRCONTENT = COPYSTRCONTENT
+        self.RESUME_NEW = RESUME_NEW
+        self.RESUME_CONCAT = RESUME_CONCAT
         self.OS_offset = OS_offset
 
     def _freeze_(self):
@@ -36,10 +39,12 @@ class StrOrUnicode(object):
 
 mode_string = StrOrUnicode(rstr.STR, annlowlevel.hlstr, '', chr,
                            rop.NEWSTR, rop.STRLEN, rop.STRGETITEM,
-                           rop.STRSETITEM, rop.COPYSTRCONTENT, 0)
+                           rop.STRSETITEM, rop.COPYSTRCONTENT,
+                           rop.RESUME_NEWSTR, rop.RESUME_CONCATSTR, 0)
 mode_unicode = StrOrUnicode(rstr.UNICODE, annlowlevel.hlunicode, u'', unichr,
                             rop.NEWUNICODE, rop.UNICODELEN, rop.UNICODEGETITEM,
                             rop.UNICODESETITEM, rop.COPYUNICODECONTENT,
+                            rop.RESUME_NEWUNICODE, rop.RESUME_CONCATUNICODE,
                             EffectInfo._OS_offset_uni)
 
 # ____________________________________________________________
@@ -390,17 +395,22 @@ class OptString(optimizer.Optimization):
     def new(self):
         return OptString()
 
-    def make_vstring_plain(self, box, source_op, mode):
+    def make_vstring_plain(self, box, source_op, mode, length):
         vvalue = VStringPlainValue(box, source_op, mode)
+        vvalue.setup(length)
+        self.optimizer.resumebuilder.new_vstring(vvalue, length, mode)
         self.make_equal_to(box, vvalue)
         return vvalue
 
-    def make_vstring_concat(self, box, source_op, mode):
+    def make_vstring_concat(self, box, source_op, mode, left, right):
         vvalue = VStringConcatValue(box, source_op, mode)
+        vvalue.setup(left, right)
+        self.optimizer.resumebuilder.vstring_concat(vvalue, left, right, mode)
         self.make_equal_to(box, vvalue)
         return vvalue
 
     def make_vstring_slice(self, box, source_op, mode):
+        xxx
         vvalue = VStringSliceValue(box, source_op, mode)
         self.make_equal_to(box, vvalue)
         return vvalue
@@ -417,8 +427,8 @@ class OptString(optimizer.Optimization):
             # build a new one with the ConstInt argument
             if not isinstance(op.getarg(0), ConstInt):
                 op = ResOperation(mode.NEWSTR, [length_box], op.result)
-            vvalue = self.make_vstring_plain(op.result, op, mode)
-            vvalue.setup(length_box.getint())
+            self.make_vstring_plain(op.result, op, mode,
+                                             length_box.getint())
         else:
             self.getvalue(op.result).ensure_nonnull()
             self.emit_operation(op)
@@ -430,7 +440,10 @@ class OptString(optimizer.Optimization):
         if value.is_virtual() and isinstance(value, VStringPlainValue):
             indexbox = self.get_constant_box(op.getarg(1))
             if indexbox is not None:
-                value.setitem(indexbox.getint(), self.getvalue(op.getarg(2)))
+                index = indexbox.getint()
+                varg = self.getvalue(op.getarg(2))
+                value.setitem(index, varg)
+                self.optimizer.resumebuilder.strsetitem(value, varg)
                 return
         value.ensure_nonnull()
         self.emit_operation(op)
@@ -592,8 +605,7 @@ class OptString(optimizer.Optimization):
         vright = self.getvalue(op.getarg(2))
         vleft.ensure_nonnull()
         vright.ensure_nonnull()
-        value = self.make_vstring_concat(op.result, op, mode)
-        value.setup(vleft, vright)
+        self.make_vstring_concat(op.result, op, mode, vleft, vright)
         return True
 
     def opt_call_stroruni_STR_SLICE(self, op, mode):

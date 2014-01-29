@@ -44,24 +44,20 @@ class LLGraphResumeBuilder(ResumeBuilder):
         return Position(self.numbering[self.mapping(box)])
 
     def process(self, op):
-        getattr(self, 'process_' + op.getopname())(op)
+        func = getattr(self, 'process_' + op.getopname(), None)
+        if func is not None:
+            func(op)
         ResumeBuilder.process(self, op)
-
-    def process_enter_frame(self, op):
-        pass
-
-    def process_leave_frame(self, op):
-        pass
-
-    def process_resume_set_pc(self, op):
-        pass
-
-    def process_resume_new_with_vtable(self, op):
-        pass
 
     def process_resume_setfield_gc(self, op):
         self._add_box_to_numbering(op.getarg(1))
 
+    def process_resume_concatstr(self, op):
+        self._add_box_to_numbering(op.getarg(0))
+        self._add_box_to_numbering(op.getarg(1))
+
+    process_resume_concatunicode = process_resume_concatstr
+        
     def _add_box_to_numbering(self, box):
         if isinstance(box, Const):
             return
@@ -70,9 +66,6 @@ class LLGraphResumeBuilder(ResumeBuilder):
 
     def process_resume_put(self, op):
         self._add_box_to_numbering(op.getarg(0))
-
-    def process_resume_clear(self, op):
-        pass
     
 class LLTrace(object):
     has_been_freed = False

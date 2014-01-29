@@ -4,7 +4,8 @@ from rpython.rlib.objectmodel import Symbolic
 
 (UNUSED, ENTER_FRAME, LEAVE_FRAME, RESUME_PUT,
  RESUME_NEW, RESUME_NEW_WITH_VTABLE, RESUME_SETFIELD_GC,
- RESUME_SET_PC, RESUME_CLEAR) = range(9)
+ RESUME_SET_PC, RESUME_CLEAR, RESUME_NEWSTR, RESUME_NEWUNICODE,
+ RESUME_CONCATSTR, RESUME_CONCATUNICODE) = range(13)
 
 TAGCONST = 0x0
 TAGVIRTUAL = 0x2
@@ -87,6 +88,17 @@ class ResumeBytecodeBuilder(object):
         self.write(RESUME_NEW)
         self.write_short(v_pos) # XXX byte virtuals?
         self.write_short(descr.global_descr_index)
+
+    def resume_newunicode(self, v_pos, lgt):
+        self.write(RESUME_NEWUNICODE)
+        self.write_short(v_pos) # XXX byte virtuals?
+        self.write(lgt)
+
+    def resume_concatunicode(self, v_pos, leftpos, rightpos):
+        self.write(RESUME_CONCATUNICODE)
+        self.write_short(v_pos)
+        self.write_short(leftpos)
+        self.write_short(rightpos)
 
     def resume_new_with_vtable(self, v_pos, const_class):
         self.write(RESUME_NEW_WITH_VTABLE)

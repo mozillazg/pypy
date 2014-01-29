@@ -1,10 +1,31 @@
 
 from rpython.jit.metainterp.resoperation import rop
-from rpython.jit.metainterp.history import Box, Const
+from rpython.jit.metainterp.history import Box, Const, AbstractDescr
 from rpython.jit.resume.rescode import ResumeBytecodeBuilder, TAGBOX,\
      ResumeBytecode, TAGVIRTUAL
 from rpython.jit.codewriter.jitcode import JitCode
 
+class DescrForStr(AbstractDescr):
+    pass
+
+left_descr = DescrForStr()
+right_descr = DescrForStr()
+
+class BaseDeps(object):
+    pass
+
+class DepsFields(BaseDeps):
+    def __init__(self):
+        self.fields = {}
+
+class DepsConcat(BaseDeps):
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+class DepsArray(BaseDeps):
+    def __init__(self, size):
+        self.l = [None] * size
 
 class LivenessAnalyzer(object):
     def __init__(self):
@@ -26,13 +47,22 @@ class LivenessAnalyzer(object):
         self.framestack[framepos][frontend_pos] = None
 
     def resume_new(self, result, descr):
-        self.deps[result] = {}
+        self.deps[result] = DepsFields()
+
+    def resume_newunicode(self, result, length):
+        self.deps[result] = DepsArray(length)
+
+    def resume_concatunicode(self, result, left, right):
+        self.deps[result] = DepsConcat(left, right)
 
     def resume_new_with_vtable(self, result, klass):
-        self.deps[result] = {}
+        self.deps[result] = DepsFields()
 
     def resume_setfield_gc(self, arg0, arg1, descr):
-        self.deps[arg0][descr] = arg1
+        self.deps[arg0].fields[descr] = arg1
+
+    def resume_strsetitem(self, arg0, arg1):
+        xxx
 
     def resume_set_pc(self, pc):
         pass
@@ -64,6 +94,16 @@ class LivenessAnalyzer(object):
             elif op.getopnum() == rop.RESUME_CLEAR:
                 self.resume_clear(op.getarg(0).getint(),
                                   op.getarg(1).getint())
+            elif op.getopnum() == rop.RESUME_NEWSTR:
+                xxx
+            elif op.getopnum() == rop.RESUME_NEWUNICODE:
+                self.resume_newunicode(op.result, op.getarg(0).getint())
+            elif op.getopnum() == rop.RESUME_CONCATSTR:
+                xxx
+            elif op.getopnum() == rop.RESUME_CONCATUNICODE:
+                self.resume_concatunicode(op.result, op.getarg(0), op.getarg(1))
+            elif op.getopnum() == rop.RESUME_STRSETITEM:
+                self.resume_strsetitem(op.getarg(0), op.getarg(1))
             elif not op.is_resume():
                 pos += 1
                 continue
@@ -150,6 +190,20 @@ class ResumeBuilder(object):
         elif op.getopnum() == rop.RESUME_CLEAR:
             self.builder.resume_clear(op.getarg(0).getint(),
                                       op.getarg(1).getint())
+        elif op.getopnum() == rop.RESUME_NEWSTR:
+            xxx
+        elif op.getopnum() == rop.RESUME_NEWUNICODE:
+            v_pos = len(self.virtuals)
+            self.virtuals[op.result] = v_pos
+            self.builder.resume_newunicode(v_pos, op.getarg(0).getint())
+        elif op.getopnum() == rop.RESUME_CONCATSTR:
+            xxx
+        elif op.getopnum() == rop.RESUME_CONCATUNICODE:
+            v_pos = len(self.virtuals)
+            self.virtuals[op.result] = v_pos
+            leftpos = self.get_box_pos(op.getarg(0))
+            rightpos = self.get_box_pos(op.getarg(0))
+            self.builder.resume_concatunicode(v_pos, leftpos, rightpos)
         else:
             raise Exception("strange operation")
 

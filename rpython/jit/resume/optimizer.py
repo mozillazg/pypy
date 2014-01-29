@@ -51,10 +51,6 @@ class OptResumeBuilder(object):
         else:
             self.opt.emit_operation(op)
 
-    def new_virtual(self, box):
-        xxx
-        self.optimizer.emit_operation(rop.RESUME_NEW)
-
     def new_virtual_with_vtable(self, box, vtable, vvalue):
         virtualbox = BoxPtr()
         op = ResOperation(rop.RESUME_NEW_WITH_VTABLE, [vtable], virtualbox)
@@ -65,6 +61,26 @@ class OptResumeBuilder(object):
         newbox = BoxPtr()
         vstruct.resume_box = newbox
         op = ResOperation(rop.RESUME_NEW, [], newbox, descr=structdescr)
+        self.opt._newoperations.append(op)
+
+    def new_vstring(self, vstring, lgt, mode):
+        newbox = BoxPtr()
+        vstring.resume_box = newbox
+        op = ResOperation(mode.RESUME_NEW, [ConstInt(lgt)], newbox)
+        self.opt._newoperations.append(op)
+
+    def vstring_concat(self, vstring, left, right, mode):
+        leftbox = left.get_resume_box()
+        rightbox = right.get_resume_box()
+        newbox = BoxPtr()
+        vstring.resume_box = newbox
+        op = ResOperation(mode.RESUME_CONCAT, [leftbox, rightbox], newbox)
+        self.opt._newoperations.append(op)
+
+    def strsetitem(self, vstring, varg):
+        argbox = varg.get_resume_box()
+        op = ResOperation(rop.RESUME_STRSETITEM, [vstring.get_resume_box(),
+                                                     argbox], None)
         self.opt._newoperations.append(op)
 
     def setfield(self, box, fieldbox, descr):

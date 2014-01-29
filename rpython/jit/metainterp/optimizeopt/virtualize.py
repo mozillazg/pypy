@@ -503,6 +503,7 @@ class OptVirtualize(optimizer.Optimization):
         return vvalue
 
     def make_varray(self, arraydescr, size, box, source_op=None):
+        xxx
         if arraydescr.is_array_of_structs():
             vvalue = VArrayStructValue(arraydescr, size, box, source_op)
         else:
@@ -519,12 +520,14 @@ class OptVirtualize(optimizer.Optimization):
         return vvalue
 
     def make_virtual_raw_memory(self, size, box, source_op):
+        xxx
         logops = self.optimizer.loop.logops
         vvalue = VRawBufferValue(self.optimizer.cpu, logops, size, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
 
     def make_virtual_raw_slice(self, rawbuffer_value, offset, box, source_op):
+        xxx
         vvalue = VRawSliceValue(rawbuffer_value, offset, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue

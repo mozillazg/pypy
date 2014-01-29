@@ -1,4 +1,7 @@
 
+from rpython.rtyper.lltypesystem import lltype, rstr, llmemory
+
+from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.metainterp.history import ConstInt
 from rpython.jit.codewriter import heaptracker
@@ -11,9 +14,16 @@ class ResumeFrame(object):
         self.pc = -1
 
 class BaseVirtual(object):
-    pass
+    def populate_fields(self, reader):
+        pass
 
-class VirtualStruct(BaseVirtual):
+class BaseVirtualStruct(BaseVirtual):
+    def populate_fields(self, val, reader):
+        fields = self.fields
+        for fielddescr, encoded_field_pos in fields.iteritems():
+            reader.setfield_gc(val, encoded_field_pos, fielddescr)
+
+class VirtualStruct(BaseVirtualStruct):
     def __init__(self, pos, descr):
         self.pos = pos
         self.fields = {}
@@ -22,10 +32,10 @@ class VirtualStruct(BaseVirtual):
     def allocate_box(self, metainterp):
         return metainterp.execute_and_record(rop.NEW, self.descr)
 
-    def allocate_direct(self, cpu):
+    def allocate_direct(self, reader, cpu):
         return cpu.bh_new(self.descr)
     
-class VirtualWithVtable(BaseVirtual):
+class VirtualWithVtable(BaseVirtualStruct):
     def __init__(self, pos, const_class):
         self.pos = pos
         self.const_class = const_class
@@ -35,9 +45,36 @@ class VirtualWithVtable(BaseVirtual):
         return metainterp.execute_and_record(rop.NEW_WITH_VTABLE, None,
                                              ConstInt(self.const_class))
 
-    def allocate_direct(self, cpu):
+    def allocate_direct(self, reader, cpu):
         descr = heaptracker.vtable2descr(cpu, self.const_class)
         return cpu.bh_new_with_vtable(self.const_class, descr)
+
+class VirtualStr(BaseVirtual):
+    def __init__(self, pos, lgt, mode):
+        self.pos = pos
+        self.lgt = lgt
+        self.mode = mode
+
+class VirtualConcat(BaseVirtual):
+    def __init__(self, pos, left, right, mode):
+        self.pos = pos
+        self.left = left
+        self.right = right
+        self.mode = mode
+
+    def allocate_direct(self, reader, cpu):
+        leftval = reader.getref(self.left)
+        rightval = reader.getref(self.right)
+        cic = reader.staticdata.callinfocollection
+        if self.mode == 'u':
+            funcptr = cic.funcptr_for_oopspec(EffectInfo.OS_UNI_CONCAT)
+            str1 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), leftval)
+            str2 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), rightval)
+            result = funcptr(str1, str2)
+            return lltype.cast_opaque_ptr(llmemory.GCREF, result)
+        else:
+            xxx
+        xxx
 
 class AbstractResumeReader(object):
     """ A resume reader that can follow resume until given point. Consult
@@ -71,6 +108,22 @@ class AbstractResumeReader(object):
 
     def resume_new(self, v_pos, descr):
         v = VirtualStruct(v_pos, descr)
+        self._add_to_virtuals(v, v_pos)
+
+    def resume_newstr(self, v_pos, lgt):
+        v = VirtualStr(v_pos, lgt, 's')
+        self._add_to_virtuals(v, v_pos)
+
+    def resume_newunicode(self, v_pos, lgt):
+        v = VirtualStr(v_pos, lgt, 'u')
+        self._add_to_virtuals(v, v_pos)
+
+    def resume_concatstr(self, v_pos, leftpos, rightpos):
+        v = VirtualConcat(v_pos, leftpos, rightpos, 's')
+        self._add_to_virtuals(v, v_pos)
+
+    def resume_concatunicode(self, v_pos, leftpos, rightpos):
+        v = VirtualConcat(v_pos, leftpos, rightpos, 'u')
         self._add_to_virtuals(v, v_pos)
 
     def resume_new_with_vtable(self, v_pos, c_const_class):
@@ -153,6 +206,21 @@ class AbstractResumeReader(object):
                 pc = self.read_short(pos + 1)
                 self.resume_set_pc(pc)
                 pos += 3
+            elif op == rescode.RESUME_NEWSTR:
+                xxx
+            elif op == rescode.RESUME_NEWUNICODE:
+                v_pos = self.read_short(pos + 1)
+                lgt = self.read(pos + 3)
+                self.resume_newunicode(v_pos, lgt)
+                pos += 4
+            elif op == rescode.RESUME_CONCATSTR:
+                xxx
+            elif op == rescode.RESUME_CONCATUNICODE:
+                v_pos = self.read_short(pos + 1)
+                left = self.read_short(pos + 3)
+                right = self.read_short(pos + 5)
+                self.resume_concatunicode(v_pos, left, right)
+                pos += 7
             else:
                 xxx
         self.bytecode = None
@@ -178,6 +246,18 @@ class Dumper(AbstractResumeReader):
 
     def resume_clear(self, frame_pos, pos_in_frame):
         self.l.append("resume_clear %d %d" % (frame_pos, pos_in_frame))
+
+    def resume_newstr(self, v_pos, lgt):
+        xxx
+
+    def resume_newunicode(self, v_pos, lgt):
+        xxx
+
+    def resume_concatstr(self, v_pos, leftpos, rightpos):
+        xxx
+
+    def resume_concatunicode(self, v_pos, leftpos, rightpos):
+        xxx
 
     def resume_new_with_vtable(self, v_pos, c_const_class):
         self.l.append("%d = resume_new_with_vtable %d" % (v_pos,

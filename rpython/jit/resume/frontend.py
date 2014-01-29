@@ -76,11 +76,9 @@ class DirectResumeReader(AbstractResumeReader):
             return self.virtuals_cache[index]
         except KeyError:
             pass
-        val = self.virtuals[index].allocate_direct(self.cpu)
+        val = self.virtuals[index].allocate_direct(self, self.cpu)
         self.virtuals_cache[index] = val
-        fields = self.virtuals[index].fields
-        for fielddescr, encoded_field_pos in fields.iteritems():
-            self.setfield_gc(val, encoded_field_pos, fielddescr)
+        self.virtuals[index].populate_fields(val, self)
         return val
 
     def setfield_gc(self, struct, encoded_field_pos, fielddescr):

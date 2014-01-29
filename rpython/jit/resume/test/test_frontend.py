@@ -2,7 +2,7 @@
 from rpython.jit.tool.oparser import parse
 from rpython.jit.codewriter.jitcode import JitCode
 from rpython.jit.metainterp.history import AbstractDescr, Const, INT, Stats,\
-     ConstInt, REF
+     ConstInt, REF, FLOAT
 from rpython.jit.resume.frontend import rebuild_from_resumedata,\
      blackhole_from_resumedata
 from rpython.jit.resume.rescode import ResumeBytecode, TAGBOX,\
@@ -29,6 +29,9 @@ class Descr(AbstractDescr):
 
     def is_field_signed(self):
         return self.kind == INT
+
+    def is_float_field(self):
+        return self.kind == FLOAT
 
 class MockLoop(object):
     pass
@@ -251,12 +254,12 @@ class TestResumeDirect(object):
         rebuild_from_resumedata(metainterp, "myframe", descr)
         expected = [(rop.NEW, descr),
                     (rop.SETFIELD_GC, d2, AnyBox(), EqConstInt(1)),
-                    (rop.NEW_WITH_VTABLE, EqConstInt(cls_as_int)),
+                    (rop.NEW_WITH_VTABLE, None, EqConstInt(cls_as_int)),
                     (rop.SETFIELD_GC, d3, AnyBox(), AnyBox()),
                     (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0),
                      EqConstInt(0))]
         expected2 = [(rop.NEW, descr),
-                     (rop.NEW_WITH_VTABLE, EqConstInt(cls_as_int)),
+                     (rop.NEW_WITH_VTABLE, None, EqConstInt(cls_as_int)),
                      (rop.SETFIELD_GC, d3, AnyBox(), AnyBox()),
                      (rop.SETFIELD_GC, d2, AnyBox(), EqConstInt(1)),
                      (rop.RESUME_PUT, None, AnyBox(), EqConstInt(0),
