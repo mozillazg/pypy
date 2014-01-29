@@ -74,8 +74,8 @@ class LivenessAnalyzer(object):
     def resume_setfield_gc(self, arg0, arg1, descr):
         self.deps[arg0].fields[descr] = arg1
 
-    def resume_strsetitem(self, arg0, arg1):
-        xxx
+    def resume_strsetitem(self, arg0, index, arg1):
+        self.deps[arg0].l[index] = arg1
 
     def resume_set_pc(self, pc):
         pass
@@ -116,7 +116,8 @@ class LivenessAnalyzer(object):
             elif op.getopnum() == rop.RESUME_CONCATUNICODE:
                 self.resume_concatunicode(op.result, op.getarg(0), op.getarg(1))
             elif op.getopnum() == rop.RESUME_STRSETITEM:
-                self.resume_strsetitem(op.getarg(0), op.getarg(1))
+                self.resume_strsetitem(op.getarg(0), op.getarg(1).getint(),
+                                       op.getarg(2))
             elif not op.is_resume():
                 pos += 1
                 continue
@@ -214,8 +215,13 @@ class ResumeBuilder(object):
             v_pos = len(self.virtuals)
             self.virtuals[op.result] = v_pos
             leftpos = self.get_box_pos(op.getarg(0))
-            rightpos = self.get_box_pos(op.getarg(0))
+            rightpos = self.get_box_pos(op.getarg(1))
             self.builder.resume_concatunicode(v_pos, leftpos, rightpos)
+        elif op.getopnum() == rop.RESUME_STRSETITEM:
+            v_pos = self.virtuals[op.getarg(0)]
+            index = op.getarg(1).getint()
+            valpos = self.get_box_pos(op.getarg(2))
+            self.builder.resume_strsetitem(v_pos, index, valpos)
         else:
             raise Exception("strange operation")
 

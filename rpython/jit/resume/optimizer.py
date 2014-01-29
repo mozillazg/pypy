@@ -77,10 +77,10 @@ class OptResumeBuilder(object):
         op = ResOperation(mode.RESUME_CONCAT, [leftbox, rightbox], newbox)
         self.opt._newoperations.append(op)
 
-    def strsetitem(self, vstring, varg):
+    def strsetitem(self, vstring, indexbox, varg):
         argbox = varg.get_resume_box()
         op = ResOperation(rop.RESUME_STRSETITEM, [vstring.get_resume_box(),
-                                                     argbox], None)
+                                                  indexbox, argbox], None)
         self.opt._newoperations.append(op)
 
     def setfield(self, box, fieldbox, descr):

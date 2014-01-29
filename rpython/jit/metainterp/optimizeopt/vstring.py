@@ -443,7 +443,8 @@ class OptString(optimizer.Optimization):
                 index = indexbox.getint()
                 varg = self.getvalue(op.getarg(2))
                 value.setitem(index, varg)
-                self.optimizer.resumebuilder.strsetitem(value, varg)
+                self.optimizer.resumebuilder.strsetitem(value, ConstInt(index),
+                                                        varg)
                 return
         value.ensure_nonnull()
         self.emit_operation(op)
