@@ -102,8 +102,6 @@ class JitCode(AbstractDescr):
     def __repr__(self):
         return '<JitCode %r>' % self.name
 
-    def _clone_if_mutable(self):
-        raise NotImplementedError
 
 class MissingLiveness(Exception):
     pass

@@ -32,7 +32,7 @@ class VirtualWithVtable(BaseVirtual):
         self.fields = {}
 
     def allocate_box(self, metainterp):
-        return metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
+        return metainterp.execute_and_record(rop.NEW_WITH_VTABLE, None,
                                              ConstInt(self.const_class))
 
     def allocate_direct(self, cpu):
@@ -175,6 +175,9 @@ class Dumper(AbstractResumeReader):
 
     def resume_new(self, v_pos, descr):
         self.l.append("%d = resume_new %d" % (v_pos, descr.global_descr_index))
+
+    def resume_clear(self, frame_pos, pos_in_frame):
+        self.l.append("resume_clear %d %d" % (frame_pos, pos_in_frame))
 
     def resume_new_with_vtable(self, v_pos, c_const_class):
         self.l.append("%d = resume_new_with_vtable %d" % (v_pos,

@@ -80,6 +80,8 @@ class AbstractResOp(object):
     def clone(self):
         args = self.getarglist()
         descr = self.getdescr()
+        if descr is not None:
+            descr = descr.clone_if_mutable()
         op = ResOperation(self.getopnum(), args[:], self.result, descr)
         if not we_are_translated():
             op.name = self.name

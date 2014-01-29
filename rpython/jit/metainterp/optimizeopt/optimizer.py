@@ -557,6 +557,8 @@ class Optimizer(Optimization):
                 self.replace_op(self.replaces_guard[op], op)
                 del self.replaces_guard[op]
                 return
+            else:
+                op = self.fixup_guard(op, pendingfields)
             self.resumebuilder.guard_seen(op, pendingfields)
         elif op.can_raise():
             self.exception_might_have_happened = True
@@ -577,19 +579,11 @@ class Optimizer(Optimization):
         else:
             assert False
 
-    def store_final_boxes_in_guard(self, op, pendingfields):
-        xxx
+    def fixup_guard(self, op, pendingfields):
         assert pendingfields is not None
         descr = op.getdescr()
         assert isinstance(descr, compile.ResumeGuardDescr)
-        modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
-        try:
-            newboxes = modifier.finish(self, pendingfields)
-            if len(newboxes) > self.metainterp_sd.options.failargs_limit:
-                raise resume.TagOverflow
-        except resume.TagOverflow:
-            raise compile.giveup()
-        descr.store_final_boxes(op, newboxes)
+        descr.set_opnum(op)
         #
         if op.getopnum() == rop.GUARD_VALUE:
             if self.getvalue(op.getarg(0)) in self.bool_boxes:
@@ -605,7 +599,6 @@ class Optimizer(Optimization):
                 else:
                     raise AssertionError("uh?")
                 newop = ResOperation(opnum, [op.getarg(0)], op.result, descr)
-                newop.setfailargs(op.getfailargs())
                 return newop
             else:
                 # a real GUARD_VALUE.  Make it use one counter per value.

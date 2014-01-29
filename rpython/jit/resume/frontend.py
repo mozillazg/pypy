@@ -154,9 +154,18 @@ class BoxResumeReader(AbstractResumeReader):
                                                 None, None)
             return virtual_box
 
+    def getkind(self, fielddescr):
+        if fielddescr.is_pointer_field():
+            return REF
+        elif fielddescr.is_float_field():
+            return FLOAT
+        else:
+            assert fielddescr.is_field_signed()
+            return INT
+        
     def setfield_gc(self, box, encoded_field_pos, fielddescr):
         field_box = self.get_box_value(-1, -1, encoded_field_pos,
-                                       fielddescr.kind)
+                                       self.getkind(fielddescr))
         self.metainterp.execute_and_record(rop.SETFIELD_GC, fielddescr,
                                            box, field_box)
 
@@ -173,6 +182,7 @@ class BoxResumeReader(AbstractResumeReader):
         miframe.registers_r[i] = box
 
     def store_float_box(self, frame_pos, pos, miframe, i, jitframe_pos):
+        xxx
         box = self.get_box_value(jitframe_pos)
         if box is None:
             return

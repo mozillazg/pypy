@@ -347,8 +347,6 @@ class LLGraphCPU(model.AbstractCPU):
         assert isinstance(frame, LLFrame)
         assert frame.forced_deadframe is None
         values = {}
-        import pdb
-        pdb.set_trace()
         for k, v in frame.lltrace.numbering.iteritems():
             try:
                 values[v] = frame.env[k]
