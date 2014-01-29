@@ -23,7 +23,7 @@ class DirectResumeReader(AbstractResumeReader):
     def finish(self):
         nextbh = None
         curbh = None
-        for frame in self.framestack:
+        for i, frame in enumerate(self.framestack):
             curbh = self.bhinterpbuilder.acquire_interp()
             curbh.nextblackholeinterp = nextbh
             nextbh = curbh
