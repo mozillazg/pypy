@@ -527,19 +527,23 @@ class UnrollOptimizer(Optimization):
     
     def jump_to_already_compiled_trace(self, jumpop):    
         assert jumpop.getopnum() == rop.JUMP
-        leave_frame_op = self.optimizer._newoperations.pop()
-        assert leave_frame_op.getopnum() == rop.LEAVE_FRAME
+        if self.optimizer._newoperations[-1].getopnum() == rop.LEAVE_FRAME:
+            leave_frame_op = self.optimizer._newoperations.pop()
+        else:
+            leave_frame_op = None
         cell_token = jumpop.getdescr()
 
         assert isinstance(cell_token, JitCellToken)
         if not cell_token.target_tokens:
-            self.optimizer._newoperations.append(leave_frame_op)
+            if leave_frame_op is not None:
+                self.optimizer._newoperations.append(leave_frame_op)
             return False
 
         if not self.inline_short_preamble:
             assert cell_token.target_tokens[0].virtual_state is None
             jumpop.setdescr(cell_token.target_tokens[0])
-            self.optimizer._newoperations.append(leave_frame_op)
+            if leave_frame_op is not None:
+                self.optimizer._newoperations.append(leave_frame_op)
             self.optimizer.send_extra_operation(jumpop)
             return True
 
@@ -606,11 +610,14 @@ class UnrollOptimizer(Optimization):
                                 "jumping to preamble instead")
                     assert cell_token.target_tokens[0].virtual_state is None
                     jumpop.setdescr(cell_token.target_tokens[0])
-                    self.optimizer._newoperations.append(leave_frame_op)
+                    if leave_frame_op is not None:
+                        self.optimizer._newoperations.append(leave_frame_op)
                     self.optimizer.send_extra_operation(jumpop)
-                self.optimizer._newoperations.append(leave_frame_op)
-                newop = inliner.inline_op(target.short_preamble[-1])
-                self.optimizer.send_extra_operation(newop)
+                else:
+                    if leave_frame_op is not None:
+                        self.optimizer._newoperations.append(leave_frame_op)
+                    newop = inliner.inline_op(target.short_preamble[-1])
+                    self.optimizer.send_extra_operation(newop)
                 return True
         debug_stop('jit-log-virtualstate')
         self.optimizer._newoperations.append(leave_frame_op)
