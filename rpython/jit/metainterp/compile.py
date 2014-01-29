@@ -499,24 +499,23 @@ class ResumeGuardDescr(ResumeDescr):
 
     def make_a_counter_per_value(self, guard_value_op):
         assert guard_value_op.getopnum() == rop.GUARD_VALUE
+        # XXX I have no clue what exactly it does, but we killed failargs
+        #     so i is always 0 now
         box = guard_value_op.getarg(0)
-        try:
-            i = guard_value_op.getfailargs().index(box)
-        except ValueError:
-            return     # xxx probably very rare
+        i = 0
+        # used to be i = guard_value_op.getfailargs().index(box)
+        if i > self.CNT_BASE_MASK:
+            return    # probably never, but better safe than sorry
+        if box.type == history.INT:
+            cnt = self.CNT_INT
+        elif box.type == history.REF:
+            cnt = self.CNT_REF
+        elif box.type == history.FLOAT:
+            cnt = self.CNT_FLOAT
         else:
-            if i > self.CNT_BASE_MASK:
-                return    # probably never, but better safe than sorry
-            if box.type == history.INT:
-                cnt = self.CNT_INT
-            elif box.type == history.REF:
-                cnt = self.CNT_REF
-            elif box.type == history.FLOAT:
-                cnt = self.CNT_FLOAT
-            else:
-                assert 0, box.type
-            assert cnt > self.CNT_BASE_MASK
-            self._counter = cnt | i
+            assert 0, box.type
+        assert cnt > self.CNT_BASE_MASK
+        self._counter = cnt | i
 
     def handle_fail(self, deadframe, metainterp_sd, jitdriver_sd):
         if self.must_compile(deadframe, metainterp_sd, jitdriver_sd):

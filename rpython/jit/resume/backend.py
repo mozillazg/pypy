@@ -62,10 +62,10 @@ class LivenessAnalyzer(object):
     def resume_new(self, result, descr):
         self.deps[result] = DepsFields()
 
-    def resume_newunicode(self, result, length):
+    def resume_newstr(self, result, length):
         self.deps[result] = DepsArray(length)
 
-    def resume_concatunicode(self, result, left, right):
+    def resume_concatstr(self, result, left, right):
         self.deps[result] = DepsConcat(left, right)
 
     def resume_new_with_vtable(self, result, klass):
@@ -108,13 +108,13 @@ class LivenessAnalyzer(object):
                 self.resume_clear(op.getarg(0).getint(),
                                   op.getarg(1).getint())
             elif op.getopnum() == rop.RESUME_NEWSTR:
-                xxx
+                self.resume_newstr(op.result, op.getarg(0).getint())
             elif op.getopnum() == rop.RESUME_NEWUNICODE:
-                self.resume_newunicode(op.result, op.getarg(0).getint())
+                self.resume_newstr(op.result, op.getarg(0).getint())
             elif op.getopnum() == rop.RESUME_CONCATSTR:
-                xxx
+                self.resume_concatstr(op.result, op.getarg(0), op.getarg(1))
             elif op.getopnum() == rop.RESUME_CONCATUNICODE:
-                self.resume_concatunicode(op.result, op.getarg(0), op.getarg(1))
+                self.resume_concatstr(op.result, op.getarg(0), op.getarg(1))
             elif op.getopnum() == rop.RESUME_STRSETITEM:
                 self.resume_strsetitem(op.getarg(0), op.getarg(1).getint(),
                                        op.getarg(2))
@@ -204,13 +204,19 @@ class ResumeBuilder(object):
             self.builder.resume_clear(op.getarg(0).getint(),
                                       op.getarg(1).getint())
         elif op.getopnum() == rop.RESUME_NEWSTR:
-            xxx
+            v_pos = len(self.virtuals)
+            self.virtuals[op.result] = v_pos
+            self.builder.resume_newstr(v_pos, op.getarg(0).getint())
         elif op.getopnum() == rop.RESUME_NEWUNICODE:
             v_pos = len(self.virtuals)
             self.virtuals[op.result] = v_pos
             self.builder.resume_newunicode(v_pos, op.getarg(0).getint())
         elif op.getopnum() == rop.RESUME_CONCATSTR:
-            xxx
+            v_pos = len(self.virtuals)
+            self.virtuals[op.result] = v_pos
+            leftpos = self.get_box_pos(op.getarg(0))
+            rightpos = self.get_box_pos(op.getarg(1))
+            self.builder.resume_concatstr(v_pos, leftpos, rightpos)
         elif op.getopnum() == rop.RESUME_CONCATUNICODE:
             v_pos = len(self.virtuals)
             self.virtuals[op.result] = v_pos

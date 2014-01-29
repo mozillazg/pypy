@@ -415,7 +415,6 @@ class UnrollOptimizer(Optimization):
             op = short[i]
             if op.is_guard():
                 op = op.clone()
-                op.setfailargs(None)
                 descr = target_token.resume_at_jump_descr.clone_if_mutable()
                 op.setdescr(descr)
                 short[i] = op
@@ -583,7 +582,6 @@ class UnrollOptimizer(Optimization):
                 for guard in extra_guards:
                     if guard.is_guard():
                         descr = target.resume_at_jump_descr.clone_if_mutable()
-                        inliner.inline_descr_inplace(descr)
                         guard.setdescr(descr)
                     self.optimizer.send_extra_operation(guard)
 

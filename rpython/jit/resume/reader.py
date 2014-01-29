@@ -109,8 +109,11 @@ class VirtualConcat(BaseVirtual):
             str2 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), rightval)
             result = funcptr(str1, str2)
             return lltype.cast_opaque_ptr(llmemory.GCREF, result)
-        else:
-            xxx
+        funcptr = cic.funcptr_for_oopspec(EffectInfo.OS_STR_CONCAT)
+        str1 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), leftval)
+        str2 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), rightval)
+        result = funcptr(str1, str2)
+        return lltype.cast_opaque_ptr(llmemory.GCREF, result)
 
 class AbstractResumeReader(object):
     """ A resume reader that can follow resume until given point. Consult
@@ -258,7 +261,11 @@ class AbstractResumeReader(object):
                 self.resume_newunicode(v_pos, lgt)
                 pos += 4
             elif op == rescode.RESUME_CONCATSTR:
-                xxx
+                v_pos = self.read_short(pos + 1)
+                left = self.read_short(pos + 3)
+                right = self.read_short(pos + 5)
+                self.resume_concatstr(v_pos, left, right)
+                pos += 7
             elif op == rescode.RESUME_CONCATUNICODE:
                 v_pos = self.read_short(pos + 1)
                 left = self.read_short(pos + 3)

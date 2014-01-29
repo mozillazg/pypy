@@ -100,6 +100,12 @@ class ResumeBytecodeBuilder(object):
         self.write(index)
         self.write_short(encoded_source)
 
+    def resume_concatstr(self, v_pos, leftpos, rightpos):
+        self.write(RESUME_CONCATSTR)
+        self.write_short(v_pos)
+        self.write_short(leftpos)
+        self.write_short(rightpos)
+
     def resume_newunicode(self, v_pos, lgt):
         self.write(RESUME_NEWUNICODE)
         self.write_short(v_pos) # XXX byte virtuals?
