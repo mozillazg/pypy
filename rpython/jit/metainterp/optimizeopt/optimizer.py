@@ -347,6 +347,7 @@ class Optimizer(Optimization):
     def __init__(self, metainterp_sd, loop, optimizations=None):
         self.metainterp_sd = metainterp_sd
         self.cpu = metainterp_sd.cpu
+        self.delayed_resume_put = None
         self.loop = loop
         self.values = {}
         self.interned_refs = self.cpu.ts.new_ref_dict()
@@ -567,6 +568,10 @@ class Optimizer(Optimization):
                 raise ValueError, "invalid optimization"
             self.seen_results[op.result] = None
         self._newoperations.append(op)
+        if (self.delayed_resume_put is not None and
+            self.delayed_resume_put.getarg(0) is op.result):
+            self._newoperations.append(self.delayed_resume_put)
+            self.delayed_resume_put = None
 
     def replace_op(self, old_op, new_op):
         # XXX: Do we want to cache indexes to prevent search?
@@ -670,17 +675,6 @@ class Optimizer(Optimization):
     def optimize_MARK_OPAQUE_PTR(self, op):
         value = self.getvalue(op.getarg(0))
         self.optimizer.opaque_pointers[value] = True
-
-    # the following stuff should go to the default Optimization thing,
-    # pending refactor
-
-    def optimize_ENTER_FRAME(self, op):
-        self.resumebuilder.enter_frame(op.getarg(0).getint(), op.getdescr())
-        self.optimize_default(op)
-
-    def optimize_LEAVE_FRAME(self, op):
-        self.resumebuilder.leave_frame(op)
-        self.optimize_default(op)
 
 dispatch_opt = make_dispatcher_method(Optimizer, 'optimize_',
         default=Optimizer.optimize_default)

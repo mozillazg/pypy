@@ -57,17 +57,6 @@ class UnrollOptimizer(Optimization):
         self.optimizer = UnrollableOptimizer(metainterp_sd, loop, optimizations)
         self.boxes_created_this_iteration = None
 
-    def fix_snapshot(self, jump_args, snapshot):
-        if snapshot is None:
-            return None
-        snapshot_args = snapshot.boxes
-        new_snapshot_args = []
-        for a in snapshot_args:
-            a = self.getvalue(a).get_key_box()
-            new_snapshot_args.append(a)
-        prev = self.fix_snapshot(jump_args, snapshot.prev)
-        return Snapshot(prev, new_snapshot_args)
-
     def propagate_all_forward(self):
         loop = self.optimizer.loop
         self.optimizer.clear_newoperations()
