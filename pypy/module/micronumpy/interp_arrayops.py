@@ -3,7 +3,7 @@ from pypy.module.micronumpy import loop, interp_dtype, interp_ufuncs
 from pypy.module.micronumpy.iter import Chunk, Chunks
 from pypy.module.micronumpy.strides import shape_agreement,\
      shape_agreement_multiple
-from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import unwrap_spec
 from pypy.module.micronumpy.conversion_utils import clipmode_converter
 from pypy.module.micronumpy.constants import *
@@ -89,7 +89,7 @@ def where(space, w_arr, w_x=None, w_y=None):
     shape = shape_agreement(space, arr.get_shape(), x)
     shape = shape_agreement(space, shape, y)
     out = W_NDimArray.from_shape(space, shape, dtype)
-    return loop.where(out, shape, arr, x, y, dtype)
+    return loop.where(space, out, shape, arr, x, y, dtype)
 
 def dot(space, w_obj1, w_obj2, w_out=None):
     w_arr = convert_to_array(space, w_obj1)
@@ -113,8 +113,8 @@ def concatenate(space, w_args, axis=0):
     if ndim == 1 and axis != 0:
         axis = 0
     if axis < 0 or axis >= ndim:
-        raise operationerrfmt(space.w_IndexError,
-            "axis %d out of bounds [0, %d)", orig_axis, ndim)
+        raise oefmt(space.w_IndexError, "axis %d out of bounds [0, %d)",
+                    orig_axis, ndim)
     for arr in args_w[1:]:
         if len(arr.get_shape()) != ndim:
             raise OperationError(space.w_ValueError, space.wrap(

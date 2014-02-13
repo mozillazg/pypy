@@ -1,3 +1,4 @@
+# encoding: utf-8
 import py
 import sys
 from pypy.objspace.std import intobject as iobj
@@ -478,6 +479,12 @@ class AppTestInt:
                 return Integral()
         assert int(TruncReturnsNonInt()) == 42
 
+    def test_int_before_string(self):
+        class Integral(str):
+            def __int__(self):
+                return 42
+        assert int(Integral('abc')) == 42
+
     def test_getnewargs(self):
         assert  0 .__getnewargs__() == (0,)
 
@@ -488,7 +495,7 @@ class AppTestInt:
         # __eq__ & the others.
         assert 1 .__cmp__
         assert int .__cmp__
-    
+
     def test_bit_length(self):
         for val, bits in [
             (0, 0),
@@ -510,6 +517,18 @@ class AppTestInt:
         e = raises(TypeError, int, [])
         assert str(e.value) == (
             "int() argument must be a string or a number, not 'list'")
+
+    def test_invalid_literal_message(self):
+        import sys
+        if '__pypy__' not in sys.builtin_module_names:
+            skip('PyPy 2.x/CPython 3.4 only')
+        for value in b'  1j ', u'  1٢٣٤j ':
+            try:
+                int(value)
+            except ValueError as e:
+                assert repr(value) in str(e)
+            else:
+                assert False, value
 
 
 class AppTestIntOptimizedAdd(AppTestInt):

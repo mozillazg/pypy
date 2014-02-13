@@ -2,6 +2,7 @@
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.rtyper.lltypesystem import lltype, rffi, llmemory
 from rpython.annotator import model as annmodel
+from rpython.rtyper.llannotation import lltype_to_annotation
 from rpython.rlib.rgc import lltype_is_gc
 from rpython.rlib.objectmodel import specialize
 
@@ -39,7 +40,7 @@ class RawStorageGetitemEntry(ExtRegistryEntry):
 
     def compute_result_annotation(self, s_TP, s_storage, s_index):
         assert s_TP.is_constant()
-        return annmodel.lltype_to_annotation(s_TP.const)
+        return lltype_to_annotation(s_TP.const)
 
     def specialize_call(self, hop):
         # emit code that will 'automatically' copy memory if unaligned

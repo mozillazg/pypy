@@ -74,6 +74,10 @@ fits into ASCII, has only two-byte characters or needs four-byte characters.
 The actual details would be rather differen in PyPy, but we would like to have
 the same optimization implemented.
 
+Or maybe not.  We can also play around with the idea of using a single
+representation: as a byte string in utf-8.  (This idea needs some extra logic
+for efficient indexing, like a cache.)
+
 .. _`optimized unicode representation`: http://www.python.org/dev/peps/pep-0393/
 
 Translation Toolchain
@@ -137,20 +141,6 @@ script that can run without parameters. Example ideas (benchmarks need
 to be got from them!):
 
 * `hg`
-
-Experiment (again) with LLVM backend for RPython compilation
-------------------------------------------------------------
-
-We already tried working with LLVM and at the time, LLVM was not mature enough
-for our needs. It's possible that this has changed, reviving the LLVM backend
-(or writing new from scratch) for static compilation would be a good project.
-
-(On the other hand, just generating C code and using clang might be enough.
-The issue with that is the so-called "asmgcc GC root finder", which has tons
-of issues of this own.  In my opinion (arigo), it would be definitely a
-better project to try to optimize the alternative, the "shadowstack" GC root
-finder, which is nicely portable.  So far it gives a pypy that is around
-7% slower.)
 
 Embedding PyPy
 ----------------------------------------
