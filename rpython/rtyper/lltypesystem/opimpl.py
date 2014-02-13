@@ -670,7 +670,6 @@ def op_raw_store(p, ofs, newvalue):
     p[0] = newvalue
 
 def op_raw_load(TVAL, p, ofs):
-    xxx
     from rpython.rtyper.lltypesystem import rffi
     p = rffi.cast(llmemory.Address, p)
     p = rffi.cast(rffi.CArrayPtr(TVAL), p + ofs)

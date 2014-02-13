@@ -402,6 +402,7 @@ class AbstractLLCPU(AbstractCPU):
 
     @specialize.argtype(1)
     def read_float_at_mem(self, gcref, ofs):
+        xxx
         return llop.raw_load(longlong.FLOATSTORAGE, gcref, ofs)
 
     @specialize.argtype(1)
