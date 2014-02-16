@@ -23,7 +23,12 @@ def raw_storage_getitem_unaligned(TP, storage, index):
 def raw_storage_getitem(TP, storage, index):
     "NOT_RPYTHON"
     ptr = rffi.ptradd(storage, index)
-    # TODO Check that pointer is aligned for TP
+    if TP is lltype.Float and rffi.cast(lltype.Signed, ptr) & 3:
+        with lltype.scoped_alloc(rffi.CArray(TP), 1) as s_array:
+            rffi.c_memcpy(rffi.cast(rffi.VOIDP, s_array),
+                          rffi.cast(rffi.VOIDP, ptr),
+                          rffi.sizeof(TP))
+            return rffi.cast(rffi.CArrayPtr(TP), s_array)[0]
     return rffi.cast(rffi.CArrayPtr(TP), ptr)[0]
 
 def raw_storage_setitem(storage, index, item):
@@ -43,12 +48,11 @@ class RawStorageGetitemEntry(ExtRegistryEntry):
         return lltype_to_annotation(s_TP.const)
 
     def specialize_call(self, hop):
-        # emit code that will 'automatically' copy memory if unaligned
         assert hop.args_r[1].lowleveltype == RAW_STORAGE_PTR
         v_storage = hop.inputarg(hop.args_r[1], arg=1)
         v_index   = hop.inputarg(lltype.Signed, arg=2)
         hop.exception_cannot_occur()
-        v_addr = hop.genop('cast_ptr_to_adr', [v_storage],
+        v_addr = hop.genop('casst_ptr_to_adr', [v_storage],
                            resulttype=llmemory.Address)
         return hop.genop('raw_load', [v_addr, v_index],
                          resulttype=hop.r_result.lowleveltype)

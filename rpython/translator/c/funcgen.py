@@ -703,8 +703,6 @@ class FunctionCodeGenerator(object):
         res = (
           "%(result)s = ((%(typename)s) (((char *)%(addr)s) + %(offset)s))[0];"
           % locals())
-        if 'float' in res or 'double' in res:
-            xxx
         return res    
 
     def OP_CAST_PRIMITIVE(self, op):

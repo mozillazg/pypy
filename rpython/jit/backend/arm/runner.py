@@ -121,14 +121,14 @@ class AbstractARMCPU(AbstractLLCPU):
     def bh_raw_load_f(self, struct, offset, descr):
         ll_p = rffi.cast(rffi.CCHARP, struct)
         ll_p_offset = rffi.ptradd(ll_p, offset)
-	if rffi.cast(lltype.Signed, ll_p_offset) & 3:
+        if rffi.cast(lltype.Signed, ll_p_offset) & 3:
             with lltype.scoped_alloc(rffi.CArray(longlong.FLOATSTORAGE), 1) as s_array:
-		rffi.c_memcpy(rffi.cast(rffi.VOIDP, s_array),
+                rffi.c_memcpy(rffi.cast(rffi.VOIDP, s_array),
                               rffi.cast(rffi.VOIDP, ll_p_offset),
                               rffi.sizeof(rffi.DOUBLE))
-        	ll_p = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE),
+                ll_p = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE),
                          s_array)
-		return ll_p[0]
+        return ll_p[0]
         ll_p = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE),
                          ll_p_offset)
         return ll_p[0]

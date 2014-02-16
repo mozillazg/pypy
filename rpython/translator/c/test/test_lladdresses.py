@@ -51,6 +51,29 @@ def test_memory_float():
     res = fc(42.42)
     assert res == f(42.42)
 
+def test_memory_float_unaligned():
+    S = lltype.GcStruct("S", ('c0', lltype.Char), ("x", lltype.Float), ('c1', lltype.Char), ("y", lltype.Float))
+    offset = FieldOffset(S, 'x')
+    offset_c0 = FieldOffset(S, 'c0')
+    offsety = FieldOffset(S, 'y')
+    def f(value):
+        s = lltype.malloc(S)
+        s.c0 = 'a'
+        s.x = 123.2
+        a = cast_ptr_to_adr(s)
+        b = a + offset
+        assert s.c0 == 'a'
+        assert b.float[0] == 123.2
+        b.float[0] += 234.1
+        (a + offsety).float[0] = value
+        assert s.x == 234.1 + 123.2
+        assert s.y == value
+        return s.x + value
+    fc = compile(f, [float])
+    res = fc(42.42)
+    assert res == f(42.42)
+
+
 def test_offset_inside_fixed_array():
     S = lltype.FixedSizeArray(lltype.Signed, 10)
     offset = FieldOffset(S, 'item4')
