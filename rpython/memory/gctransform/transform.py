@@ -331,6 +331,7 @@ class BaseGCTransformer(object):
     gct_setarrayitem = gct_setfield
     gct_setinteriorfield = gct_setfield
     gct_raw_store = gct_setfield
+    gct_raw_store_unaligned = gct_setfield
 
     gct_getfield = default
 

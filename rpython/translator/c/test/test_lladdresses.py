@@ -2,6 +2,7 @@ import py, sys
 from rpython.rtyper.lltypesystem.llmemory import *
 from rpython.translator.c.test.test_genc import compile
 from rpython.rlib.objectmodel import free_non_gc_object
+from rpython.rlib import rawstorage
 
 def test_null():
     def f():
@@ -52,6 +53,8 @@ def test_memory_float():
     assert res == f(42.42)
 
 def test_memory_float_unaligned():
+    py.test.skip("XXX do we really want to support unaligned "
+                 "raw_load/raw_store with the syntax 'addr.float[]'?")
     S = lltype.GcStruct("S", ('c0', lltype.Char), ("x", lltype.Float), ('c1', lltype.Char), ("y", lltype.Float))
     offset = FieldOffset(S, 'x')
     offset_c0 = FieldOffset(S, 'c0')
@@ -269,3 +272,27 @@ def test_dict_of_addresses():
     assert res == 456
     res = fc(77)
     assert res == 123
+
+def test_rawstorage_int():
+    def f(i):
+        r = rawstorage.alloc_raw_storage(24)
+        rawstorage.raw_storage_setitem(r, 8, i)
+        res = rawstorage.raw_storage_getitem(lltype.Signed, r, 8)
+        rawstorage.free_raw_storage(r)
+        return res
+
+    fc = compile(f, [int])
+    x = fc(1<<30)
+    assert x == 1 << 30
+
+def test_rawstorage_float_unaligned():
+    def f(v):
+        r = rawstorage.alloc_raw_storage(24)
+        rawstorage.raw_storage_setitem_unaligned(r, 3, v)
+        res = rawstorage.raw_storage_getitem_unaligned(lltype.Float, r, 3)
+        rawstorage.free_raw_storage(r)
+        return res
+
+    fc = compile(f, [float])
+    x = fc(3.14)
+    assert x == 3.14

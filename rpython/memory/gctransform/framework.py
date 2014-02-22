@@ -1094,7 +1094,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
         v_struct = hop.spaceop.args[0]
         v_newvalue = hop.spaceop.args[-1]
         assert opname in ('setfield', 'setarrayitem', 'setinteriorfield',
-                          'raw_store')
+                          'raw_store', 'raw_store_unaligned')
         assert isinstance(v_newvalue.concretetype, lltype.Ptr)
         # XXX for some GCs the skipping if the newvalue is a constant won't be
         # ok

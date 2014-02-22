@@ -688,22 +688,40 @@ class FunctionCodeGenerator(object):
         offset = self.expr(op.args[1])
         value = self.expr(op.args[2])
         TYPE = op.args[2].concretetype
-        typename = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
+        ptrname = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
+        if op.opname.endswith('_unaligned'):
+            typename = cdecl(self.db.gettype(TYPE), '')
+            return ('{\n\t'
+                    '%(typename)s tmpbuf = %(value)s;\n\t'
+                    'memcpy(((char *)%(addr)s) + %(offset)s,\n\t'
+                    '       (char *)&tmpbuf, sizeof(%(typename)s));\n'
+                    '}' % locals())
         return (
-           '((%(typename)s) (((char *)%(addr)s) + %(offset)s))[0] = %(value)s;'
+           '((%(ptrname)s) (((char *)%(addr)s) + %(offset)s))[0] = %(value)s;'
            % locals())
     OP_BARE_RAW_STORE = OP_RAW_STORE
+    OP_RAW_STORE_UNALIGNED = OP_RAW_STORE
+    OP_BARE_RAW_STORE_UNALIGNED = OP_RAW_STORE
 
     def OP_RAW_LOAD(self, op):
         addr = self.expr(op.args[0])
         offset = self.expr(op.args[1])
         result = self.expr(op.result)
         TYPE = op.result.concretetype
-        typename = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
-        res = (
-          "%(result)s = ((%(typename)s) (((char *)%(addr)s) + %(offset)s))[0];"
+        ptrname = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
+        if op.opname.endswith('_unaligned'):
+            typename = cdecl(self.db.gettype(TYPE), '')
+            return ('{\n\t'
+                    '%(typename)s tmpbuf;\n\t'
+                    'memcpy((char *)&tmpbuf,\n\t'
+                    '       ((char *)%(addr)s) + %(offset)s,\n\t'
+                    '       sizeof(%(typename)s));\n\t'
+                    '%(result)s = tmpbuf;\n'
+                    '}' % locals())
+        return (
+          "%(result)s = ((%(ptrname)s) (((char *)%(addr)s) + %(offset)s))[0];"
           % locals())
-        return res    
+    OP_RAW_LOAD_UNALIGNED = OP_RAW_LOAD
 
     def OP_CAST_PRIMITIVE(self, op):
         TYPE = self.lltypemap(op.result)
