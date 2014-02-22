@@ -137,6 +137,27 @@ def test_cast_float_to_ulonglong():
     x = llop.cast_float_to_ulonglong(lltype.UnsignedLongLong, f)
     assert x == r_ulonglong(f)
 
+def test_raw_load_store_alignment():
+    from rpython.rlib import rawstorage
+    from rpython.rlib.rawstorage import AlignmentError
+    p = rawstorage.alloc_raw_storage(37)
+    llop.raw_store(lltype.Void, p, 8, 4891379)
+    assert llop.raw_load(lltype.Signed, p, 8) == 4891379
+    py.test.raises(AlignmentError, llop.raw_load, lltype.Signed, p, 3)
+    py.test.raises(AlignmentError, llop.raw_store, lltype.Void, p, 3, 2987128)
+    rawstorage.free_raw_storage(p)
+
+def test_raw_load_store_unaligned():
+    from rpython.rlib import rawstorage
+    p = rawstorage.alloc_raw_storage(37)
+    rawstorage.raw_storage_setitem_unaligned(p, 3, 123456789)
+    res = llop.raw_load_unaligned(lltype.Signed, p, 3)
+    assert res == 123456789
+    llop.raw_store_unaligned(lltype.Void, p, 3, -987654321)
+    res = rawstorage.raw_storage_getitem_unaligned(lltype.Signed, p, 3)
+    assert res == -987654321
+    rawstorage.free_raw_storage(p)
+
 # ___________________________________________________________________________
 # This tests that the LLInterpreter and the LL_OPERATIONS tables are in sync.
 

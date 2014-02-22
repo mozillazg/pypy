@@ -411,8 +411,11 @@ LL_OPERATIONS = {
     'raw_memcopy':          LLOp(),
     'raw_memmove':          LLOp(),
     'raw_load':             LLOp(sideeffects=False, canrun=True),
+    'raw_load_unaligned':   LLOp(sideeffects=False, canrun=True),
     'raw_store':            LLOp(canrun=True),
+    'raw_store_unaligned':  LLOp(canrun=True),
     'bare_raw_store':       LLOp(),
+    'bare_raw_store_unaligned': LLOp(),
     'stack_malloc':         LLOp(), # mmh
     'track_alloc_start':    LLOp(),
     'track_alloc_stop':     LLOp(),

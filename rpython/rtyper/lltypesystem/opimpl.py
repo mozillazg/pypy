@@ -664,17 +664,41 @@ def op_debug_fatalerror(ll_msg):
 
 def op_raw_store(p, ofs, newvalue):
     from rpython.rtyper.lltypesystem import rffi
+    from rpython.rlib.rawstorage import _check_alignment
     p = rffi.cast(llmemory.Address, p)
     TVAL = lltype.typeOf(newvalue)
+    _check_alignment(TVAL, ofs)
     p = rffi.cast(rffi.CArrayPtr(TVAL), p + ofs)
     p[0] = newvalue
 
 def op_raw_load(TVAL, p, ofs):
     from rpython.rtyper.lltypesystem import rffi
+    from rpython.rlib.rawstorage import _check_alignment
     p = rffi.cast(llmemory.Address, p)
+    _check_alignment(TVAL, ofs)
     p = rffi.cast(rffi.CArrayPtr(TVAL), p + ofs)
     return p[0]
 op_raw_load.need_result_type = True
+
+def op_raw_store_unaligned(p, ofs, newvalue):
+    from rpython.rtyper.lltypesystem import rffi
+    p = rffi.cast(llmemory.Address, p)
+    TVAL = lltype.typeOf(newvalue)
+    with lltype.scoped_alloc(rffi.CArray(TVAL), 1) as s_array:
+        rffi.cast(rffi.CArrayPtr(TVAL), s_array)[0] = newvalue
+        rffi.c_memcpy(rffi.cast(rffi.VOIDP, p + ofs),
+                      rffi.cast(rffi.VOIDP, s_array),
+                      rffi.sizeof(TVAL))
+
+def op_raw_load_unaligned(TVAL, p, ofs):
+    from rpython.rtyper.lltypesystem import rffi
+    p = rffi.cast(llmemory.Address, p)
+    with lltype.scoped_alloc(rffi.CArray(TVAL), 1) as s_array:
+        rffi.c_memcpy(rffi.cast(rffi.VOIDP, s_array),
+                      rffi.cast(rffi.VOIDP, p + ofs),
+                      rffi.sizeof(TVAL))
+        return rffi.cast(rffi.CArrayPtr(TVAL), s_array)[0]
+op_raw_load_unaligned.need_result_type = True
 
 # ____________________________________________________________
 
