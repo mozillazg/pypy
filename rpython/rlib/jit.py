@@ -1,5 +1,6 @@
 import sys
 import types
+import warnings
 
 import py
 
@@ -12,7 +13,7 @@ from rpython.tool.sourcetools import rpython_wrapper
 DEBUG_ELIDABLE_FUNCTIONS = False
 
 
-def elidable(canfolderror=None):
+def elidable(*args, **kwargs):
     """ Decorate a function as "trace-elidable". Usually this means simply that
     the function is constant-foldable, i.e. is pure and has no side-effects.
 
@@ -37,9 +38,7 @@ def elidable(canfolderror=None):
     In this case, if it raises specific exception listed there, it's also
     constant folded away.
     """
-    if isinstance(canfolderror, types.FunctionType):
-        raise Exception("@elidable was changed to a full "
-                        "decorator, use @elidable()")
+
     def decorator(func):
         if DEBUG_ELIDABLE_FUNCTIONS:
             cache = {}
@@ -57,6 +56,17 @@ def elidable(canfolderror=None):
         if canfolderror is not None:
             func._elidable_exceptions_ = canfolderror
         return func
+
+    if len(args) == 1:
+        # non-ported
+        assert len(kwargs) == 0
+        warnings.warn("@elidable is deprecated, use @elidable() instead", stacklevel=2)
+        canfolderror = None
+        return decorator(args[0])
+    else:
+        assert len(args) == 0
+        canfolderror = kwargs.get('canfolderror', None)
+        return decorator
 
 def purefunction(*args, **kwargs):
     import warnings
@@ -133,7 +143,7 @@ def elidable_promote(promote_args='all'):
     function
     """
     def decorator(func):
-        elidable(func)
+        elidable()(func)
         args = _get_args(func)
         argstring = ", ".join(args)
         code = ["def f(%s):\n" % (argstring, )]

@@ -3,7 +3,7 @@ import py
 from rpython.conftest import option
 from rpython.annotator.model import UnionError
 from rpython.rlib.jit import (hint, we_are_jitted, JitDriver, elidable_promote,
-    JitHintError, oopspec, isconstant, conditional_call)
+    JitHintError, oopspec, isconstant, conditional_call, elidable)
 from rpython.rlib.rarithmetic import r_uint
 from rpython.rtyper.test.tool import BaseRtypingTest
 from rpython.rtyper.lltypesystem import lltype
@@ -90,6 +90,27 @@ def test_merge_enter_different():
 
     myjitdriver = JitDriver(greens=['n'], reds=[])
     py.test.raises(JitHintError, fn, 100)
+
+def test_elidable():
+    import warnings
+    # deprecated version
+    if 1:#with warnings.catch_warnings(record=True) as w:
+        #assert not w
+        @elidable
+        def f():
+            pass
+        assert f._elidable_function_
+        #assert "@elidable()" in w[0].message[0]
+
+    # proper version
+    @elidable()
+    def f():
+        pass
+    assert f._elidable_function_
+    @elidable(canfolderror=ValueError)
+    def f():
+        pass
+    assert f._elidable_function_
 
 class TestJIT(BaseRtypingTest):
     def test_hint(self):
