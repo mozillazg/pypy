@@ -44,6 +44,25 @@ class TestCall(LLJitMixin):
 
         self.meta_interp(main, [10])
 
+    def test_call_elidable_raise(self):
+        @jit.elidable(canfolderror=(ValueError,))
+        def f(a):
+            raise ValueError
+
+        driver = jit.JitDriver(greens = [], reds = 'auto')
+
+        def main(n):
+            while n >= 0:
+                driver.jit_merge_point()
+                try:
+                    f(1)
+                except ValueError:
+                    pass
+                n -= 1
+
+        self.meta_interp(main, [10])
+        self.check_simple_loop(call=0)
+
     def test_cond_call(self):
         def f(l, n):
             l.append(n)
