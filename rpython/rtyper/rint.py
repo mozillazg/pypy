@@ -366,7 +366,7 @@ class __extend__(IntegerRepr):
         hop.exception_cannot_occur()
         return vlist[0]
 
-    @jit.elidable
+    @jit.elidable()
     def ll_str(self, i):
         from rpython.rtyper.lltypesystem.ll_str import ll_int2dec
         return ll_int2dec(i)

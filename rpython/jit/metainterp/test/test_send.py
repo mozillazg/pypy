@@ -596,7 +596,7 @@ class SendTests(object):
     def test_constfold_pure_oosend(self):
         myjitdriver = JitDriver(greens=[], reds = ['i', 'obj'])
         class A:
-            @elidable
+            @elidable()
             def foo(self):
                 return 42
         def fn(n, i):

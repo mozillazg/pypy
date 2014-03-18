@@ -71,7 +71,7 @@ math_sqrt = llexternal('sqrt', [rffi.DOUBLE], rffi.DOUBLE)
 math_sin = llexternal('sin', [rffi.DOUBLE], rffi.DOUBLE, elidable_function=True)
 math_cos = llexternal('cos', [rffi.DOUBLE], rffi.DOUBLE, elidable_function=True)
 
-@jit.elidable
+@jit.elidable()
 def sqrt_nonneg(x):
     return math_sqrt(x)
 sqrt_nonneg.oopspec = "math.sqrt_nonneg(x)"

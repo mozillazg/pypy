@@ -160,7 +160,7 @@ def rsplit(value, by=None, maxsplit=-1):
 
 
 @specialize.argtype(0)
-@jit.elidable
+@jit.elidable()
 def replace(input, sub, by, maxsplit=-1):
     if isinstance(input, str):
         assert isinstance(sub, str)
@@ -236,7 +236,7 @@ def _normalize_start_end(length, start, end):
     return start, end
 
 @specialize.argtype(0)
-@jit.elidable
+@jit.elidable()
 def startswith(u_self, prefix, start=0, end=sys.maxint):
     length = len(u_self)
     start, end = _normalize_start_end(length, start, end)
@@ -249,7 +249,7 @@ def startswith(u_self, prefix, start=0, end=sys.maxint):
     return True
 
 @specialize.argtype(0)
-@jit.elidable
+@jit.elidable()
 def endswith(u_self, suffix, start=0, end=sys.maxint):
     length = len(u_self)
     start, end = _normalize_start_end(length, start, end)

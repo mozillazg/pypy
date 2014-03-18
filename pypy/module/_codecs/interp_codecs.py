@@ -100,7 +100,7 @@ class CodecState(object):
     def get_codec_from_cache(self, key):
         return self._get_codec_with_version(key, self.version)
 
-    @jit.elidable
+    @jit.elidable()
     def _get_codec_with_version(self, key, version):
         return self.codec_search_cache.get(key, None)
 

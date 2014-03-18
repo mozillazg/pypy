@@ -169,7 +169,7 @@ class rbigint(object):
     numdigits._always_inline_ = True
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def fromint(intval):
         # This function is marked as pure, so you must not call it and
         # then modify the result.
@@ -192,7 +192,7 @@ class rbigint(object):
             return rbigint([_store_digit(ival & MASK)], sign, 1)
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def frombool(b):
         # You must not call this function and then modify the result.
         if b:
@@ -205,7 +205,7 @@ class rbigint(object):
         return rbigint(*args_from_long(l))
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def fromfloat(dval):
         """ Create a new bigint object from a float """
         # This function is not marked as pure because it can raise
@@ -216,7 +216,7 @@ class rbigint(object):
         return rbigint._fromfloat_finite(dval)
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def _fromfloat_finite(dval):
         sign = 1
         if dval < 0.0:
@@ -238,7 +238,7 @@ class rbigint(object):
         return v
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     @specialize.argtype(0)
     def fromrarith_int(i):
         # This function is marked as pure, so you must not call it and
@@ -246,14 +246,14 @@ class rbigint(object):
         return rbigint(*args_from_rarith_int(i))
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def fromdecimalstr(s):
         # This function is marked as elidable, so you must not call it and
         # then modify the result.
         return _decimalstr_to_bigint(s)
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def fromstr(s, base=0):
         """As string_to_int(), but ignores an optional 'l' or 'L' suffix
         and returns an rbigint."""
@@ -271,7 +271,7 @@ class rbigint(object):
         return parse_digit_string(parser)
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def frombytes(s, byteorder, signed):
         if byteorder not in ('big', 'little'):
             raise InvalidEndiannessError()
@@ -311,7 +311,7 @@ class rbigint(object):
         result._normalize()
         return result
 
-    @jit.elidable
+    @jit.elidable()
     def tobytes(self, nbytes, byteorder, signed):
         if byteorder not in ('big', 'little'):
             raise InvalidEndiannessError()
@@ -384,7 +384,7 @@ class rbigint(object):
                 digits = ''.join([digits[i] for i in range(length-1, -1, -1)])
         return digits
 
-    @jit.elidable
+    @jit.elidable()
     def toint(self):
         """
         Get an integer from a bigint object.
@@ -400,7 +400,7 @@ class rbigint(object):
             raise OverflowError
         return intmask(intmask(x) * sign)
 
-    @jit.elidable
+    @jit.elidable()
     def tolonglong(self):
         return _AsLongLong(self)
 
@@ -408,13 +408,13 @@ class rbigint(object):
     def tobool(self):
         return self.sign != 0
 
-    @jit.elidable
+    @jit.elidable()
     def touint(self):
         if self.sign == -1:
             raise ValueError("cannot convert negative integer to unsigned int")
         return self._touint_helper()
 
-    @jit.elidable
+    @jit.elidable()
     def _touint_helper(self):
         x = r_uint(0)
         i = self.numdigits() - 1
@@ -427,32 +427,32 @@ class rbigint(object):
             i -= 1
         return x
 
-    @jit.elidable
+    @jit.elidable()
     def toulonglong(self):
         if self.sign == -1:
             raise ValueError("cannot convert negative integer to unsigned int")
         return _AsULonglong_ignore_sign(self)
 
-    @jit.elidable
+    @jit.elidable()
     def uintmask(self):
         return _AsUInt_mask(self)
 
-    @jit.elidable
+    @jit.elidable()
     def ulonglongmask(self):
         """Return r_ulonglong(self), truncating."""
         return _AsULonglong_mask(self)
 
-    @jit.elidable
+    @jit.elidable()
     def tofloat(self):
         return _AsDouble(self)
 
-    @jit.elidable
+    @jit.elidable()
     def format(self, digits, prefix='', suffix=''):
         # 'digits' is a string whose length is the base to use,
         # and where each character is the corresponding digit.
         return _format(self, digits, prefix, suffix)
 
-    @jit.elidable
+    @jit.elidable()
     def repr(self):
         try:
             x = self.toint()
@@ -460,7 +460,7 @@ class rbigint(object):
             return self.format(BASE10, suffix="L")
         return str(x) + "L"
 
-    @jit.elidable
+    @jit.elidable()
     def str(self):
         try:
             x = self.toint()
@@ -468,7 +468,7 @@ class rbigint(object):
             return self.format(BASE10)
         return str(x)
 
-    @jit.elidable
+    @jit.elidable()
     def eq(self, other):
         if (self.sign != other.sign or
             self.numdigits() != other.numdigits()):
@@ -486,7 +486,7 @@ class rbigint(object):
     def ne(self, other):
         return not self.eq(other)
 
-    @jit.elidable
+    @jit.elidable()
     def lt(self, other):
         if self.sign > other.sign:
             return False
@@ -533,11 +533,11 @@ class rbigint(object):
     def ge(self, other):
         return not self.lt(other)
 
-    @jit.elidable
+    @jit.elidable()
     def hash(self):
         return _hash(self)
 
-    @jit.elidable
+    @jit.elidable()
     def add(self, other):
         if self.sign == 0:
             return other
@@ -550,7 +550,7 @@ class rbigint(object):
         result.sign *= other.sign
         return result
 
-    @jit.elidable
+    @jit.elidable()
     def sub(self, other):
         if other.sign == 0:
             return self
@@ -563,7 +563,7 @@ class rbigint(object):
         result.sign *= self.sign
         return result
 
-    @jit.elidable
+    @jit.elidable()
     def mul(self, b):
         asize = self.numdigits()
         bsize = b.numdigits()
@@ -608,12 +608,12 @@ class rbigint(object):
         result.sign = a.sign * b.sign
         return result
 
-    @jit.elidable
+    @jit.elidable()
     def truediv(self, other):
         div = _bigint_true_divide(self, other)
         return div
 
-    @jit.elidable
+    @jit.elidable()
     def floordiv(self, other):
         if self.sign == 1 and other.numdigits() == 1 and other.sign == 1:
             digit = other.digit(0)
@@ -634,7 +634,7 @@ class rbigint(object):
     def div(self, other):
         return self.floordiv(other)
 
-    @jit.elidable
+    @jit.elidable()
     def mod(self, other):
         if self.sign == 0:
             return NULLRBIGINT
@@ -671,7 +671,7 @@ class rbigint(object):
             mod = mod.add(other)
         return mod
 
-    @jit.elidable
+    @jit.elidable()
     def divmod(v, w):
         """
         The / and % operators are now defined in terms of divmod().
@@ -697,7 +697,7 @@ class rbigint(object):
             div = div.sub(ONERBIGINT)
         return div, mod
 
-    @jit.elidable
+    @jit.elidable()
     def pow(a, b, c=None):
         negativeOutput = False  # if x<0 return negative output
 
@@ -837,17 +837,17 @@ class rbigint(object):
             z = z.sub(c)
         return z
 
-    @jit.elidable
+    @jit.elidable()
     def neg(self):
         return rbigint(self._digits, -self.sign, self.size)
 
-    @jit.elidable
+    @jit.elidable()
     def abs(self):
         if self.sign != -1:
             return self
         return rbigint(self._digits, 1, self.size)
 
-    @jit.elidable
+    @jit.elidable()
     def invert(self): #Implement ~x as -(x + 1)
         if self.sign == 0:
             return ONENEGATIVERBIGINT
@@ -856,7 +856,7 @@ class rbigint(object):
         ret.sign = -ret.sign
         return ret
 
-    @jit.elidable
+    @jit.elidable()
     def lshift(self, int_other):
         if int_other < 0:
             raise ValueError("negative shift count")
@@ -893,7 +893,7 @@ class rbigint(object):
         return z
     lshift._always_inline_ = True # It's so fast that it's always benefitial.
 
-    @jit.elidable
+    @jit.elidable()
     def lqshift(self, int_other):
         " A quicker one with much less checks, int_other is valid and for the most part constant."
         assert int_other > 0
@@ -913,7 +913,7 @@ class rbigint(object):
         return z
     lqshift._always_inline_ = True # It's so fast that it's always benefitial.
 
-    @jit.elidable
+    @jit.elidable()
     def rshift(self, int_other, dont_invert=False):
         if int_other < 0:
             raise ValueError("negative shift count")
@@ -943,7 +943,7 @@ class rbigint(object):
         return z
     rshift._always_inline_ = 'try' # It's so fast that it's always benefitial.
 
-    @jit.elidable
+    @jit.elidable()
     def abs_rshift_and_mask(self, bigshiftcount, mask):
         assert isinstance(bigshiftcount, r_ulonglong)
         assert mask >= 0
@@ -992,30 +992,30 @@ class rbigint(object):
         z._normalize()
         return z
 
-    @jit.elidable
+    @jit.elidable()
     def and_(self, other):
         return _bitwise(self, '&', other)
 
-    @jit.elidable
+    @jit.elidable()
     def xor(self, other):
         return _bitwise(self, '^', other)
 
-    @jit.elidable
+    @jit.elidable()
     def or_(self, other):
         return _bitwise(self, '|', other)
 
-    @jit.elidable
+    @jit.elidable()
     def oct(self):
         if self.sign == 0:
             return '0L'
         else:
             return _format(self, BASE8, '0', 'L')
 
-    @jit.elidable
+    @jit.elidable()
     def hex(self):
         return _format(self, BASE16, '0x', 'L')
 
-    @jit.elidable
+    @jit.elidable()
     def log(self, base):
         # base is supposed to be positive or 0.0, which means we use e
         if base == 10.0:
@@ -1050,7 +1050,7 @@ class rbigint(object):
 
     _normalize._always_inline_ = True
 
-    @jit.elidable
+    @jit.elidable()
     def bit_length(self):
         i = self.numdigits()
         if i == 1 and self._digits[0] == NULLDIGIT:

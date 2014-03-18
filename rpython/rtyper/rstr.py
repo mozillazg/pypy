@@ -20,7 +20,7 @@ class AbstractStringRepr(Repr):
         self.rstr_decode_utf_8 = func_with_new_name(str_decode_utf_8_impl,
                                                     'rstr_decode_utf_8_impl')
 
-    @jit.elidable
+    @jit.elidable()
     def ll_decode_utf8(self, llvalue):
         from rpython.rtyper.annlowlevel import hlstr
         value = hlstr(llvalue)
@@ -70,7 +70,7 @@ class AbstractUnicodeRepr(AbstractStringRepr):
     def rtype_method_lower(self, hop):
         raise TypeError("Cannot do tolower on unicode string")
 
-    @jit.elidable
+    @jit.elidable()
     def ll_encode_utf8(self, ll_s):
         from rpython.rtyper.annlowlevel import hlunicode
         s = hlunicode(ll_s)

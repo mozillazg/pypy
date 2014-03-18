@@ -10,7 +10,7 @@ class Signature(object):
         self.varargname = varargname
         self.kwargname = kwargname
 
-    @jit.elidable
+    @jit.elidable()
     def find_argname(self, name):
         try:
             return self.argnames.index(name)

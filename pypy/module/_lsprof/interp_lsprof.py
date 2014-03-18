@@ -150,7 +150,7 @@ class ProfilerEntry(ProfilerSubEntry):
                             factor * float(self.ll_it), w_sublist)
         return space.wrap(w_se)
 
-    @jit.elidable
+    @jit.elidable()
     def _get_or_make_subentry(self, entry, make=True):
         try:
             return self.calls[entry]
@@ -302,7 +302,7 @@ class W_Profiler(W_Root):
         c_setup_profiling()
         space.getexecutioncontext().setllprofile(lsprof_call, space.wrap(self))
 
-    @jit.elidable
+    @jit.elidable()
     def _get_or_make_entry(self, f_code, make=True):
         try:
             return self.data[f_code]
@@ -313,7 +313,7 @@ class W_Profiler(W_Root):
                 return entry
             raise
 
-    @jit.elidable
+    @jit.elidable()
     def _get_or_make_builtin_entry(self, key, make=True):
         try:
             return self.builtin_data[key]

@@ -634,7 +634,7 @@ class CompileFrameworkTests(BaseFrameworkTests):
         self.run('compile_framework_external_exception_handling')
 
     def define_compile_framework_bug1(self):
-        @elidable
+        @elidable()
         def nonmoving():
             x = X(1)
             for i in range(7):

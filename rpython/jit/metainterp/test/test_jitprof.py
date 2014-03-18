@@ -77,7 +77,7 @@ class TestProfile(ProfilerMixin):
         assert profiler.calls == 1
 
     def test_blackhole_pure(self):
-        @elidable
+        @elidable()
         def g(n):
             return n+1
         

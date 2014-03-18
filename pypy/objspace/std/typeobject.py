@@ -259,7 +259,7 @@ class W_TypeObject(W_Object):
                     return w_value
         return w_value
 
-    @elidable
+    @elidable()
     def _pure_getdictvalue_no_unwrapping(w_self, space, version_tag, attr):
         return w_self._getdictvalue_no_unwrapping(space, attr)
 
@@ -371,7 +371,7 @@ class W_TypeObject(W_Object):
         w_class, w_value = w_self._pure_lookup_where_with_method_cache(name, version_tag)
         return w_class, unwrap_cell(space, w_value)
 
-    @elidable
+    @elidable()
     def _pure_lookup_where_with_method_cache(w_self, name, version_tag):
         space = w_self.space
         cache = space.fromcache(MethodCache)

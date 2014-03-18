@@ -216,12 +216,12 @@ _ll_5_list_ll_arraycopy = rgc.ll_arraycopy
 
 _ll_3_list_resize_hint_really = rlist_ll._ll_list_resize_hint_really
 
-@elidable
+@elidable()
 def _ll_1_gc_identityhash(x):
     return lltype.identityhash(x)
 
 
-# the following function should not be "@elidable": I can think of
+# the following function should not be "@elidable()": I can think of
 # a corner case in which id(const) is constant-folded, and then 'const'
 # disappears and is collected too early (possibly causing another object
 # with the same id() to appear).

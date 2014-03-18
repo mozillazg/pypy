@@ -17,7 +17,7 @@ class W_FFIType(W_Root):
         self.w_pointer_to = w_pointer_to
         self.set_ffitype(ffitype)
 
-    @jit.elidable
+    @jit.elidable()
     def get_ffitype(self):
         if not self._ffitype:
             raise ValueError("Operation not permitted on an incomplete type")

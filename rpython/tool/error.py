@@ -160,7 +160,7 @@ def debug(drv, use_pdb=True):
         pdb_plus_show.start(tb)
 
 
-@jit.elidable
+@jit.elidable()
 def offset2lineno(c, stopat):
     tab = c.co_lnotab
     line = c.co_firstlineno

@@ -413,7 +413,7 @@ class BasicTests:
                                       call=0, call_pure=0)
 
     def test_residual_call_elidable_1(self):
-        @elidable
+        @elidable()
         def externfn(x, y):
             return x * y
         def f(n):
@@ -426,7 +426,7 @@ class BasicTests:
 
     def test_residual_call_elidable_2(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
-        @elidable
+        @elidable()
         def externfn(x):
             return x - 1
         def f(n):
@@ -443,7 +443,7 @@ class BasicTests:
 
     def test_constfold_call_elidable(self):
         myjitdriver = JitDriver(greens = ['m'], reds = ['n'])
-        @elidable
+        @elidable()
         def externfn(x):
             return x - 3
         def f(n, m):
@@ -459,7 +459,7 @@ class BasicTests:
 
     def test_constfold_call_elidable_2(self):
         myjitdriver = JitDriver(greens = ['m'], reds = ['n'])
-        @elidable
+        @elidable()
         def externfn(x):
             return x - 3
         class V:
@@ -484,7 +484,7 @@ class BasicTests:
                 self.x = x
         v1 = V(1)
         v2 = V(2)
-        @elidable
+        @elidable()
         def externfn(x):
             if x:
                 return v1
@@ -504,7 +504,7 @@ class BasicTests:
 
     def test_elidable_raising(self):
         myjitdriver = JitDriver(greens = ['m'], reds = ['n'])
-        @elidable
+        @elidable()
         def externfn(x):
             if x <= 0:
                 raise ValueError
@@ -530,7 +530,7 @@ class BasicTests:
 
     def test_elidable_raising_2(self):
         myjitdriver = JitDriver(greens = ['m'], reds = ['n'])
-        @elidable
+        @elidable()
         def externfn(x):
             if x <= 0:
                 raise ValueError

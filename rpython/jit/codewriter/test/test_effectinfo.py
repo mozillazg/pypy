@@ -122,7 +122,7 @@ class TestVirtualizableAnalyzer(object):
         class B(A):
             x = 2
 
-        @jit.elidable
+        @jit.elidable()
         def g(cls):
             return cls()
 

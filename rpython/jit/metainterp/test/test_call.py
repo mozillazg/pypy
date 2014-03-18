@@ -28,7 +28,7 @@ class TestCall(LLJitMixin):
     def test_call_elidable_none(self):
         d = {}
 
-        @jit.elidable
+        @jit.elidable()
         def f(a):
             return d.get(a, None)
 

@@ -43,7 +43,7 @@ class AbstractAttribute(object):
         else:
             return obj._mapdict_read_storage(attr.storageindex)
 
-    @jit.elidable
+    @jit.elidable()
     def _pure_mapdict_read_storage(self, obj, storageindex):
         return obj._mapdict_read_storage(storageindex)
 
@@ -68,7 +68,7 @@ class AbstractAttribute(object):
         else:
             return self._find_map_attr_indirection(selector)
 
-    @jit.elidable
+    @jit.elidable()
     def _find_map_attr_jit_pure(self, name, index):
         return self._find_map_attr_indirection((name, index))
 
@@ -128,14 +128,14 @@ class AbstractAttribute(object):
     def set_terminator(self, obj, terminator):
         raise NotImplementedError("abstract base class")
 
-    @jit.elidable
+    @jit.elidable()
     def size_estimate(self):
         return self._size_estimate >> NUM_DIGITS
 
     def search(self, attrtype):
         return None
 
-    @jit.elidable
+    @jit.elidable()
     def _get_new_attr(self, name, index):
         selector = name, index
         cache = self.cache_attrs

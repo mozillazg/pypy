@@ -1,4 +1,5 @@
 import sys
+import types
 
 import py
 
@@ -11,7 +12,7 @@ from rpython.tool.sourcetools import rpython_wrapper
 DEBUG_ELIDABLE_FUNCTIONS = False
 
 
-def elidable(func):
+def elidable(canfolderror=None):
     """ Decorate a function as "trace-elidable". Usually this means simply that
     the function is constant-foldable, i.e. is pure and has no side-effects.
 
@@ -31,22 +32,31 @@ def elidable(func):
     Most importantly it doesn't mean that an elidable function has no observable
     side effect, but those side effects are idempotent (ie caching).
     If a particular call to this function ends up raising an exception, then it
-    is handled like a normal function call (this decorator is ignored).
+    is handled like a normal function call (this decorator is ignored), unless
+    canfolderror is specified (which is an exception class or a tuple).
+    In this case, if it raises specific exception listed there, it's also
+    constant folded away.
     """
-    if DEBUG_ELIDABLE_FUNCTIONS:
-        cache = {}
-        oldfunc = func
-        def func(*args):
-            result = oldfunc(*args)    # if it raises, no caching
-            try:
-                oldresult = cache.setdefault(args, result)
-            except TypeError:
-                pass           # unhashable args
-            else:
-                assert oldresult == result
-            return result
-    func._elidable_function_ = True
-    return func
+    if isinstance(canfolderror, types.FunctionType):
+        raise Exception("@elidable was changed to a full "
+                        "decorator, use @elidable()")
+    def decorator(func):
+        if DEBUG_ELIDABLE_FUNCTIONS:
+            cache = {}
+            oldfunc = func
+            def func(*args):
+                result = oldfunc(*args)    # if it raises, no caching
+                try:
+                    oldresult = cache.setdefault(args, result)
+                except TypeError:
+                    pass           # unhashable args
+                else:
+                    assert oldresult == result
+                return result
+        func._elidable_function_ = True
+        if canfolderror is not None:
+            func._elidable_exceptions_ = canfolderror
+        return func
 
 def purefunction(*args, **kwargs):
     import warnings

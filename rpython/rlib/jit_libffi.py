@@ -245,7 +245,7 @@ class types(object):
         del cls._import
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def getkind(ffi_type):
         """Returns 'v' for void, 'f' for float, 'i' for signed integer,
         'u' for unsigned integer, 'S' for singlefloat, 'L' for long long
@@ -281,7 +281,7 @@ class types(object):
         return '?'
 
     @staticmethod
-    @jit.elidable
+    @jit.elidable()
     def is_struct(ffi_type):
         return rffi.getintfield(ffi_type, 'c_type') == FFI_TYPE_STRUCT
 

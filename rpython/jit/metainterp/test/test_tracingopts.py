@@ -411,7 +411,7 @@ class TestLLtype(LLJitMixin):
         a1.y = 6
         a2 = A()
         a2.y = 13
-        @jit.elidable
+        @jit.elidable()
         def f(b):
             return b + 1
         def fn(n):

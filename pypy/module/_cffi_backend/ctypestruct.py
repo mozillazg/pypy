@@ -135,7 +135,7 @@ class W_CTypeStructOrUnion(W_CType):
                 msg = "list or tuple or dict"
             raise self._convert_error(msg, w_ob)
 
-    @jit.elidable
+    @jit.elidable()
     def _getcfield_const(self, attr):
         return self.fields_dict[attr]
 

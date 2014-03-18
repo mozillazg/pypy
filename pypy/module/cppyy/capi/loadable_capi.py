@@ -342,10 +342,10 @@ def c_allocate_function_args(space, size):
     return _cdata_to_ptr(space, call_capi(space, 'allocate_function_args', [_Arg(l=size)]))
 def c_deallocate_function_args(space, cargs):
     call_capi(space, 'deallocate_function_args', [_Arg(vp=cargs)])
-@jit.elidable
+@jit.elidable()
 def c_function_arg_sizeof(space):
     return _cdata_to_size_t(space, call_capi(space, 'function_arg_sizeof', []))
-@jit.elidable
+@jit.elidable()
 def c_function_arg_typeoffset(space):
     return _cdata_to_size_t(space, call_capi(space, 'function_arg_typeoffset', []))
 

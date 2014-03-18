@@ -72,7 +72,7 @@ class Class(object):
 
     classes = [] # [(descr, cls), ...]
 
-    @elidable
+    @elidable()
     def get(key):
         for descr, cls in Class.classes:
             if key.attributes == descr.attributes and\

@@ -585,7 +585,7 @@ class StringMethods(object):
             return self
         return self._new(self.title(selfval))
 
-    @jit.elidable
+    @jit.elidable()
     def title(self, value):
         builder = self._builder(len(value))
         previous_is_cased = False

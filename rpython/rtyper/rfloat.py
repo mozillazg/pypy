@@ -136,7 +136,7 @@ class __extend__(FloatRepr):
         hop.exception_cannot_occur()
         return vlist[0]
 
-    @jit.elidable
+    @jit.elidable()
     def ll_str(self, f):
         return llstr(formatd(f, 'f', 6))
 
