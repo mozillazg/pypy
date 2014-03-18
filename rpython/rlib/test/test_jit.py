@@ -94,19 +94,25 @@ def test_merge_enter_different():
 def test_elidable():
     import warnings
     # deprecated version
-    if 1:#with warnings.catch_warnings(record=True) as w:
-        #assert not w
+    with warnings.catch_warnings(record=True) as w:
+        assert not w
         @elidable
         def f():
             pass
         assert f._elidable_function_
-        #assert "@elidable()" in w[0].message[0]
+        assert "@elidable()" in w[0].message[0]
 
     # proper version
     @elidable()
     def f():
         pass
     assert f._elidable_function_
+
+    @elidable(ValueError)
+    def f():
+        pass
+    assert f._elidable_function_
+
     @elidable(canfolderror=ValueError)
     def f():
         pass

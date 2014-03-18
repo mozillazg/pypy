@@ -1,4 +1,6 @@
+from __future__ import absolute_import
 import sys
+import types
 import warnings
 
 import py
@@ -58,16 +60,13 @@ def elidable(canfolderror=None):
 
 _elidable = elidable
 def elidable(*args, **kwargs):
-    if len(args) == 1:
+    if len(args) == 1 and isinstance(args[0], types.FunctionType):
         assert len(kwargs) == 0
         warnings.warn("@elidable is deprecated, use @elidable() instead", stacklevel=2)
         return _elidable()(args[0])
-    else:
-        assert len(args) == 0
-        return _elidable(**kwargs)
+    return _elidable(*args, **kwargs)
 
 def purefunction(*args, **kwargs):
-    import warnings
     warnings.warn("purefunction is deprecated, use elidable instead", DeprecationWarning)
     return elidable(*args, **kwargs)
 
@@ -160,7 +159,6 @@ def elidable_promote(promote_args='all'):
     return decorator
 
 def purefunction_promote(*args, **kwargs):
-    import warnings
     warnings.warn("purefunction_promote is deprecated, use elidable_promote instead", DeprecationWarning)
     return elidable_promote(*args, **kwargs)
 
