@@ -49,6 +49,7 @@ class OptResumeBuilder(object):
             no = op.getarg(2).getint()
             self.framestack[op.getarg(1).getint()].values[no] = value
         else:
+            XXX
             self.opt.emit_operation(op)
 
     def new_virtual_with_vtable(self, box, vtable, vvalue):

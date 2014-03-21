@@ -7,4 +7,4 @@
 
 * do escape analysis in the resume/optimizer.py
 
-* make_a_counter_per_value got screwed, but a bit no clue what it does
+* reimplement make_a_counter_per_value

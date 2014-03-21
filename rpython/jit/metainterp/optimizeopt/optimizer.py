@@ -568,10 +568,6 @@ class Optimizer(Optimization):
                 raise ValueError, "invalid optimization"
             self.seen_results[op.result] = None
         self._newoperations.append(op)
-        if (self.delayed_resume_put is not None and
-            self.delayed_resume_put.getarg(0) is op.result):
-            self._newoperations.append(self.delayed_resume_put)
-            self.delayed_resume_put = None
 
     def replace_op(self, old_op, new_op):
         # XXX: Do we want to cache indexes to prevent search?

@@ -1,6 +1,7 @@
 
 from rpython.jit.metainterp.optimizeopt import optimizer
 from rpython.jit.metainterp.optimizeopt.util import make_dispatcher_method
+from rpython.jit.metainterp.history import Const
 
 """ All of this directly emit the ops, without calling emit_operation
 (they also don't have boxes except a resume_put)
@@ -8,9 +9,12 @@ from rpython.jit.metainterp.optimizeopt.util import make_dispatcher_method
 
 class OptResume(optimizer.Optimization):
     def optimize_RESUME_PUT(self, op):
-        if op.getarg(0) in self.optimizer.producer:
+        arg = op.getarg(0)
+        if (isinstance(arg, Const) or arg in self.optimizer.producer or
+            arg in self.optimizer.loop.inputargs):
             self.optimizer.resumebuilder.resume_put(op)
         else:
+            xxx
             self.optimizer.delayed_resume_put = op
             # otherwise we did not emit the operation just yet
 

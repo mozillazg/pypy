@@ -498,9 +498,8 @@ class ResumeGuardDescr(ResumeDescr):
         self.guard_opnum = guard_op.getopnum()
 
     def make_a_counter_per_value(self, guard_value_op):
+        return # XXXX
         assert guard_value_op.getopnum() == rop.GUARD_VALUE
-        # XXX I have no clue what exactly it does, but we killed failargs
-        #     so i is always 0 now
         box = guard_value_op.getarg(0)
         i = 0
         # used to be i = guard_value_op.getfailargs().index(box)
@@ -557,6 +556,7 @@ class ResumeGuardDescr(ResumeDescr):
         else: # we have a GUARD_VALUE that fails.  Make a _counters instance
             # (only now, when the guard is actually failing at least once),
             # and use it to record some statistics about the failing values.
+            assert 0 # XXX this should be dead code until we fix it
             index = self._counter & self.CNT_BASE_MASK
             typetag = self._counter & self.CNT_TYPE_MASK
             counters = self._counters
