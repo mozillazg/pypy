@@ -269,6 +269,19 @@ class WarmEnterState(object):
         vinfo = jitdriver_sd.virtualizable_info
         index_of_virtualizable = jitdriver_sd.index_of_virtualizable
         num_green_args = jitdriver_sd.num_green_args
+        num_green_ints = 0
+        num_green_refs = 0
+        for kind in jitdriver_sd.green_args_types:
+            if kind == 'int':
+                num_green_ints += 1
+            elif kind == 'ref':
+                num_green_refs += 1
+        num_green_floats = num_green_args - num_green_ints - num_green_refs
+        range_green_ints = unrolling_iterable(enumerate(range(num_green_ints)))
+        range_green_refs = unrolling_iterable(enumerate(
+            range(num_green_ints, num_green_ints + num_green_refs)))
+        range_green_floats = unrolling_iterable(enumerate(
+            range(num_green_ints + num_green_refs, num_green_args)))
         JitCell = self.make_jitcell_subclass()
         self.make_jitdriver_callbacks()
         confirm_enter_jit = self.confirm_enter_jit
@@ -276,18 +289,33 @@ class WarmEnterState(object):
             range(num_green_args, num_green_args + jitdriver_sd.num_red_args))
         # get a new specialized copy of the method
         ARGS = []
+        num_red_ints = 0
+        num_red_refs = 0
+        num_red_floats = 0
         for kind in jitdriver_sd.red_args_types:
             if kind == 'int':
+                num_red_ints += 1
                 ARGS.append(lltype.Signed)
             elif kind == 'ref':
+                num_red_refs += 1
                 ARGS.append(llmemory.GCREF)
             elif kind == 'float':
+                num_red_floats += 1
                 ARGS.append(longlong.FLOATSTORAGE)
             else:
                 assert 0, kind
         func_execute_token = self.cpu.make_execute_token(*ARGS)
         cpu = self.cpu
         jitcounter = self.warmrunnerdesc.jitcounter
+
+        range_red_ints = unrolling_iterable(enumerate(
+            range(num_green_args, num_green_args + num_red_ints)))
+        range_red_refs = unrolling_iterable(enumerate(
+            range(num_green_args + num_red_ints,
+                  num_green_args + num_red_ints + num_red_refs)))
+        range_red_floats = unrolling_iterable(enumerate(
+            range(num_green_args + num_red_ints + num_red_refs,
+                  jitdriver_sd.num_red_args)))
 
         def execute_assembler(loop_token, *args):
             # Call the backend to run the 'looptoken' with the given
@@ -325,7 +353,26 @@ class WarmEnterState(object):
                 jitcounter.install_new_cell(hash, cell)
             cell.flags |= JC_TRACING
             try:
-                metainterp.compile_and_run_once(jitdriver_sd, *args)
+                green_ints = [0] * num_green_ints
+                green_refs = [lltype.nullptr(llmemory.GCREF.TO)] * num_green_refs
+                green_floats = [longlong.getfloatstorage(0.0)] * num_green_floats
+                red_ints = [0] * num_red_ints
+                red_refs = [lltype.nullptr(llmemory.GCREF.TO)] * num_red_refs
+                red_floats = [longlong.getfloatstorage(0.0)] * num_red_floats
+                for i, num in range_green_ints:
+                    green_ints[i] = args[num]
+                for i, num in range_green_refs:
+                    green_refs[i] = args[num]
+                for i, num in range_green_floats:
+                    green_floats[i] = args[num]
+                for i, num in range_red_ints:
+                    red_ints[i] = args[num]
+                for i, num in range_red_refs:
+                    red_refs[i] = args[num]
+                for i, num in range_red_floats:
+                    red_floats[i] = args[num]
+                metainterp.compile_and_run_once(jitdriver_sd, green_ints,
+                    green_refs, green_floats, red_ints, red_refs, red_floats)
             finally:
                 cell.flags &= ~JC_TRACING
 

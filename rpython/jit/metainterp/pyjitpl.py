@@ -2000,8 +2000,9 @@ class MetaInterp(object):
                     self.staticdata.log(sys.exc_info()[0].__name__)
                 raise
 
-    @specialize.arg(1)
-    def compile_and_run_once(self, jitdriver_sd, *args):
+    def compile_and_run_once(self, jitdriver_sd,
+                             green_args_i, green_args_r, green_args_f,
+                             args_i, args_r, args_f):
         # NB. we pass explicity 'jitdriver_sd' around here, even though it
         # is also available as 'self.jitdriver_sd', because we need to
         # specialize this function and a few other ones for the '*args'.
@@ -2012,7 +2013,9 @@ class MetaInterp(object):
         self.staticdata.try_to_free_some_loops()
         self.create_empty_history()
         try:
-            original_boxes = self.initialize_original_boxes(jitdriver_sd, *args)
+            original_boxes = self.initialize_original_boxes(
+                jitdriver_sd, green_args_i, green_args_r, green_args_f,
+                args_i, args_r, args_f)
             return self._compile_and_run_once(original_boxes)
         finally:
             self.staticdata.profiler.end_tracing()
@@ -2370,22 +2373,37 @@ class MetaInterp(object):
         if target_token is not token:
             compile.giveup()
 
-    @specialize.arg(1)
-    def initialize_original_boxes(self, jitdriver_sd, *args):
+    def initialize_original_boxes(self, jitdriver_sd,
+                                  greens_i, greens_r, greens_f,
+                                  args_i, args_r, args_f):
         original_boxes = []
         self._fill_original_boxes(jitdriver_sd, original_boxes,
-                                  jitdriver_sd.num_green_args, *args)
+                                  greens_i, greens_r, greens_f, args_i, args_r,
+                                  args_f)
         return original_boxes
 
-    @specialize.arg(1)
-    def _fill_original_boxes(self, jitdriver_sd, original_boxes,
-                             num_green_args, *args):
-        if args:
-            from rpython.jit.metainterp.warmstate import wrap
-            box = wrap(self.cpu, args[0], num_green_args > 0)
+    def _fill_original_boxes(self, jitdriver_sd, original_boxes, greens_i,
+                             greens_r, greens_f, args_i, args_r, args_f):
+        from rpython.jit.metainterp.warmstate import wrap
+
+        for ival in greens_i:
+            box = wrap(self.cpu, ival, True)
             original_boxes.append(box)
-            self._fill_original_boxes(jitdriver_sd, original_boxes,
-                                      num_green_args-1, *args[1:])
+        for rval in greens_r:
+            box = wrap(self.cpu, rval, True)
+            original_boxes.append(box)
+        for fval in greens_f:
+            box = wrap(self.cpu, fval, True)
+            original_boxes.append(box)
+        for ival in args_i:
+            box = wrap(self.cpu, ival, False)
+            original_boxes.append(box)
+        for rval in args_r:
+            box = wrap(self.cpu, rval, False)
+            original_boxes.append(box)
+        for fval in args_f:
+            box = wrap(self.cpu, fval, False)
+            original_boxes.append(box)
 
     def initialize_state_from_start(self, original_boxes):
         # ----- make a new frame -----

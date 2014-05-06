@@ -569,6 +569,8 @@ class WarmRunnerDesc(object):
         ALLARGS = [v.concretetype for v in (greens_v + reds_v)]
         jd._green_args_spec = [v.concretetype for v in greens_v]
         jd.red_args_types = [history.getkind(v.concretetype) for v in reds_v]
+        jd.green_args_types = [history.getkind(v.concretetype)
+                               for v in greens_v]
         jd.num_green_args = len(jd._green_args_spec)
         jd.num_red_args = len(jd.red_args_types)
         RESTYPE = graph.getreturnvar().concretetype

@@ -512,9 +512,9 @@ class JitDriver(object):
         # if reds are automatic, they won't be passed to jit_merge_point, so
         # _check_arguments will receive only the green ones (i.e., the ones
         # which are listed explicitly). So, it is fine to just ignore reds
-        self._somelivevars = set([name for name in
+        self._somelivevars = set([_name for _name in
                                   self.greens + (self.reds or [])
-                                  if '.' not in name])
+                                  if '.' not in _name])
         self._heuristic_order = {}   # check if 'reds' and 'greens' are ordered
         self._make_extregistryentries()
         assert get_jitcell_at is None, "get_jitcell_at no longer used"
