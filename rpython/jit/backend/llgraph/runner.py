@@ -290,12 +290,12 @@ class LLGraphCPU(model.AbstractCPU):
         compiled_loop_token._llgraph_loop = None
         model.AbstractCPU.free_loop_and_bridges(self, compiled_loop_token)
 
-    def make_execute_token(self, *argtypes):
+    def make_execute_token(self):
         return self._execute_token
 
-    def _execute_token(self, loop_token, *args):
+    def _execute_token(self, loop_token, args_i, args_r, args_f):
         lltrace = loop_token.compiled_loop_token._llgraph_loop
-        frame = LLFrame(self, lltrace.inputargs, args)
+        frame = LLFrame(self, lltrace.inputargs, args_i + args_r + args_f)
         try:
             frame.execute(lltrace)
             assert False

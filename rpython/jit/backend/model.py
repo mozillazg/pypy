@@ -73,17 +73,16 @@ class AbstractCPU(object):
         """Print a disassembled version of looptoken to stdout"""
         raise NotImplementedError
 
-    def execute_token(self, looptoken, *args):
+    def execute_token(self, looptoken, args_i, args_r, args_f):
         """NOT_RPYTHON (for tests only)
         Execute the generated code referenced by the looptoken.
         When done, this returns a 'dead JIT frame' object that can
         be inspected with the get_latest_xxx() methods.
         """
-        argtypes = [lltype.typeOf(x) for x in args]
-        execute = self.make_execute_token(*argtypes)
-        return execute(looptoken, *args)
+        execute = self.make_execute_token()
+        return execute(looptoken, args_i, args_r, args_f)
 
-    def make_execute_token(self, *argtypes):
+    def make_execute_token(self):
         """Must make and return an execute_token() function that will be
         called with the given argtypes.
         """

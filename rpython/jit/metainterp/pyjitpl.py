@@ -2194,15 +2194,18 @@ class MetaInterp(object):
 
     def _nontranslated_run_directly(self, live_arg_boxes, loop_token):
         "NOT_RPYTHON"
-        args = []
         num_green_args = self.jitdriver_sd.num_green_args
         num_red_args = self.jitdriver_sd.num_red_args
+        args_i = []
+        args_r = []
+        args_f = []
         for box in live_arg_boxes[num_green_args:num_green_args+num_red_args]:
-            if   box.type == history.INT: args.append(box.getint())
-            elif box.type == history.REF: args.append(box.getref_base())
-            elif box.type == history.FLOAT: args.append(box.getfloatstorage())
+            if   box.type == history.INT: args_i.append(box.getint())
+            elif box.type == history.REF: args_r.append(box.getref_base())
+            elif box.type == history.FLOAT: args_f.append(box.getfloatstorage())
             else: assert 0
-        self.jitdriver_sd.warmstate.execute_assembler(loop_token, *args)
+        self.jitdriver_sd.warmstate.execute_assembler(loop_token, args_i,
+                                                      args_r, args_f)
 
     def prepare_resume_from_failure(self, opnum, dont_change_position,
                                     deadframe):

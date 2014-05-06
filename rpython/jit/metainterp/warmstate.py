@@ -267,7 +267,6 @@ class WarmEnterState(object):
         metainterp_sd = warmrunnerdesc.metainterp_sd
         jitdriver_sd = self.jitdriver_sd
         vinfo = jitdriver_sd.virtualizable_info
-        index_of_virtualizable = jitdriver_sd.index_of_virtualizable
         num_green_args = jitdriver_sd.num_green_args
         num_green_ints = 0
         num_green_refs = 0
@@ -288,23 +287,21 @@ class WarmEnterState(object):
         range_red_args = unrolling_iterable(
             range(num_green_args, num_green_args + jitdriver_sd.num_red_args))
         # get a new specialized copy of the method
-        ARGS = []
         num_red_ints = 0
         num_red_refs = 0
         num_red_floats = 0
         for kind in jitdriver_sd.red_args_types:
             if kind == 'int':
                 num_red_ints += 1
-                ARGS.append(lltype.Signed)
             elif kind == 'ref':
                 num_red_refs += 1
-                ARGS.append(llmemory.GCREF)
             elif kind == 'float':
                 num_red_floats += 1
-                ARGS.append(longlong.FLOATSTORAGE)
             else:
                 assert 0, kind
-        func_execute_token = self.cpu.make_execute_token(*ARGS)
+        index_of_virtualizable = (jitdriver_sd.index_of_virtualizable -
+                                  num_red_ints)
+        func_execute_token = self.cpu.make_execute_token()
         cpu = self.cpu
         jitcounter = self.warmrunnerdesc.jitcounter
 
@@ -317,7 +314,7 @@ class WarmEnterState(object):
             range(num_green_args + num_red_ints + num_red_refs,
                   jitdriver_sd.num_red_args)))
 
-        def execute_assembler(loop_token, *args):
+        def execute_assembler(loop_token, args_i, args_r, args_f):
             # Call the backend to run the 'looptoken' with the given
             # input args.
 
@@ -325,10 +322,10 @@ class WarmEnterState(object):
             # state, to make sure we enter with vable_token being NONE
             #
             if vinfo is not None:
-                virtualizable = args[index_of_virtualizable]
+                virtualizable = args_r[index_of_virtualizable]
                 vinfo.clear_vable_token(virtualizable)
             
-            deadframe = func_execute_token(loop_token, *args)
+            deadframe = func_execute_token(loop_token, args_i, args_r, args_f)
             #
             # Record in the memmgr that we just ran this loop,
             # so that it will keep it alive for a longer time
@@ -420,11 +417,17 @@ class WarmEnterState(object):
                 return
             # extract and unspecialize the red arguments to pass to
             # the assembler
-            execute_args = ()
-            for i in range_red_args:
-                execute_args += (unspecialize_value(args[i]), )
+            args_i = [0] * num_red_ints
+            args_r = [lltype.nullptr(llmemory.GCREF.TO)] * num_red_refs
+            args_f = [longlong.getfloatstorage(0.0)] * num_red_floats
+            for i, num in range_red_ints:
+                args_i[i] = unspecialize_value(args[num])
+            for i, num in range_red_refs:
+                args_r[i] = unspecialize_value(args[num])
+            for i, num in range_red_floats:
+                args_f[i] = unspecialize_value(args[num])
             # run it!  this executes until interrupted by an exception
-            execute_assembler(procedure_token, *execute_args)
+            execute_assembler(procedure_token, args_i, args_r, args_f)
             assert 0, "should not reach this point"
 
         maybe_compile_and_run._dont_inline_ = True

@@ -214,16 +214,12 @@ class AbstractLLCPU(AbstractCPU):
         frame.jf_descr = frame.jf_force_descr
         return lltype.cast_opaque_ptr(llmemory.GCREF, frame)
 
-    def make_execute_token(self, *ARGS):
+    def make_execute_token(self):
         FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.GCREF],
                                              llmemory.GCREF))
 
-        lst = [(i, history.getkind(ARG)[0]) for i, ARG in enumerate(ARGS)]
-        kinds = unrolling_iterable(lst)
-
-        def execute_token(executable_token, *args):
+        def execute_token(executable_token, args_i, args_r, args_f):
             clt = executable_token.compiled_loop_token
-            assert len(args) == clt._debug_nbargs
             #
             addr = executable_token._ll_function_addr
             func = rffi.cast(FUNCPTR, addr)
@@ -237,16 +233,16 @@ class AbstractLLCPU(AbstractCPU):
                 prev_interpreter = LLInterpreter.current_interpreter
                 LLInterpreter.current_interpreter = self.debug_ll_interpreter
             try:
-                for i, kind in kinds:
-                    arg = args[i]
-                    num = locs[i]
-                    if kind == history.INT:
-                        self.set_int_value(ll_frame, num, arg)
-                    elif kind == history.FLOAT:
-                        self.set_float_value(ll_frame, num, arg)
-                    else:
-                        assert kind == history.REF
-                        self.set_ref_value(ll_frame, num, arg)
+                num = 0
+                for arg_i in args_i:
+                    self.set_int_value(ll_frame, locs[num], arg_i)
+                    num += 1
+                for arg_r in args_r:
+                    self.set_ref_value(ll_frame, locs[num], arg_r)
+                    num += 1
+                for arg_f in args_f:
+                    self.set_float_value(ll_frame, locs[num], arg_f)
+                    num += 1
                 llop.gc_writebarrier(lltype.Void, ll_frame)
                 ll_frame = func(ll_frame)
             finally:
