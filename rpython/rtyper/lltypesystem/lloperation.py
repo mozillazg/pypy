@@ -438,6 +438,9 @@ LL_OPERATIONS = {
     'gc_gettypeptr_group':  LLOp(canfold=True),
     'get_member_index':     LLOp(canfold=True),
 
+    'getfield_exc_type':    LLOp(sideeffects=False),
+    'setfield_exc_type':    LLOp(),
+
     # __________ used by the JIT ________
 
     'jit_marker':           LLOp(),

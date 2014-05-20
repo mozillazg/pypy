@@ -67,17 +67,19 @@ class ExceptionTransformer(object):
         self.c_n_i_error_ll_exc_type = constant_value(n_i_error_ll_exc_type)
 
         def rpyexc_occured():
-            exc_type = exc_data.exc_type
+            exc_type = lloperation.llop.getfield_exc_type(
+                self.lltype_of_exception_type)
             return bool(exc_type)
 
         def rpyexc_fetch_type():
-            return exc_data.exc_type
+            return lloperation.llop.getfield_exc_type(
+                self.lltype_of_exception_type)
 
         def rpyexc_fetch_value():
             return exc_data.exc_value
 
         def rpyexc_clear():
-            exc_data.exc_type = null_type
+            lloperation.llop.setfield_exc_type(lltype.Void, null_type)
             exc_data.exc_value = null_value
 
         def rpyexc_raise(etype, evalue):
@@ -90,12 +92,12 @@ class ExceptionTransformer(object):
             # us to see at least part of the traceback for them.
             ll_assert(etype != assertion_error_ll_exc_type, "AssertionError")
             ll_assert(etype != n_i_error_ll_exc_type, "NotImplementedError")
-            exc_data.exc_type = etype
+            lloperation.llop.setfield_exc_type(lltype.Void, etype)
             exc_data.exc_value = evalue
             lloperation.llop.debug_start_traceback(lltype.Void, etype)
 
         def rpyexc_reraise(etype, evalue):
-            exc_data.exc_type = etype
+            lloperation.llop.setfield_exc_type(lltype.Void, etype)
             exc_data.exc_value = evalue
             lloperation.llop.debug_reraise_traceback(lltype.Void, etype)
 
@@ -106,7 +108,8 @@ class ExceptionTransformer(object):
 
         def rpyexc_restore_exception(evalue):
             if evalue:
-                exc_data.exc_type = ll_inst_type(evalue)
+                lloperation.llop.setfield_exc_type(lltype.Void,
+                                                   ll_inst_type(evalue))
                 exc_data.exc_value = evalue
 
         self.rpyexc_occured_ptr = self.build_func(
@@ -143,15 +146,15 @@ class ExceptionTransformer(object):
             lltype.Void,
             jitcallkind='rpyexc_raise') # for the JIT
 
-        self.rpyexc_fetch_exception_ptr = self.build_func(
-            "RPyFetchException",
-            rpyexc_fetch_exception,
-            [], self.lltype_of_exception_value)
+        #self.rpyexc_fetch_exception_ptr = self.build_func(
+        #    "RPyFetchException",
+        #    rpyexc_fetch_exception,
+        #    [], self.lltype_of_exception_value)
 
-        self.rpyexc_restore_exception_ptr = self.build_func(
-            "RPyRestoreException",
-            self.noinline(rpyexc_restore_exception),
-            [self.lltype_of_exception_value], lltype.Void)
+        #self.rpyexc_restore_exception_ptr = self.build_func(
+        #    "RPyRestoreException",
+        #    self.noinline(rpyexc_restore_exception),
+        #    [self.lltype_of_exception_value], lltype.Void)
 
         self.build_extra_funcs()
 
@@ -461,7 +464,6 @@ class ExceptionTransformer(object):
 
     def setup_excdata(self):
         EXCDATA = lltype.Struct('ExcData',
-            ('exc_type',  self.lltype_of_exception_type),
             ('exc_value', self.lltype_of_exception_value))
         self.EXCDATA = EXCDATA
 
@@ -482,11 +484,17 @@ class ExceptionTransformer(object):
         return Constant(fn_ptr, lltype.Ptr(FUNC_TYPE))
 
     def gen_getfield(self, name, llops):
+        if name == 'exc_type':
+            return llops.genop('getfield_exc_type', [],
+                               resulttype = self.lltype_of_exception_type)
         c_name = inputconst(lltype.Void, name)
         return llops.genop('getfield', [self.cexcdata, c_name],
                            resulttype = getattr(self.EXCDATA, name))
 
     def gen_setfield(self, name, v_value, llops):
+        if name == 'exc_type':
+            llops.genop('setfield_exc_type', [v_value])
+            return
         c_name = inputconst(lltype.Void, name)
         llops.genop('setfield', [self.cexcdata, c_name, v_value])
 
@@ -515,6 +523,7 @@ class ExceptionTransformer(object):
         exc_data = self.exc_data_ptr
 
         def rpyexc_get_exception_addr():
+            raise NotImplementedError
             return (llmemory.cast_ptr_to_adr(exc_data) +
                     llmemory.offsetof(EXCDATA, 'exc_type'))
 

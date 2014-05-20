@@ -1,6 +1,7 @@
 from rpython.flowspace.model import Block, Link, SpaceOperation
 from rpython.annotator import model as annmodel
 from rpython.translator.unsimplify import varoftype, copyvar
+from rpython.translator.backendopt.ssa import SSA_to_SSI
 from rpython.rtyper.llannotation import SomePtr
 from rpython.rlib.debug import ll_assert
 from rpython.rlib.nonconst import NonConstant
@@ -16,38 +17,49 @@ from rpython.rtyper.rbuiltin import gen_cast
 
 
 class ShadowStackFrameworkGCTransformer(BaseFrameworkGCTransformer):
+    RPY_SHADOWSTACK_PTR = lltype.Ptr(
+        lltype.Struct('rpy_shadowstack_s',
+                      hints={"external": "C", "c_name": "rpy_shadowstack_s"}))
+
     def build_root_walker(self):
         return ShadowStackRootWalker(self)
 
     def transform_graph(self, graph):
         self._transforming_graph = graph
+        self._ss_graph_marker = None
         super(ShadowStackFrameworkGCTransformer, self).transform_graph(graph)
+        del self._ss_graph_marker
         del self._transforming_graph
 
+    def sanitize_graph(self, graph):
+        SSA_to_SSI(graph, self.translator.annotator)
+
     def ensure_ss_graph_marker(self):
-        graph = self._transforming_graph
-        ops = graph.startblock.operations
-        if not ops or ops[0].opname != 'gc_ss_graph_marker':
+        if self._ss_graph_marker is None:
+            graph = self._transforming_graph
             inputargs = [copyvar(self.translator.annotator, v)
                          for v in graph.startblock.inputargs]
-            block = Block(inputargs)
-            v_void = varoftype(lltype.Void)
-            block.operations.append(SpaceOperation('gc_ss_graph_marker',
-                                                   [], v_void))
-            block.closeblock(Link(inputargs, graph.startblock))
-            graph.startblock = block
+            hblock = Block(inputargs)
+            v_marker = varoftype(self.RPY_SHADOWSTACK_PTR)
+            hblock.operations.append(SpaceOperation('gc_ss_graph_marker',
+                                                    [], v_marker))
+            hblock.closeblock(Link(inputargs, graph.startblock))
+            graph.startblock = hblock
+            self._ss_graph_marker = v_marker
+        return self._ss_graph_marker
 
     def push_roots(self, hop, keep_current_args=False):
         livevars = self.get_livevars_for_roots(hop, keep_current_args)
         self.num_pushs += len(livevars)
-        self.ensure_ss_graph_marker()
-        hop.genop("gc_ss_store", livevars)
+        v_marker = self.ensure_ss_graph_marker()
+        hop.genop("gc_ss_store", [v_marker] + livevars)
         return livevars
 
     def pop_roots(self, hop, livevars):
         # for moving collectors, reload the roots into the local variables
         if self.gcdata.gc.moving_gc and livevars:
-            hop.genop("gc_ss_reload", livevars)
+            v_marker = self.ensure_ss_graph_marker()
+            hop.genop("gc_ss_reload", [v_marker] + livevars)
 
 
 class ShadowStackRootWalker(BaseRootWalker):

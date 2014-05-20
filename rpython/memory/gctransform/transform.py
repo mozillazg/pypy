@@ -247,6 +247,7 @@ class BaseGCTransformer(object):
             old_startblock = graph.startblock
             graph.startblock = graph.startblock.exits[0].target
 
+        self.sanitize_graph(graph)
         checkgraph(graph)
 
         self.links_to_split = None
@@ -256,6 +257,9 @@ class BaseGCTransformer(object):
         self.pop_alive(v, llops)
         graph.exc_cleanup = (v, list(llops))
         return is_borrowed    # xxx for tests only
+
+    def sanitize_graph(self, graph):
+        pass
 
     def annotate_helper(self, ll_helper, ll_args, ll_result, inline=False):
         assert not self.finished_helpers

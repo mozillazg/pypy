@@ -444,22 +444,25 @@ class ShadowStackFrameworkGcPolicy(BasicFrameworkGcPolicy):
         return shadowstack.ShadowStackFrameworkGCTransformer(self.db.translator)
 
     def OP_GC_SS_GRAPH_MARKER(self, funcgen, op):
-        return '; struct rpy_shadowstack_s *rpy_ss = rpy_shadowstack;'
+        return '%s = rpy_shadowstack;' % funcgen.expr(op.result)
 
     def OP_GC_SS_STORE(self, funcgen, op):
+        marker = funcgen.expr(op.args[0])
         lines = []
-        for i, v in enumerate(op.args):
-            lines.append('rpy_ss[%d].s = %s;' % (i, funcgen.expr(v)))
-        lines.append('rpy_shadowstack = rpy_ss + %d;' % len(op.args))
+        for i, v in enumerate(op.args[1:]):
+            lines.append('%s[%d].s = %s;' % (marker, i, funcgen.expr(v)))
+        lines.append('rpy_shadowstack = %s + %d;' % (marker, len(op.args)))
         return '\n'.join(lines)
 
     def OP_GC_SS_RELOAD(self, funcgen, op):
+        marker = funcgen.expr(op.args[0])
         lines = []
-        for i, v in enumerate(op.args):
+        for i, v in enumerate(op.args[1:]):
             typename = funcgen.db.gettype(v.concretetype)
-            lines.append('%s = (%s)rpy_ss[%d].s;' % (
+            lines.append('%s = (%s)%s[%d].s;' % (
                 funcgen.expr(v),
                 cdecl(typename, ''),
+                marker,
                 i))
             if isinstance(v, Constant):
                 lines[-1] = '/* %s */' % lines[-1]
