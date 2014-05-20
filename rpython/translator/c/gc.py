@@ -431,6 +431,12 @@ class BasicFrameworkGcPolicy(BasicGcPolicy):
             raise AssertionError(subopnum)
         return ' '.join(parts)
 
+    def OP_GC_STACK_BOTTOM(self, funcgen, op):
+        return 'pypy_asm_stack_bottom();'
+
+    def OP_GC_STACK_TOP(self, funcgen, op):
+        return 'pypy_asm_stack_top();'
+
 class ShadowStackFrameworkGcPolicy(BasicFrameworkGcPolicy):
 
     def gettransformer(self):
@@ -468,9 +474,6 @@ class AsmGcRootFrameworkGcPolicy(BasicFrameworkGcPolicy):
 
     def GC_KEEPALIVE(self, funcgen, v):
         return 'pypy_asm_keepalive(%s);' % funcgen.expr(v)
-
-    def OP_GC_STACK_BOTTOM(self, funcgen, op):
-        return 'pypy_asm_stack_bottom();'
 
 
 name_to_gcpolicy = {

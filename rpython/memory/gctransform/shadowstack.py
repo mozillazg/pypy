@@ -8,6 +8,7 @@ from rpython.rlib import rgc
 from rpython.rtyper import rmodel
 from rpython.rtyper.annlowlevel import llhelper
 from rpython.rtyper.lltypesystem import lltype, llmemory
+from rpython.rtyper.lltypesystem.lloperation import llop
 from rpython.rtyper.llannotation import SomeAddress
 from rpython.memory.gctransform.framework import (
      BaseFrameworkGCTransformer, BaseRootWalker, sizeofaddr)
@@ -85,6 +86,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         BaseRootWalker.setup_root_walker(self)
 
     def walk_stack_roots(self, collect_stack_root):
+        llop.gc_stack_top(lltype.Void)
         gcdata = self.gcdata
         self.rootstackhook(collect_stack_root,
                            gcdata.root_stack_base, gcdata.root_stack_top)
@@ -317,6 +319,7 @@ class ShadowStackPool(object):
         self.gcdata.root_stack_base = self.unused_full_stack
         self.gcdata.root_stack_top  = self.unused_full_stack
         self.unused_full_stack = llmemory.NULL
+        llop.gc_stack_bottom(lltype.Void)
 
     def _cleanup(self, shadowstackref):
         shadowstackref.base = llmemory.NULL

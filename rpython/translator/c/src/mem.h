@@ -214,7 +214,14 @@ extern struct rpy_shadowstack_s *rpy_shadowstack;
 
 static inline void pypy_asm_stack_bottom(void)
 {
-    abort();
+    void *s = pypy_g_rpython_memory_gctypelayout_GCData.gcd_inst_root_stack_top;
+    rpy_shadowstack = (struct rpy_shadowstack_s *)s;
+}
+
+static inline void pypy_asm_stack_top(void)
+{
+    void *s = rpy_shadowstack;
+    pypy_g_rpython_memory_gctypelayout_GCData.gcd_inst_root_stack_top = s;
 }
 
 

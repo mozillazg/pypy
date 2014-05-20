@@ -507,6 +507,7 @@ LL_OPERATIONS = {
     # see translator/c/src/mem.h for the valid indices
     'gc_asmgcroot_static':  LLOp(sideeffects=False),
     'gc_stack_bottom':      LLOp(canrun=True),
+    'gc_stack_top':         LLOp(canrun=True),
 
     # for stacklet+asmgcroot support
     'gc_detach_callback_pieces': LLOp(),
