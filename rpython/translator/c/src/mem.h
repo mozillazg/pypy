@@ -224,18 +224,5 @@ static inline void pypy_asm_stack_top(void)
     pypy_g_rpython_memory_gctypelayout_GCData.gcd_inst_root_stack_top = s;
 }
 
-#define OP_GETFIELD_EXC_TYPE(r)                                            \
-    if (__builtin_expect(((Signed)rpy_shadowstack) & 1, 0)) {              \
-        r = (struct pypy_object_vtable0 *)(((char *)rpy_shadowstack) - 1); \
-        if (!r) __builtin_unreachable();                                   \
-    }                                                                      \
-    else {                                                                 \
-        r = NULL;                                                          \
-    }
-#define OP_SETFIELD_EXC_TYPE(x, r)                        \
-    rpy_shadowstack = (x) ?                               \
-        (struct rpy_shadowstack_s *)(((char *)x) + 1)     \
-        : NULL
-
 
 #endif
