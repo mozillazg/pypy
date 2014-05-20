@@ -451,7 +451,7 @@ class ShadowStackFrameworkGcPolicy(BasicFrameworkGcPolicy):
         lines = []
         for i, v in enumerate(op.args[1:]):
             lines.append('%s[%d].s = %s;' % (marker, i, funcgen.expr(v)))
-        lines.append('rpy_shadowstack = %s + %d;' % (marker, len(op.args)))
+        lines.append('rpy_shadowstack = %s + %d;' % (marker, len(op.args) - 1))
         return '\n'.join(lines)
 
     def OP_GC_SS_RELOAD(self, funcgen, op):
