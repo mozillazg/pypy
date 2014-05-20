@@ -95,7 +95,14 @@ void boehm_gc_startup_code(void)
     GC_finalize_on_demand = 1;
     GC_set_warn_proc(mem_boehm_ignore);
 }
-#endif /* BOEHM GC */
+
+#elif !defined(PYPY_USE_ASMGCC)     /* shadowstack */
+
+#ifndef RPY_SHADOWSTACK_REG
+struct rpy_shadowstack_s *rpy_shadowstack;
+#endif
+
+#endif /* BOEHM_GC / PYPY_USE_ASMGCC */
 
 
 #ifdef RPY_ASSERT

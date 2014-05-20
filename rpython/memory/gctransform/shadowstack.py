@@ -1,4 +1,6 @@
+from rpython.flowspace.model import Block, Link, SpaceOperation
 from rpython.annotator import model as annmodel
+from rpython.translator.unsimplify import varoftype, copyvar
 from rpython.rtyper.llannotation import SomePtr
 from rpython.rlib.debug import ll_assert
 from rpython.rlib.nonconst import NonConstant
@@ -13,46 +15,38 @@ from rpython.rtyper.rbuiltin import gen_cast
 
 
 class ShadowStackFrameworkGCTransformer(BaseFrameworkGCTransformer):
-    def annotate_walker_functions(self, getfn):
-        self.incr_stack_ptr = getfn(self.root_walker.incr_stack,
-                                   [annmodel.SomeInteger()],
-                                   SomeAddress(),
-                                   inline = True)
-        self.decr_stack_ptr = getfn(self.root_walker.decr_stack,
-                                   [annmodel.SomeInteger()],
-                                   SomeAddress(),
-                                   inline = True)
-
     def build_root_walker(self):
         return ShadowStackRootWalker(self)
+
+    def transform_graph(self, graph):
+        self._transforming_graph = graph
+        super(ShadowStackFrameworkGCTransformer, self).transform_graph(graph)
+        del self._transforming_graph
+
+    def ensure_ss_graph_marker(self):
+        graph = self._transforming_graph
+        ops = graph.startblock.operations
+        if not ops or ops[0].opname != 'gc_ss_graph_marker':
+            inputargs = [copyvar(self.translator.annotator, v)
+                         for v in graph.startblock.inputargs]
+            block = Block(inputargs)
+            v_void = varoftype(lltype.Void)
+            block.operations.append(SpaceOperation('gc_ss_graph_marker',
+                                                   [], v_void))
+            block.closeblock(Link(inputargs, graph.startblock))
+            graph.startblock = block
 
     def push_roots(self, hop, keep_current_args=False):
         livevars = self.get_livevars_for_roots(hop, keep_current_args)
         self.num_pushs += len(livevars)
-        if not livevars:
-            return []
-        c_len = rmodel.inputconst(lltype.Signed, len(livevars) )
-        base_addr = hop.genop("direct_call", [self.incr_stack_ptr, c_len ],
-                              resulttype=llmemory.Address)
-        for k,var in enumerate(livevars):
-            c_k = rmodel.inputconst(lltype.Signed, k * sizeofaddr)
-            v_adr = gen_cast(hop.llops, llmemory.Address, var)
-            hop.genop("raw_store", [base_addr, c_k, v_adr])
+        self.ensure_ss_graph_marker()
+        hop.genop("gc_ss_store", livevars)
         return livevars
 
     def pop_roots(self, hop, livevars):
-        if not livevars:
-            return
-        c_len = rmodel.inputconst(lltype.Signed, len(livevars) )
-        base_addr = hop.genop("direct_call", [self.decr_stack_ptr, c_len ],
-                              resulttype=llmemory.Address)
-        if self.gcdata.gc.moving_gc:
-            # for moving collectors, reload the roots into the local variables
-            for k,var in enumerate(livevars):
-                c_k = rmodel.inputconst(lltype.Signed, k * sizeofaddr)
-                v_newaddr = hop.genop("raw_load", [base_addr, c_k],
-                                      resulttype=llmemory.Address)
-                hop.genop("gc_reload_possibly_moved", [v_newaddr, var])
+        # for moving collectors, reload the roots into the local variables
+        if self.gcdata.gc.moving_gc and livevars:
+            hop.genop("gc_ss_reload", livevars)
 
 
 class ShadowStackRootWalker(BaseRootWalker):
@@ -60,18 +54,6 @@ class ShadowStackRootWalker(BaseRootWalker):
         BaseRootWalker.__init__(self, gctransformer)
         # NB. 'self' is frozen, but we can use self.gcdata to store state
         gcdata = self.gcdata
-
-        def incr_stack(n):
-            top = gcdata.root_stack_top
-            gcdata.root_stack_top = top + n*sizeofaddr
-            return top
-        self.incr_stack = incr_stack
-
-        def decr_stack(n):
-            top = gcdata.root_stack_top - n*sizeofaddr
-            gcdata.root_stack_top = top
-            return top
-        self.decr_stack = decr_stack
 
         root_iterator = get_root_iterator(gctransformer)
         def walk_stack_root(callback, start, end):

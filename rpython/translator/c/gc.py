@@ -437,6 +437,29 @@ class ShadowStackFrameworkGcPolicy(BasicFrameworkGcPolicy):
         from rpython.memory.gctransform import shadowstack
         return shadowstack.ShadowStackFrameworkGCTransformer(self.db.translator)
 
+    def OP_GC_SS_GRAPH_MARKER(self, funcgen, op):
+        return '; struct rpy_shadowstack_s *rpy_ss = rpy_shadowstack;'
+
+    def OP_GC_SS_STORE(self, funcgen, op):
+        lines = []
+        for i, v in enumerate(op.args):
+            lines.append('rpy_ss[%d].s = %s;' % (i, funcgen.expr(v)))
+        lines.append('rpy_shadowstack = rpy_ss + %d;' % len(op.args))
+        return '\n'.join(lines)
+
+    def OP_GC_SS_RELOAD(self, funcgen, op):
+        lines = []
+        for i, v in enumerate(op.args):
+            typename = funcgen.db.gettype(v.concretetype)
+            lines.append('%s = (%s)rpy_ss[%d].s;' % (
+                funcgen.expr(v),
+                cdecl(typename, ''),
+                i))
+            if isinstance(v, Constant):
+                lines[-1] = '/* %s */' % lines[-1]
+        lines.reverse()
+        return '\n'.join(lines)
+
 class AsmGcRootFrameworkGcPolicy(BasicFrameworkGcPolicy):
 
     def gettransformer(self):

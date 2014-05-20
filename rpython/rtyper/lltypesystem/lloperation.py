@@ -465,7 +465,9 @@ LL_OPERATIONS = {
     'gc_restore_exception': LLOp(),
     'gc_call_rtti_destructor': LLOp(),
     'gc_deallocate':        LLOp(),
-    'gc_reload_possibly_moved': LLOp(),
+    'gc_ss_graph_marker':   LLOp(),
+    'gc_ss_store':          LLOp(),
+    'gc_ss_reload':         LLOp(),
     # see rlib/objectmodel for gc_identityhash and gc_id
     'gc_identityhash':      LLOp(sideeffects=False, canmallocgc=True),
     'gc_id':                LLOp(sideeffects=False, canmallocgc=True),

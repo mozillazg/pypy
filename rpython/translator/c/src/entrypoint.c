@@ -35,7 +35,6 @@ int pypy_main_function(int argc, char *argv[])
 #ifdef PYPY_USE_ASMGCC
     pypy_g_rpython_rtyper_lltypesystem_rffi_StackCounter.sc_inst_stacks_counter++;
 #endif
-    pypy_asm_stack_bottom();
     instrument_setup();
 
 #ifndef MS_WINDOWS
@@ -50,6 +49,7 @@ int pypy_main_function(int argc, char *argv[])
     errmsg = RPython_StartupCode();
     if (errmsg) goto error;
 
+    pypy_asm_stack_bottom();
     list = _RPyListOfString_New(argc);
     if (RPyExceptionOccurred()) goto memory_out;
     for (i=0; i<argc; i++) {

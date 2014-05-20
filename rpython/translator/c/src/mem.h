@@ -136,12 +136,13 @@ void boehm_gc_finalizer_notifier(void);
 #define OP_GC_DUMP_RPY_HEAP(fd, r)       r = 0
 #define OP_GC_SET_EXTRA_THRESHOLD(x, r)  /* nothing */
 
+
+#ifdef PYPY_USE_ASMGCC
 /****************************/
 /* The "asmgcc" root finder */
 /****************************/
 
-#ifndef _MSC_VER
-/* Implementation for Linux */
+/* Implementation of asmgcc, for Linux only */
 extern char __gcmapstart;
 extern char __gcmapend;
 extern char __gccallshapes;
@@ -194,44 +195,27 @@ static void pypy_check_stack_count(void) { }
 	i == 2 ? (void*)&__gccallshapes :	       \
 	NULL
 
+
 #else
-/* implementation of asmgcroot for Windows */
-extern void* __gcmapstart;
-extern void* __gcmapend;
-extern char* __gccallshapes;
-extern Signed pypy_asm_stackwalk(void*, void*);
+/*********************************/
+/* The "shadowstack" root finder */
+/*********************************/
 
-/* With the msvc Microsoft Compiler, the optimizer seems free to move
-   any code (even asm) that involves local memory (registers and stack).
-   The _ReadWriteBarrier function has an effect only where the content
-   of a global variable is *really* used.  trackgcroot.py will remove
-   the extra instructions: the access to _constant_always_one_ is
-   removed, and the multiplication is replaced with a simple move. */
-
-static __forceinline void*
-pypy_asm_gcroot(void* _r1)
-{
-    static volatile int _constant_always_one_ = 1;
-    (Signed)_r1 *= _constant_always_one_;
-    _ReadWriteBarrier();
-    return _r1;
-}
-
-#define pypy_asm_gc_nocollect(f) "/* GC_NOCOLLECT " #f " */"
-
-#ifndef _WIN64
-#  define pypy_asm_keepalive(v)    __asm { }
-#else
-   /* is there something cheaper? */
-#  define pypy_asm_keepalive(v)    _ReadWriteBarrier();
+#if defined(__GNUC__) && defined(__amd64__)
+#  define RPY_SHADOWSTACK_REG  "r15"
 #endif
 
-static __declspec(noinline) void pypy_asm_stack_bottom() { }
+struct rpy_shadowstack_s { void *s; };
+#ifdef RPY_SHADOWSTACK_REG
+register struct rpy_shadowstack_s *rpy_shadowstack asm(RPY_SHADOWSTACK_REG);
+#else
+extern struct rpy_shadowstack_s *rpy_shadowstack;
+#endif
 
-#define OP_GC_ASMGCROOT_STATIC(i, r)		       \
-    r =	i == 0 ? (void*)__gcmapstart :		       \
-	i == 1 ? (void*)__gcmapend :		       \
-	i == 2 ? (void*)&__gccallshapes :	       \
-	NULL
+static inline void pypy_asm_stack_bottom(void)
+{
+    abort();
+}
+
 
 #endif
