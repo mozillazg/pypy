@@ -1,4 +1,4 @@
-from rpython.flowspace.model import Block, Link, SpaceOperation
+from rpython.flowspace.model import Block, Link, Constant, SpaceOperation
 from rpython.annotator import model as annmodel
 from rpython.translator.unsimplify import varoftype, copyvar
 from rpython.translator.backendopt.ssa import SSA_to_SSI
@@ -26,39 +26,42 @@ class ShadowStackFrameworkGCTransformer(BaseFrameworkGCTransformer):
 
     def transform_graph(self, graph):
         self._transforming_graph = graph
-        self._ss_graph_marker = None
+        self._ss_graph_marker_op = None
         super(ShadowStackFrameworkGCTransformer, self).transform_graph(graph)
-        del self._ss_graph_marker
+        del self._ss_graph_marker_op
         del self._transforming_graph
 
     def sanitize_graph(self, graph):
         SSA_to_SSI(graph, self.translator.annotator)
 
-    def ensure_ss_graph_marker(self):
-        if self._ss_graph_marker is None:
+    def ensure_ss_graph_marker(self, count):
+        c_count = Constant(count, lltype.Signed)
+        if self._ss_graph_marker_op is None:
             graph = self._transforming_graph
             inputargs = [copyvar(self.translator.annotator, v)
                          for v in graph.startblock.inputargs]
             hblock = Block(inputargs)
             v_marker = varoftype(self.RPY_SHADOWSTACK_PTR)
-            hblock.operations.append(SpaceOperation('gc_ss_graph_marker',
-                                                    [], v_marker))
+            op = SpaceOperation('gc_ss_graph_marker', [c_count], v_marker)
+            hblock.operations.append(op)
             hblock.closeblock(Link(inputargs, graph.startblock))
             graph.startblock = hblock
-            self._ss_graph_marker = v_marker
-        return self._ss_graph_marker
+            self._ss_graph_marker_op = op
+        elif self._ss_graph_marker_op.args[0].value < count:
+            self._ss_graph_marker_op.args[0] = c_count
+        return self._ss_graph_marker_op.result
 
     def push_roots(self, hop, keep_current_args=False):
         livevars = self.get_livevars_for_roots(hop, keep_current_args)
         self.num_pushs += len(livevars)
-        v_marker = self.ensure_ss_graph_marker()
+        v_marker = self.ensure_ss_graph_marker(len(livevars))
         hop.genop("gc_ss_store", [v_marker] + livevars)
         return livevars
 
     def pop_roots(self, hop, livevars):
         # for moving collectors, reload the roots into the local variables
         if self.gcdata.gc.moving_gc and livevars:
-            v_marker = self.ensure_ss_graph_marker()
+            v_marker = self.ensure_ss_graph_marker(len(livevars))
             hop.genop("gc_ss_reload", [v_marker] + livevars)
 
 
@@ -69,15 +72,20 @@ class ShadowStackRootWalker(BaseRootWalker):
         gcdata = self.gcdata
 
         root_iterator = get_root_iterator(gctransformer)
-        def walk_stack_root(callback, start, end):
-            root_iterator.setcontext(NonConstant(llmemory.NULL))
+        def walk_stack_root(callback, addr):
+            #root_iterator.setcontext(NonConstant(llmemory.NULL))
             gc = self.gc
-            addr = end
             while True:
-                addr = root_iterator.nextleft(gc, start, addr)
+                addr += 2
+                ll_assert(not (llmemory.cast_adr_to_int(addr) & (sizeofaddr-1)),
+                          "in shadowstack: misaligned")
                 if addr == llmemory.NULL:
-                    return
-                callback(gc, addr)
+                    break
+                while (addr.signed[0] & 2) == 0:
+                    if gc.points_to_valid_gc_object(addr):
+                        callback(gc, addr)
+                    addr -= sizeofaddr
+                addr = addr.address[0]
         self.rootstackhook = walk_stack_root
 
         self.shadow_stack_pool = ShadowStackPool(gcdata)
@@ -100,8 +108,7 @@ class ShadowStackRootWalker(BaseRootWalker):
     def walk_stack_roots(self, collect_stack_root):
         llop.gc_stack_top(lltype.Void)
         gcdata = self.gcdata
-        self.rootstackhook(collect_stack_root,
-                           gcdata.root_stack_base, gcdata.root_stack_top)
+        self.rootstackhook(collect_stack_root, gcdata.root_stack_top)
 
     def need_thread_support(self, gctransformer, getfn):
         from rpython.rlib import rthread    # xxx fish
@@ -276,11 +283,11 @@ class ShadowStackPool(object):
     #MAX = 20  not implemented yet
 
     def __init__(self, gcdata):
-        self.unused_full_stack = llmemory.NULL
+        #self.unused_full_stack = llmemory.NULL
         self.gcdata = gcdata
 
     def initial_setup(self):
-        self._prepare_unused_stack()
+        #self._prepare_unused_stack()
         self.start_fresh_new_state()
 
     def allocate(self, SHADOWSTACKREF):
@@ -294,7 +301,8 @@ class ShadowStackPool(object):
         forget_current_state(), and then call restore_state_from()
         or start_fresh_new_state().
         """
-        self._prepare_unused_stack()
+        raise MemoryError
+        #self._prepare_unused_stack()
         shadowstackref.base = self.gcdata.root_stack_base
         shadowstackref.top  = self.gcdata.root_stack_top
         shadowstackref.context = ncontext
@@ -312,14 +320,15 @@ class ShadowStackPool(object):
         self.gcdata.root_stack_top = llmemory.NULL  # to detect missing restore
 
     def forget_current_state(self):
-        ll_assert(self.gcdata.root_stack_base == self.gcdata.root_stack_top,
-                  "forget_current_state: shadowstack not empty!")
-        if self.unused_full_stack:
-            llmemory.raw_free(self.unused_full_stack)
-        self.unused_full_stack = self.gcdata.root_stack_base
+        #ll_assert(self.gcdata.root_stack_base == self.gcdata.root_stack_top,
+        #          "forget_current_state: shadowstack not empty!")
+        #if self.unused_full_stack:
+        #    llmemory.raw_free(self.unused_full_stack)
+        #self.unused_full_stack = self.gcdata.root_stack_base
         self.gcdata.root_stack_top = llmemory.NULL  # to detect missing restore
 
     def restore_state_from(self, shadowstackref):
+        raise MemoryError
         ll_assert(bool(shadowstackref.base), "empty shadowstackref!")
         ll_assert(shadowstackref.base <= shadowstackref.top,
                   "restore_state_from: broken shadowstack")
@@ -328,9 +337,11 @@ class ShadowStackPool(object):
         self._cleanup(shadowstackref)
 
     def start_fresh_new_state(self):
-        self.gcdata.root_stack_base = self.unused_full_stack
-        self.gcdata.root_stack_top  = self.unused_full_stack
-        self.unused_full_stack = llmemory.NULL
+        #self.gcdata.root_stack_base = self.unused_full_stack
+        #self.gcdata.root_stack_top  = self.unused_full_stack
+        #self.unused_full_stack = llmemory.NULL
+        self.gcdata.root_stack_top = llmemory.NULL
+        self.gcdata.root_stack_top -= 2
         llop.gc_stack_bottom(lltype.Void)
 
     def _cleanup(self, shadowstackref):
@@ -338,12 +349,12 @@ class ShadowStackPool(object):
         shadowstackref.top = llmemory.NULL
         shadowstackref.context = llmemory.NULL
 
-    def _prepare_unused_stack(self):
-        if self.unused_full_stack == llmemory.NULL:
-            root_stack_size = sizeofaddr * self.root_stack_depth
-            self.unused_full_stack = llmemory.raw_malloc(root_stack_size)
-            if self.unused_full_stack == llmemory.NULL:
-                raise MemoryError
+    ## def _prepare_unused_stack(self):
+    ##     if self.unused_full_stack == llmemory.NULL:
+    ##         root_stack_size = sizeofaddr * self.root_stack_depth
+    ##         self.unused_full_stack = llmemory.raw_malloc(root_stack_size)
+    ##         if self.unused_full_stack == llmemory.NULL:
+    ##             raise MemoryError
 
 
 def get_root_iterator(gctransformer):
@@ -354,8 +365,10 @@ def get_root_iterator(gctransformer):
             return True
         def setcontext(self, context):
             pass
-        def nextleft(self, gc, start, addr):
-            while addr != start:
+        def nextleft(self, gc, addr):
+            assert llmemory.cast_adr_to_int(addr) & (WORD-1) == (WORD-2)
+            xxxxxxx
+            while addr != ROOT_STACK_STOP:
                 addr -= sizeofaddr
                 if gc.points_to_valid_gc_object(addr):
                     return addr
@@ -366,6 +379,7 @@ def get_root_iterator(gctransformer):
 
 
 def get_shadowstackref(root_walker, gctransformer):
+    raise Exception("XXX")
     if hasattr(gctransformer, '_SHADOWSTACKREF'):
         return gctransformer._SHADOWSTACKREF
 

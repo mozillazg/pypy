@@ -444,14 +444,16 @@ class ShadowStackFrameworkGcPolicy(BasicFrameworkGcPolicy):
         return shadowstack.ShadowStackFrameworkGCTransformer(self.db.translator)
 
     def OP_GC_SS_GRAPH_MARKER(self, funcgen, op):
-        return '%s = rpy_shadowstack;' % funcgen.expr(op.result)
+        marker = funcgen.expr(op.result)
+        count = op.args[0].value
+        return 'RPY_SS_GRAPH_MARKER(%s, %d);' % (marker, count)
 
     def OP_GC_SS_STORE(self, funcgen, op):
         marker = funcgen.expr(op.args[0])
         lines = []
         for i, v in enumerate(op.args[1:]):
-            lines.append('%s[%d].s = %s;' % (marker, i, funcgen.expr(v)))
-        lines.append('rpy_shadowstack = %s + %d;' % (marker, len(op.args) - 1))
+            lines.append('%s[%d].s = %s;' % (marker, i + 1, funcgen.expr(v)))
+        lines.append('RPY_SS_STORED(%s, %d);' % (marker, len(op.args) - 1))
         return '\n'.join(lines)
 
     def OP_GC_SS_RELOAD(self, funcgen, op):
@@ -463,7 +465,7 @@ class ShadowStackFrameworkGcPolicy(BasicFrameworkGcPolicy):
                 funcgen.expr(v),
                 cdecl(typename, ''),
                 marker,
-                i))
+                i + 1))
             if isinstance(v, Constant):
                 lines[-1] = '/* %s */' % lines[-1]
         lines.reverse()
