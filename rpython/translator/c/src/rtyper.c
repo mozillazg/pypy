@@ -37,10 +37,10 @@ void RPyString_FreeCache(void)
 	}
 }
 
-RPyString *RPyString_FromString(char *buf)
+RPyString *RPyString_FromString(struct rpy_shadowstack_s *rpy_shadowstack, char *buf)
 {
 	int length = strlen(buf);
-	RPyString *rps = RPyString_New(length);
+	RPyString *rps = RPyString_New(rpy_shadowstack, length);
 	memcpy(rps->rs_chars.items, buf, length);
 	return rps;
 }

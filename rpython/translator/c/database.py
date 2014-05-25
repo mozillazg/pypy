@@ -118,7 +118,7 @@ class LowLevelDatabase(object):
             return node.gettype()
         elif isinstance(T, FuncType):
             resulttype = self.gettype(T.RESULT)
-            argtypes = []
+            argtypes = ['struct rpy_shadowstack_s *rpy_shadowstack']
             for i in range(len(T.ARGS)):
                 if T.ARGS[i] is not Void:
                     argtype = self.gettype(T.ARGS[i])

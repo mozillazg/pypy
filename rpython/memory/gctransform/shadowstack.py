@@ -21,6 +21,12 @@ class ShadowStackFrameworkGCTransformer(BaseFrameworkGCTransformer):
         lltype.Struct('rpy_shadowstack_s',
                       hints={"external": "C", "c_name": "rpy_shadowstack_s"}))
 
+    def gct_gc_stack_bottom(self, hop):
+        self.ensure_ss_graph_marker(0)
+        block = self._transforming_graph.startblock
+        op = SpaceOperation('gc_stack_bottom', [], varoftype(lltype.Void))
+        block.operations.insert(0, op)
+
     def build_root_walker(self):
         return ShadowStackRootWalker(self)
 

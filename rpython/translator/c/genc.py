@@ -782,6 +782,7 @@ def gen_source(database, modulename, targetdir,
     incfilename = targetdir.join('common_header.h')
     fi = incfilename.open('w')
     fi.write('#ifndef _PY_COMMON_HEADER_H\n#define _PY_COMMON_HEADER_H\n')
+    fi.write('struct rpy_shadowstack_s;\n')
 
     #
     # Header

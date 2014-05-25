@@ -31,6 +31,7 @@ int pypy_main_function(int argc, char *argv[])
     char *errmsg;
     int i, exitcode;
     RPyListOfString *list;
+    struct rpy_shadowstack_s *rpy_shadowstack;
 
 #ifdef PYPY_USE_ASMGCC
     pypy_g_rpython_rtyper_lltypesystem_rffi_StackCounter.sc_inst_stacks_counter++;
@@ -49,23 +50,20 @@ int pypy_main_function(int argc, char *argv[])
     errmsg = RPython_StartupCode();
     if (errmsg) goto error;
 
-    pypy_asm_stack_bottom();
-    list = _RPyListOfString_New(argc);
-    if (RPyExceptionOccurred()) goto memory_out;
+    RPY_SS_STACK_BOTTOM();
+    list = _RPyListOfString_New(rpy_shadowstack, argc);
+    if (RPyExceptionOccurred(rpy_shadowstack)) goto memory_out;
     for (i=0; i<argc; i++) {
-        pypy_asm_stack_bottom();
-        RPyString *s = RPyString_FromString(argv[i]);
-        if (RPyExceptionOccurred()) goto memory_out;
-        pypy_asm_stack_bottom();
-        _RPyListOfString_SetItem(list, i, s);
+        RPyString *s = RPyString_FromString(rpy_shadowstack, argv[i]);
+        if (RPyExceptionOccurred(rpy_shadowstack)) goto memory_out;
+        _RPyListOfString_SetItem(rpy_shadowstack, list, i, s);
     }
 
-    pypy_asm_stack_bottom();
-    exitcode = STANDALONE_ENTRY_POINT(list);
+    exitcode = STANDALONE_ENTRY_POINT(rpy_shadowstack, list);
 
     pypy_debug_alloc_results();
 
-    if (RPyExceptionOccurred()) {
+    if (RPyExceptionOccurred(rpy_shadowstack)) {
         /* print the RPython traceback */
         pypy_debug_catch_fatal_exception();
     }

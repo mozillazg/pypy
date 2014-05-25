@@ -11,4 +11,4 @@
 
 char *RPyString_AsCharP(RPyString *rps);
 void RPyString_FreeCache(void);
-RPyString *RPyString_FromString(char *buf);
+RPyString *RPyString_FromString(struct rpy_shadowstack_s *rpy_shadowstack, char *buf);

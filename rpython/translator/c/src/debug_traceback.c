@@ -13,7 +13,7 @@ void pypy_debug_traceback_print(void)
 {
   int i;
   int skipping;
-  void *my_etype = RPyFetchExceptionType();
+  void *my_etype = RPyFetchExceptionType(NULL);
   struct pypydtpos_s *location;
   void *etype;
   int has_loc;
@@ -67,6 +67,6 @@ void pypy_debug_catch_fatal_exception(void)
 {
   pypy_debug_traceback_print();
   fprintf(stderr, "Fatal RPython error: %s\n",
-          RPyFetchExceptionType()->ov_name->items);
+          RPyFetchExceptionType(NULL)->ov_name->items);
   abort();
 }

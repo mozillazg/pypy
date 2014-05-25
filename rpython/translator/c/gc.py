@@ -431,17 +431,21 @@ class BasicFrameworkGcPolicy(BasicGcPolicy):
             raise AssertionError(subopnum)
         return ' '.join(parts)
 
-    def OP_GC_STACK_BOTTOM(self, funcgen, op):
-        return 'pypy_asm_stack_bottom();'
-
-    def OP_GC_STACK_TOP(self, funcgen, op):
-        return 'pypy_asm_stack_top();'
-
 class ShadowStackFrameworkGcPolicy(BasicFrameworkGcPolicy):
 
     def gettransformer(self):
         from rpython.memory.gctransform import shadowstack
         return shadowstack.ShadowStackFrameworkGCTransformer(self.db.translator)
+
+    def gc_startup_code(self):
+        fnptr = self.db.gctransformer.frameworkgc_setup_ptr.value
+        yield '%s(NULL);' % (self.db.get(fnptr),)
+
+    def OP_GC_STACK_BOTTOM(self, funcgen, op):
+        return 'RPY_SS_STACK_BOTTOM();'
+
+    def OP_GC_STACK_TOP(self, funcgen, op):
+        return 'RPY_SS_STACK_TOP();'
 
     def OP_GC_SS_GRAPH_MARKER(self, funcgen, op):
         marker = funcgen.expr(op.result)

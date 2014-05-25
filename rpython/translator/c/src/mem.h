@@ -201,16 +201,7 @@ static void pypy_check_stack_count(void) { }
 /* The "shadowstack" root finder */
 /*********************************/
 
-#if defined(__GNUC__) && defined(__amd64__)
-#  define RPY_SHADOWSTACK_REG  "r15"
-#endif
-
 struct rpy_shadowstack_s { void *s; };
-#ifdef RPY_SHADOWSTACK_REG
-register void *rpy_shadowstack asm(RPY_SHADOWSTACK_REG);
-#else
-extern void *rpy_shadowstack;
-#endif
 
 #define RPY_SS_GRAPH_MARKER(marker, count)              \
     ;                                                   \
@@ -222,28 +213,13 @@ extern void *rpy_shadowstack;
     rpy_shadowstack = count > 0 ? (char *)(marker + count) - 2  \
                                 : marker[0].s
 
-static inline void pypy_asm_stack_bottom(void)
-{
-    void *s = pypy_g_rpython_memory_gctypelayout_GCData.gcd_inst_root_stack_top;
-    rpy_shadowstack = s;
-}
+#define RPY_SS_STACK_BOTTOM()                                           \
+    rpy_shadowstack =                                                   \
+        pypy_g_rpython_memory_gctypelayout_GCData.gcd_inst_root_stack_top
 
-static inline void pypy_asm_stack_top(void)
-{
-    void *s = rpy_shadowstack;
-    pypy_g_rpython_memory_gctypelayout_GCData.gcd_inst_root_stack_top = s;
-}
-
-#define OP_GETFIELD_EXC_TYPE(r)                                            \
-    if (__builtin_expect(((Signed)rpy_shadowstack) & 1, 0)) {              \
-        r = (struct pypy_object_vtable0 *)(((char *)rpy_shadowstack) - 1); \
-        if (!r) __builtin_unreachable();                                   \
-    }                                                                      \
-    else {                                                                 \
-        r = NULL;                                                          \
-    }
-#define OP_SETFIELD_EXC_TYPE(x, r)                      \
-    rpy_shadowstack = (x) ? ((char *)(x)) + 1 : NULL
+#define RPY_SS_STACK_TOP()                                              \
+    pypy_g_rpython_memory_gctypelayout_GCData.gcd_inst_root_stack_top = \
+        rpy_shadowstack
 
 
 #endif

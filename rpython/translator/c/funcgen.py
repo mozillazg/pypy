@@ -407,7 +407,8 @@ class FunctionCodeGenerator(object):
         r = self.expr(op.result)
         return 'OP_CALL_ARGS((%s), %s);' % (', '.join(args), r)
 
-    def generic_call(self, FUNC, fnexpr, args_v, v_result, targets=None):
+    def generic_call(self, FUNC, fnexpr, args_v, v_result, targets=None,
+                     to_internal=True):
         args = []
         assert len(args_v) == len(FUNC.TO.ARGS)
         for v, ARGTYPE in zip(args_v, FUNC.TO.ARGS):
@@ -418,6 +419,8 @@ class FunctionCodeGenerator(object):
             # XXX is this still needed now that rctypes is gone
             if isinstance(ARGTYPE, ContainerType):
                 args[-1] = '*%s' % (args[-1],)
+        if to_internal:
+            args.insert(0, 'rpy_shadowstack')
 
         line = '%s(%s);' % (fnexpr, ', '.join(args))
         if self.lltypemap(v_result) is not Void:
@@ -438,7 +441,8 @@ class FunctionCodeGenerator(object):
         except AttributeError:
             targets = None
         return self.generic_call(fn.concretetype, self.expr(fn),
-                                 op.args[1:], op.result, targets)
+                                 op.args[1:], op.result, targets,
+                                 to_internal = targets is not None)
 
     def OP_INDIRECT_CALL(self, op):
         fn = op.args[0]
