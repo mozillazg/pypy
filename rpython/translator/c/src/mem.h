@@ -202,7 +202,7 @@ static void pypy_check_stack_count(void) { }
 /*********************************/
 
 #if defined(__GNUC__) && defined(__amd64__)
-#  define RPY_SHADOWSTACK_REG  "r15"
+//#  define RPY_SHADOWSTACK_REG  "r15"
 #endif
 
 struct rpy_shadowstack_s { void *s; };
