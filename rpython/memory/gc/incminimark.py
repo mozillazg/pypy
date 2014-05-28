@@ -132,8 +132,8 @@ GCFLAG_CARDS_SET    = first_gcflag << 7     # <- at least one card bit is set
 # The following flag is set on surviving raw-malloced young objects during
 # a minor collection.
 GCFLAG_VISITED_RMY   = first_gcflag << 8
-
-_GCFLAG_FIRST_UNUSED = first_gcflag << 9    # the first unused bit
+GCFLAG_PINNED = first_gcflag << 9
+_GCFLAG_FIRST_UNUSED = first_gcflag << 10    # the first unused bit
 
 
 # States for the incremental GC
