@@ -15,6 +15,7 @@ ARRAY_TYPEID_MAP = lltype.GcArray(lltype.Ptr(TYPEID_MAP))
 class GCBase(object):
     _alloc_flavor_ = "raw"
     moving_gc = False
+    can_pin_objects = False
     needs_write_barrier = False
     malloc_zero_filled = False
     prebuilt_gc_objects_are_static_roots = True
@@ -174,6 +175,12 @@ class GCBase(object):
 
     def can_move(self, addr):
         return False
+    
+    def pin(self, addr):
+        pass
+
+    def unpin(self, addr):
+        pass    
 
     def set_max_heap_size(self, size):
         raise NotImplementedError
