@@ -165,6 +165,7 @@ NURSARRAY = lltype.Array(llmemory.Address)
 
 class IncrementalMiniMarkGC(MovingGCBase):
     _alloc_flavor_ = "raw"
+    can_pin_objects = True
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     needs_write_barrier = True
@@ -884,7 +885,13 @@ class IncrementalMiniMarkGC(MovingGCBase):
 
     def can_move(self, obj):
         """Overrides the parent can_move()."""
-        return self.is_in_nursery(obj)
+        return (self.is_in_nursery(obj) & not self.header(obj).tid & GCFLAG_PINNED)
+
+    def pin(self, obj):
+        self.header(obj).tid |= GCFLAG_PINNED
+
+    def unpin(self, obj):
+        self.header(obj).tid &= ~GCFLAG_PINNED
 
 
     def shrink_array(self, obj, smallerlength):
