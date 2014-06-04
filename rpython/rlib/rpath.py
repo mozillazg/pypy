@@ -4,10 +4,12 @@ Minimal (and limited) RPython version of some functions contained in os.path.
 
 import os.path
 from rpython.rlib import rposix
+from rpython.rlib.objectmodel import enforceargs
 
 if os.name == 'posix':
     # the posix version is already RPython, just use it
     # (but catch exceptions)
+    @enforceargs(str)
     def rabspath(path):
         try:
             return os.path.abspath(path)
@@ -25,6 +27,7 @@ else:
     raise ImportError('Unsupported os: %s' % os.name)
 
 
+@enforceargs(str)
 def dirname(p):
     """Returns the directory component of a pathname"""
     i = p.rfind('/') + 1
@@ -35,6 +38,7 @@ def dirname(p):
     return head
 
 
+@enforceargs(str)
 def basename(p):
     """Returns the final component of a pathname"""
     i = p.rfind('/') + 1
@@ -42,6 +46,7 @@ def basename(p):
     return p[i:]
 
 
+@enforceargs(str)
 def split(p):
     """Split a pathname.  Returns tuple "(head, tail)" where "tail" is
     everything after the final slash.  Either part may be empty."""
@@ -53,6 +58,7 @@ def split(p):
     return head, tail
 
 
+@enforceargs(str)
 def exists(path):
     """Test whether a path exists.  Returns False for broken symbolic links"""
     try:
@@ -66,6 +72,7 @@ def exists(path):
 import os
 from os.path import isabs, islink, abspath, normpath
 
+@enforceargs(str, [str])
 def join(a, p):
     """Join two or more pathname components, inserting '/' as needed.
     If any component is an absolute path, all previous path components
@@ -81,6 +88,7 @@ def join(a, p):
             path += '/' + b
     return path
 
+@enforceargs(str)
 def realpath(filename):
     """Return the canonical path of the specified filename, eliminating any
 symbolic links encountered in the path."""
@@ -104,6 +112,7 @@ symbolic links encountered in the path."""
     return abspath(filename)
 
 
+@enforceargs(str)
 def _resolve_link(path):
     """Internal helper function.  Takes a path and follows symlinks
     until we either arrive at something that isn't a symlink, or
