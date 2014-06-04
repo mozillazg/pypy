@@ -5,17 +5,21 @@ Minimal (and limited) RPython version of some functions contained in os.path.
 import os.path
 from rpython.rlib import rposix
 from rpython.rlib.objectmodel import enforceargs
+from rpython.annotator.model import SomeString
+
+valid_path = SomeString(no_nul=True)
 
 if os.name == 'posix':
     # the posix version is already RPython, just use it
     # (but catch exceptions)
-    @enforceargs(str)
+    @enforceargs(valid_path, typecheck=False)
     def rabspath(path):
         try:
             return os.path.abspath(path)
         except OSError:
             return path
 elif os.name == 'nt':
+    @enforceargs(valid_path, typecheck=False)
     def rabspath(path):
         if path == '':
             path = os.getcwd()
@@ -27,7 +31,7 @@ else:
     raise ImportError('Unsupported os: %s' % os.name)
 
 
-@enforceargs(str)
+@enforceargs(valid_path, typecheck=False)
 def dirname(p):
     """Returns the directory component of a pathname"""
     i = p.rfind('/') + 1
@@ -38,7 +42,7 @@ def dirname(p):
     return head
 
 
-@enforceargs(str)
+@enforceargs(valid_path, typecheck=False)
 def basename(p):
     """Returns the final component of a pathname"""
     i = p.rfind('/') + 1
@@ -46,7 +50,7 @@ def basename(p):
     return p[i:]
 
 
-@enforceargs(str)
+@enforceargs(valid_path, typecheck=False)
 def split(p):
     """Split a pathname.  Returns tuple "(head, tail)" where "tail" is
     everything after the final slash.  Either part may be empty."""
@@ -58,7 +62,7 @@ def split(p):
     return head, tail
 
 
-@enforceargs(str)
+@enforceargs(valid_path, typecheck=False)
 def exists(path):
     """Test whether a path exists.  Returns False for broken symbolic links"""
     try:
@@ -72,7 +76,7 @@ def exists(path):
 import os
 from os.path import isabs, islink, abspath, normpath
 
-@enforceargs(str, [str])
+@enforceargs(valid_path, [valid_path], typecheck=False)
 def join(a, p):
     """Join two or more pathname components, inserting '/' as needed.
     If any component is an absolute path, all previous path components
@@ -88,7 +92,7 @@ def join(a, p):
             path += '/' + b
     return path
 
-@enforceargs(str)
+@enforceargs(valid_path, typecheck=False)
 def realpath(filename):
     """Return the canonical path of the specified filename, eliminating any
 symbolic links encountered in the path."""
@@ -112,7 +116,7 @@ symbolic links encountered in the path."""
     return abspath(filename)
 
 
-@enforceargs(str)
+@enforceargs(valid_path, typecheck=False)
 def _resolve_link(path):
     """Internal helper function.  Takes a path and follows symlinks
     until we either arrive at something that isn't a symlink, or
