@@ -1030,6 +1030,9 @@ class AppTestArray(BaseArrayTests):
         raises(TypeError, "a[MyInt(0)]")
         raises(TypeError, "a[MyInt(0):MyInt(5)]")
 
+    def test_fresh_array_buffer_bytes(self):
+        assert bytes(memoryview(self.array('i'))) == b''
+
 
 class AppTestArrayBuiltinShortcut(AppTestArray):
     spaceconfig = AppTestArray.spaceconfig.copy()
