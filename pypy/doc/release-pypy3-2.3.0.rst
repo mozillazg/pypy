@@ -1,6 +1,6 @@
-===================
-PyPy3 2.3 - Fulcrum
-===================
+=====================
+PyPy3 2.3.1 - Fulcrum
+=====================
 
 We're pleased to announce the first stable release of PyPy3. PyPy3
 targets Python 3 (3.2.5) compatibility.
@@ -8,9 +8,9 @@ targets Python 3 (3.2.5) compatibility.
 We would like to thank all of the people who donated_ to the `py3k proposal`_
 for supporting the work that went into this.
 
-You can download the PyPy3 2.3 release here:
+You can download the PyPy3 2.3.1 release here:
 
-    http://pypy.org/download.html#pypy3-2-3
+    http://pypy.org/download.html#pypy3-2-3-1
 
 Highlights
 ==========
