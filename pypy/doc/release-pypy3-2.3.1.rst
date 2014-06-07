@@ -19,11 +19,15 @@ Highlights
 
 * The stdlib has been updated to Python 3.2.5
 
+* Additional support for the u'unicode' syntax (`PEP 414`_) from Python 3.3
+
 * Fixed the previously disabled collection (list/dict/set) strategies which
   resolves a notable performance regression from PyPy 2.
 
 * Updates from the default branch, such as incremental GC and various JIT
-  improvements.
+  improvements
+
+.. _`PEP 414`: http://legacy.python.org/dev/peps/pep-0414/
 
 What is PyPy?
 ==============
