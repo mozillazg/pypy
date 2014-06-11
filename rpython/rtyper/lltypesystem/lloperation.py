@@ -450,6 +450,7 @@ LL_OPERATIONS = {
     'jit_conditional_call': LLOp(),
     'get_exception_addr':   LLOp(),
     'get_exc_value_addr':   LLOp(),
+    'do_malloc_fixedsize':  LLOp(canmallocgc=True),
     'do_malloc_fixedsize_clear':LLOp(canmallocgc=True),
     'do_malloc_varsize_clear':  LLOp(canmallocgc=True),
     'get_write_barrier_failing_case': LLOp(sideeffects=False),
