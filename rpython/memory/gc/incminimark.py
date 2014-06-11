@@ -291,7 +291,23 @@ class IncrementalMiniMarkGC(MovingGCBase):
         self.nursery      = NULL
         self.nursery_free = NULL
         self.nursery_top  = NULL
-        self.nursery_real_top = NULL
+        #   _______  nursery ________________ 
+        #  /                                 \    
+        #  first-part               second-part
+        #  +----------------------------------+   
+        #  | | | | |      |               | | |
+        #  | | | | |      |               | | | 
+        #  |o|o|o|o|      |               |o|o|     
+        #  |b|b|b|b|zeroed|non-zeroed mem |b|b|           
+        #  |j|j|j|j|--->  |       <-------|j|j|  
+        #  | | | | |      |               | | |      
+        #  +--------------+-------------------+       
+        #          ^      ^               ^   ^
+        #         free   top            free real-top
+        #new:add the pointer for objects don't need zero memory before allocation
+        self.nursery_second_part_free = NULL
+        self.nursery_second_part_top = NULL
+        self.nursery_real_top = NULL 
         self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = lltype.nullptr(NURSARRAY)
         self.extra_threshold = 0
@@ -464,6 +480,8 @@ class IncrementalMiniMarkGC(MovingGCBase):
         # the end of the nursery:
         self.nursery_top = self.nursery + self.nursery_size
         self.nursery_real_top = self.nursery_top
+        self.nursery_second_part_free = self.nursery_real_top
+        self.nursery_second_part_top = self.nursery_top
         # initialize the threshold
         self.min_heap_size = max(self.min_heap_size, self.nursery_size *
                                               self.major_collection_threshold)
@@ -596,6 +614,31 @@ class IncrementalMiniMarkGC(MovingGCBase):
         #
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
+    def malloc_fixedsize(self, typeid, length, size, 
+                        needs_finalizer=False,
+                        is_finalizer_light=False,
+                        contains_weakptr=False):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        rawtotalsize = raw_malloc_usage(totalsize)
+        min_size = raw_malloc_usage(self.minimal_size_in_nursery)
+        if rawtotalsize < min_size:
+            #round up the raw totalsize to min_size
+            totalsize = rawtotalsize = min_size
+        result = self.nursery_second_part_free
+        
+        #allocate the obj in the opposite direction as obj in malloc_fixedsize_clear()
+        self.nursery_second_part_free = result - totalsize
+        #make sure the new object won't overwrite existing objects
+        if self.nursery_second_part_free < self.nursery_free:
+            ##TODO:deal with different GC states
+            result = self.minor_collection()
+        #move the pointer
+        result -= totalsize
+        llarena.arena_reserve(result, totalsize)
+        #real object beginning address
+        obj = result + size_gc_header
+        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
                              offset_to_length):
@@ -671,6 +714,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             "totalsize > nursery_cleanup")
         llarena.arena_reset(self.nursery_top, size, 2)
         self.nursery_top += size
+        self.nursery_second_part_top = self.nursery_top
     move_nursery_top._always_inline_ = True
 
     def collect_and_reserve(self, prev_result, totalsize):
@@ -1457,6 +1501,8 @@ class IncrementalMiniMarkGC(MovingGCBase):
         self.nursery_free = self.nursery
         self.nursery_top = self.nursery + self.initial_cleanup
         self.nursery_real_top = self.nursery + self.nursery_size
+        self.nursery_second_part_free = self.nursery_real_top
+        self.nursery_second_part_top = self.nursery_top
         #
         debug_print("minor collect, total memory used:",
                     self.get_total_memory_used())
