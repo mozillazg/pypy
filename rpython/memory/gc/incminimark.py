@@ -621,23 +621,37 @@ class IncrementalMiniMarkGC(MovingGCBase):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         rawtotalsize = raw_malloc_usage(totalsize)
-        min_size = raw_malloc_usage(self.minimal_size_in_nursery)
-        if rawtotalsize < min_size:
-            #round up the raw totalsize to min_size
-            totalsize = rawtotalsize = min_size
-        result = self.nursery_second_part_free
+        if needs_finalizer and not is_finalizer_light:
+            ll_assert(not contains_weakptr,
+                     "'needs_finalizer' and 'contains_weakptr' both specified")
+            obj = self.external_malloc(typeid, 0, can_make_young=False)
+            self.objects_with_finalizers.append(obj)
+        else:
+            min_size = raw_malloc_usage(self.minimal_size_in_nursery)
+            if rawtotalsize < min_size:
+                #round up the raw totalsize to min_size
+                totalsize = rawtotalsize = min_size
+            result = self.nursery_second_part_free
         
-        #allocate the obj in the opposite direction as obj in malloc_fixedsize_clear()
-        self.nursery_second_part_free = result - totalsize
-        #make sure the new object won't overwrite existing objects
-        if self.nursery_second_part_free < self.nursery_free:
-            ##TODO:deal with different GC states
-            result = self.minor_collection()
-        #move the pointer
-        result -= totalsize
-        llarena.arena_reserve(result, totalsize)
-        #real object beginning address
-        obj = result + size_gc_header
+            #allocate the obj in the opposite direction as obj in malloc_fixedsize_clear()
+            self.nursery_second_part_free = result - totalsize
+            #make sure the new object won't overwrite existing objects
+            if self.nursery_second_part_free < self.nursery_free:
+                ##TODO:deal with different GC states
+                result = self.minor_collection()
+            #move the pointer
+            result -= totalsize
+            llarena.arena_reserve(result, totalsize)
+            #init gc flags to zero
+            self.init_gc_object(result, typeid, flags=0)
+            #real object beginning address
+            obj = result + size_gc_header
+            #record obj with light finalizer
+            if is_finalizer_light:
+               self.young_objects_with_light_finalizers.append(obj)
+            #record obj with weakptr
+            if contains_weakptr:
+                self.young_objects_with_weakrefs.append(obj)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
