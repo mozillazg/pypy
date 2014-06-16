@@ -5,7 +5,8 @@ Interp-level implementation of the basic space operations.
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import unwrap_spec, WrappedDefault
-from rpython.rlib.runicode import UNICHR
+from pypy.interpreter.utf8 import Utf8Str, utf8chr
+#from rpython.rlib.runicode import UNICHR
 from rpython.rlib.rfloat import isnan, isinf, round_double
 from rpython.rlib import rfloat
 import __builtin__
@@ -28,7 +29,8 @@ def unichr(space, code):
     "Return a Unicode string of one character with the given ordinal."
     # XXX range checking!
     try:
-        c = UNICHR(code)
+        #c = UNICHR(code)
+        c = utf8chr(code)
     except ValueError:
         raise OperationError(space.w_ValueError,
                              space.wrap("unichr() arg out of range"))

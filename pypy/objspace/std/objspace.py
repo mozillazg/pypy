@@ -3,6 +3,7 @@ import types
 from pypy.interpreter import special
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.interpreter.error import OperationError, oefmt
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
                                transparent, callmethod)
@@ -158,8 +159,12 @@ class StdObjSpace(ObjSpace):
                 return self.newint(x)
         if isinstance(x, str):
             return wrapstr(self, x)
-        if isinstance(x, unicode):
+        if isinstance(x, Utf8Str):
             return wrapunicode(self, x)
+
+        if isinstance(x, unicode):
+            import pdb; pdb.set_trace()
+
         if isinstance(x, float):
             return W_FloatObject(x)
         if isinstance(x, W_Root):

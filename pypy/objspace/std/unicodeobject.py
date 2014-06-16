@@ -10,6 +10,7 @@ from rpython.rlib.runicode import (
 
 from pypy.interpreter import unicodehelper
 from pypy.interpreter.baseobjspace import W_Root
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import WrappedDefault, interp2app, unwrap_spec
 from pypy.module.unicodedata import unicodedb
@@ -29,7 +30,8 @@ class W_UnicodeObject(W_Root):
     _immutable_fields_ = ['_value']
 
     def __init__(w_self, unistr):
-        assert isinstance(unistr, unicode)
+        assert isinstance(unistr, Utf8Str)
+        #assert isinstance(unistr, unicode)
         w_self._value = unistr
 
     def __repr__(w_self):
@@ -1076,7 +1078,8 @@ def _create_list_from_unicode(value):
     return [s for s in value]
 
 
-W_UnicodeObject.EMPTY = W_UnicodeObject(u'')
+#W_UnicodeObject.EMPTY = W_UnicodeObject(u'')
+W_UnicodeObject.EMPTY = W_UnicodeObject(Utf8Str(''))
 
 
 # Helper for converting int/long
