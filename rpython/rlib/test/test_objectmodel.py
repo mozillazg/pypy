@@ -454,7 +454,8 @@ def test_enforceargs_None_string():
     @enforceargs(str, unicode)
     def f(a, b):
         return a, b
-    assert f(None, None) == (None, None)
+    with py.test.raises(TypeError):
+        f(None, None)
 
 def test_enforceargs_complex_types():
     @enforceargs([int], {str: int})
