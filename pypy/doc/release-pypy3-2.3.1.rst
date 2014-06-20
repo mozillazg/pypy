@@ -21,11 +21,17 @@ Highlights
 
 * Additional support for the u'unicode' syntax (`PEP 414`_) from Python 3.3
 
-* Fixed the previously disabled collection (list/dict/set) strategies which
-  resolves a notable performance regression from PyPy 2.
-
 * Updates from the default branch, such as incremental GC and various JIT
   improvements
+
+* Resolved some notable JIT performance regressions from PyPy2:
+
+ - Re-enabled the previously disabled collection (list/dict/set) strategies
+
+ - Resolved performance of iteration over range objects
+
+ - Resolved handling of Python 3's exception __context__ unnecessarily forcing
+   frame object overhead
 
 .. _`PEP 414`: http://legacy.python.org/dev/peps/pep-0414/
 
