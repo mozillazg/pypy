@@ -61,5 +61,3 @@ def test_getslice():
     assert s[0:1] == u'A'
     assert s[0:2] == u'A\u010F'
     assert s[1:2] == u'\u010F'
-    assert s[-4:-3] == u'A'
-    assert s[-4:-2] == u'A\u010F'

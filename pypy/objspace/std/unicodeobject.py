@@ -4,13 +4,13 @@ from rpython.rlib.objectmodel import (
     compute_hash, compute_unique_id, import_from_mixin)
 from rpython.rlib.buffer import StringBuffer
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder
-from rpython.rlib.runicode import (
-    make_unicode_escape_function, str_decode_ascii, str_decode_utf_8,
-    unicode_encode_ascii, unicode_encode_utf_8)
 
 from pypy.interpreter import unicodehelper
 from pypy.interpreter.baseobjspace import W_Root
-from pypy.interpreter.utf8 import Utf8Str
+from pypy.interpreter.utf8 import Utf8Str, utf8chr, utf8ord
+from pypy.interpreter.utf8_codecs import (
+    make_unicode_escape_function, str_decode_ascii, str_decode_utf_8,
+    unicode_encode_ascii, unicode_encode_utf_8)
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import WrappedDefault, interp2app, unwrap_spec
 from pypy.module.unicodedata import unicodedb
@@ -31,7 +31,6 @@ class W_UnicodeObject(W_Root):
 
     def __init__(w_self, unistr):
         assert isinstance(unistr, Utf8Str)
-        #assert isinstance(unistr, unicode)
         w_self._value = unistr
 
     def __repr__(w_self):
@@ -88,7 +87,7 @@ class W_UnicodeObject(W_Root):
             raise oefmt(space.w_TypeError,
                          "ord() expected a character, but string of length %d "
                          "found", len(self._value))
-        return space.wrap(ord(self._value[0]))
+        return space.wrap(utf8ord(self))
 
     def _new(self, value):
         return W_UnicodeObject(value)
@@ -126,46 +125,46 @@ class W_UnicodeObject(W_Root):
     _builder = UnicodeBuilder
 
     def _isupper(self, ch):
-        return unicodedb.isupper(ord(ch))
+        return unicodedb.isupper(utf8ord(ch))
 
     def _islower(self, ch):
-        return unicodedb.islower(ord(ch))
+        return unicodedb.islower(utf8ord(ch))
 
     def _isnumeric(self, ch):
-        return unicodedb.isnumeric(ord(ch))
+        return unicodedb.isnumeric(utf8ord(ch))
 
     def _istitle(self, ch):
-        return unicodedb.isupper(ord(ch)) or unicodedb.istitle(ord(ch))
+        return unicodedb.isupper(utf8ord(ch)) or unicodedb.istitle(utf8ord(ch))
 
     def _isspace(self, ch):
-        return unicodedb.isspace(ord(ch))
+        return unicodedb.isspace(utf8ord(ch))
 
     def _isalpha(self, ch):
-        return unicodedb.isalpha(ord(ch))
+        return unicodedb.isalpha(utf8ord(ch))
 
     def _isalnum(self, ch):
-        return unicodedb.isalnum(ord(ch))
+        return unicodedb.isalnum(utf8ord(ch))
 
     def _isdigit(self, ch):
-        return unicodedb.isdigit(ord(ch))
+        return unicodedb.isdigit(utf8ord(ch))
 
     def _isdecimal(self, ch):
-        return unicodedb.isdecimal(ord(ch))
+        return unicodedb.isdecimal(utf8ord(ch))
 
     def _iscased(self, ch):
-        return unicodedb.iscased(ord(ch))
+        return unicodedb.iscased(utf8ord(ch))
 
     def _islinebreak(self, ch):
-        return unicodedb.islinebreak(ord(ch))
+        return unicodedb.islinebreak(utf8ord(ch))
 
     def _upper(self, ch):
-        return unichr(unicodedb.toupper(ord(ch)))
+        return unichr(unicodedb.toupper(utf8ord(ch)))
 
     def _lower(self, ch):
-        return unichr(unicodedb.tolower(ord(ch)))
+        return unichr(unicodedb.tolower(utf8ord(ch)))
 
     def _title(self, ch):
-        return unichr(unicodedb.totitle(ord(ch)))
+        return unichr(unicodedb.totitle(utf8ord(ch)))
 
     def _newlist_unwrapped(self, space, lst):
         return space.newlist_unicode(lst)
@@ -311,7 +310,7 @@ class W_UnicodeObject(W_Root):
         result = []
         for unichar in selfvalue:
             try:
-                w_newval = space.getitem(w_table, space.wrap(ord(unichar)))
+                w_newval = space.getitem(w_table, space.wrap(utf8ord(unichar)))
             except OperationError as e:
                 if e.match(space, space.w_LookupError):
                     result.append(unichar)
@@ -377,20 +376,20 @@ class W_UnicodeObject(W_Root):
     def descr_islower(self, space):
         cased = False
         for uchar in self._value:
-            if (unicodedb.isupper(ord(uchar)) or
-                unicodedb.istitle(ord(uchar))):
+            if (unicodedb.isupper(utf8ord(uchar)) or
+                unicodedb.istitle(utf8ord(uchar))):
                 return space.w_False
-            if not cased and unicodedb.islower(ord(uchar)):
+            if not cased and unicodedb.islower(utf8ord(uchar)):
                 cased = True
         return space.newbool(cased)
 
     def descr_isupper(self, space):
         cased = False
         for uchar in self._value:
-            if (unicodedb.islower(ord(uchar)) or
-                unicodedb.istitle(ord(uchar))):
+            if (unicodedb.islower(utf8ord(uchar)) or
+                unicodedb.istitle(utf8ord(uchar))):
                 return space.w_False
-            if not cased and unicodedb.isupper(ord(uchar)):
+            if not cased and unicodedb.isupper(utf8ord(uchar)):
                 cased = True
         return space.newbool(cased)
 
@@ -534,7 +533,8 @@ def unicode_from_string(space, w_str):
         return unicode_from_encoded_object(space, w_str, encoding, "strict")
     s = space.str_w(w_str)
     try:
-        return W_UnicodeObject(s.decode("ascii"))
+        result, _ = str_decode_ascii(s, len(s), 'strict')
+        return space.wrap(result)
     except UnicodeDecodeError:
         # raising UnicodeDecodeError is messy, "please crash for me"
         return unicode_from_encoded_object(space, w_str, "ascii", "strict")
@@ -1078,7 +1078,6 @@ def _create_list_from_unicode(value):
     return [s for s in value]
 
 
-#W_UnicodeObject.EMPTY = W_UnicodeObject(u'')
 W_UnicodeObject.EMPTY = W_UnicodeObject(Utf8Str(''))
 
 

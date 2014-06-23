@@ -198,7 +198,7 @@ def strict_errors(space, w_exc):
 def ignore_errors(space, w_exc):
     check_exception(space, w_exc)
     w_end = space.getattr(w_exc, space.wrap('end'))
-    return space.newtuple([space.wrap(u''), w_end])
+    return space.newtuple([space.wrap(Utf8Str('')), w_end])
 
 def replace_errors(space, w_exc):
     check_exception(space, w_exc)
@@ -378,17 +378,18 @@ def register_error(space, errors, w_handler):
 # ____________________________________________________________
 # delegation to runicode
 
-from rpython.rlib import runicode
+#from rpython.rlib import runicode
+from pypy.interpreter import utf8_codecs
 
 def make_encoder_wrapper(name):
     rname = "unicode_encode_%s" % (name.replace("_encode", ""), )
-    assert hasattr(runicode, rname)
+    assert hasattr(utf8_codecs, rname)
     @unwrap_spec(uni=unicode, errors='str_or_None')
     def wrap_encoder(space, uni, errors="strict"):
         if errors is None:
             errors = 'strict'
         state = space.fromcache(CodecState)
-        func = getattr(runicode, rname)
+        func = getattr(utf8_codecs, rname)
         result = func(uni, len(uni), errors, state.encode_error_handler)
         return space.newtuple([space.wrap(result), space.wrap(len(uni))])
     wrap_encoder.func_name = rname
@@ -396,7 +397,7 @@ def make_encoder_wrapper(name):
 
 def make_decoder_wrapper(name):
     rname = "str_decode_%s" % (name.replace("_decode", ""), )
-    assert hasattr(runicode, rname)
+    assert hasattr(utf8_codecs, rname)
     @unwrap_spec(string='bufferstr', errors='str_or_None',
                  w_final=WrappedDefault(False))
     def wrap_decoder(space, string, errors="strict", w_final=None):
@@ -404,7 +405,7 @@ def make_decoder_wrapper(name):
             errors = 'strict'
         final = space.is_true(w_final)
         state = space.fromcache(CodecState)
-        func = getattr(runicode, rname)
+        func = getattr(utf8_codecs, rname)
         result, consumed = func(string, len(string), errors,
                                 final, state.decode_error_handler)
         return space.newtuple([space.wrap(result), space.wrap(consumed)])
@@ -441,7 +442,7 @@ for decoders in [
          ]:
     make_decoder_wrapper(decoders)
 
-if hasattr(runicode, 'str_decode_mbcs'):
+if hasattr(utf8_codecs, 'str_decode_mbcs'):
     make_encoder_wrapper('mbcs_encode')
     make_decoder_wrapper('mbcs_decode')
 
@@ -452,7 +453,7 @@ def utf_8_encode(space, uni, errors="strict"):
     if errors is None:
         errors = 'strict'
     state = space.fromcache(CodecState)
-    result = runicode.unicode_encode_utf_8(
+    result = utf8_codecs.unicode_encode_utf_8(
         uni, len(uni), errors, state.encode_error_handler,
         allow_surrogates=True)
     return space.newtuple([space.wrap(result), space.wrap(len(uni))])
@@ -464,7 +465,7 @@ def utf_8_decode(space, string, errors="strict", w_final=None):
         errors = 'strict'
     final = space.is_true(w_final)
     state = space.fromcache(CodecState)
-    result, consumed = runicode.str_decode_utf_8(
+    result, consumed = utf8_codecs.str_decode_utf_8(
         string, len(string), errors,
         final, state.decode_error_handler,
         allow_surrogates=True)
@@ -486,7 +487,7 @@ def utf_16_ex_decode(space, data, errors='strict', byteorder=0, w_final=None):
     consumed = len(data)
     if final:
         consumed = 0
-    res, consumed, byteorder = runicode.str_decode_utf_16_helper(
+    res, consumed, byteorder = utf8_codecs.str_decode_utf_16_helper(
         data, len(data), errors, final, state.decode_error_handler, byteorder)
     return space.newtuple([space.wrap(res), space.wrap(consumed),
                            space.wrap(byteorder)])
@@ -505,7 +506,7 @@ def utf_32_ex_decode(space, data, errors='strict', byteorder=0, w_final=None):
     consumed = len(data)
     if final:
         consumed = 0
-    res, consumed, byteorder = runicode.str_decode_utf_32_helper(
+    res, consumed, byteorder = utf8_codecs.str_decode_utf_32_helper(
         data, len(data), errors, final, state.decode_error_handler, byteorder)
     return space.newtuple([space.wrap(res), space.wrap(consumed),
                            space.wrap(byteorder)])
@@ -603,7 +604,7 @@ def charmap_decode(space, string, errors="strict", w_mapping=None):
 
     final = True
     state = space.fromcache(CodecState)
-    result, consumed = runicode.str_decode_charmap(
+    result, consumed = utf8_codecs.str_decode_charmap(
         string, len(string), errors,
         final, state.decode_error_handler, mapping)
     return space.newtuple([space.wrap(result), space.wrap(consumed)])
@@ -618,7 +619,7 @@ def charmap_encode(space, uni, errors="strict", w_mapping=None):
         mapping = Charmap_Encode(space, w_mapping)
 
     state = space.fromcache(CodecState)
-    result = runicode.unicode_encode_charmap(
+    result = utf8_codecs.unicode_encode_charmap(
         uni, len(uni), errors,
         state.encode_error_handler, mapping)
     return space.newtuple([space.wrap(result), space.wrap(len(uni))])
@@ -661,7 +662,7 @@ def unicode_escape_decode(space, string, errors="strict", w_final=None):
 
     unicode_name_handler = state.get_unicodedata_handler(space)
 
-    result, consumed = runicode.str_decode_unicode_escape(
+    result, consumed = utf8_codecs.str_decode_unicode_escape(
         string, len(string), errors,
         final, state.decode_error_handler,
         unicode_name_handler)
@@ -686,7 +687,7 @@ def unicode_internal_decode(space, w_string, errors="strict"):
 
     final = True
     state = space.fromcache(CodecState)
-    result, consumed = runicode.str_decode_unicode_internal(
+    result, consumed = utf8_codecs.str_decode_unicode_internal(
         string, len(string), errors,
         final, state.decode_error_handler)
     return space.newtuple([space.wrap(result), space.wrap(consumed)])

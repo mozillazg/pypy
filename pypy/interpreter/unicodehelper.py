@@ -34,25 +34,25 @@ def encode(space, w_data, encoding=None, errors='strict'):
 
 # These functions take and return unwrapped rpython strings and unicodes
 def decode_unicode_escape(space, string):
-    from pypy.interpreter.utf8 import decode_unicode_escape
+    from pypy.interpreter.utf8_codecs import str_decode_unicode_escape
     state = space.fromcache(interp_codecs.CodecState)
     unicodedata_handler = state.get_unicodedata_handler(space)
-    result, consumed = decode_unicode_escape(
+    result, consumed = str_decode_unicode_escape(
         string, len(string), "strict",
         final=True, errorhandler=decode_error_handler(space),
         unicodedata_handler=unicodedata_handler)
     return result
 
 def decode_raw_unicode_escape(space, string):
-    from pypy.interpreter.utf8 import decode_raw_unicode_escape
-    result, consumed = decode_raw_unicode_escape(
+    from pypy.interpreter.utf8_codecs import str_decode_raw_unicode_escape
+    result, consumed = str_decode_raw_unicode_escape(
         string, len(string), "strict",
         final=True, errorhandler=decode_error_handler(space))
     return result
 
 def decode_utf8(space, string):
-    from pypy.interpreter.utf8 import decode_utf_8
-    result, consumed = decode_utf_8(
+    from pypy.interpreter.utf8_codecs import str_decode_utf_8
+    result, consumed = str_decode_utf_8(
         string, len(string), "strict",
         final=True, errorhandler=decode_error_handler(space),
         allow_surrogates=True)
@@ -60,4 +60,4 @@ def decode_utf8(space, string):
 
 def encode_utf8(space, uni):
     # unicode to string...
-    return s.bytes
+    return uni.bytes
