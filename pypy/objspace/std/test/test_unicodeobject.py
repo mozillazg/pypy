@@ -1,5 +1,6 @@
 import py
 import sys
+from pypy.interpreter.utf8 import Utf8Str
 
 
 class TestUnicodeObject:
@@ -22,12 +23,12 @@ class TestUnicodeObject:
         assert len(warnings) == 2
 
     def test_listview_unicode(self):
-        w_str = self.space.wrap(u'abcd')
+        w_str = self.space.wrap(Utf8Str.from_unicode(u'abcd'))
         assert self.space.listview_unicode(w_str) == list(u"abcd")
 
     def test_new_shortcut(self):
         space = self.space
-        w_uni = self.space.wrap(u'abcd')
+        w_uni = self.space.wrap(Utf8Str.from_unicode(u'abcd'))
         w_new = space.call_method(
                 space.w_unicode, "__new__", space.w_unicode, w_uni)
         assert w_new is w_uni

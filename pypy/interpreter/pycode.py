@@ -13,6 +13,7 @@ from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.astcompiler.consts import (
     CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS, CO_NESTED,
     CO_GENERATOR, CO_KILL_DOCSTRING, CO_YIELD_INSIDE_TRY)
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.tool.stdlib_opcode import opcodedesc, HAVE_ARGUMENT
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.objectmodel import compute_hash
@@ -150,6 +151,8 @@ class PyCode(eval.Code):
         for const in code.co_consts:
             if isinstance(const, types.CodeType): # from stable compiler
                 const = code_hook(space, const, hidden_applevel, code_hook)
+            if isinstance(const, unicode):
+                const = Utf8Str.from_unicode(const)
             newconsts_w[num] = space.wrap(const)
             num += 1
         # stick the underlying CPython magic value, if the code object

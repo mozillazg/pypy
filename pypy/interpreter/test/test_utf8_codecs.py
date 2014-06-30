@@ -6,19 +6,6 @@ import sys, random
 from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter import utf8_codecs
 
-'''
-try:
-    import signal
-except ImportError:
-    pass
-else:
-    class MyKeyboardInterrupt(BaseException):
-        pass
-    def _interrupt(*args):
-        __tracebackhide__ = True
-        raise MyKeyboardInterrupt
-    signal.signal(signal.SIGINT, _interrupt)
-'''
 
 class UnicodeTests(object):
     def typeequals(self, x, y):
@@ -697,19 +684,13 @@ class TestEncoding(UnicodeTests):
         for s in ["\xd7\x90", "\xd6\x96", "\xeb\x96\x95", "\xf0\x90\x91\x93"]:
             self.checkencode(s, "utf-8")
 
-    # TODO: Is this test useful?
     def test_utf8_surrogates(self):
         # make sure that the string itself is not marshalled
         u = u"\ud800"
         for i in range(4):
             u += u"\udc00"
 
-        if utf8_codecs.MAXUNICODE < 65536:
-            # Check replacing of two surrogates by single char while encoding
-            self.checkencode(u, "utf-8")
-        else:
-            # This is not done in wide unicode builds
-            py.test.raises(UnicodeEncodeError, self.checkencode, u, "utf-8")
+        py.test.raises(UnicodeEncodeError, self.checkencode, u, "utf-8")
 
     def test_ascii_error(self):
         self.checkencodeerror(
@@ -780,13 +761,13 @@ class TestTranslation(object):
         u = runicode.UNICHR(0xD800) + runicode.UNICHR(0xDC00)
         if runicode.MAXUNICODE < 65536:
             # Narrow unicode build, consider utf16 surrogate pairs
-            assert runicode.unicode_encode_unicode_escape(
+            assert utf8_codecs.unicode_encode_unicode_escape(
                 u, len(u), True) == r'\U00010000'
-            assert runicode.unicode_encode_raw_unicode_escape(
+            assert utf8_codecs.unicode_encode_raw_unicode_escape(
                 u, len(u), True) == r'\U00010000'
         else:
             # Wide unicode build, don't merge utf16 surrogate pairs
-            assert runicode.unicode_encode_unicode_escape(
+            assert utf8_codecs.unicode_encode_unicode_escape(
                 u, len(u), True) == r'\ud800\udc00'
-            assert runicode.unicode_encode_raw_unicode_escape(
+            assert utf8_codecs.unicode_encode_raw_unicode_escape(
                 u, len(u), True) == r'\ud800\udc00'

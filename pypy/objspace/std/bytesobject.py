@@ -10,6 +10,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import (
     WrappedDefault, interp2app, interpindirect2app, unwrap_spec)
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.objspace.std import newformat
 from pypy.objspace.std.basestringtype import basestring_typedef
 from pypy.objspace.std.formatting import mod_format
@@ -715,11 +716,11 @@ class W_BytesObject(W_AbstractBytesObject):
             sub = self_as_uni._op_val(space, w_old)
             by = self_as_uni._op_val(space, w_new)
             try:
-                res = replace(input, sub, by, count)
+                res = replace(input.bytes, sub.bytes, by.bytes, count)
             except OverflowError:
                 raise oefmt(space.w_OverflowError,
                             "replace string is too long")
-            return self_as_uni._new(res)
+            return self_as_uni._new(Utf8Str(res))
         return self._StringMethods_descr_replace(space, w_old, w_new, count)
 
     _StringMethods_descr_join = descr_join

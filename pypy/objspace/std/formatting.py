@@ -2,13 +2,14 @@
 String formatting routines.
 """
 import sys
-from pypy.interpreter.error import OperationError, oefmt
 from rpython.rlib import jit
 from rpython.rlib.rfloat import formatd, DTSF_ALT, isnan, isinf
-from rpython.rlib.rstring import StringBuilder, UnicodeBuilder
+from rpython.rlib.rstring import StringBuilder
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.rlib.rarithmetic import INT_MAX
 from rpython.tool.sourcetools import func_with_new_name
+from pypy.interpreter.error import OperationError, oefmt
+from pypy.interpreter.utf8 import Utf8Builder, ORD
 
 
 class BaseStringFormatter(object):
@@ -168,7 +169,7 @@ def make_formatter_subclass(do_unicode):
         def peekchr(self):
             # return the 'current' character
             try:
-                return self.fmt[self.fmtpos]
+                return ORD(self.fmt, self.fmtpos)
             except IndexError:
                 space = self.space
                 raise OperationError(space.w_ValueError,
@@ -185,16 +186,16 @@ def make_formatter_subclass(do_unicode):
             pcount = 1
             while 1:
                 try:
-                    c = fmt[i]
+                    c = ORD(fmt, i)
                 except IndexError:
                     space = self.space
                     raise OperationError(space.w_ValueError,
                                          space.wrap("incomplete format key"))
-                if c == ')':
+                if c == ord(')'):
                     pcount -= 1
                     if pcount == 0:
                         break
-                elif c == '(':
+                elif c == ord('('):
                     pcount += 1
                 i += 1
             self.fmtpos = i + 1   # first character after ')'
@@ -210,7 +211,7 @@ def make_formatter_subclass(do_unicode):
             return space.getitem(self.w_valuedict, w_key)
 
         def parse_fmt(self):
-            if self.peekchr() == '(':
+            if self.peekchr() == ord('('):
                 w_value = self.getmappingvalue(self.getmappingkey())
             else:
                 w_value = None
@@ -223,7 +224,7 @@ def make_formatter_subclass(do_unicode):
                 self.f_ljust = True
                 self.width = -self.width
 
-            if self.peekchr() == '.':
+            if self.peekchr() == ord('.'):
                 self.forward()
                 self.prec = self.peel_num('prec', INT_MAX)
                 if self.prec < 0:
@@ -232,7 +233,7 @@ def make_formatter_subclass(do_unicode):
                 self.prec = -1
 
             c = self.peekchr()
-            if c == 'h' or c == 'l' or c == 'L':
+            if c == ord('h') or c == ord('l') or c == ord('L'):
                 self.forward()
 
             return w_value
@@ -247,15 +248,15 @@ def make_formatter_subclass(do_unicode):
             self.f_zero  = False
             while True:
                 c = self.peekchr()
-                if c == '-':
+                if c == ord('-'):
                     self.f_ljust = True
-                elif c == '+':
+                elif c == ord('+'):
                     self.f_sign = True
-                elif c == ' ':
+                elif c == ord(' '):
                     self.f_blank = True
-                elif c == '#':
+                elif c == ord('#'):
                     self.f_alt = True
-                elif c == '0':
+                elif c == ord('0'):
                     self.f_zero = True
                 else:
                     break
@@ -266,7 +267,7 @@ def make_formatter_subclass(do_unicode):
         def peel_num(self, name, maxval):
             space = self.space
             c = self.peekchr()
-            if c == '*':
+            if c == ord('*'):
                 self.forward()
                 w_value = self.nextinputvalue()
                 if name == 'width':
@@ -277,7 +278,7 @@ def make_formatter_subclass(do_unicode):
                     assert False
             result = 0
             while True:
-                digit = ord(c) - ord('0')
+                digit = c - ord('0')
                 if not (0 <= digit <= 9):
                     break
                 if result > (maxval - digit) / 10:
@@ -291,16 +292,17 @@ def make_formatter_subclass(do_unicode):
         def format(self):
             lgt = len(self.fmt) + 4 * len(self.values_w) + 10
             if do_unicode:
-                result = UnicodeBuilder(lgt)
+                result = Utf8Builder(lgt)
             else:
                 result = StringBuilder(lgt)
             self.result = result
+
             while True:
                 # fast path: consume as many characters as possible
                 fmt = self.fmt
                 i = i0 = self.fmtpos
                 while i < len(fmt):
-                    if fmt[i] == '%':
+                    if ORD(fmt, i) == ord('%'):
                         break
                     i += 1
                 else:
@@ -313,8 +315,8 @@ def make_formatter_subclass(do_unicode):
                 w_value = self.parse_fmt()
                 c = self.peekchr()
                 self.forward()
-                if c == '%':
-                    self.std_wp(const('%'))
+                if c == ord('%'):
+                    self.std_wp('%')
                     continue
                 if w_value is None:
                     w_value = self.nextinputvalue()
@@ -325,7 +327,7 @@ def make_formatter_subclass(do_unicode):
                     if c == c1:
                         # 'c1' is an annotation constant here,
                         # so this getattr() is ok
-                        do_fmt = getattr(self, 'fmt_' + c1)
+                        do_fmt = getattr(self, 'fmt_' + chr(c1))
                         do_fmt(w_value)
                         break
                 else:
@@ -348,7 +350,7 @@ def make_formatter_subclass(do_unicode):
             else:
                 s = c
             msg = "unsupported format character '%s' (0x%x) at index %d" % (
-                s, ord(c), self.fmtpos - 1)
+                s, ORD(c, 0), self.fmtpos - 1)
             raise OperationError(space.w_ValueError, space.wrap(msg))
 
         def std_wp(self, r):
@@ -359,7 +361,7 @@ def make_formatter_subclass(do_unicode):
             prec = self.prec
             if prec == -1 and self.width == 0:
                 # fast path
-                self.result.append(const(r))
+                self.result.append(r)
                 return
             if prec >= 0 and prec < length:
                 length = prec   # ignore the end of the string if too long
@@ -369,12 +371,12 @@ def make_formatter_subclass(do_unicode):
                 padding = 0
             assert padding >= 0
             if not self.f_ljust and padding > 0:
-                result.append_multiple_char(const(' '), padding)
+                result.append_multiple_char(' ', padding)
                 # add any padding at the left of 'r'
                 padding = 0
             result.append_slice(r, 0, length)       # add 'r' itself
             if padding > 0:
-                result.append_multiple_char(const(' '), padding)
+                result.append_multiple_char(' ', padding)
             # add any remaining padding at the right
         std_wp._annspecialcase_ = 'specialize:argtype(1)'
 
@@ -405,18 +407,19 @@ def make_formatter_subclass(do_unicode):
 
             assert padding >= 0
             if padnumber == '>':
-                result.append_multiple_char(const(' '), padding)
+                result.append_multiple_char(' ', padding)
                 # pad with spaces on the left
             if sign:
-                result.append(const(r[0]))        # the sign
-            result.append(const(prefix))               # the prefix
+                # TODO: Why r[0]?
+                result.append(r[0])        # the sign
+            result.append(prefix)               # the prefix
             if padnumber == '0':
-                result.append_multiple_char(const('0'), padding)
+                result.append_multiple_char('0', padding)
                 # pad with zeroes
-            result.append_slice(const(r), int(sign), len(r))
+            result.append_slice(r, int(sign), len(r))
             # the rest of the number
             if padnumber == '<':           # spaces on the right
-                result.append_multiple_char(const(' '), padding)
+                result.append_multiple_char(' ', padding)
 
         def string_formatting(self, w_value):
             space = self.space
@@ -499,7 +502,7 @@ UnicodeFormatter.__name__ = 'UnicodeFormatter'
 # an "unrolling" list of all the known format characters,
 # collected from which fmt_X() functions are defined in the class
 FORMATTER_CHARS = unrolling_iterable(
-    [_name[-1] for _name in dir(StringFormatter)
+    [ord(_name[-1]) for _name in dir(StringFormatter)
                if len(_name) == 5 and _name.startswith('fmt_')])
 
 def format(space, w_fmt, values_w, w_valuedict, do_unicode):

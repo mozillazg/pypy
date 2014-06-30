@@ -3,6 +3,7 @@ from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.rstring import UnicodeBuilder
 from rpython.rlib.runicode import code_to_unichr, MAXUNICODE
 
+from pypy.interpreter.utf8 import Utf8Builder, Utf8Str, utf8chr, utf8ord
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 
@@ -206,13 +207,13 @@ def replace_errors(space, w_exc):
     w_end = space.getattr(w_exc, space.wrap('end'))
     size = space.int_w(w_end) - space.int_w(w_start)
     if space.isinstance_w(w_exc, space.w_UnicodeEncodeError):
-        text = u'?' * size
+        text = Utf8Str('?' * size, True)
         return space.newtuple([space.wrap(text), w_end])
     elif space.isinstance_w(w_exc, space.w_UnicodeDecodeError):
-        text = u'\ufffd'
+        text = utf8chr(0xfffd)
         return space.newtuple([space.wrap(text), w_end])
     elif space.isinstance_w(w_exc, space.w_UnicodeTranslateError):
-        text = u'\ufffd' * size
+        text = utf8chr(0xfffd) * size
         return space.newtuple([space.wrap(text), w_end])
     else:
         raise oefmt(space.w_TypeError,
@@ -251,25 +252,26 @@ def backslashreplace_errors(space, w_exc):
         start = space.int_w(space.getattr(w_exc, space.wrap('start')))
         w_end = space.getattr(w_exc, space.wrap('end'))
         end = space.int_w(w_end)
-        builder = UnicodeBuilder()
+
+        builder = Utf8Builder()
         pos = start
         while pos < end:
-            oc = ord(obj[pos])
+            oc = utf8ord(obj, pos)
             num = hex(oc)
             if (oc >= 0x10000):
-                builder.append(u"\\U")
+                builder.append("\\U")
                 zeros = 8
             elif (oc >= 0x100):
-                builder.append(u"\\u")
+                builder.append("\\u")
                 zeros = 4
             else:
-                builder.append(u"\\x")
+                builder.append("\\x")
                 zeros = 2
             lnum = len(num)
             nb = zeros + 2 - lnum # num starts with '0x'
             if nb > 0:
                 builder.append_multiple_char(u'0', nb)
-            builder.append_slice(unicode(num), 2, lnum)
+            builder.append_slice(num, 2, lnum)
             pos += 1
         return space.newtuple([space.wrap(builder.build()), w_end])
     else:
@@ -378,7 +380,6 @@ def register_error(space, errors, w_handler):
 # ____________________________________________________________
 # delegation to runicode
 
-#from rpython.rlib import runicode
 from pypy.interpreter import utf8_codecs
 
 def make_encoder_wrapper(name):
@@ -548,7 +549,7 @@ class Charmap_Decode:
             if not 0 <= x <= 0x10FFFF:
                 raise oefmt(space.w_TypeError,
                     "character mapping must be in range(0x110000)")
-            return code_to_unichr(x)
+            return utf8chr(x)
         elif space.is_w(w_ch, space.w_None):
             # Charmap may return None
             return errorchar
@@ -566,7 +567,7 @@ class Charmap_Encode:
 
         # get the character from the mapping
         try:
-            w_ch = space.getitem(self.w_mapping, space.newint(ord(ch)))
+            w_ch = space.getitem(self.w_mapping, space.newint(utf8ord(ch)))
         except OperationError, e:
             if not e.match(space, space.w_LookupError):
                 raise
@@ -595,7 +596,7 @@ def charmap_decode(space, string, errors="strict", w_mapping=None):
     if errors is None:
         errors = 'strict'
     if len(string) == 0:
-        return space.newtuple([space.wrap(u''), space.wrap(0)])
+        return space.newtuple([space.wrap(Utf8Str('')), space.wrap(0)])
 
     if space.is_none(w_mapping):
         mapping = None
@@ -631,7 +632,7 @@ def charmap_build(space, chars):
     w_charmap = space.newdict()
     for num in range(len(chars)):
         elem = chars[num]
-        space.setitem(w_charmap, space.newint(ord(elem)), space.newint(num))
+        space.setitem(w_charmap, space.newint(utf8ord(elem)), space.newint(num))
     return w_charmap
 
 # ____________________________________________________________

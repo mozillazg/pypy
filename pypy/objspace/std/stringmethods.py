@@ -9,6 +9,7 @@ from rpython.rlib.buffer import Buffer
 
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import WrappedDefault, unwrap_spec
+from pypy.interpreter.utf8 import ORD
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 
@@ -141,7 +142,7 @@ class StringMethods(object):
         if d > 0:
             offset = d//2 + (d & width & 1)
             fillchar = self._multi_chr(fillchar[0])
-            centered = offset * fillchar + value + (d - offset) * fillchar
+            centered = fillchar * offset + value + fillchar * (d - offset)
         else:
             centered = value
 
@@ -192,9 +193,9 @@ class StringMethods(object):
             return self._empty()
 
         if self._use_rstr_ops(space, self):
-            splitted = value.split(self._chr('\t'))
+            splitted = value.split('\t')
         else:
-            splitted = split(value, self._chr('\t'))
+            splitted = split(value, '\t')
 
         try:
             ovfcheck(len(splitted) * tabsize)
@@ -203,7 +204,7 @@ class StringMethods(object):
         expanded = oldtoken = splitted.pop(0)
 
         for token in splitted:
-            expanded += self._multi_chr(self._chr(' ')) * self._tabindent(oldtoken,
+            expanded += self._multi_chr(' ') * self._tabindent(oldtoken,
                                                          tabsize) + token
             oldtoken = token
 
@@ -218,7 +219,8 @@ class StringMethods(object):
             offset = len(token)
 
             while 1:
-                if token[offset-1] == "\n" or token[offset-1] == "\r":
+                if (ORD(token, offset-1) == ord("\n") or
+                    ORD(token, offset-1) == ord("\r")):
                     break
                 distance += 1
                 offset -= 1
@@ -455,7 +457,7 @@ class StringMethods(object):
         d = width - len(value)
         if d > 0:
             fillchar = self._multi_chr(fillchar[0])
-            value += d * fillchar
+            value += fillchar * d
 
         return self._new(value)
 
@@ -469,7 +471,7 @@ class StringMethods(object):
         d = width - len(value)
         if d > 0:
             fillchar = self._multi_chr(fillchar[0])
-            value = d * fillchar + value
+            value = fillchar * d + value
 
         return self._new(value)
 
@@ -558,30 +560,38 @@ class StringMethods(object):
         res = []
         value = self._val(space)
         if space.is_none(w_sep):
-            res = split(value, maxsplit=maxsplit)
+            res = self._split(value, None, maxsplit)
             return self._newlist_unwrapped(space, res)
 
         by = self._op_val(space, w_sep)
         if len(by) == 0:
             raise oefmt(space.w_ValueError, "empty separator")
-        res = split(value, by, maxsplit)
+        res = self._split(value, by, maxsplit)
 
         return self._newlist_unwrapped(space, res)
+
+    @staticmethod
+    def _split(value, sep=None, maxsplit=-1):
+        return split(value, sep, maxsplit)
 
     @unwrap_spec(maxsplit=int)
     def descr_rsplit(self, space, w_sep=None, maxsplit=-1):
         res = []
         value = self._val(space)
         if space.is_none(w_sep):
-            res = rsplit(value, maxsplit=maxsplit)
+            res = self._rsplit(value, maxsplit=maxsplit)
             return self._newlist_unwrapped(space, res)
 
         by = self._op_val(space, w_sep)
         if len(by) == 0:
             raise oefmt(space.w_ValueError, "empty separator")
-        res = rsplit(value, by, maxsplit)
+        res = self._split(value, by, maxsplit)
 
         return self._newlist_unwrapped(space, res)
+
+    @staticmethod
+    def _rsplit(value, sep=None, maxsplit=-1):
+        return value.split(sep, maxsplit)
 
     @unwrap_spec(keepends=bool)
     def descr_splitlines(self, space, keepends=False):
@@ -757,20 +767,21 @@ class StringMethods(object):
     def descr_zfill(self, space, width):
         selfval = self._val(space)
         if len(selfval) == 0:
-            return self._new(self._multi_chr(self._chr('0')) * width)
+            return self._new(self._multi_chr('0') * width)
         num_zeros = width - len(selfval)
         if num_zeros <= 0:
             # cannot return self, in case it is a subclass of str
             return self._new(selfval)
 
         builder = self._builder(width)
-        if len(selfval) > 0 and (selfval[0] == '+' or selfval[0] == '-'):
+        if len(selfval) > 0 and (ORD(selfval, 0) == ord('+') or
+                                 ORD(selfval, 0) == ord('-')):
             # copy sign to first position
             builder.append(selfval[0])
             start = 1
         else:
             start = 0
-        builder.append_multiple_char(self._chr('0'), num_zeros)
+        builder.append_multiple_char('0', num_zeros)
         builder.append_slice(selfval, start, len(selfval))
         return self._new(builder.build())
 

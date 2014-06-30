@@ -6,7 +6,7 @@ from rpython.rlib.rarithmetic import r_uint, intmask
 from rpython.rlib.unicodedata import unicodedb
 from rpython.rlib.runicode import utf8_code_length
 
-from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord
+from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord, ORD
 
 
 BYTEORDER = sys.byteorder
@@ -33,7 +33,7 @@ def str_decode_unicode_escape(s, size, errors, final=False,
 
         # Non-escape characters are interpreted as Unicode ordinals
         if ch != '\\':
-            builder.append(ch)
+            builder.append(ord(ch))
             pos += 1
             continue
 
@@ -383,6 +383,8 @@ def str_decode_ascii(s, size, errors, final=False,
 @specialize.arg_or_var(3)
 def unicode_encode_ucs1_helper(p, size, errors,
                                errorhandler=None, limit=256):
+    if len(p) == 0:
+        return ''
     if errorhandler is None:
         errorhandler = default_unicode_error_encode
     if limit == 256:
@@ -415,8 +417,9 @@ def unicode_encode_ucs1_helper(p, size, errors,
                 result.append(rs)
                 continue
             for ch in ru:
-                if ord(ch) < limit:
-                    result.append(chr(ord(ch)))
+                cd = ORD(ch, 0)
+                if cd < limit:
+                    result.append(chr(cd))
                 else:
                     errorhandler("strict", encoding, reason, p,
                                  collstart, collend)
@@ -436,15 +439,60 @@ def unicode_encode_ascii(p, size, errors, errorhandler=None):
 # ____________________________________________________________
 # utf-8 {{{
 
-# Converting bytes (utf8) to unicode?
-# I guess we just make sure we're looking at valid utf-8 and then make the
-# object?
 
 def unicode_encode_utf_8(s, size, errors, errorhandler=None,
                          allow_surrogates=False):
-    if size < len(s):
-        return s.bytes[0:s.index_of_char(size)]
-    return s.bytes
+    if len(s) == 0:
+        return ''
+    if errorhandler is None:
+        errorhandler = default_unicode_error_encode
+
+    return unicode_encode_utf_8_impl(s, size, errors, errorhandler,
+                                     allow_surrogates)
+
+def unicode_encode_utf_8_impl(s, size, errors, errorhandler, allow_surrogates):
+    iter = s.codepoint_iter()
+    for oc in iter:
+        if oc >= 0xD800 and oc <= 0xDFFF:
+            break
+        if iter.pos == size:
+            return s.bytes
+    else:
+        return s.bytes
+
+    iter.move(-1)
+    result = Utf8Builder(len(s.bytes))
+    result.append_slice(s.bytes, 0, iter.byte_pos)
+
+    for oc in iter:
+        if oc >= 0xD800 and oc <= 0xDFFF:
+            # Check the next character to see if this is a surrogate pair
+            if (iter.pos != len(s) and oc <= 0xDBFF and
+                0xDC00 <= iter.peek_next() <= 0xDFFF):
+                oc2 = iter.next()
+                result.append(((oc - 0xD800) << 10 | (oc2 - 0xDC00)) + 0x10000)
+            elif allow_surrogates:
+                result.append(oc)
+            else:
+                ru, rs, pos = errorhandler(errors, 'utf8',
+                                        'surrogates not allowed', s,
+                                        iter.pos-1, iter.pos)
+                iter.move(pos - iter.pos)
+                if rs is not None:
+                    # py3k only
+                    result.append(rs)
+                    continue
+                for ch in ru:
+                    if ord(ch) < 0x80:
+                        result.append(ch)
+                    else:
+                        errorhandler('strict', 'utf8',
+                                    'surrogates not allowed',
+                                    s, pos-1, pos)
+        else:
+            result.append(oc)
+
+    return result.build().bytes
 
 def str_decode_utf_8(s, size, errors, final=False,
                      errorhandler=None, allow_surrogates=False):
@@ -1219,7 +1267,7 @@ def unicode_encode_utf_7(s, size, errors, errorhandler=None):
 # ____________________________________________________________
 # Charmap {{{
 
-ERROR_CHAR = u'\ufffe'
+ERROR_CHAR = Utf8Str.from_unicode(u'\ufffe')
 
 @specialize.argtype(5)
 def str_decode_charmap(s, size, errors, final=False,
@@ -1296,84 +1344,16 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
 
 def str_decode_unicode_internal(s, size, errors, final=False,
                                 errorhandler=None):
-    if errorhandler is None:
-        errorhandler = default_unicode_error_decode
-    if size == 0:
-        return u'', 0
-
-    if MAXUNICODE < 65536:
-        unicode_bytes = 2
+    if BYTEORDER == 'little':
+        return str_decode_utf_32_le(s, size, errors, errorhandler)
     else:
-        unicode_bytes = 4
-    if BYTEORDER == "little":
-        start = 0
-        stop = unicode_bytes
-        step = 1
-    else:
-        start = unicode_bytes - 1
-        stop = -1
-        step = -1
-
-    result = UnicodeBuilder(size // unicode_bytes)
-    pos = 0
-    while pos < size:
-        if pos > size - unicode_bytes:
-            res, pos = errorhandler(errors, "unicode_internal",
-                                    "truncated input",
-                                    s, pos, size)
-            result.append(res)
-            if pos > size - unicode_bytes:
-                break
-            continue
-        t = r_uint(0)
-        h = 0
-        for j in range(start, stop, step):
-            t += r_uint(ord(s[pos + j])) << (h*8)
-            h += 1
-        if t > MAXUNICODE:
-            res, pos = errorhandler(errors, "unicode_internal",
-                                    "unichr(%d) not in range" % (t,),
-                                    s, pos, pos + unicode_bytes)
-            result.append(res)
-            continue
-        result.append(UNICHR(t))
-        pos += unicode_bytes
-    return result.build(), pos
+        return str_decode_utf_32_be(s, size, errors, errorhandler)
 
 def unicode_encode_unicode_internal(s, size, errors, errorhandler=None):
-    if size == 0:
-        return ''
-
-    if MAXUNICODE < 65536:
-        unicode_bytes = 2
+    if BYTEORDER == 'little':
+        return unicode_encode_utf_32_le(s, size, errors, errorhandler)
     else:
-        unicode_bytes = 4
-
-    result = StringBuilder(size * unicode_bytes)
-    pos = 0
-    while pos < size:
-        oc = utf8ord(s, pos)
-        if MAXUNICODE < 65536:
-            if BYTEORDER == "little":
-                result.append(chr(oc       & 0xFF))
-                result.append(chr(oc >>  8 & 0xFF))
-            else:
-                result.append(chr(oc >>  8 & 0xFF))
-                result.append(chr(oc       & 0xFF))
-        else:
-            if BYTEORDER == "little":
-                result.append(chr(oc       & 0xFF))
-                result.append(chr(oc >>  8 & 0xFF))
-                result.append(chr(oc >> 16 & 0xFF))
-                result.append(chr(oc >> 24 & 0xFF))
-            else:
-                result.append(chr(oc >> 24 & 0xFF))
-                result.append(chr(oc >> 16 & 0xFF))
-                result.append(chr(oc >>  8 & 0xFF))
-                result.append(chr(oc       & 0xFF))
-        pos += 1
-
-    return result.build()
+        return unicode_encode_utf_32_be(s, size, errors, errorhandler)
 
 # }}}
 

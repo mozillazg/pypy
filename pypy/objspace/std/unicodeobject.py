@@ -1,13 +1,14 @@
 """The builtin unicode implementation"""
 
 from rpython.rlib.objectmodel import (
-    compute_hash, compute_unique_id, import_from_mixin)
+    compute_hash, compute_unique_id, import_from_mixin, specialize)
 from rpython.rlib.buffer import StringBuffer
-from rpython.rlib.rstring import StringBuilder, UnicodeBuilder
+from rpython.rlib.rstring import (
+    StringBuilder, replace, startswith, endswith)
 
 from pypy.interpreter import unicodehelper
 from pypy.interpreter.baseobjspace import W_Root
-from pypy.interpreter.utf8 import Utf8Str, utf8chr, utf8ord
+from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord
 from pypy.interpreter.utf8_codecs import (
     make_unicode_escape_function, str_decode_ascii, str_decode_utf_8,
     unicode_encode_ascii, unicode_encode_utf_8)
@@ -67,11 +68,12 @@ class W_UnicodeObject(W_Root):
         return self._value
 
     def readbuf_w(self, space):
-        from rpython.rlib.rstruct.unichar import pack_unichar, UNICODE_SIZE
-        builder = StringBuilder(len(self._value) * UNICODE_SIZE)
-        for unich in self._value:
-            pack_unichar(unich, builder)
-        return StringBuffer(builder.build())
+        return StringBuffer(self._value.bytes)
+        #from rpython.rlib.rstruct.unichar import pack_unichar, UNICODE_SIZE
+        #builder = StringBuilder(len(self._value) * UNICODE_SIZE)
+        #for unich in self._value:
+        #    pack_unichar(unich, builder)
+        #return StringBuffer(builder.build())
 
     def writebuf_w(self, space):
         raise OperationError(space.w_TypeError, space.wrap(
@@ -87,7 +89,7 @@ class W_UnicodeObject(W_Root):
             raise oefmt(space.w_TypeError,
                          "ord() expected a character, but string of length %d "
                          "found", len(self._value))
-        return space.wrap(utf8ord(self))
+        return space.wrap(utf8ord(self._value))
 
     def _new(self, value):
         return W_UnicodeObject(value)
@@ -120,9 +122,18 @@ class W_UnicodeObject(W_Root):
 
     def _chr(self, char):
         assert len(char) == 1
-        return unicode(char)[0]
+        assert ord(char) < 127
+        return Utf8Str(char, True)
 
-    _builder = UnicodeBuilder
+    @specialize.argtype(1)
+    def _multi_chr(self, c):
+        if isinstance(c, str):
+            assert ord(c) < 127
+            return Utf8Str(c, True)
+        else:
+            return c
+
+    _builder = Utf8Builder
 
     def _isupper(self, ch):
         return unicodedb.isupper(utf8ord(ch))
@@ -158,13 +169,13 @@ class W_UnicodeObject(W_Root):
         return unicodedb.islinebreak(utf8ord(ch))
 
     def _upper(self, ch):
-        return unichr(unicodedb.toupper(utf8ord(ch)))
+        return utf8chr(unicodedb.toupper(utf8ord(ch)))
 
     def _lower(self, ch):
-        return unichr(unicodedb.tolower(utf8ord(ch)))
+        return utf8chr(unicodedb.tolower(utf8ord(ch)))
 
     def _title(self, ch):
-        return unichr(unicodedb.totitle(utf8ord(ch)))
+        return utf8chr(unicodedb.totitle(utf8ord(ch)))
 
     def _newlist_unwrapped(self, space, lst):
         return space.newlist_unicode(lst)
@@ -302,6 +313,35 @@ class W_UnicodeObject(W_Root):
     def descr_mod(self, space, w_values):
         return mod_format(space, self, w_values, do_unicode=True)
 
+    @unwrap_spec(count=int)
+    def descr_replace(self, space, w_old, w_new, count=-1):
+        input = self._val(space)
+
+        sub = self._op_val(space, w_old)
+        by = self._op_val(space, w_new)
+        try:
+            res = replace(input.bytes, sub.bytes, by.bytes, count)
+        except OverflowError:
+            raise oefmt(space.w_OverflowError, "replace string is too long")
+
+        return self._new(Utf8Str(res))
+
+    def _startswith(self, space, value, w_prefix, start, end):
+        return startswith(value.bytes, self._op_val(space, w_prefix).bytes,
+                          start, end)
+
+    def _endswith(self, space, value, w_prefix, start, end):
+        return endswith(value.bytes, self._op_val(space, w_prefix).bytes,
+                        start, end)
+
+    @staticmethod
+    def _split(value, sep=None, maxsplit=-1):
+        return value.split(sep, maxsplit)
+
+    @staticmethod
+    def _rsplit(value, sep=None, maxsplit=-1):
+        return value.split(sep, maxsplit)
+
     def descr_translate(self, space, w_table):
         selfvalue = self._value
         w_sys = space.getbuiltinmodule('sys')
@@ -313,7 +353,7 @@ class W_UnicodeObject(W_Root):
                 w_newval = space.getitem(w_table, space.wrap(utf8ord(unichar)))
             except OperationError as e:
                 if e.match(space, space.w_LookupError):
-                    result.append(unichar)
+                    result.append(unichar.bytes)
                 else:
                     raise
             else:
@@ -325,14 +365,14 @@ class W_UnicodeObject(W_Root):
                         raise oefmt(space.w_TypeError,
                                     "character mapping must be in range(%s)",
                                     hex(maxunicode + 1))
-                    result.append(unichr(newval))
+                    result.append(utf8chr(newval).bytes)
                 elif space.isinstance_w(w_newval, space.w_unicode):
-                    result.append(space.unicode_w(w_newval))
+                    result.append(space.unicode_w(w_newval).bytes)
                 else:
                     raise oefmt(space.w_TypeError,
                                 "character mapping must return integer, None "
                                 "or unicode")
-        return W_UnicodeObject(u''.join(result))
+        return W_UnicodeObject(Utf8Str(''.join(result)))
 
     def descr_encode(self, space, w_encoding=None, w_errors=None):
         encoding, errors = _get_encoding_and_errors(space, w_encoding,
@@ -1090,7 +1130,7 @@ def unicode_to_decimal_w(space, w_unistr):
     digits = ['0', '1', '2', '3', '4',
               '5', '6', '7', '8', '9']
     for i in xrange(len(unistr)):
-        uchr = ord(unistr[i])
+        uchr = utf8ord(unistr, i)
         if unicodedb.isspace(uchr):
             result[i] = ' '
             continue

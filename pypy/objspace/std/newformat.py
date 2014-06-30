@@ -4,6 +4,7 @@ import sys
 import string
 
 from pypy.interpreter.error import OperationError, oefmt
+from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, ORD
 from rpython.rlib import rstring, runicode, rlocale, rfloat, jit
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rfloat import copysign, formatd
@@ -47,7 +48,7 @@ def make_template_formatting_class():
         def __init__(self, space, is_unicode, template):
             self.space = space
             self.is_unicode = is_unicode
-            self.empty = u"" if is_unicode else ""
+            self.empty = Utf8Str("") if is_unicode else ""
             self.template = template
 
         def build(self, args):
@@ -59,7 +60,7 @@ def make_template_formatting_class():
         def _build_string(self, start, end, level):
             space = self.space
             if self.is_unicode:
-                out = rstring.UnicodeBuilder()
+                out = Utf8Builder()
             else:
                 out = rstring.StringBuilder()
             if not level:
@@ -74,23 +75,23 @@ def make_template_formatting_class():
             space = self.space
             last_literal = i = start
             while i < end:
-                c = s[i]
+                c = ORD(s, i)
                 i += 1
-                if c == "{" or c == "}":
+                if c == ord("{") or c == ord("}"):
                     at_end = i == end
                     # Find escaped "{" and "}"
                     markup_follows = True
-                    if c == "}":
-                        if at_end or s[i] != "}":
+                    if c == ord("}"):
+                        if at_end or ORD(s, i) != ord("}"):
                             raise OperationError(space.w_ValueError,
                                                  space.wrap("Single '}'"))
                         i += 1
                         markup_follows = False
-                    if c == "{":
+                    if c == ord("{"):
                         if at_end:
                             raise OperationError(space.w_ValueError,
                                                  space.wrap("Single '{'"))
-                        if s[i] == "{":
+                        if ORD(s, i) == ord("{"):
                             i += 1
                             markup_follows = False
                     # Attach literal data, ending with { or }
@@ -111,11 +112,11 @@ def make_template_formatting_class():
                     field_start = i
                     recursive = False
                     while i < end:
-                        c = s[i]
-                        if c == "{":
+                        c = ORD(s, i)
+                        if c == ord("{"):
                             recursive = True
                             nested += 1
-                        elif c == "}":
+                        elif c == ord("}"):
                             nested -= 1
                             if not nested:
                                 break
@@ -139,9 +140,9 @@ def make_template_formatting_class():
             i = start
             while i < end:
                 c = s[i]
-                if c == ":" or c == "!":
+                if c == ord(":") or c == ord("!"):
                     end_name = i
-                    if c == "!":
+                    if c == ord("!"):
                         i += 1
                         if i == end:
                             w_msg = self.space.wrap("expected conversion")
@@ -170,7 +171,7 @@ def make_template_formatting_class():
             end = len(name)
             while i < end:
                 c = name[i]
-                if c == "[" or c == ".":
+                if c == ord("[") or c == ord("."):
                     break
                 i += 1
             empty = not i
@@ -228,12 +229,12 @@ def make_template_formatting_class():
             i = start
             while i < end:
                 c = name[i]
-                if c == ".":
+                if c == ord("."):
                     i += 1
                     start = i
                     while i < end:
                         c = name[i]
-                        if c == "[" or c == ".":
+                        if c == ord("[") or c == ord("."):
                             break
                         i += 1
                     if start == i:
@@ -245,13 +246,13 @@ def make_template_formatting_class():
                     else:
                         self.parser_list_w.append(space.newtuple([
                             space.w_True, w_attr]))
-                elif c == "[":
+                elif c == ord("["):
                     got_bracket = False
                     i += 1
                     start = i
                     while i < end:
                         c = name[i]
-                        if c == "]":
+                        if c == ord("]"):
                             got_bracket = True
                             break
                         i += 1
@@ -280,8 +281,8 @@ def make_template_formatting_class():
             i = 0
             end = len(name)
             while i < end:
-                c = name[i]
-                if c == "[" or c == ".":
+                c = ORD(name, i)
+                if c == ord("[") or c == ord("."):
                     break
                 i += 1
             if i == 0:
@@ -303,10 +304,10 @@ def make_template_formatting_class():
 
         def _convert(self, w_obj, conversion):
             space = self.space
-            conv = conversion[0]
-            if conv == "r":
+            conv = ORD(conversion, 0)
+            if conv == ord("r"):
                 return space.repr(w_obj)
-            elif conv == "s":
+            elif conv == ord("s"):
                 if self.is_unicode:
                     return space.call_function(space.w_unicode, w_obj)
                 return space.str(w_obj)
@@ -416,15 +417,15 @@ def make_formatting_class():
             self.spec = spec
 
         def _is_alignment(self, c):
-            return (c == "<" or
-                    c == ">" or
-                    c == "=" or
-                    c == "^")
+            return (c == ord("<") or
+                    c == ord(">") or
+                    c == ord("=") or
+                    c == ord("^"))
 
         def _is_sign(self, c):
-            return (c == " " or
-                    c == "+" or
-                    c == "-")
+            return (c == ord(" ") or
+                    c == ord("+") or
+                    c == ord("-"))
 
         def _parse_spec(self, default_type, default_align):
             space = self.space

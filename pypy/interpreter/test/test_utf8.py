@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+
+import py
+import sys
 from pypy.interpreter.utf8 import (
     Utf8Str, Utf8Builder, utf8chr, utf8ord)
 
@@ -19,6 +23,39 @@ def test_builder():
                                 0xE2, 0x82, 0xAC,
                                 0xF0, 0x9F, 0x98, 0xBD,
                             ]]
+
+def test_iterator():
+    s = build_utf8str()
+    iter = s.codepoint_iter()
+    assert iter.peek_next() == 0x41
+    assert list(iter) == [0x41, 0x10F, 0x20AC, 0x1F63D]
+
+    for i in range(1, 5):
+        iter = s.codepoint_iter()
+        iter.move(i)
+        if i != 4:
+            assert iter.peek_next() == [0x41, 0x10F, 0x20AC, 0x1F63D][i]
+        assert list(iter) == [0x41, 0x10F, 0x20AC, 0x1F63D][i:]
+
+    for i in range(1, 5):
+        iter = s.codepoint_iter()
+        list(iter) # move the iterator to the end
+        iter.move(-i)
+        assert list(iter) == [0x41, 0x10F, 0x20AC, 0x1F63D][4-i:]
+
+    iter = s.char_iter()
+    l = [s.bytes.decode('utf8') for s in list(iter)]
+    if sys.maxunicode < 65536:
+        assert l[:3] == [u'A', u'\u010F', u'\u20AC']
+    else:
+        assert l == [u'A', u'\u010F', u'\u20AC', u'\U00001F63D']
+
+def test_builder_append_slice():
+    builder = Utf8Builder()
+    builder.append_slice(Utf8Str.from_unicode(u"0ê0"), 1, 2)
+    builder.append_slice("Test", 1, 3)
+
+    assert builder.build() == u"êes"
 
 def test_unicode_literal_comparison():
     builder = Utf8Builder()
@@ -55,9 +92,65 @@ def test_getitem():
     assert s[-1] == utf8chr(0x1F63D)
     assert s[-2] == utf8chr(0x20AC)
 
+    with py.test.raises(IndexError):
+        c = s[4]
+
 def test_getslice():
     s = build_utf8str()
 
     assert s[0:1] == u'A'
     assert s[0:2] == u'A\u010F'
     assert s[1:2] == u'\u010F'
+
+def test_convert_indices():
+    s = build_utf8str()
+
+    assert s.index_of_char(0) == 0
+    assert s.index_of_char(1) == 1
+    assert s.index_of_char(2) == 3
+    assert s.index_of_char(3) == 6
+
+    for i in range(len(s)):
+        assert s.char_index_of_byte(s.index_of_char(i)) == i
+
+def test_join():
+    s = Utf8Str(' ')
+    assert s.join([]) == u''
+
+    
+    assert s.join([Utf8Str('one')]) == u'one'
+    assert s.join([Utf8Str('one'), Utf8Str('two')]) == u'one two'
+
+def test_find():
+    u = u"äëïöü"
+    s = Utf8Str.from_unicode(u)
+
+    for c in u:
+        assert s.find(Utf8Str.from_unicode(u)) == u.find(u)
+        assert s.rfind(Utf8Str.from_unicode(u)) == u.rfind(u)
+
+    assert s.find('') == u.find('')
+    assert s.rfind('') == u.rfind('')
+
+    assert s.find('1') == u.find('1')
+    assert s.rfind('1') == u.rfind('1')
+
+    assert Utf8Str.from_unicode(u'abcdefghiabc').rfind(u'') == 12
+
+def test_count():
+    u = u"12äëïöü223"
+    s = Utf8Str.from_unicode(u)
+
+    assert s.count("1") == u.count("1")
+    assert s.count("2") == u.count("2")
+    assert s.count(Utf8Str.from_unicode(u"ä")) == u.count(u"ä")
+
+def test_split():
+    # U+00A0 is a non-breaking space
+    u = u"one two three\xA0four"
+    s = Utf8Str.from_unicode(u)
+
+    assert s.split() == u.split()
+    assert s.split(' ') == u.split(' ')
+    assert s.split(maxsplit=1) == u.split(None, 1)
+    assert s.split('\n') == [s]
