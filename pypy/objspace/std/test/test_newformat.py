@@ -382,30 +382,30 @@ class AppTestInternalMethods:
         assert l == [('abcd', None, None, None)]
         #
         l = list('ab{0}cd'._formatter_parser())
-        assert l == [('ab', '0', '', None), ('cd', None, None, None)]
+        assert l == [('ab', '0', '', -1), ('cd', None, None, None)]
         #
         l = list('{0}cd'._formatter_parser())
-        assert l == [('', '0', '', None), ('cd', None, None, None)]
+        assert l == [('', '0', '', -1), ('cd', None, None, None)]
         #
         l = list('ab{0}'._formatter_parser())
-        assert l == [('ab', '0', '', None)]
+        assert l == [('ab', '0', '', -1)]
         #
         l = list(''._formatter_parser())
         assert l == []
         #
         l = list('{0:123}'._formatter_parser())
-        assert l == [('', '0', '123', None)]
+        assert l == [('', '0', '123', -1)]
         #
         l = list('{0!x:123}'._formatter_parser())
-        assert l == [('', '0', '123', 'x')]
+        assert l == [('', '0', '123', ord('x'))]
         #
         l = list('{0!x:12{sdd}3}'._formatter_parser())
-        assert l == [('', '0', '12{sdd}3', 'x')]
+        assert l == [('', '0', '12{sdd}3', ord('x'))]
 
     def test_u_formatter_parser(self):
         l = list(u'{0!x:12{sdd}3}'._formatter_parser())
-        assert l == [(u'', u'0', u'12{sdd}3', u'x')]
-        for x in l[0]:
+        assert l == [(u'', u'0', u'12{sdd}3', ord(u'x'))]
+        for x in l[0][:-1]:
             assert isinstance(x, unicode)
 
     def test_formatter_parser_escape(self):

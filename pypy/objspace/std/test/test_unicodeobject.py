@@ -100,6 +100,7 @@ class AppTestUnicodeString:
         assert u'\n\n'.splitlines() == [u'', u'']
         assert u'a\nb\nc'.splitlines(1) == [u'a\n', u'b\n', u'c']
         assert u'\na\nb\n'.splitlines(1) == [u'\n', u'a\n', u'b\n']
+        assert u'one\r\ntwo\r\n'.splitlines(True) == [u'one\r\n', u'two\r\n']
 
     def test_zfill(self):
         assert u'123'.zfill(2) == u'123'

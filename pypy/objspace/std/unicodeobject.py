@@ -11,7 +11,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord
 from pypy.interpreter.utf8_codecs import (
     make_unicode_escape_function, str_decode_ascii, str_decode_utf_8,
-    unicode_encode_ascii, unicode_encode_utf_8)
+    unicode_encode_ascii, unicode_encode_utf_8, unicode_encode_unicode_internal)
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import WrappedDefault, interp2app, unwrap_spec
 from pypy.module.unicodedata import unicodedb
@@ -68,12 +68,8 @@ class W_UnicodeObject(W_Root):
         return self._value
 
     def readbuf_w(self, space):
-        return StringBuffer(self._value.bytes)
-        #from rpython.rlib.rstruct.unichar import pack_unichar, UNICODE_SIZE
-        #builder = StringBuilder(len(self._value) * UNICODE_SIZE)
-        #for unich in self._value:
-        #    pack_unichar(unich, builder)
-        #return StringBuffer(builder.build())
+        return StringBuffer(unicode_encode_unicode_internal(
+            self._value, len(self._value), 'strict'))
 
     def writebuf_w(self, space):
         raise OperationError(space.w_TypeError, space.wrap(
@@ -227,7 +223,7 @@ class W_UnicodeObject(W_Root):
         return encode_object(space, self, None, None)
 
     def descr_hash(self, space):
-        x = compute_hash(self._value)
+        x = compute_hash(self._value.bytes)
         return space.wrap(x)
 
     def descr_eq(self, space, w_other):
@@ -340,7 +336,7 @@ class W_UnicodeObject(W_Root):
 
     @staticmethod
     def _rsplit(value, sep=None, maxsplit=-1):
-        return value.split(sep, maxsplit)
+        return value.rsplit(sep, maxsplit)
 
     def descr_translate(self, space, w_table):
         selfvalue = self._value

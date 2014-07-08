@@ -102,7 +102,4 @@ class TestParsetring:
     def test_decode_unicode_utf8(self):
         buf = parsestring.decode_unicode_utf8(self.space,
                                               'u"\xf0\x9f\x92\x8b"', 2, 6)
-        if sys.maxunicode == 65535:
-            assert buf == r"\U0000d83d\U0000dc8b"
-        else:
-            assert buf == r"\U0001f48b"
+        assert buf == r"\U0001f48b"

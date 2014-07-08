@@ -35,13 +35,15 @@ def test_iterator():
         iter.move(i)
         if i != 4:
             assert iter.peek_next() == [0x41, 0x10F, 0x20AC, 0x1F63D][i]
-        assert list(iter) == [0x41, 0x10F, 0x20AC, 0x1F63D][i:]
+        l = list(iter)
+        assert l == [0x41, 0x10F, 0x20AC, 0x1F63D][i:]
 
     for i in range(1, 5):
         iter = s.codepoint_iter()
         list(iter) # move the iterator to the end
         iter.move(-i)
-        assert list(iter) == [0x41, 0x10F, 0x20AC, 0x1F63D][4-i:]
+        l = list(iter)
+        assert l == [0x41, 0x10F, 0x20AC, 0x1F63D][4-i:]
 
     iter = s.char_iter()
     l = [s.bytes.decode('utf8') for s in list(iter)]
@@ -50,12 +52,37 @@ def test_iterator():
     else:
         assert l == [u'A', u'\u010F', u'\u20AC', u'\U00001F63D']
 
+def test_reverse_iterator():
+    s = build_utf8str()
+    iter = s.reverse_codepoint_iter()
+    assert iter.peek_next() == 0x1F63D
+    assert list(iter) == [0x1F63D, 0x20AC, 0x10F, 0x41]
+
+    for i in range(1, 5):
+        iter = s.reverse_codepoint_iter()
+        iter.move(i)
+        if i != 4:
+            assert iter.peek_next() == [0x1F63D, 0x20AC, 0x10F, 0x41][i]
+        l = list(iter)
+        assert l == [0x1F63D, 0x20AC, 0x10F, 0x41][i:]
+
+    for i in range(1, 5):
+        iter = s.reverse_codepoint_iter()
+        list(iter) # move the iterator to the end
+        iter.move(-i)
+        l = list(iter)
+        assert l == [0x1F63D, 0x20AC, 0x10F, 0x41][4-i:]
+
 def test_builder_append_slice():
     builder = Utf8Builder()
     builder.append_slice(Utf8Str.from_unicode(u"0ê0"), 1, 2)
     builder.append_slice("Test", 1, 3)
 
     assert builder.build() == u"êes"
+
+def test_eq():
+    assert Utf8Str('test') == Utf8Str('test')
+    assert Utf8Str('test') != Utf8Str('test1')
 
 def test_unicode_literal_comparison():
     builder = Utf8Builder()
@@ -152,5 +179,17 @@ def test_split():
 
     assert s.split() == u.split()
     assert s.split(' ') == u.split(' ')
-    assert s.split(maxsplit=1) == u.split(None, 1)
+    assert s.split(maxsplit=2) == u.split(None, 2)
+    assert s.split(' ', 2) == u.split(' ', 2)
     assert s.split('\n') == [s]
+
+def test_rsplit():
+    # U+00A0 is a non-breaking space
+    u = u"one two three\xA0four"
+    s = Utf8Str.from_unicode(u)
+
+    assert s.rsplit() == u.rsplit()
+    assert s.rsplit(' ') == u.rsplit(' ')
+    assert s.rsplit(maxsplit=2) == u.rsplit(None, 2)
+    assert s.rsplit(' ', 2) == u.rsplit(' ', 2)
+    assert s.rsplit('\n') == [s]

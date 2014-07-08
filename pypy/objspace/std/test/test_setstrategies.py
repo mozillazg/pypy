@@ -4,10 +4,14 @@ from pypy.objspace.std.setobject import (
     IntegerIteratorImplementation, IntegerSetStrategy, ObjectSetStrategy,
     UnicodeIteratorImplementation, UnicodeSetStrategy)
 from pypy.objspace.std.listobject import W_ListObject
+from pypy.interpreter.utf8 import Utf8Str
 
 class TestW_SetStrategies:
 
     def wrapped(self, l):
+        for i in range(len(l)):
+            if isinstance(l[i], unicode):
+                l[i] = Utf8Str.from_unicode(l[i])
         return W_ListObject(self.space, [self.space.wrap(x) for x in l])
 
     def test_from_list(self):
@@ -41,7 +45,7 @@ class TestW_SetStrategies:
 
     def test_switch_to_unicode(self):
         s = W_SetObject(self.space, self.wrapped([]))
-        s.add(self.space.wrap(u"six"))
+        s.add(self.space.wrap(Utf8Str.from_unicode(u"six")))
         assert s.strategy is self.space.fromcache(UnicodeSetStrategy)
 
     def test_symmetric_difference(self):

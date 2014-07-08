@@ -8,6 +8,7 @@ from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.astcompiler.astbuilder import ast_from_node
 from pypy.interpreter.astcompiler import ast, consts
+from pypy.interpreter.utf8 import Utf8Str
 
 
 class TestAstBuilder:
@@ -1103,7 +1104,7 @@ class TestAstBuilder:
         assert info.encoding == "utf-7"
         s = ast_from_node(space, tree, info).body[0].value
         assert isinstance(s, ast.Str)
-        assert space.eq_w(s.s, space.wrap(sentence))
+        assert space.eq_w(s.s, space.wrap(Utf8Str.from_unicode(sentence)))
 
     def test_string_bug(self):
         space = self.space

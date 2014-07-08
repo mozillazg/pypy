@@ -1,5 +1,7 @@
 from py.test import raises
 
+from pypy.interpreter.utf8 import Utf8Str
+
 class AppTest_IndexProtocol:
     def setup_class(self):
         w_oldstyle = self.space.appexec([], """():
@@ -263,7 +265,7 @@ class AppTest_StringTestCase(SeqTestCase, StringTestCase):
 class AppTest_UnicodeTestCase(SeqTestCase, StringTestCase):
     def setup_method(self, method):
         SeqTestCase.setup_method(self, method)
-        self.w_seq = self.space.wrap(u"this is a test")
+        self.w_seq = self.space.wrap(Utf8Str.from_unicode(u"this is a test"))
         self.w_const = self.space.appexec([], """(): return unicode""")
 
 

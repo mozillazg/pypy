@@ -2,6 +2,7 @@ from py.test import raises
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.function import Function
 from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.utf8 import Utf8Str
 from rpython.rlib.rarithmetic import r_longlong, r_ulonglong
 import sys
 
@@ -217,8 +218,9 @@ class TestObjSpace:
         w = space.wrap
         assert space.str0_w(w("123")) == "123"
         exc = space.raises_w(space.w_TypeError, space.str0_w, w("123\x004"))
-        assert space.unicode0_w(w(u"123")) == u"123"
-        exc = space.raises_w(space.w_TypeError, space.unicode0_w, w(u"123\x004"))
+        assert space.unicode0_w(w(Utf8Str("123"))) == u"123"
+        exc = space.raises_w(space.w_TypeError, space.unicode0_w,
+                             w(Utf8Str.from_unicode(u"123\x004")))
 
     def test_getindex_w(self):
         w_instance1 = self.space.appexec([], """():

@@ -4,6 +4,7 @@ from __future__ import division, print_function  # for test_app2interp_future
 from pypy.interpreter import gateway, argument
 from pypy.interpreter.gateway import ObjSpace, W_Root, WrappedDefault
 from pypy.interpreter.signature import Signature
+from pypy.interpreter.utf8 import Utf8Str
 import py
 import sys
 
@@ -519,7 +520,7 @@ class TestGateway:
                                                       unicode])
         w_app_g3_u = space.wrap(app_g3_u)
         assert self.space.eq_w(
-            space.call_function(w_app_g3_u, w(u"foo")),
+            space.call_function(w_app_g3_u, w(Utf8Str("foo"))),
             w(3))
         assert self.space.eq_w(
             space.call_function(w_app_g3_u, w("baz")),

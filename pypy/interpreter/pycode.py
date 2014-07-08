@@ -153,6 +153,10 @@ class PyCode(eval.Code):
                 const = code_hook(space, const, hidden_applevel, code_hook)
             if isinstance(const, unicode):
                 const = Utf8Str.from_unicode(const)
+            if isinstance(const, tuple):
+                const = tuple(x if not isinstance(x, unicode)
+                                else Utf8Str.from_unicode(x)
+                                for x in const)
             newconsts_w[num] = space.wrap(const)
             num += 1
         # stick the underlying CPython magic value, if the code object

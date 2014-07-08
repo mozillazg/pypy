@@ -104,6 +104,9 @@ class Utf8Str(object):
             return Utf8Str('')
         # TODO: If start > _len or stop >= _len, then raise exception 
 
+        if stop > len(self):
+            stop = len(self)
+
         if self._is_ascii:
             return Utf8Str(self.bytes[start:stop], True)
 
@@ -124,6 +127,12 @@ class Utf8Str(object):
         return Utf8Str(self.bytes[start_byte:stop_byte], is_ascii,
                        stop - start)
 
+    def byte_slice(self, start, end):
+        return Utf8Str(self.bytes[start:end], self._is_ascii)
+
+    def __repr__(self):
+        return "<Utf8Str: %r>" % unicode(self)
+
     def __add__(self, other):
         return Utf8Str(self.bytes + other.bytes,
                        self._is_ascii and other._is_ascii)
@@ -134,6 +143,9 @@ class Utf8Str(object):
     def __len__(self):
         return self._len
 
+    def __hash__(self):
+        return hash(self.bytes)
+
     def __eq__(self, other):
         """NOT_RPYTHON"""
         if isinstance(other, Utf8Str):
@@ -142,6 +154,27 @@ class Utf8Str(object):
             return unicode(self.bytes, 'utf8') == other
 
         return False
+
+    def __ne__(self, other):
+        """NOT_RPYTHON"""
+        if isinstance(other, Utf8Str):
+            return self.bytes != other.bytes
+        if isinstance(other, unicode):
+            return unicode(self.bytes, 'utf8') != other
+
+        return True
+
+    def __lt__(self, other):
+        return self.bytes < other.bytes
+
+    def __le__(self, other):
+        return self.bytes <= other.bytes
+
+    def __gt__(self, other):
+        return self.bytes > other.bytes
+
+    def __ge__(self, other):
+        return self.bytes >= other.bytes
 
     @specialize.argtype(1)
     def __contains__(self, other):
@@ -158,11 +191,20 @@ class Utf8Str(object):
     def __iter__(self):
         return self.char_iter()
 
+    def __unicode__(self):
+        return unicode(self.bytes, 'utf8')
+
     def char_iter(self):
-        return Utf8StrCharIterator(self)
+        return Utf8CharacterIter(self)
+
+    def reverse_char_iter(self):
+        return Utf8ReverseCharacterIter(self)
 
     def codepoint_iter(self):
-        return Utf8StrCodePointIterator(self)
+        return Utf8CodePointIter(self)
+
+    def reverse_codepoint_iter(self):
+        return Utf8ReverseCodePointIter(self)
 
     @specialize.argtype(1, 2)
     def _bound_check(self, start, end):
@@ -270,12 +312,11 @@ class Utf8Str(object):
             else:
                 break
 
-            iter.prev_count(1)
             start_byte = iter.byte_pos
-            iter.next_count(1)
 
             if maxsplit == 0:
-                res.append(Utf8Str(self.bytes[start_byte:len(self.bytes)]))
+                res.append(Utf8Str(self.bytes[start_byte:len(self.bytes)],
+                           self._is_ascii))
                 break
 
             for cd in iter:
@@ -283,12 +324,12 @@ class Utf8Str(object):
                     break
             else:
                 # Hit the end of the string
-                res.append(Utf8Str(self.bytes[start_byte:len(self.bytes)]))
+                res.append(Utf8Str(self.bytes[start_byte:len(self.bytes)],
+                           self._is_ascii))
                 break
 
-            iter.prev_count(1)
-            res.append(Utf8Str(self.bytes[start_byte:iter.byte_pos]))
-            iter.next_count(1)
+            res.append(Utf8Str(self.bytes[start_byte:iter.byte_pos],
+                               self._is_ascii))
             maxsplit -= 1
 
         return res
@@ -302,15 +343,54 @@ class Utf8Str(object):
                 other_bytes = other.bytes
             return [Utf8Str(s) for s in self.bytes.rsplit(other_bytes, maxsplit)]
 
-        # TODO: I need to make a reverse_codepoint_iter first
+        res = []
+        iter = self.reverse_codepoint_iter()
+        while True:
+            # Find the start of the next word
+            for cd in iter:
+                if not unicodedb.isspace(cd):
+                    break
+            else:
+                break
 
+            start_byte = self.next_char(iter.byte_pos)
+
+            if maxsplit == 0:
+                res.append(Utf8Str(self.bytes[0:start_byte], self._is_ascii))
+                break
+
+            # Find the end of the word
+            for cd in iter:
+                if unicodedb.isspace(cd):
+                    break
+            else:
+                # We hit the end of the string
+                res.append(Utf8Str(self.bytes[0:start_byte], self._is_ascii))
+                break
+
+            end_byte = self.next_char(iter.byte_pos)
+            res.append(Utf8Str(self.bytes[end_byte:start_byte],
+                               self._is_ascii))
+            maxsplit -= 1
+
+        res.reverse()
+        return res
+
+    @specialize.argtype(1)
     def join(self, other):
         if len(other) == 0:
             return Utf8Str('')
 
-        assert isinstance(other[0], Utf8Str)
-        return Utf8Str(self.bytes.join([s.bytes for s in other]),
-                       self._is_ascii and all(s._is_ascii for s in other))
+        if isinstance(other[0], Utf8Str):
+            return Utf8Str(
+                self.bytes.join([s.bytes for s in other]),
+                self._is_ascii and all(s._is_ascii for s in other)
+            )
+        else:
+            return Utf8Str(
+                self.bytes.join([s for s in other]),
+                self._is_ascii and all(s._is_ascii for s in other)
+            )
 
     def as_unicode(self):
         """NOT_RPYTHON"""
@@ -321,83 +401,18 @@ class Utf8Str(object):
         """NOT_RPYTHON"""
         return Utf8Str(u.encode('utf-8'))
 
-class Utf8StrCodePointIterator(object):
-    def __init__(self, ustr):
-        self.ustr = ustr
-        self.pos = 0
-        self.byte_pos = 0
+    def next_char(self, byte_pos):
+        return byte_pos + utf8_code_length[ord(self.bytes[byte_pos])]
 
-        if len(ustr) != 0:
-            self.current = utf8ord_bytes(ustr.bytes, 0)
-        else:
-            self.current = -1
+    def prev_char(self, byte_pos):
+        if byte_pos == 0:
+            return -1
+        byte_pos -= 1
+        while utf8_code_length[ord(self.bytes[byte_pos])] == 0:
+            byte_pos -= 1
+        return byte_pos
 
-    def __iter__(self):
-        return self
 
-    def next(self):
-        if self.pos == len(self.ustr):
-            raise StopIteration()
-        self.current = utf8ord_bytes(self.ustr.bytes, self.byte_pos)
-
-        self.byte_pos += utf8_code_length[ord(self.ustr.bytes[self.byte_pos])]
-        self.pos += 1
-
-        return self.current
-
-    def next_count(self, count=1):
-        self.pos += count
-        while count > 1:
-            self.byte_pos += utf8_code_length[ord(self.ustr.bytes[self.byte_pos])]
-            count -= 1
-        self.current = utf8ord_bytes(self.ustr.bytes, self.byte_pos)
-        self.byte_pos += utf8_code_length[ord(self.ustr.bytes[self.byte_pos])]
-
-    def prev_count(self, count=1):
-        self.pos -= count
-        while count > 0:
-            self.byte_pos -= 1
-            while utf8_code_length[ord(self.ustr.bytes[self.byte_pos])] == 0:
-                self.byte_pos -= 1
-            count -= 1
-
-        self.current = utf8ord_bytes(self.ustr.bytes, self.byte_pos)
-
-    def move(self, count):
-        if count > 0:
-            self.next_count(count)
-        elif count < 0:
-            self.prev_count(-count)
-
-    def peek_next(self):
-        return utf8ord_bytes(self.ustr.bytes, self.byte_pos)
-
-class Utf8StrCharIterator(object):
-    def __init__(self, ustr):
-        self.ustr = ustr
-        self.byte_pos = 0
-        self.current = self._get_current()
-
-    def __iter__(self):
-        return self
-
-    def _get_current(self):
-        if self.byte_pos == len(self.ustr.bytes):
-            return None
-        length = utf8_code_length[ord(self.ustr.bytes[self.byte_pos])]
-        return Utf8Str(''.join([self.ustr.bytes[i]
-                        for i in range(self.byte_pos, self.byte_pos + length)]),
-                       length == 1)
-
-    def next(self):
-        #import pdb; pdb.set_trace()
-        ret = self.current
-        if ret is None:
-            raise StopIteration()
-
-        self.byte_pos += utf8_code_length[ord(self.ustr.bytes[self.byte_pos])]
-        self.current = self._get_current()
-        return ret
 
 class Utf8Builder(object):
     @specialize.argtype(1)
@@ -452,9 +467,168 @@ class Utf8Builder(object):
             raise TypeError("Invalid type '%s' for Utf8Str.append_slice" %
                             type(s))
 
+    @specialize.argtype(1)
     def append_multiple_char(self, c, count):
-        self._builder.append_multiple_char(c, count)
+        # TODO: What do I do when I have an int? Is it fine to just loop over
+        #       .append(c) then? Should (can) I force a resize first?
+        if isinstance(c, int):
+            self._builder.append_multiple_char(chr(c), count)
+            return
+
+        if len(c) > 1:
+            import pdb; pdb.set_trace()
+        if isinstance(c, str):
+            self._builder.append_multiple_char(c, count)
+        else:
+            self._builder.append_multiple_char(c.bytes, count)
 
     def build(self):
         return Utf8Str(self._builder.build(), self._is_ascii)
 
+# _______________________________________________
+
+# iter.current is the current (ie the last returned) element
+# iter.pos isthe position of the current element
+# iter.byte_pos isthe byte position of the current element
+# In the before-the-start state, for foward iterators iter.pos and
+# iter.byte_pos are -1. For reverse iterators, they are len(ustr) and
+# len(ustr.bytes) respectively.
+
+class ForwardIterBase(object):
+    def __init__(self, ustr):
+        self.ustr = ustr
+        self.pos = -1
+
+        self._byte_pos = 0
+        self.byte_pos = -1
+        self.current = self._default
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        if self.pos + 1 == len(self.ustr):
+            raise StopIteration()
+
+        self.pos += 1
+        self.byte_pos = self._byte_pos
+
+        self.current = self._value(self.byte_pos)
+
+        self._byte_pos = self.ustr.next_char(self._byte_pos)
+        return self.current
+
+    def peek_next(self):
+        return self._value(self._byte_pos)
+
+    def peek_prev(self):
+        return self._value(self._move_backward(self.byte_pos))
+
+    def move(self, count):
+        if count > 0:
+            self.pos += count
+
+            while count != 1:
+                self._byte_pos = self.ustr.next_char(self._byte_pos)
+                count -= 1
+            self.byte_pos = self._byte_pos
+            self._byte_pos = self.ustr.next_char(self._byte_pos)
+            self.current = self._value(self.byte_pos)
+
+        elif count < 0:
+            self.pos += count
+            while count < -1:
+                self.byte_pos = self.ustr.prev_char(self.byte_pos)
+                count += 1
+            self._byte_pos = self.byte_pos
+            self.byte_pos = self.ustr.prev_char(self.byte_pos)
+            self.current = self._value(self.byte_pos)
+
+    def copy(self):
+        iter = self.__class__(self.ustr)
+        iter.pos = self.pos
+        iter.byte_pos = self.byte_pos
+        iter._byte_pos = self._byte_pos
+        iter.current = self.current
+        return iter
+
+class ReverseIterBase(object):
+    def __init__(self, ustr):
+        self.ustr = ustr
+        self.pos = len(ustr)
+        self.byte_pos = len(ustr.bytes)
+        self.current = self._default
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        if self.pos == 0:
+            raise StopIteration()
+
+        self.pos -= 1
+        self.byte_pos = self.ustr.prev_char(self.byte_pos)
+        self.current = self._value(self.byte_pos)
+        return self.current
+
+    def peek_next(self):
+        return self._value(self.ustr.prev_char(self.byte_pos))
+
+    def peek_prev(self):
+        return self._value(self.ustr.next_char(self.byte_pos))
+
+    def move(self, count):
+        if count > 0:
+            self.pos -= count
+            while count != 0:
+                self.byte_pos = self.ustr.prev_char(self.byte_pos)
+                count -= 1
+            self.current = self._value(self.byte_pos)
+        elif count < 0:
+            self.pos -= count
+            while count != 0:
+                self.byte_pos = self.ustr.next_char(self.byte_pos)
+                count += 1
+            self.current = self._value(self.byte_pos)
+
+    def copy(self):
+        iter = self.__class__(self.ustr)
+        iter.pos = self.pos
+        iter.byte_pos = self.byte_pos
+        iter.current = self.current
+        return iter
+
+def make_iterator(name, base, calc_value, default):
+    class C(base):
+        _default = default
+        _value = calc_value
+    C.__name__ = name
+    return C
+
+def codepoint_calc_value(self, byte_pos):
+    if byte_pos == -1 or byte_pos == len(self.ustr.bytes):
+        return -1
+    return utf8ord_bytes(self.ustr.bytes, byte_pos)
+
+def character_calc_value(self, byte_pos):
+    if byte_pos == -1 or byte_pos == len(self.ustr.bytes):
+        return None
+    length = utf8_code_length[ord(self.ustr.bytes[self.byte_pos])]
+    return Utf8Str(''.join([self.ustr.bytes[i]
+                    for i in range(self.byte_pos, self.byte_pos + length)]),
+                    length == 1)
+
+Utf8CodePointIter = make_iterator("Utf8CodePointIter", ForwardIterBase,
+                                  codepoint_calc_value, -1)
+Utf8CharacterIter = make_iterator("Utf8CharacterIter", ForwardIterBase,
+                                  character_calc_value, None)
+Utf8ReverseCodePointIter = make_iterator(
+    "Utf8ReverseCodePointIter", ReverseIterBase, codepoint_calc_value, -1)
+Utf8ReverseCharacterIter = make_iterator(
+    "Utf8ReverseCharacterIter", ReverseIterBase, character_calc_value, None)
+
+del make_iterator
+del codepoint_calc_value
+del character_calc_value
+del ForwardIterBase
+del ReverseIterBase

@@ -585,13 +585,13 @@ class StringMethods(object):
         by = self._op_val(space, w_sep)
         if len(by) == 0:
             raise oefmt(space.w_ValueError, "empty separator")
-        res = self._split(value, by, maxsplit)
+        res = self._rsplit(value, by, maxsplit)
 
         return self._newlist_unwrapped(space, res)
 
     @staticmethod
     def _rsplit(value, sep=None, maxsplit=-1):
-        return value.split(sep, maxsplit)
+        return rsplit(value, sep, maxsplit)
 
     @unwrap_spec(keepends=bool)
     def descr_splitlines(self, space, keepends=False):
@@ -606,7 +606,8 @@ class StringMethods(object):
             eol = pos
             pos += 1
             # read CRLF as one line break
-            if pos < length and value[eol] == '\r' and value[pos] == '\n':
+            if (pos < length and ORD(value, eol) == ord('\r') and
+                                 ORD(value, pos) == ord('\n')):
                 pos += 1
             if keepends:
                 eol = pos

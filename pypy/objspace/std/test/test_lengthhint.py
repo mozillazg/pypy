@@ -1,3 +1,4 @@
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.module._collections.interp_deque import W_Deque
 from pypy.module.itertools.interp_itertools import W_Repeat
 
@@ -71,7 +72,7 @@ class TestLengthHint:
         self._test_length_hint(self.space.wrap('P' * self.SIZE))
 
     def test_unicode(self):
-        self._test_length_hint(self.space.wrap(u'Y' * self.SIZE))
+        self._test_length_hint(self.space.wrap(Utf8Str('Y' * self.SIZE)))
 
     def test_tuple(self):
         self._test_length_hint(self.space.wrap(tuple(self.ITEMS)))

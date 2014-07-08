@@ -3,6 +3,7 @@ import py
 
 from pypy.objspace.std.dictmultiobject import (W_DictMultiObject,
     BytesDictStrategy, ObjectDictStrategy)
+from pypy.interpreter.utf8 import Utf8Str
 
 
 class TestW_DictObject(object):
@@ -142,8 +143,9 @@ class TestW_DictObject(object):
 
     def test_listview_unicode_dict(self):
         w = self.space.wrap
+        w_u = lambda x: w(Utf8Str.from_unicode(x))
         w_d = self.space.newdict()
-        w_d.initialize_content([(w(u"a"), w(1)), (w(u"b"), w(2))])
+        w_d.initialize_content([(w_u(u"a"), w(1)), (w_u(u"b"), w(2))])
         assert self.space.listview_unicode(w_d) == [u"a", u"b"]
 
     def test_listview_int_dict(self):
@@ -154,7 +156,8 @@ class TestW_DictObject(object):
 
     def test_keys_on_string_unicode_int_dict(self, monkeypatch):
         w = self.space.wrap
-        
+        w_u = lambda x: w(Utf8Str.from_unicode(x))
+
         w_d = self.space.newdict()
         w_d.initialize_content([(w(1), w("a")), (w(2), w("b"))])
         w_l = self.space.call_method(w_d, "keys")
@@ -174,7 +177,7 @@ class TestW_DictObject(object):
         # but we need space.newlist_unicode for it
         monkeypatch.undo() 
         w_d = self.space.newdict()
-        w_d.initialize_content([(w(u"a"), w(1)), (w(u"b"), w(6))])
+        w_d.initialize_content([(w_u(u"a"), w(1)), (w_u(u"b"), w(6))])
         w_l = self.space.call_method(w_d, "keys")
         assert sorted(self.space.listview_unicode(w_l)) == [u"a", u"b"]
 

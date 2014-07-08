@@ -9,6 +9,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import WrappedDefault, interp2app, unwrap_spec
 from pypy.interpreter.signature import Signature
+from pypy.interpreter.utf8_codecs import str_decode_latin_1
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std.stdtypedef import StdTypeDef
 from pypy.objspace.std.stringmethods import StringMethods, _get_buffer
@@ -154,9 +155,11 @@ class W_BytearrayObject(W_Root):
         w_dict = self.getdict(space)
         if w_dict is None:
             w_dict = space.w_None
+        ustr = str_decode_latin_1(''.join(self.data), len(self.data),
+                                  'strict')[0]
         return space.newtuple([
             space.type(self), space.newtuple([
-                space.wrap(''.join(self.data).decode('latin-1')),
+                space.wrap(ustr),
                 space.wrap('latin-1')]),
             w_dict])
 

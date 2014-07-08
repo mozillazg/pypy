@@ -208,7 +208,6 @@ def make_unicode_escape_function(pass_printable=False, unicode_output=False,
 
         pos = 0
         while pos < size:
-            #oc = ORD(s, pos)
             oc = utf8ord(s, pos)
 
             # Escape quotes
@@ -460,10 +459,10 @@ def unicode_encode_utf_8_impl(s, size, errors, errorhandler, allow_surrogates):
     else:
         return s.bytes
 
-    iter.move(-1)
     result = Utf8Builder(len(s.bytes))
     result.append_slice(s.bytes, 0, iter.byte_pos)
 
+    iter.move(-1)
     for oc in iter:
         if oc >= 0xD800 and oc <= 0xDFFF:
             # Check the next character to see if this is a surrogate pair
@@ -741,7 +740,6 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
 
     result = Utf8Builder(size // 2)
 
-    #XXX I think the errors are not correctly handled here
     while pos < size:
         # remaining bytes at the end? (size should be even)
         if len(s) - pos < 2:
@@ -869,7 +867,8 @@ BOM32_REVERSE = intmask(0xFFFE0000)
 
 def str_decode_utf_32_helper(s, size, errors, final=True,
                              errorhandler=None,
-                             byteorder="native"):
+                             byteorder="native",
+                             encodingname='utf32'):
     if errorhandler is None:
         errorhandler = default_unicode_error_decode
     bo = 0
@@ -924,7 +923,7 @@ def str_decode_utf_32_helper(s, size, errors, final=True,
         if len(s) - pos < 4:
             if not final:
                 break
-            r, pos = errorhandler(errors, 'utf32', "truncated data",
+            r, pos = errorhandler(errors, encodingname, "truncated data",
                                   s, pos, len(s))
             result.append(r)
             if len(s) - pos < 4:
@@ -933,7 +932,8 @@ def str_decode_utf_32_helper(s, size, errors, final=True,
         ch = ((ord(s[pos + iorder[3]]) << 24) | (ord(s[pos + iorder[2]]) << 16) |
               (ord(s[pos + iorder[1]]) << 8)  | ord(s[pos + iorder[0]]))
         if ch >= 0x110000:
-            r, pos = errorhandler(errors, 'utf32', "codepoint not in range(0x110000)",
+            r, pos = errorhandler(errors, encodingname,
+                                  "codepoint not in range(0x110000)",
                                   s, pos, len(s))
             result.append(r)
             continue
@@ -1097,7 +1097,7 @@ def str_decode_utf_7(s, size, errors, final=False,
     if errorhandler is None:
         errorhandler = default_unicode_error_decode
     if size == 0:
-        return u'', 0
+        return Utf8Str(''), 0
 
     inShift = False
     base64bits = 0
@@ -1345,9 +1345,12 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
 def str_decode_unicode_internal(s, size, errors, final=False,
                                 errorhandler=None):
     if BYTEORDER == 'little':
-        return str_decode_utf_32_le(s, size, errors, errorhandler)
+        result, length, byteorder = str_decode_utf_32_helper(
+            s, size, errors, final, errorhandler, "little", "unicode_internal")
     else:
-        return str_decode_utf_32_be(s, size, errors, errorhandler)
+        result, length, byteorder = str_decode_utf_32_helper(
+            s, size, errors, final, errorhandler, "internal", "unicode_internal")
+    return result, length
 
 def unicode_encode_unicode_internal(s, size, errors, errorhandler=None):
     if BYTEORDER == 'little':
@@ -1561,6 +1564,7 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
 
 def default_unicode_error_decode(errors, encoding, msg, s,
                                  startingpos, endingpos):
+    """NOT_RPYTHON"""
     if errors == 'replace':
         return _unicode_error_replacement, endingpos
     if errors == 'ignore':
@@ -1570,9 +1574,10 @@ _unicode_error_replacement = Utf8Str.from_unicode(u'\ufffd')
 
 def default_unicode_error_encode(errors, encoding, msg, u,
                                  startingpos, endingpos):
+    """NOT_RPYTHON"""
     if errors == 'replace':
         return '?', None, endingpos
     if errors == 'ignore':
         return '', None, endingpos
-    raise UnicodeEncodeError(encoding, u, startingpos, endingpos, msg)
+    raise UnicodeEncodeError(encoding, unicode(u), startingpos, endingpos, msg)
 

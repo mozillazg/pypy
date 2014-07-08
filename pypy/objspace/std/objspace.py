@@ -162,9 +162,6 @@ class StdObjSpace(ObjSpace):
         if isinstance(x, Utf8Str):
             return wrapunicode(self, x)
 
-        if isinstance(x, unicode):
-            import pdb; pdb.set_trace()
-
         if isinstance(x, float):
             return W_FloatObject(x)
         if isinstance(x, W_Root):

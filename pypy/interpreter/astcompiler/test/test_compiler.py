@@ -919,11 +919,7 @@ class AppTestCompiler:
         import sys
         d = {}
         exec '# -*- coding: utf-8 -*-\n\nu = u"\xf0\x9f\x92\x8b"' in d
-        if sys.maxunicode > 65535 and self.maxunicode > 65535:
-            expected_length = 1
-        else:
-            expected_length = 2
-        assert len(d['u']) == expected_length
+        assert len(d['u']) == 1
 
 
 class TestOptimizations:

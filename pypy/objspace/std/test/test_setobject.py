@@ -13,6 +13,7 @@ from pypy.objspace.std.setobject import W_SetObject, W_FrozensetObject, IntegerS
 from pypy.objspace.std.setobject import _initialize_set
 from pypy.objspace.std.setobject import newset
 from pypy.objspace.std.listobject import W_ListObject
+from pypy.interpreter.utf8 import Utf8Str
 
 letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -86,6 +87,7 @@ class TestW_SetObject:
         from pypy.objspace.std.floatobject import W_FloatObject
 
         w = self.space.wrap
+        w_u = lambda x: w(Utf8Str(x))
         intstr = self.space.fromcache(IntegerSetStrategy)
         tmp_func = intstr.get_storage_from_list
         # test if get_storage_from_list is no longer used
@@ -103,11 +105,13 @@ class TestW_SetObject:
         assert w_set.strategy is self.space.fromcache(BytesSetStrategy)
         assert w_set.strategy.unerase(w_set.sstorage) == {"1":None, "2":None, "3":None}
 
-        w_list = self.space.iter(W_ListObject(self.space, [w(u"1"), w(u"2"), w(u"3")]))
+        w_list = self.space.iter(W_ListObject(self.space, [w_u("1"), w_u("2"), w_u("3")]))
         w_set = W_SetObject(self.space)
         _initialize_set(self.space, w_set, w_list)
         assert w_set.strategy is self.space.fromcache(UnicodeSetStrategy)
-        assert w_set.strategy.unerase(w_set.sstorage) == {u"1":None, u"2":None, u"3":None}
+        assert w_set.strategy.unerase(w_set.sstorage) == {Utf8Str("1") :None,
+                                                          Utf8Str("2") :None,
+                                                          Utf8Str("3") :None}
 
         w_list = W_ListObject(self.space, [w("1"), w(2), w("3")])
         w_set = W_SetObject(self.space)
