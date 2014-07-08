@@ -227,6 +227,9 @@ class StdObjSpace(ObjSpace):
             wrappeditems = [self.wrap(item) for item in x]
             return W_FrozensetObject(self, wrappeditems)
 
+        if isinstance(x, unicode):
+            return W_UnicodeObject(Utf8Str.from_unicode(x))
+
         if x is __builtin__.Ellipsis:
             # '__builtin__.Ellipsis' avoids confusion with special.Ellipsis
             return self.w_Ellipsis
