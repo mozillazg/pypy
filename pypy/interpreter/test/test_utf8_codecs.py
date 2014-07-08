@@ -3,7 +3,7 @@
 import py
 import sys, random
 
-from pypy.interpreter.utf8 import Utf8Str
+from pypy.interpreter.utf8 import Utf8Str, utf8chr
 from pypy.interpreter import utf8_codecs
 
 
@@ -740,12 +740,7 @@ class TestEncoding(UnicodeTests):
         assert encoder(u'u\u1234', 2, 'replace') == 'u?'
 
 
-# TODO: Do I need to actually skip these?
 class TestTranslation(object):
-    def setup_class(cls):
-        if utf8_codecs.MAXUNICODE != sys.maxunicode:
-            py.test.skip("these tests cannot run on the llinterp")
-
     def test_utf8(self):
         from rpython.rtyper.test.test_llinterp import interpret
         def f(x):
@@ -758,16 +753,10 @@ class TestTranslation(object):
         assert res
 
     def test_encode_surrogate_pair(self):
-        u = runicode.UNICHR(0xD800) + runicode.UNICHR(0xDC00)
-        if runicode.MAXUNICODE < 65536:
-            # Narrow unicode build, consider utf16 surrogate pairs
-            assert utf8_codecs.unicode_encode_unicode_escape(
-                u, len(u), True) == r'\U00010000'
-            assert utf8_codecs.unicode_encode_raw_unicode_escape(
-                u, len(u), True) == r'\U00010000'
-        else:
-            # Wide unicode build, don't merge utf16 surrogate pairs
-            assert utf8_codecs.unicode_encode_unicode_escape(
-                u, len(u), True) == r'\ud800\udc00'
-            assert utf8_codecs.unicode_encode_raw_unicode_escape(
-                u, len(u), True) == r'\ud800\udc00'
+        u = utf8chr(0xD800) + utf8chr(0xDC00)
+
+        # Wide unicode build, don't merge utf16 surrogate pairs
+        assert utf8_codecs.unicode_encode_unicode_escape(
+            u, len(u), True) == r'\ud800\udc00'
+        assert utf8_codecs.unicode_encode_raw_unicode_escape(
+            u, len(u), True) == r'\ud800\udc00'
