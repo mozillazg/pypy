@@ -188,7 +188,7 @@ class TestUnicode(BaseApiTest):
         
         w_u = api.PyUnicode_DecodeUTF8(u, 2, None)
         assert space.type(w_u) is space.w_unicode
-        assert space.unwrap(w_u) == 'sp'
+        assert space.unwrap(w_u) == u'sp'
         rffi.free_charp(u)
 
     def test_encode_utf8(self, space, api):
@@ -296,7 +296,7 @@ class TestUnicode(BaseApiTest):
         w_u = space.wrap(u'a')
         assert api.PyUnicode_FromObject(w_u) is w_u
         assert space.unwrap(
-            api.PyUnicode_FromObject(space.wrap('test'))) == 'test'
+            api.PyUnicode_FromObject(space.wrap('test'))) == u'test'
 
     def test_decode(self, space, api):
         b_text = rffi.str2charp('caf\x82xx')
@@ -306,7 +306,7 @@ class TestUnicode(BaseApiTest):
 
         w_text = api.PyUnicode_FromEncodedObject(space.wrap("test"), b_encoding, None)
         assert space.isinstance_w(w_text, space.w_unicode)
-        assert space.unwrap(w_text) == "test"
+        assert space.unwrap(w_text) == u"test"
 
         assert api.PyUnicode_FromEncodedObject(space.wrap(u"test"), b_encoding, None) is None
         assert api.PyErr_Occurred() is space.w_TypeError

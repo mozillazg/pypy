@@ -4,6 +4,7 @@ import py
 import sys
 from pypy.interpreter.utf8 import (
     Utf8Str, Utf8Builder, utf8chr, utf8ord)
+from rpython.rtyper.lltypesystem import rffi
 
 def build_utf8str():
     builder = Utf8Builder()
@@ -193,3 +194,15 @@ def test_rsplit():
     assert s.rsplit(maxsplit=2) == u.rsplit(None, 2)
     assert s.rsplit(' ', 2) == u.rsplit(' ', 2)
     assert s.rsplit('\n') == [s]
+
+def test_copy_to_wcharp():
+    s = build_utf8str()
+    if sys.maxunicode < 0x10000:
+        # The last character requires a surrogate pair on narrow builds and
+        # so won't be converted correctly by rffi.wcharp2unicode
+        s = s[:-1]
+
+    wcharp = s.copy_to_wcharp()
+    u = rffi.wcharp2unicode(wcharp)
+    rffi.free_wcharp(wcharp)
+    assert s == u

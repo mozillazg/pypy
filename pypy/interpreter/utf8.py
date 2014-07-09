@@ -3,6 +3,7 @@ from rpython.rlib.objectmodel import specialize
 from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
 from rpython.rlib.rarithmetic import r_uint
+from rpython.rtyper.lltypesystem import rffi
 
 def utf8chr(value):
     # Like unichr, but returns a Utf8Str object
@@ -73,6 +74,8 @@ class Utf8Str(object):
         self._len = length
 
     def index_of_char(self, char):
+        if char >= len(self):
+            return len(self.bytes)
         byte = 0
         pos = 0
         while pos < char:
@@ -411,6 +414,14 @@ class Utf8Str(object):
         while utf8_code_length[ord(self.bytes[byte_pos])] == 0:
             byte_pos -= 1
         return byte_pos
+
+    def copy_to_wcharp(self):
+        # XXX Temporary solution. This won't work on correctly on systems
+        #     where sizeof(wchar_t) == 2. Also, it copies twice.
+        from pypy.interpreter.utf8_codecs import unicode_encode_unicode_internal
+        from rpython.rlib.runicode import MAXUNICODE
+        bytes = unicode_encode_unicode_internal(self, len(self), 'strict')
+        return rffi.cast(rffi.CWCHARP, rffi.str2charp(bytes))
 
 
 

@@ -1,4 +1,5 @@
 from pypy.interpreter.error import OperationError
+from pypy.interpreter import utf8_codecs
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb
 from pypy.module.cpyext.api import (
@@ -208,7 +209,7 @@ def PyUnicode_AS_UNICODE(space, ref):
         # Copy unicode buffer
         w_unicode = from_ref(space, ref)
         u = space.unicode_w(w_unicode)
-        ref_unicode.c_buffer = rffi.unicode2wcharp(u)
+        ref_unicode.c_buffer = u.copy_to_wcharp()
     return ref_unicode.c_buffer
 
 @cpython_api([PyObject], rffi.CWCHARP)
@@ -552,7 +553,7 @@ def PyUnicode_DecodeUTF16(space, s, size, llerrors, pbyteorder):
     else:
         errors = None
 
-    result, length, byteorder = runicode.str_decode_utf_16_helper(
+    result, length, byteorder = utf8_codecs.str_decode_utf_16_helper(
         string, size, errors,
         True, # final ? false for multiple passes?
         None, # errorhandler
@@ -608,7 +609,7 @@ def PyUnicode_DecodeUTF32(space, s, size, llerrors, pbyteorder):
     else:
         errors = None
 
-    result, length, byteorder = runicode.str_decode_utf_32_helper(
+    result, length, byteorder = utf8_codecs.str_decode_utf_32_helper(
         string, size, errors,
         True, # final ? false for multiple passes?
         None, # errorhandler
@@ -640,7 +641,7 @@ def PyUnicode_EncodeDecimal(space, s, length, output, llerrors):
     else:
         errors = None
     state = space.fromcache(CodecState)
-    result = runicode.unicode_encode_decimal(u, length, errors,
+    result = utf8_codecs.unicode_encode_decimal(u, length, errors,
                                              state.encode_error_handler)
     i = len(result)
     output[i] = '\0'
@@ -691,10 +692,12 @@ def PyUnicode_Tailmatch(space, w_str, w_substr, start, end, direction):
     suffix match), 0 otherwise. Return -1 if an error occurred."""
     str = space.unicode_w(w_str)
     substr = space.unicode_w(w_substr)
+    start = str.index_of_char(start)
+    end = str.index_of_char(end)
     if rffi.cast(lltype.Signed, direction) <= 0:
-        return rstring.startswith(str, substr, start, end)
+        return rstring.startswith(str.bytes, substr.bytes, start, end)
     else:
-        return rstring.endswith(str, substr, start, end)
+        return rstring.endswith(str.bytes, substr.bytes, start, end)
 
 @cpython_api([PyObject, PyObject, Py_ssize_t, Py_ssize_t], Py_ssize_t, error=-1)
 def PyUnicode_Count(space, w_str, w_substr, start, end):

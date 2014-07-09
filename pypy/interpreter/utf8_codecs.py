@@ -1538,8 +1538,8 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
         if rs is not None:
             # py3k only
             errorhandler('strict', 'decimal', msg, s, collstart, collend)
-        for char in ru:
-            ch = ord(char)
+        for i in range(len(ru)):
+            ch = ORD(ru, i)
             if unicodedb.isspace(ch):
                 result.append(' ')
                 continue

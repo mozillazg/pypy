@@ -229,7 +229,7 @@ def xmlcharrefreplace_errors(space, w_exc):
         builder = UnicodeBuilder()
         pos = start
         while pos < end:
-            code = ord(obj[pos])
+            code = utf8ord(obj, pos)
             if (MAXUNICODE == 0xffff and 0xD800 <= code <= 0xDBFF and
                        pos + 1 < end and 0xDC00 <= ord(obj[pos+1]) <= 0xDFFF):
                 code = (code & 0x03FF) << 10
