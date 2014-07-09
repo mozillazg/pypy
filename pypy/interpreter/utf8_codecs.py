@@ -1,7 +1,7 @@
 import sys
 
 from rpython.rlib.rstring import StringBuilder
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import we_are_translated, specialize
 from rpython.rlib.rarithmetic import r_uint, intmask
 from rpython.rlib.unicodedata import unicodedb
 from rpython.rlib.runicode import utf8_code_length
@@ -1564,7 +1564,6 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
 
 def default_unicode_error_decode(errors, encoding, msg, s,
                                  startingpos, endingpos):
-    """NOT_RPYTHON"""
     if errors == 'replace':
         return _unicode_error_replacement, endingpos
     if errors == 'ignore':
@@ -1574,10 +1573,17 @@ _unicode_error_replacement = Utf8Str.from_unicode(u'\ufffd')
 
 def default_unicode_error_encode(errors, encoding, msg, u,
                                  startingpos, endingpos):
-    """NOT_RPYTHON"""
     if errors == 'replace':
         return '?', None, endingpos
     if errors == 'ignore':
         return '', None, endingpos
+
+    if we_are_translated():
+        # The constructor for UnicodeEncodeError requires an actual unicode
+        # object; a Utf8Str isn't good enough. Converting a Utf8Str to a
+        # unicode is (somewhat arbitrarily) not RPython. Since, translated
+        # built-in exceptions don't care about their arguments, only do the
+        # conversion when not translated.
+        raise UnicodeEncodeError()
     raise UnicodeEncodeError(encoding, unicode(u), startingpos, endingpos, msg)
 
