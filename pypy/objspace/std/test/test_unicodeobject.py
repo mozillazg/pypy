@@ -380,7 +380,9 @@ class AppTestUnicodeString:
         assert u'ab'.startswith(u'a', 1) is False
         assert u'ab'.startswith(u'b', 1) is True
         assert u'abc'.startswith(u'bc', 1, 2) is False
-        assert u'abc'.startswith(u'c', -1, 4) is True
+
+        assert u'\xE4bc'.startswith(u'\xE4') is True
+        assert u'\xE4\xE4bc'.startswith(u'\xE4', 1) is True
 
     def test_startswith_tuples(self):
         assert u'hello'.startswith((u'he', u'ha'))
