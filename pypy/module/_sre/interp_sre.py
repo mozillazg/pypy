@@ -5,6 +5,7 @@ from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.typedef import make_weakref_descr
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.utf8 import utf8ord
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib import jit
 
@@ -27,6 +28,15 @@ def w_getcodesize(space):
 # use the same version of unicodedb as the standard objspace
 import pypy.objspace.std.unicodeobject
 set_unicode_db(pypy.objspace.std.unicodeobject.unicodedb)
+
+
+# Monkey patch UnicodeMatchContext so we can use our own unicode type instead
+# of the built-in unicode.
+def _utf8_UnicodeMatchContext_str(self, index):
+    rsre_core.check_nonneg(index)
+    return utf8ord(self._unicodestr, index)
+rsre_core.UnicodeMatchContext.str = _utf8_UnicodeMatchContext_str
+
 
 # ____________________________________________________________
 #
