@@ -2,6 +2,7 @@ from rpython.rlib import libffi
 from rpython.rlib import jit
 from rpython.rlib.rarithmetic import r_uint
 from pypy.interpreter.error import OperationError, oefmt
+from pypy.interpreter.utf8 import utf8chr
 from pypy.module._rawffi.structure import W_StructureInstance, W_Structure
 from pypy.module._rawffi.alt.interp_ffitype import app_types
 
@@ -228,7 +229,7 @@ class ToAppLevelConverter(object):
             return space.wrap(chr(ucharval))
         elif w_ffitype.is_unichar():
             wcharval = self.get_unichar(w_ffitype)
-            return space.wrap(unichr(wcharval))
+            return space.wrap(utf8chr(int(wcharval)))
         elif w_ffitype.is_double():
             return self._float(w_ffitype)
         elif w_ffitype.is_singlefloat():

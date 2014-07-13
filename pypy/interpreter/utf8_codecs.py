@@ -784,6 +784,13 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
             result.append(r)
     return result.build(), pos, bo
 
+def create_surrogate_pair(val):
+    if val >= 0x10000:
+        return (0xD800 | ((val-0x10000) >> 10),
+                0xDC00 | ((val-0x10000) & 0x3FF))
+    else:
+        return val, 0
+
 def unicode_encode_utf_16_helper(s, size, errors,
                                  errorhandler=None,
                                  byteorder='little'):
@@ -803,10 +810,7 @@ def unicode_encode_utf_16_helper(s, size, errors,
     while i < size:
         ch = utf8ord(s, i)
         i += 1
-        ch2 = 0
-        if ch >= 0x10000:
-            ch2 = 0xDC00 | ((ch-0x10000) & 0x3FF)
-            ch  = 0xD800 | ((ch-0x10000) >> 10)
+        ch, ch2 = create_surrogate_pair(ch)
 
         _STORECHAR(result, ch, byteorder)
         if ch2:

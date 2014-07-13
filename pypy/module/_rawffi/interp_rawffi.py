@@ -2,6 +2,9 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError, oefmt, wrap_oserror
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
+from pypy.interpreter.utf8 import (
+    Utf8Str, utf8ord, utf8chr, WCHAR_INTP, wchar_rint)
+from pypy.interpreter.utf8_codecs import create_surrogate_pair
 
 from rpython.rlib.clibffi import *
 from rpython.rtyper.lltypesystem import lltype, rffi
@@ -84,6 +87,7 @@ LL_TYPEMAP = {
 if _MS_WINDOWS:
     LL_TYPEMAP['X'] = rffi.CCHARP
     LL_TYPEMAP['v'] = rffi.SHORT
+
 
 def letter2tp(space, key):
     from pypy.module._rawffi.array import PRIMITIVE_ARRAY_TYPES
@@ -269,6 +273,8 @@ def read_ptr(ptr, ofs, TP):
                 ptr_val = t_array[0]
                 return ptr_val
     else:
+        if T is rffi.CWCHARP:
+            return utf8chr(int(rffi.cast(WCHAR_INTP, ptr)[ofs]))
         return rffi.cast(T, ptr)[ofs]
 read_ptr._annspecialcase_ = 'specialize:arg(2)'
 
@@ -382,14 +388,18 @@ def unwrap_value(space, push_func, add_arg, argdesc, letter, w_arg):
         else:
             ptr = unwrap_truncate_int(rffi.VOIDP, space, w_arg)
         push_func(add_arg, argdesc, ptr)
+        return 1
     elif letter == "d":
         push_func(add_arg, argdesc, space.float_w(w_arg))
+        return 1
     elif letter == "f":
         push_func(add_arg, argdesc, rffi.cast(rffi.FLOAT,
                                               space.float_w(w_arg)))
+        return 1
     elif letter == "g":
         push_func(add_arg, argdesc, rffi.cast(rffi.LONGDOUBLE,
                                               space.float_w(w_arg)))
+        return 1
     elif letter == "c":
         s = space.str_w(w_arg)
         if len(s) != 1:
@@ -397,20 +407,31 @@ def unwrap_value(space, push_func, add_arg, argdesc, letter, w_arg):
                 "Expected string of length one as character"))
         val = s[0]
         push_func(add_arg, argdesc, val)
+        return 1
     elif letter == 'u':
         s = space.unicode_w(w_arg)
         if len(s) != 1:
             raise OperationError(space.w_TypeError, w(
                 "Expected unicode string of length one as wide character"))
-        val = s[0]
-        push_func(add_arg, argdesc, val)
+
+        val = utf8ord(s)
+        if rffi.sizeof(rffi.WCHAR_T) == 2 and val > 0xFFFF:
+            # Utf-16 must be used on systems with a 2 byte wchar_t to
+            # encode codepoints > 0xFFFF
+            c1, c2 = create_surrogate_pair(val)
+            push_func(add_arg, argdesc, wchar_rint(c1))
+            push_func(add_arg, argdesc+1, wchar_rint(c2))
+            return 2
+        else:
+            push_func(add_arg, argdesc, wchar_rint(val))
+            return 1
     else:
         for c in unroll_letters_for_numbers:
             if letter == c:
                 TP = LL_TYPEMAP[c]
                 val = unwrap_truncate_int(TP, space, w_arg)
                 push_func(add_arg, argdesc, val)
-                return
+                return 1
         else:
             raise OperationError(space.w_TypeError,
                                  space.wrap("cannot directly write value"))
@@ -559,9 +580,9 @@ def wcharp2unicode(space, address, maxlength=-1):
         return space.w_None
     wcharp_addr = rffi.cast(rffi.CWCHARP, address)
     if maxlength == -1:
-        s = rffi.wcharp2unicode(wcharp_addr)
+        s = Utf8Str.from_wcharp(wcharp_addr)
     else:
-        s = rffi.wcharp2unicoden(wcharp_addr, maxlength)
+        s = Utf8Str.from_wcharpn(wcharp_addr, maxlength)
     return space.wrap(s)
 
 @unwrap_spec(address=r_uint, maxlength=int)

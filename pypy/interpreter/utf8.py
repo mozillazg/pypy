@@ -4,6 +4,14 @@ from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
 from rpython.rlib.rarithmetic import r_uint
 from rpython.rtyper.lltypesystem import rffi
+from rpython.rtyper.lltypesystem import lltype
+
+wchar_rint = rffi.r_uint
+WCHAR_INTP = rffi.UINTP
+if rffi.sizeof(rffi.WCHAR_T) == 2:
+    wchar_rint = rffi.r_ushort
+    WCHAR_INTP = rffi.USHORTP
+
 
 def utf8chr(value):
     # Like unichr, but returns a Utf8Str object
@@ -415,15 +423,89 @@ class Utf8Str(object):
             byte_pos -= 1
         return byte_pos
 
-    def copy_to_wcharp(self):
-        # XXX Temporary solution. This won't work on correctly on systems
-        #     where sizeof(wchar_t) == 2. Also, it copies twice.
-        from pypy.interpreter.utf8_codecs import unicode_encode_unicode_internal
-        from rpython.rlib.runicode import MAXUNICODE
-        bytes = unicode_encode_unicode_internal(self, len(self), 'strict')
-        return rffi.cast(rffi.CWCHARP, rffi.str2charp(bytes))
+    def copy_to_wcharp(self, track_allocation=True):
+        length = len(self) + 1
+        if rffi.sizeof(rffi.WCHAR_T) == 2:
+            for c in self.codepoint_iter():
+                if c > 0xFFFF:
+                    length += 1
 
+        array = lltype.malloc(WCHAR_INTP.TO, length, flavor='raw',
+                              track_allocation=track_allocation)
+        from pypy.interpreter.utf8_codecs import create_surrogate_pair
 
+        i = 0;
+        for c in self.codepoint_iter():
+            if rffi.sizeof(rffi.WCHAR_T) == 2:
+                c1, c2 = create_surrogate_pair(c)
+                array[i] = wchar_rint(c1)
+                if c2:
+                    i += 1
+                    array[i] = wchar_rint(c2)
+            else:
+                array[i] = wchar_rint(c)
+
+            i += 1
+
+        array[i] = wchar_rint(0)
+        array = rffi.cast(rffi.CWCHARP, array)
+        return array
+
+    @staticmethod
+    def from_wcharp(wcharp):
+        array = rffi.cast(WCHAR_INTP, wcharp)
+        builder = Utf8Builder()
+        i = 0;
+        while True:
+            c = int(array[i])
+            if c == 0:
+                break
+
+            if rffi.sizeof(rffi.WCHAR_T) == 2:
+                if 0xD800 <= c <= 0xDBFF:
+                    i += 1
+                    c2 = int(array[i])
+                    if c2 == 0:
+                        builder.append(c)
+                        break
+                    elif not (0xDC00 <= c2 <= 0xDFFF):
+                        builder.append(c)
+                        c = c2
+                    else:
+                        c = (((c & 0x3FF)<<10) | (c2 & 0x3FF)) + 0x10000;
+
+            builder.append(c)
+            i += 1
+
+        return builder.build()
+
+    @staticmethod
+    def from_wcharpn(wcharp, size):
+        array = rffi.cast(WCHAR_INTP, wcharp)
+        builder = Utf8Builder()
+        i = 0;
+        while i < size:
+            c = int(array[i])
+            if c == 0:
+                break
+
+            if rffi.sizeof(rffi.WCHAR_T) == 2:
+                if i != size - 1 and 0xD800 <= c <= 0xDBFF:
+                    i += 1
+                    c2 = int(array[i])
+                    if c2 == 0:
+                        builder.append(c)
+                        break
+                    elif not (0xDC00 <= c2 <= 0xDFFF):
+                        builder.append(c)
+                        c = c2
+                    else:
+                        c = (((c & 0x3FF)<<10) | (c2 & 0x3FF)) + 0x10000;
+
+            builder.append(c)
+            i += 1
+
+        return builder.build()
 
 class Utf8Builder(object):
     @specialize.argtype(1)

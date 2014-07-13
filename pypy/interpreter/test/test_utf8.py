@@ -51,7 +51,7 @@ def test_iterator():
     if sys.maxunicode < 65536:
         assert l[:3] == [u'A', u'\u010F', u'\u20AC']
     else:
-        assert l == [u'A', u'\u010F', u'\u20AC', u'\U00001F63D']
+        assert l == [u'A', u'\u010F', u'\u20AC', u'\U0001F63D']
 
 def test_reverse_iterator():
     s = build_utf8str()
@@ -197,7 +197,7 @@ def test_rsplit():
 
 def test_copy_to_wcharp():
     s = build_utf8str()
-    if sys.maxunicode < 0x10000:
+    if sys.maxunicode < 0x10000 and rffi.sizeof(rffi.WCHAR_T) == 4:
         # The last character requires a surrogate pair on narrow builds and
         # so won't be converted correctly by rffi.wcharp2unicode
         s = s[:-1]
@@ -206,3 +206,27 @@ def test_copy_to_wcharp():
     u = rffi.wcharp2unicode(wcharp)
     rffi.free_wcharp(wcharp)
     assert s == u
+
+def test_from_wcharp():
+    def check(u):
+        wcharp = rffi.unicode2wcharp(u)
+        s = Utf8Str.from_wcharp(wcharp)
+        rffi.free_wcharp(wcharp)
+        assert s == u
+    check(u'A\u010F\u20AC\U0001F63D')
+    check(u'0xDCC0 ')
+    check(u'0xDCC0')
+
+def test_from_wcharpn():
+    u = u'A\u010F\u20AC\U0001F63D'
+    wcharp = rffi.unicode2wcharp(u)
+    s = Utf8Str.from_wcharpn(wcharp, 3)
+    assert s == u[:3]
+
+    s = Utf8Str.from_wcharpn(wcharp, 4)
+    if sys.maxunicode == 0xFFFF:
+        assert s == u[:4]
+    else:
+        assert s == u
+
+    rffi.free_wcharp(wcharp)

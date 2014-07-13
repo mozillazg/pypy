@@ -42,14 +42,27 @@ class W_Array(W_DataShape):
         if not space.is_none(w_items):
             items_w = space.unpackiterable(w_items)
             iterlength = len(items_w)
-            if iterlength > length:
+
+            double_length_items = 0
+            if rffi.sizeof(rffi.WCHAR_T) == 2:
+                # On systems where sizeof(wchar_t) = 2, the resulting array
+                # needs to be encoded in utf-16. As a result, codepoints larger
+                # than 0xFFFF will occupy two array values
+                for w_i in items_w:
+                    if space.isinstance_w(w_i, space.w_unicode):
+                        u = space.unicode_w(w_i)
+                        if len(u) == 0 and utf8ord(u) > 0xFFFF:
+                            double_length_items += 1
+
+            if iterlength + double_length_items > length:
                 raise OperationError(space.w_ValueError,
                                      space.wrap("too many items for specified"
                                                 " array length"))
-            for num in range(iterlength):
-                w_item = items_w[num]
-                unwrap_value(space, write_ptr, result.ll_buffer, num,
-                             self.itemcode, w_item)
+            i = 0
+            for w_item in items_w:
+                i += unwrap_value(space, write_ptr, result.ll_buffer, i,
+                                  self.itemcode, w_item)
+
         return space.wrap(result)
 
     def descr_repr(self, space):

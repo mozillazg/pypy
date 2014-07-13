@@ -1,6 +1,7 @@
 import sys
 from rpython.rlib.rarithmetic import r_uint, r_singlefloat, r_longlong, r_ulonglong
 from rpython.rlib.libffi import IS_32_BIT
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.module._rawffi.alt.interp_ffitype import app_types, descr_new_pointer
 from pypy.module._rawffi.alt.type_converter import FromAppLevelConverter, ToAppLevelConverter
 
@@ -58,7 +59,8 @@ class TestFromAppLevel(object):
     def test_char(self):
         space = self.space
         self.check(app_types.char, space.wrap('a'), ord('a'))
-        self.check(app_types.unichar, space.wrap(u'\u1234'), 0x1234)
+        self.check(app_types.unichar,
+                   space.wrap(Utf8Str.from_unicode(u'\u1234')), 0x1234)
 
     def test_signed_longlong(self):
         space = self.space
@@ -120,8 +122,11 @@ class TestFromAppLevel(object):
     def test_strings(self):
         # first, try automatic conversion from applevel
         self.check(app_types.char_p, self.space.wrap('foo'), 'foo')
-        self.check(app_types.unichar_p, self.space.wrap(u'foo\u1234'), u'foo\u1234')    
-        self.check(app_types.unichar_p, self.space.wrap('foo'), u'foo')    
+        self.check(app_types.unichar_p,
+                   self.space.wrap(Utf8Str.from_unicode(u'foo\u1234')),
+                   Utf8Str.from_unicode(u'foo\u1234'))
+        self.check(app_types.unichar_p, self.space.wrap('foo'),
+                   Utf8Str.from_unicode(u'foo'))
         # then, try to pass explicit pointers
         self.check(app_types.char_p, self.space.wrap(42), 42)
         self.check(app_types.unichar_p, self.space.wrap(42), 42)        
