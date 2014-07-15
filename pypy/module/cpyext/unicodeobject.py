@@ -1,4 +1,5 @@
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter import utf8_codecs
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb
@@ -71,7 +72,7 @@ def unicode_realize(space, py_obj):
     be modified after this call.
     """
     py_uni = rffi.cast(PyUnicodeObject, py_obj)
-    s = rffi.wcharpsize2unicode(py_uni.c_buffer, py_uni.c_size)
+    s = Utf8Str.from_wcharpsize(py_uni.c_buffer, py_uni.c_size)
     w_obj = space.wrap(s)
     track_reference(space, py_obj, w_obj)
     return w_obj
@@ -330,7 +331,7 @@ def PyUnicode_FromUnicode(space, wchar_p, length):
     Therefore, modification of the resulting Unicode object is only allowed when u
     is NULL."""
     if wchar_p:
-        s = rffi.wcharpsize2unicode(wchar_p, length)
+        s = rffi.Utf8Str.from_wcharpsize(wchar_p, length)
         return make_ref(space, space.wrap(s))
     else:
         return rffi.cast(PyObject, new_empty_unicode(space, length))
@@ -495,7 +496,7 @@ def make_conversion_functions(suffix, encoding):
         """Encode the Py_UNICODE buffer of the given size and return a
         Python string object.  Return NULL if an exception was raised
         by the codec."""
-        w_u = space.wrap(rffi.wcharpsize2unicode(s, size))
+        w_u = space.wrap(Utf8Str.from_wcharpsize(s, size))
         if errors:
             w_errors = space.wrap(rffi.charp2str(errors))
         else:
@@ -635,7 +636,7 @@ def PyUnicode_EncodeDecimal(space, s, length, output, llerrors):
 
     Returns 0 on success, -1 on failure.
     """
-    u = rffi.wcharpsize2unicode(s, length)
+    u = Utf8Str.from_wcharpsize(s, length)
     if llerrors:
         errors = rffi.charp2str(llerrors)
     else:

@@ -230,3 +230,11 @@ def test_from_wcharpn():
         assert s == u
 
     rffi.free_wcharp(wcharp)
+
+def test_from_wcharpsize():
+    u = u'A\u010F\0\u20AC\U0001F63D'
+    wcharp = rffi.unicode2wcharp(u)
+    s = Utf8Str.from_wcharpsize(wcharp, 4)
+    assert s == u[:4]
+
+    rffi.free_wcharp(wcharp)

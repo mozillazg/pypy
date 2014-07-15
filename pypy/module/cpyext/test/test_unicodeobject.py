@@ -1,4 +1,5 @@
 # encoding: iso-8859-15
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.unicodeobject import (
@@ -78,10 +79,11 @@ class AppTestUnicodeObject(AppTestCpythonExtensionBase):
 
 class TestUnicode(BaseApiTest):
     def test_unicodeobject(self, space, api):
-        assert api.PyUnicode_GET_SIZE(space.wrap(u'späm')) == 4
-        assert api.PyUnicode_GetSize(space.wrap(u'späm')) == 4
+        wrap_u = lambda x: space.wrap(Utf8Str.from_unicode(x))
+        assert api.PyUnicode_GET_SIZE(wrap_u(u'späm')) == 4
+        assert api.PyUnicode_GetSize(wrap_u(u'späm')) == 4
         unichar = rffi.sizeof(Py_UNICODE)
-        assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 4 * unichar
+        assert api.PyUnicode_GET_DATA_SIZE(wrap_u(u'späm')) == 4 * unichar
 
         encoding = rffi.charp2str(api.PyUnicode_GetDefaultEncoding())
         w_default_encoding = space.call_function(
@@ -103,7 +105,8 @@ class TestUnicode(BaseApiTest):
         rffi.free_charp(prev_encoding)
 
     def test_AS(self, space, api):
-        word = space.wrap(u'spam')
+        wrap_u = lambda x: space.wrap(Utf8Str.from_unicode(x))
+        word = space.wrap(Utf8Str('spam'))
         array = rffi.cast(rffi.CWCHARP, api.PyUnicode_AS_DATA(word))
         array2 = api.PyUnicode_AS_UNICODE(word)
         array3 = api.PyUnicode_AsUnicode(word)
@@ -115,10 +118,10 @@ class TestUnicode(BaseApiTest):
                     space.wrap('spam'))
 
         utf_8 = rffi.str2charp('utf-8')
-        encoded = api.PyUnicode_AsEncodedString(space.wrap(u'späm'),
+        encoded = api.PyUnicode_AsEncodedString(wrap_u(u'späm'),
                                                 utf_8, None)
         assert space.unwrap(encoded) == 'sp\xc3\xa4m'
-        encoded_obj = api.PyUnicode_AsEncodedObject(space.wrap(u'späm'),
+        encoded_obj = api.PyUnicode_AsEncodedObject(wrap_u(u'späm'),
                                                 utf_8, None)
         assert space.eq_w(encoded, encoded_obj)
         self.raises(space, api, TypeError, api.PyUnicode_AsEncodedString,
@@ -127,7 +130,7 @@ class TestUnicode(BaseApiTest):
                space.wrap(''), None, None)
         ascii = rffi.str2charp('ascii')
         replace = rffi.str2charp('replace')
-        encoded = api.PyUnicode_AsEncodedString(space.wrap(u'späm'),
+        encoded = api.PyUnicode_AsEncodedString(wrap_u(u'späm'),
                                                 ascii, replace)
         assert space.unwrap(encoded) == 'sp?m'
         rffi.free_charp(utf_8)
@@ -135,9 +138,9 @@ class TestUnicode(BaseApiTest):
         rffi.free_charp(ascii)
 
         buf = rffi.unicode2wcharp(u"12345")
-        api.PyUnicode_AsWideChar(space.wrap(u'longword'), buf, 5)
+        api.PyUnicode_AsWideChar(wrap_u(u'longword'), buf, 5)
         assert rffi.wcharp2unicode(buf) == 'longw'
-        api.PyUnicode_AsWideChar(space.wrap(u'a'), buf, 5)
+        api.PyUnicode_AsWideChar(wrap_u(u'a'), buf, 5)
         assert rffi.wcharp2unicode(buf) == 'a'
         rffi.free_wcharp(buf)
 
@@ -175,7 +178,7 @@ class TestUnicode(BaseApiTest):
         lltype.free(ar, flavor='raw')
 
     def test_AsUTF8String(self, space, api):
-        w_u = space.wrap(u'späm')
+        w_u = space.wrap(Utf8Str.from_unicode(u'späm'))
         w_res = api.PyUnicode_AsUTF8String(w_u)
         assert space.type(w_res) is space.w_str
         assert space.unwrap(w_res) == 'sp\xc3\xa4m'
@@ -293,7 +296,7 @@ class TestUnicode(BaseApiTest):
         assert api.Py_UNICODE_TONUMERIC(u'\N{VULGAR FRACTION ONE HALF}') == .5
 
     def test_fromobject(self, space, api):
-        w_u = space.wrap(u'a')
+        w_u = space.wrap(Utf8Str('a'))
         assert api.PyUnicode_FromObject(w_u) is w_u
         assert space.unwrap(
             api.PyUnicode_FromObject(space.wrap('test'))) == u'test'
@@ -308,7 +311,8 @@ class TestUnicode(BaseApiTest):
         assert space.isinstance_w(w_text, space.w_unicode)
         assert space.unwrap(w_text) == u"test"
 
-        assert api.PyUnicode_FromEncodedObject(space.wrap(u"test"), b_encoding, None) is None
+        assert api.PyUnicode_FromEncodedObject(space.wrap(Utf8Str("test")),
+                                               b_encoding, None) is None
         assert api.PyErr_Occurred() is space.w_TypeError
         assert api.PyUnicode_FromEncodedObject(space.wrap(1), b_encoding, None) is None
         assert api.PyErr_Occurred() is space.w_TypeError
@@ -319,7 +323,7 @@ class TestUnicode(BaseApiTest):
 
     def test_decode_null_encoding(self, space, api):
         null_charp = lltype.nullptr(rffi.CCHARP.TO)
-        u_text = u'abcdefg'
+        u_text = Utf8Str('abcdefg')
         s_text = space.str_w(api.PyUnicode_AsEncodedString(space.wrap(u_text), null_charp, null_charp))
         b_text = rffi.str2charp(s_text)
         assert space.unwrap(api.PyUnicode_Decode(b_text, len(s_text), null_charp, null_charp)) == u_text
@@ -347,7 +351,7 @@ class TestUnicode(BaseApiTest):
 
     def test_escape(self, space, api):
         def test(ustr):
-            w_ustr = space.wrap(ustr.decode('Unicode-Escape'))
+            w_ustr = space.wrap(Utf8Str.from_unicode(ustr.decode('Unicode-Escape')))
             result = api.PyUnicode_AsUnicodeEscapeString(w_ustr)
             assert space.eq_w(space.wrap(ustr), result)
 
@@ -357,12 +361,12 @@ class TestUnicode(BaseApiTest):
 
     def test_ascii(self, space, api):
         ustr = "abcdef"
-        w_ustr = space.wrap(ustr.decode("ascii"))
+        w_ustr = space.wrap(Utf8Str.from_unicode(ustr.decode("ascii")))
         result = api.PyUnicode_AsASCIIString(w_ustr)
         
         assert space.eq_w(space.wrap(ustr), result)
 
-        w_ustr = space.wrap(u"abcd\xe9f")
+        w_ustr = space.wrap(Utf8Str.from_unicode(u"abcd\xe9f"))
         self.raises(space, api, UnicodeEncodeError, api.PyUnicode_AsASCIIString, w_ustr)
 
     def test_decode_utf16(self, space, api):
@@ -441,19 +445,19 @@ class TestUnicode(BaseApiTest):
         assert api.PyUnicode_Compare(space.wrap('a'), space.wrap('b')) == -1
 
     def test_copy(self, space, api):
-        w_x = space.wrap(u"abcd\u0660")
+        w_x = space.wrap(Utf8Str.from_unicode(u"abcd\u0660"))
         target_chunk, _ = rffi.alloc_unicodebuffer(space.int_w(space.len(w_x)))
         #lltype.malloc(Py_UNICODE, space.int_w(space.len(w_x)), flavor='raw')
 
         x_chunk = api.PyUnicode_AS_UNICODE(w_x)
         api.Py_UNICODE_COPY(target_chunk, x_chunk, 4)
-        w_y = space.wrap(rffi.wcharpsize2unicode(target_chunk, 4))
+        w_y = space.wrap(Utf8Str.from_wcharpsize(target_chunk, 4))
 
-        assert space.eq_w(w_y, space.wrap(u"abcd"))
+        assert space.eq_w(w_y, space.wrap(Utf8Str("abcd")))
 
         size = api.PyUnicode_GET_SIZE(w_x)
         api.Py_UNICODE_COPY(target_chunk, x_chunk, size)
-        w_y = space.wrap(rffi.wcharpsize2unicode(target_chunk, size))
+        w_y = space.wrap(Utf8Str.from_wcharpsize(target_chunk, size))
 
         assert space.eq_w(w_y, w_x)
 
@@ -463,7 +467,7 @@ class TestUnicode(BaseApiTest):
         s = 'abcdefg'
         data = rffi.str2charp(s)
         w_u = api.PyUnicode_DecodeASCII(data, len(s), lltype.nullptr(rffi.CCHARP.TO))
-        assert space.eq_w(w_u, space.wrap(u"abcdefg"))
+        assert space.eq_w(w_u, space.wrap(Utf8Str("abcdefg")))
         rffi.free_charp(data)
 
         s = 'abcd\xFF'
@@ -489,7 +493,7 @@ class TestUnicode(BaseApiTest):
         s = 'abcdefg'
         data = rffi.str2charp(s)
         w_u = api.PyUnicode_DecodeLatin1(data, len(s), lltype.nullptr(rffi.CCHARP.TO))
-        assert space.eq_w(w_u, space.wrap(u"abcdefg"))
+        assert space.eq_w(w_u, space.wrap(Utf8Str("abcdefg")))
         rffi.free_charp(data)
 
         uni = u'abcdefg'
@@ -499,19 +503,19 @@ class TestUnicode(BaseApiTest):
         rffi.free_wcharp(data)
 
         ustr = "abcdef"
-        w_ustr = space.wrap(ustr.decode("ascii"))
+        w_ustr = space.wrap(Utf8Str.from_unicode(ustr.decode("ascii")))
         result = api.PyUnicode_AsLatin1String(w_ustr)
         assert space.eq_w(space.wrap(ustr), result)
 
     def test_format(self, space, api):
-        w_format = space.wrap(u'hi %s')
-        w_args = space.wrap((u'test',))
+        w_format = space.wrap(Utf8Str('hi %s'))
+        w_args = space.wrap((Utf8Str('test'),))
         w_formated = api.PyUnicode_Format(w_format, w_args)
         assert space.unwrap(w_formated) == space.unwrap(space.mod(w_format, w_args))
 
     def test_join(self, space, api):
-        w_sep = space.wrap(u'<sep>')
-        w_seq = space.wrap([u'a', u'b'])
+        w_sep = space.wrap(Utf8Str('<sep>'))
+        w_seq = space.wrap([Utf8Str('a'), Utf8Str('b')])
         w_joined = api.PyUnicode_Join(w_sep, w_seq)
         assert space.unwrap(w_joined) == u'a<sep>b'
 
@@ -524,16 +528,16 @@ class TestUnicode(BaseApiTest):
         assert space.unwrap(w_char) == u'\uFFFF'
 
     def test_replace(self, space, api):
-        w_str = space.wrap(u"abababab")
-        w_substr = space.wrap(u"a")
-        w_replstr = space.wrap(u"z")
+        w_str = space.wrap(Utf8Str("abababab"))
+        w_substr = space.wrap(Utf8Str("a"))
+        w_replstr = space.wrap(Utf8Str("z"))
         assert u"zbzbabab" == space.unwrap(
             api.PyUnicode_Replace(w_str, w_substr, w_replstr, 2))
         assert u"zbzbzbzb" == space.unwrap(
             api.PyUnicode_Replace(w_str, w_substr, w_replstr, -1))
 
     def test_tailmatch(self, space, api):
-        w_str = space.wrap(u"abcdef")
+        w_str = space.wrap(Utf8Str("abcdef"))
         # prefix match
         assert api.PyUnicode_Tailmatch(w_str, space.wrap("cde"), 2, 9, -1) == 1
         assert api.PyUnicode_Tailmatch(w_str, space.wrap("cde"), 2, 4, -1) == 0 # ends at 'd'
@@ -552,28 +556,30 @@ class TestUnicode(BaseApiTest):
                     2, 10, 1)
 
     def test_count(self, space, api):
-        w_str = space.wrap(u"abcabdab")
-        assert api.PyUnicode_Count(w_str, space.wrap(u"ab"), 0, -1) == 2
-        assert api.PyUnicode_Count(w_str, space.wrap(u"ab"), 0, 2) == 1
-        assert api.PyUnicode_Count(w_str, space.wrap(u"ab"), -5, 30) == 2
+        wrap_u = lambda x: space.wrap(Utf8Str.from_unicode(x))
+        w_str = wrap_u(u"abcabdab")
+        assert api.PyUnicode_Count(w_str, wrap_u(u"ab"), 0, -1) == 2
+        assert api.PyUnicode_Count(w_str, wrap_u(u"ab"), 0, 2) == 1
+        assert api.PyUnicode_Count(w_str, wrap_u(u"ab"), -5, 30) == 2
 
     def test_find(self, space, api):
-        w_str = space.wrap(u"abcabcd")
-        assert api.PyUnicode_Find(w_str, space.wrap(u"c"), 0, 7, 1) == 2
-        assert api.PyUnicode_Find(w_str, space.wrap(u"c"), 3, 7, 1) == 5
-        assert api.PyUnicode_Find(w_str, space.wrap(u"c"), 0, 7, -1) == 5
-        assert api.PyUnicode_Find(w_str, space.wrap(u"c"), 3, 7, -1) == 5
-        assert api.PyUnicode_Find(w_str, space.wrap(u"c"), 0, 4, -1) == 2
-        assert api.PyUnicode_Find(w_str, space.wrap(u"z"), 0, 4, -1) == -1
+        wrap_u = lambda x: space.wrap(Utf8Str.from_unicode(x))
+        w_str = wrap_u("abcabcd")
+        assert api.PyUnicode_Find(w_str, wrap_u(u"c"), 0, 7, 1) == 2
+        assert api.PyUnicode_Find(w_str, wrap_u(u"c"), 3, 7, 1) == 5
+        assert api.PyUnicode_Find(w_str, wrap_u(u"c"), 0, 7, -1) == 5
+        assert api.PyUnicode_Find(w_str, wrap_u(u"c"), 3, 7, -1) == 5
+        assert api.PyUnicode_Find(w_str, wrap_u(u"c"), 0, 4, -1) == 2
+        assert api.PyUnicode_Find(w_str, wrap_u(u"z"), 0, 4, -1) == -1
 
     def test_split(self, space, api):
-        w_str = space.wrap(u"a\nb\nc\nd")
+        w_str = space.wrap(Utf8Str("a\nb\nc\nd"))
         assert "[u'a', u'b', u'c', u'd']" == space.unwrap(space.repr(
                 api.PyUnicode_Split(w_str, space.wrap('\n'), -1)))
         assert r"[u'a', u'b', u'c\nd']" == space.unwrap(space.repr(
                 api.PyUnicode_Split(w_str, space.wrap('\n'), 2)))
         assert r"[u'a', u'b', u'c d']" == space.unwrap(space.repr(
-                api.PyUnicode_Split(space.wrap(u'a\nb  c d'), None, 2)))
+                api.PyUnicode_Split(space.wrap(Utf8Str('a\nb  c d')), None, 2)))
         assert "[u'a', u'b', u'c', u'd']" == space.unwrap(space.repr(
                 api.PyUnicode_Splitlines(w_str, 0)))
         assert r"[u'a\n', u'b\n', u'c\n', u'd']" == space.unwrap(space.repr(

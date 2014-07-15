@@ -735,9 +735,10 @@ class TestEncoding(UnicodeTests):
 
     def test_encode_decimal(self):
         encoder = self.getencoder('decimal')
-        assert encoder(u' 12, 34 ', 8, None) == ' 12, 34 '
-        py.test.raises(UnicodeEncodeError, encoder, u' 12, \u1234 ', 7, None)
-        assert encoder(u'u\u1234', 2, 'replace') == 'u?'
+        assert encoder(Utf8Str(' 12, 34 '), 8, None) == ' 12, 34 '
+        py.test.raises(UnicodeEncodeError, encoder,
+                       Utf8Str.from_unicode(u' 12, \u1234 '), 7, None)
+        assert encoder(Utf8Str.from_unicode(u'u\u1234'), 2, 'replace') == 'u?'
 
 
 class TestTranslation(object):

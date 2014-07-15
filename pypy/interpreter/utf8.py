@@ -507,6 +507,29 @@ class Utf8Str(object):
 
         return builder.build()
 
+    @staticmethod
+    def from_wcharpsize(wcharp, size):
+        array = rffi.cast(WCHAR_INTP, wcharp)
+        builder = Utf8Builder()
+        i = 0;
+        while i < size:
+            c = int(array[i])
+
+            if rffi.sizeof(rffi.WCHAR_T) == 2:
+                if i != size - 1 and 0xD800 <= c <= 0xDBFF:
+                    i += 1
+                    c2 = int(array[i])
+                    if not (0xDC00 <= c2 <= 0xDFFF):
+                        builder.append(c)
+                        c = c2
+                    else:
+                        c = (((c & 0x3FF)<<10) | (c2 & 0x3FF)) + 0x10000;
+
+            builder.append(c)
+            i += 1
+
+        return builder.build()
+
 class Utf8Builder(object):
     @specialize.argtype(1)
     def __init__(self, init_size=None):

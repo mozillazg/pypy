@@ -11,6 +11,7 @@ from pypy.module.cpyext.typeobject import PyTypeObjectPtr
 from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
 from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.utf8 import Utf8Str
 import pypy.module.__builtin__.operation as operation
 
 
@@ -239,7 +240,7 @@ def PyObject_Unicode(space, w_obj):
     the Python expression unicode(o).  Called by the unicode() built-in
     function."""
     if w_obj is None:
-        return space.wrap(u"<NULL>")
+        return space.wrap(Utf8Str("<NULL>"))
     return space.call_function(space.w_unicode, w_obj)
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)

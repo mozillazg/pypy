@@ -1410,7 +1410,7 @@ if sys.platform == 'win32':
             errorhandler('strict', 'mbcs', msg, s, 0, 0)
 
         if size == 0:
-            return u"", 0
+            return Utf8Str(""), 0
 
         if force_ignore or errors == 'ignore':
             flags = 0
@@ -1505,7 +1505,7 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
     result = StringBuilder(size)
     pos = 0
     while pos < size:
-        ch = ord(s[pos])
+        ch = utf8ord(s, pos)
         if unicodedb.isspace(ch):
             result.append(' ')
             pos += 1
@@ -1526,7 +1526,7 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
         collstart = pos
         collend = collstart + 1
         while collend < size:
-            ch = ord(s[collend])
+            ch = utf8ord(s, collend)
             try:
                 if (0 < ch < 256 or
                     unicodedb.isspace(ch) or

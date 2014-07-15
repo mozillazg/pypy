@@ -226,19 +226,13 @@ def xmlcharrefreplace_errors(space, w_exc):
         start = space.int_w(space.getattr(w_exc, space.wrap('start')))
         w_end = space.getattr(w_exc, space.wrap('end'))
         end = space.int_w(w_end)
-        builder = UnicodeBuilder()
+        builder = Utf8Builder()
         pos = start
         while pos < end:
             code = utf8ord(obj, pos)
-            if (MAXUNICODE == 0xffff and 0xD800 <= code <= 0xDBFF and
-                       pos + 1 < end and 0xDC00 <= ord(obj[pos+1]) <= 0xDFFF):
-                code = (code & 0x03FF) << 10
-                code |= ord(obj[pos+1]) & 0x03FF
-                code += 0x10000
-                pos += 1
-            builder.append(u"&#")
-            builder.append(unicode(str(code)))
-            builder.append(u";")
+            builder.append("&#")
+            builder.append(str(code))
+            builder.append(";")
             pos += 1
         return space.newtuple([space.wrap(builder.build()), w_end])
     else:

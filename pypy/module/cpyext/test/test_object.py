@@ -1,5 +1,6 @@
 import py
 
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from rpython.rtyper.lltypesystem import rffi, lltype
@@ -188,7 +189,7 @@ class TestObject(BaseApiTest):
             assert ptr[0] == -1
             assert api.PyObject_Cmp(w("a"), w("a"), ptr) == 0
             assert ptr[0] == 0
-            assert api.PyObject_Cmp(w(u"\xe9"), w("\xe9"), ptr) < 0
+            assert api.PyObject_Cmp(w(Utf8Str.from_unicode(u"\xe9")), w("\xe9"), ptr) < 0
             assert api.PyErr_Occurred()
             api.PyErr_Clear()
 

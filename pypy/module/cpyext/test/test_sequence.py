@@ -1,5 +1,6 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext import sequence
 import py.test
@@ -73,7 +74,7 @@ class TestSequence(BaseApiTest):
 
     def test_contains(self, space, api):
         w_t = space.wrap((1, 'ha'))
-        assert api.PySequence_Contains(w_t, space.wrap(u'ha'))
+        assert api.PySequence_Contains(w_t, space.wrap(Utf8Str.from_unicode('ha')))
         assert not api.PySequence_Contains(w_t, space.wrap(2))
         assert api.PySequence_Contains(space.w_None, space.wrap(2)) == -1
         assert api.PyErr_Occurred()
