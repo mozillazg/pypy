@@ -1,8 +1,9 @@
 import py
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.interpreter.utf8 import Utf8Str
 
-UNICODE_REPLACEMENT_CHARACTER = u'\uFFFD'
+UNICODE_REPLACEMENT_CHARACTER = Utf8Str.from_unicode(u'\uFFFD')
 
 
 class EncodeDecodeError(Exception):
@@ -139,7 +140,7 @@ def decodeex(decodebuf, stringdata, errors="strict", errorcb=None, namecb=None,
                                     errorcb, namecb, stringdata)
         src = pypy_cjk_dec_outbuf(decodebuf)
         length = pypy_cjk_dec_outlen(decodebuf)
-        return rffi.wcharpsize2unicode(src, length)
+        return Utf8Str.from_wcharpsize(src, length)
     #
     finally:
         rffi.free_nonmovingbuffer(stringdata, inbuf)
@@ -164,18 +165,18 @@ def multibytecodec_decerror(decodebuf, e, errors,
     if errors == "strict":
         raise EncodeDecodeError(start, end, reason)
     elif errors == "ignore":
-        replace = u""
+        replace = Utf8Str("")
     elif errors == "replace":
         replace = UNICODE_REPLACEMENT_CHARACTER
     else:
         assert errorcb
         replace, end = errorcb(errors, namecb, reason,
                                stringdata, start, end)
-    inbuf = rffi.get_nonmoving_unicodebuffer(replace)
+    inbuf = replace.copy_to_wcharp()
     try:
         r = pypy_cjk_dec_replace_on_error(decodebuf, inbuf, len(replace), end)
     finally:
-        rffi.free_nonmoving_unicodebuffer(replace, inbuf)
+        rffi.free_wcharp(inbuf)
     if r == MBERR_NOMEMORY:
         raise MemoryError
 
@@ -222,7 +223,7 @@ def encode(codec, unicodedata, errors="strict", errorcb=None, namecb=None):
 def encodeex(encodebuf, unicodedata, errors="strict", errorcb=None,
              namecb=None, ignore_error=0):
     inleft = len(unicodedata)
-    inbuf = rffi.get_nonmoving_unicodebuffer(unicodedata)
+    inbuf = unicodedata.copy_to_wcharp()
     try:
         if pypy_cjk_enc_init(encodebuf, inbuf, inleft) < 0:
             raise MemoryError
@@ -247,7 +248,7 @@ def encodeex(encodebuf, unicodedata, errors="strict", errorcb=None,
         return rffi.charpsize2str(src, length)
     #
     finally:
-        rffi.free_nonmoving_unicodebuffer(unicodedata, inbuf)
+        rffi.free_wcharp(inbuf)
 
 def multibytecodec_encerror(encodebuf, e, errors,
                             errorcb, namecb, unicodedata):
@@ -273,7 +274,7 @@ def multibytecodec_encerror(encodebuf, e, errors,
     elif errors == "replace":
         codec = pypy_cjk_enc_getcodec(encodebuf)
         try:
-            replace = encode(codec, u"?")
+            replace = encode(codec, Utf8Str("?"))
         except EncodeDecodeError:
             replace = "?"
     else:

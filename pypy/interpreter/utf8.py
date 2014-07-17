@@ -2,9 +2,8 @@ from rpython.rlib.rstring import StringBuilder
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
-from rpython.rlib.rarithmetic import r_uint
-from rpython.rtyper.lltypesystem import rffi
-from rpython.rtyper.lltypesystem import lltype
+from rpython.rlib.rarithmetic import r_uint, intmask
+from rpython.rtyper.lltypesystem import rffi, lltype
 
 wchar_rint = rffi.r_uint
 WCHAR_INTP = rffi.UINTP
@@ -464,7 +463,7 @@ class Utf8Str(object):
             if rffi.sizeof(rffi.WCHAR_T) == 2:
                 if 0xD800 <= c <= 0xDBFF:
                     i += 1
-                    c2 = int(array[i])
+                    c2 = intmask(array[i])
                     if c2 == 0:
                         builder.append(c)
                         break
@@ -485,7 +484,7 @@ class Utf8Str(object):
         builder = Utf8Builder()
         i = 0;
         while i < size:
-            c = int(array[i])
+            c = intmask(array[i])
             if c == 0:
                 break
 
@@ -513,7 +512,7 @@ class Utf8Str(object):
         builder = Utf8Builder()
         i = 0;
         while i < size:
-            c = int(array[i])
+            c = intmask(array[i])
 
             if rffi.sizeof(rffi.WCHAR_T) == 2:
                 if i != size - 1 and 0xD800 <= c <= 0xDBFF:

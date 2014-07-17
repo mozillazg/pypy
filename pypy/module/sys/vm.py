@@ -3,11 +3,11 @@ Implementation of interpreter-level 'sys' routines.
 """
 
 from rpython.rlib import jit
-from rpython.rlib.runicode import MAXUNICODE
 
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import unwrap_spec
+from pypy.interpreter.utf8_codecs import MAXUNICODE
 
 
 # ____________________________________________________________

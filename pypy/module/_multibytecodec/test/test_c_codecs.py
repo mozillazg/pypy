@@ -1,4 +1,5 @@
 import py
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.module._multibytecodec.c_codecs import getcodec, codecs
 from pypy.module._multibytecodec.c_codecs import decode, encode
 from pypy.module._multibytecodec.c_codecs import EncodeDecodeError
@@ -95,37 +96,38 @@ def test_decode_hz_replace():
 
 def test_encode_hz():
     c = getcodec("hz")
-    s = encode(c, u'foobar')
+    s = encode(c, Utf8Str('foobar'))
     assert s == 'foobar' and type(s) is str
-    s = encode(c, u'\u5f95\u6cef')
+    s = encode(c, Utf8Str.from_unicode(u'\u5f95\u6cef'))
     assert s == '~{abc}~}'
 
 def test_encode_hz_error():
     # error
     c = getcodec("hz")
-    e = py.test.raises(EncodeDecodeError, encode, c, u'abc\u1234def').value
+    e = py.test.raises(EncodeDecodeError, encode, c,
+                       Utf8Str.from_unicode(u'abc\u1234def')).value
     assert e.start == 3
     assert e.end == 4
     assert e.reason == "illegal multibyte sequence"
 
 def test_encode_hz_ignore():
     c = getcodec("hz")
-    s = encode(c, u'abc\u1234def', 'ignore')
+    s = encode(c, Utf8Str.from_unicode(u'abc\u1234def'), 'ignore')
     assert s == 'abcdef'
 
 def test_encode_hz_replace():
     c = getcodec("hz")
-    s = encode(c, u'abc\u1234def', 'replace')
+    s = encode(c, Utf8Str.from_unicode(u'abc\u1234def'), 'replace')
     assert s == 'abc?def'
 
 def test_encode_jisx0208():
     c = getcodec('iso2022_jp')
-    s = encode(c, u'\u83ca\u5730\u6642\u592b')
+    s = encode(c, Utf8Str.from_unicode(u'\u83ca\u5730\u6642\u592b'))
     assert s == '\x1b$B5FCO;~IW\x1b(B' and type(s) is str
 
 def test_encode_custom_error_handler_bytes():
     c = getcodec("hz")
     def errorhandler(errors, enc, msg, t, startingpos, endingpos):
         return None, '\xc3', endingpos
-    s = encode(c, u'abc\u1234def', 'foo', errorhandler)
+    s = encode(c, Utf8Str.from_unicode(u'abc\u1234def'), 'foo', errorhandler)
     assert '\xc3' in s
