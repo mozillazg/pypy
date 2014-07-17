@@ -172,7 +172,7 @@ def multibytecodec_decerror(decodebuf, e, errors,
         assert errorcb
         replace, end = errorcb(errors, namecb, reason,
                                stringdata, start, end)
-    inbuf = replace.copy_to_wcharp()
+    inbuf = replace.copy_to_new_wcharp()
     try:
         r = pypy_cjk_dec_replace_on_error(decodebuf, inbuf, len(replace), end)
     finally:
@@ -223,7 +223,7 @@ def encode(codec, unicodedata, errors="strict", errorcb=None, namecb=None):
 def encodeex(encodebuf, unicodedata, errors="strict", errorcb=None,
              namecb=None, ignore_error=0):
     inleft = len(unicodedata)
-    inbuf = unicodedata.copy_to_wcharp()
+    inbuf = unicodedata.copy_to_new_wcharp()
     try:
         if pypy_cjk_enc_init(encodebuf, inbuf, inleft) < 0:
             raise MemoryError

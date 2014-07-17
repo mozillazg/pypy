@@ -210,7 +210,7 @@ def PyUnicode_AS_UNICODE(space, ref):
         # Copy unicode buffer
         w_unicode = from_ref(space, ref)
         u = space.unicode_w(w_unicode)
-        ref_unicode.c_buffer = u.copy_to_wcharp()
+        ref_unicode.c_buffer = u.copy_to_new_wcharp()
     return ref_unicode.c_buffer
 
 @cpython_api([PyObject], rffi.CWCHARP)

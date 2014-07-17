@@ -195,17 +195,20 @@ def test_rsplit():
     assert s.rsplit(' ', 2) == u.rsplit(' ', 2)
     assert s.rsplit('\n') == [s]
 
-def test_copy_to_wcharp():
+def test_copy_to_new_wcharp():
     s = build_utf8str()
     if sys.maxunicode < 0x10000 and rffi.sizeof(rffi.WCHAR_T) == 4:
         # The last character requires a surrogate pair on narrow builds and
         # so won't be converted correctly by rffi.wcharp2unicode
         s = s[:-1]
 
-    wcharp = s.copy_to_wcharp()
+    wcharp = s.copy_to_new_wcharp()
     u = rffi.wcharp2unicode(wcharp)
     rffi.free_wcharp(wcharp)
     assert s == u
+
+    with s.scoped_wcharp_copy():
+        assert s == u
 
 def test_from_wcharp():
     def check(u):

@@ -9,7 +9,9 @@ from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib import jit
 from rpython.rtyper.lltypesystem import lltype, rffi
 
+from pypy.interpreter import utf8
 from pypy.interpreter.error import oefmt
+from pypy.interpreter.utf8 import Utf8Str, utf8ord
 from pypy.module._cffi_backend import cdataobj, misc
 from pypy.module._cffi_backend.ctypeobj import W_CType
 
@@ -46,7 +48,7 @@ class W_CTypePrimitive(W_CType):
             raise oefmt(space.w_TypeError,
                         "cannot cast unicode string of length %d to ctype '%s'",
                         len(s), self.name)
-        return ord(s[0])
+        return utf8ord(s)
 
     def cast(self, w_ob):
         from pypy.module._cffi_backend import ctypeptr
@@ -128,12 +130,12 @@ class W_CTypePrimitiveUniChar(W_CTypePrimitiveCharOrUniChar):
     _attrs_ = []
 
     def cast_to_int(self, cdata):
-        unichardata = rffi.cast(rffi.CWCHARP, cdata)
-        return self.space.wrap(ord(unichardata[0]))
+        unichardata = rffi.cast(utf8.WCHAR_INTP, cdata)
+        return self.space.wrap(intmask(unichardata[0]))
 
     def convert_to_object(self, cdata):
         unichardata = rffi.cast(rffi.CWCHARP, cdata)
-        s = rffi.wcharpsize2unicode(unichardata, 1)
+        s = Utf8Str.from_wcharpsize(unichardata, 1)
         return self.space.wrap(s)
 
     def string(self, cdataobj, maxlen):
@@ -154,7 +156,7 @@ class W_CTypePrimitiveUniChar(W_CTypePrimitiveCharOrUniChar):
 
     def convert_from_object(self, cdata, w_ob):
         value = self._convert_to_unichar(w_ob)
-        rffi.cast(rffi.CWCHARP, cdata)[0] = value
+        rffi.cast(utf8.WCHAR_INTP, cdata)[0] = utf8.wchar_rint(utf8ord(value))
 
 
 class W_CTypePrimitiveSigned(W_CTypePrimitive):

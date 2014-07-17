@@ -2,7 +2,8 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef
-from rpython.rlib.rstring import UnicodeBuilder, StringBuilder
+from pypy.interpreter.utf8 import Utf8Builder
+from rpython.rlib.rstring import StringBuilder
 from rpython.tool.sourcetools import func_with_new_name
 
 
@@ -62,4 +63,4 @@ def create_builder(name, strtype, builder_cls):
     return W_Builder
 
 W_StringBuilder = create_builder("StringBuilder", str, StringBuilder)
-W_UnicodeBuilder = create_builder("UnicodeBuilder", unicode, UnicodeBuilder)
+W_UnicodeBuilder = create_builder("UnicodeBuilder", unicode, Utf8Builder)

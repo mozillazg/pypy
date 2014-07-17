@@ -9,6 +9,8 @@ from rpython.rtyper.annlowlevel import llstr, llunicode
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rtyper.lltypesystem.rstr import copy_string_to_raw, copy_unicode_to_raw
 
+from pypy.interpreter import utf8
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter.error import OperationError, oefmt, wrap_oserror
 from pypy.module._cffi_backend import cdataobj, misc, ctypeprim, ctypevoid
 from pypy.module._cffi_backend.ctypeobj import W_CType
@@ -98,10 +100,11 @@ class W_CTypePtrOrArray(W_CType):
                 raise oefmt(space.w_IndexError,
                             "initializer unicode string is too long for '%s' "
                             "(got %d characters)", self.name, n)
-            unichardata = rffi.cast(rffi.CWCHARP, cdata)
-            copy_unicode_to_raw(llunicode(s), unichardata, 0, n)
+
+            unichardata = rffi.cast(utf8.WCHAR_INTP, cdata)
+            s.copy_to_wcharp(unichardata, 0, n)
             if n != self.length:
-                unichardata[n] = u'\x00'
+                unichardata[n] = utf8.wchar_rint(0)
         else:
             raise self._convert_error("list or tuple", w_ob)
 
@@ -131,9 +134,9 @@ class W_CTypePtrOrArray(W_CType):
             if self.is_unichar_ptr_or_array():
                 cdata = rffi.cast(rffi.CWCHARP, cdata)
                 if length < 0:
-                    u = rffi.wcharp2unicode(cdata)
+                    u = Utf8Str.from_wcharp(cdata)
                 else:
-                    u = rffi.wcharp2unicoden(cdata, length)
+                    u = Utf8Str.from_wcharpn(cdata, length)
                 keepalive_until_here(cdataobj)
                 return space.wrap(u)
         #

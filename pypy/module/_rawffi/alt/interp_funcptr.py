@@ -168,7 +168,7 @@ class PushArgumentConverter(FromAppLevelConverter):
         self.argchain.arg(addr)
 
     def handle_unichar_p(self, w_ffitype, w_obj, unicodeval):
-        buf = unicodeval.copy_to_wcharp()
+        buf = unicodeval.copy_to_new_wcharp()
         self.w_func.to_free.append(rffi.cast(rffi.VOIDP, buf))
         addr = rffi.cast(rffi.ULONG, buf)
         self.argchain.arg(addr)
