@@ -1,6 +1,7 @@
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.typedef import (
     TypeDef, generic_new_descr, GetSetProperty)
+from pypy.interpreter.utf8 import Utf8Str, utf8ord
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.module._io.interp_textio import W_TextIOBase, W_IncrementalNewlineDecoder
 from pypy.module._io.interp_iobase import convert_size
@@ -26,8 +27,8 @@ class W_StringIO(W_TextIOBase):
         else:
             newline = space.unicode_w(w_newline)
 
-        if (newline is not None and newline != u"" and newline != u"\n" and
-            newline != u"\r" and newline != u"\r\n"):
+        if (newline is not None and len(newline) != 0 and
+            newline not in (Utf8Str('\n'), Utf8Str('\r\n'), Utf8Str('\r'))):
             # Not using oefmt() because I don't know how to ues it
             # with unicode
             raise OperationError(space.w_ValueError,
@@ -37,9 +38,9 @@ class W_StringIO(W_TextIOBase):
             )
         if newline is not None:
             self.readnl = newline
-        self.readuniversal = newline is None or newline == u""
+        self.readuniversal = newline is None or len(newline) == 0
         self.readtranslate = newline is None
-        if newline and newline[0] == u"\r":
+        if newline and utf8ord(newline) == ord("\r"):
             self.writenl = newline
         if self.readuniversal:
             self.w_decoder = space.call_function(
@@ -112,7 +113,7 @@ class W_StringIO(W_TextIOBase):
         if len(self.buf) > newlength:
             self.buf = self.buf[:newlength]
         if len(self.buf) < newlength:
-            self.buf.extend([u'\0'] * (newlength - len(self.buf)))
+            self.buf.extend([Utf8Str('\0')] * (newlength - len(self.buf)))
 
     def write(self, string):
         length = len(string)
@@ -156,21 +157,21 @@ class W_StringIO(W_TextIOBase):
         start = self.pos
         available = len(self.buf) - start
         if available <= 0:
-            return space.wrap(u"")
+            return space.wrap(Utf8Str(""))
         if size >= 0 and size <= available:
             end = start + size
         else:
             end = len(self.buf)
         assert 0 <= start <= end
         self.pos = end
-        return space.wrap(u''.join(self.buf[start:end]))
+        return space.wrap(Utf8Str('').join(self.buf[start:end]))
 
     def readline_w(self, space, w_limit=None):
         self._check_closed(space)
         limit = convert_size(space, w_limit)
 
         if self.pos >= len(self.buf):
-            return space.wrap(u"")
+            return space.wrap(Utf8Str(""))
 
         start = self.pos
         if limit < 0 or limit > len(self.buf) - self.pos:
@@ -181,7 +182,7 @@ class W_StringIO(W_TextIOBase):
 
         endpos, consumed = self._find_line_ending(
             # XXX: super inefficient, makes a copy of the entire contents.
-            u"".join(self.buf),
+            Utf8Str("").join(self.buf),
             start,
             end
         )
@@ -191,7 +192,7 @@ class W_StringIO(W_TextIOBase):
             endpos = end
         assert endpos >= 0
         self.pos = endpos
-        return space.wrap(u"".join(self.buf[start:endpos]))
+        return space.wrap(Utf8Str("").join(self.buf[start:endpos]))
 
     @unwrap_spec(pos=int, mode=int)
     def seek_w(self, space, pos, mode=0):
@@ -234,7 +235,7 @@ class W_StringIO(W_TextIOBase):
 
     def getvalue_w(self, space):
         self._check_closed(space)
-        return space.wrap(u''.join(self.buf))
+        return space.wrap(Utf8Str('').join(self.buf))
 
     def readable_w(self, space):
         self._check_closed(space)

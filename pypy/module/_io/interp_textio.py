@@ -6,11 +6,11 @@ from pypy.interpreter.gateway import WrappedDefault, interp2app, unwrap_spec
 from pypy.interpreter.typedef import (
     GetSetProperty, TypeDef, generic_new_descr, interp_attrproperty,
     interp_attrproperty_w)
+from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8ord
 from pypy.module._codecs import interp_codecs
 from pypy.module._io.interp_iobase import W_IOBase, convert_size, trap_eintr
 from rpython.rlib.rarithmetic import intmask, r_uint, r_ulonglong
 from rpython.rlib.rbigint import rbigint
-from rpython.rlib.rstring import UnicodeBuilder
 
 
 STATE_ZERO, STATE_OK, STATE_DETACHED = range(3)
@@ -29,17 +29,17 @@ class W_IncrementalNewlineDecoder(W_Root):
 
     def __init__(self, space):
         self.w_newlines_dict = {
-            SEEN_CR: space.wrap(u"\r"),
-            SEEN_LF: space.wrap(u"\n"),
-            SEEN_CRLF: space.wrap(u"\r\n"),
+            SEEN_CR: space.wrap(Utf8Str("\r")),
+            SEEN_LF: space.wrap(Utf8Str("\n")),
+            SEEN_CRLF: space.wrap(Utf8Str("\r\n")),
             SEEN_CR | SEEN_LF: space.newtuple(
-                [space.wrap(u"\r"), space.wrap(u"\n")]),
+                [space.wrap(Utf8Str("\r")), space.wrap(Utf8Str("\n"))]),
             SEEN_CR | SEEN_CRLF: space.newtuple(
-                [space.wrap(u"\r"), space.wrap(u"\r\n")]),
+                [space.wrap(Utf8Str("\r")), space.wrap(Utf8Str("\r\n"))]),
             SEEN_LF | SEEN_CRLF: space.newtuple(
-                [space.wrap(u"\n"), space.wrap(u"\r\n")]),
+                [space.wrap(Utf8Str("\n")), space.wrap(Utf8Str("\r\n"))]),
             SEEN_CR | SEEN_LF | SEEN_CRLF: space.newtuple(
-                [space.wrap(u"\r"), space.wrap(u"\n"), space.wrap(u"\r\n")]),
+                [space.wrap(Utf8Str("\r")), space.wrap(Utf8Str("\n")), space.wrap(Utf8Str("\r\n"))]),
             }
 
     @unwrap_spec(translate=int)
@@ -76,7 +76,7 @@ class W_IncrementalNewlineDecoder(W_Root):
         output = space.unicode_w(w_output)
         output_len = len(output)
         if self.pendingcr and (final or output_len):
-            output = u'\r' + output
+            output = Utf8Str('\r') + output
             self.pendingcr = False
             output_len += 1
 
@@ -85,13 +85,13 @@ class W_IncrementalNewlineDecoder(W_Root):
         if not final and output_len > 0:
             last = output_len - 1
             assert last >= 0
-            if output[last] == u'\r':
+            if output[last] == Utf8Str('\r'):
                 output = output[:last]
                 self.pendingcr = True
                 output_len -= 1
 
         if output_len == 0:
-            return space.wrap(u"")
+            return space.wrap(Utf8Str(""))
 
         # Record which newlines are read and do newline translation if
         # desired, all in one pass.
@@ -101,12 +101,12 @@ class W_IncrementalNewlineDecoder(W_Root):
         # for the \r
         only_lf = False
         if seennl == SEEN_LF or seennl == 0:
-            only_lf = (output.find(u'\r') < 0)
+            only_lf = (output.find(Utf8Str('\r')) < 0)
 
         if only_lf:
             # If not already seen, quick scan for a possible "\n" character.
             # (there's nothing else to be done, even when in translation mode)
-            if seennl == 0 and output.find(u'\n') >= 0:
+            if seennl == 0 and output.find('\n') >= 0:
                 seennl |= SEEN_LF
                 # Finished: we have scanned for newlines, and none of them
                 # need translating.
@@ -115,32 +115,32 @@ class W_IncrementalNewlineDecoder(W_Root):
             while i < output_len:
                 if seennl == SEEN_ALL:
                     break
-                c = output[i]
+                c = utf8ord(output, i)
                 i += 1
-                if c == u'\n':
+                if c == ord('\n'):
                     seennl |= SEEN_LF
-                elif c == u'\r':
-                    if i < output_len and output[i] == u'\n':
+                elif c == ord('\r'):
+                    if i < output_len and utf8ord(output, i) == ord('\n'):
                         seennl |= SEEN_CRLF
                         i += 1
                     else:
                         seennl |= SEEN_CR
-        elif output.find(u'\r') >= 0:
+        elif output.find('\r') >= 0:
             # Translate!
-            builder = UnicodeBuilder(output_len)
+            builder = Utf8Builder(output_len)
             i = 0
             while i < output_len:
-                c = output[i]
+                c = utf8ord(output, i)
                 i += 1
-                if c == u'\n':
+                if c == ord('\n'):
                     seennl |= SEEN_LF
-                elif c == u'\r':
-                    if i < output_len and output[i] == u'\n':
+                elif c == ord('\r'):
+                    if i < output_len and utf8ord(output, i) == ord('\n'):
                         seennl |= SEEN_CRLF
                         i += 1
                     else:
                         seennl |= SEEN_CR
-                    builder.append(u'\n')
+                    builder.append('\n')
                     continue
                 builder.append(c)
             output = builder.build()
@@ -217,7 +217,7 @@ class W_TextIOBase(W_IOBase):
         if self.readtranslate:
 
             # Newlines are already translated, only search for \n
-            pos = line.find(u'\n', start, end)
+            pos = line.find('\n', start, end)
             if pos >= 0:
                 return pos - start + 1, 0
             else:
@@ -229,16 +229,16 @@ class W_TextIOBase(W_IOBase):
             while True:
                 # Fast path for non-control chars. The loop always ends
                 # since the Py_UNICODE storage is NUL-terminated.
-                while i < size and line[start + i] > '\r':
+                while i < size and utf8ord(line, start + i) > ord('\r'):
                     i += 1
                 if i >= size:
                     return -1, size
-                ch = line[start + i]
+                ch = utf8ord(line, start + i)
                 i += 1
-                if ch == '\n':
+                if ch == ord('\n'):
                     return i, 0
-                if ch == '\r':
-                    if line[start + i] == '\n':
+                if ch == ord('\r'):
+                    if utf8ord(line, start + i) == ord('\n'):
                         return i + 1, 0
                     else:
                         return i, 0
@@ -371,7 +371,8 @@ class W_TextIOWrapper(W_TextIOBase):
             newline = None
         else:
             newline = space.unicode_w(w_newline)
-        if newline and newline not in (u'\n', u'\r\n', u'\r'):
+        if newline and newline not in (Utf8Str('\n'), Utf8Str('\r\n'),
+                                       Utf8Str('\r')):
             r = space.str_w(space.repr(w_newline))
             raise OperationError(space.w_ValueError, space.wrap(
                 "illegal newline value: %s" % (r,)))
@@ -382,13 +383,13 @@ class W_TextIOWrapper(W_TextIOBase):
         self.readtranslate = newline is None
         self.readnl = newline
 
-        self.writetranslate = (newline != u'')
+        self.writetranslate = (newline != Utf8Str(''))
         if not self.readuniversal:
             self.writenl = self.readnl
-            if self.writenl == u'\n':
+            if self.writenl == Utf8Str('\n'):
                 self.writenl = None
         elif _WINDOWS:
-            self.writenl = u"\r\n"
+            self.writenl = Utf8Str("\r\n")
         else:
             self.writenl = None
 
@@ -508,7 +509,7 @@ class W_TextIOWrapper(W_TextIOBase):
 
     def _get_decoded_chars(self, size):
         if self.decoded_chars is None:
-            return u""
+            return Utf8Str("")
 
         available = len(self.decoded_chars) - self.decoded_chars_used
         if size < 0 or size > available:
@@ -603,7 +604,7 @@ class W_TextIOWrapper(W_TextIOBase):
             return w_final
 
         remaining = size
-        builder = UnicodeBuilder(size)
+        builder = Utf8Builder(size)
 
         # Keep reading chunks until we have n characters to return
         while True:
@@ -710,12 +711,12 @@ class W_TextIOWrapper(W_TextIOBase):
         if chunks:
             if line:
                 chunks.append(line)
-            line = u''.join(chunks)
+            line = Utf8Str('').join(chunks)
 
         if line:
             return space.wrap(line)
         else:
-            return space.wrap(u'')
+            return space.wrap(Utf8Str(''))
 
     # _____________________________________________________________
     # write methods
@@ -736,15 +737,16 @@ class W_TextIOWrapper(W_TextIOBase):
 
         haslf = False
         if (self.writetranslate and self.writenl) or self.line_buffering:
-            if text.find(u'\n') >= 0:
+            if text.find('\n') >= 0:
                 haslf = True
         if haslf and self.writetranslate and self.writenl:
-            w_text = space.call_method(w_text, "replace", space.wrap(u'\n'),
+            w_text = space.call_method(w_text, "replace",
+                                       space.wrap(Utf8Str('\n')),
                                        space.wrap(self.writenl))
             text = space.unicode_w(w_text)
 
         needflush = False
-        if self.line_buffering and (haslf or text.find(u'\r') >= 0):
+        if self.line_buffering and (haslf or text.find('\r') >= 0):
             needflush = True
 
         # XXX What if we were just reading?
