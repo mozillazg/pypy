@@ -6,11 +6,11 @@ from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, interp_attrproperty
+from pypy.interpreter.utf8 import utf8chr
 from rpython.rlib.rarithmetic import r_longlong
 from rpython.rlib.objectmodel import we_are_translated
-from rpython.rlib.runicode import MAXUNICODE
 from rpython.rlib.unicodedata import unicodedb_5_2_0, unicodedb_3_2_0
-from rpython.rlib.runicode import code_to_unichr, ord_accepts_surrogate
+from rpython.rlib.runicode import ord_accepts_surrogate
 import sys
 
 
@@ -30,47 +30,15 @@ SCount = (LCount*NCount)
 # unicode code point.
 
 
-if MAXUNICODE > 0xFFFF:
-    # Target is wide build
-    def unichr_to_code_w(space, w_unichr):
-        if not space.isinstance_w(w_unichr, space.w_unicode):
+def unichr_to_code_w(space, w_unichr):
+    if not space.isinstance_w(w_unichr, space.w_unicode):
+        raise OperationError(space.w_TypeError, space.wrap(
+            'argument 1 must be unicode'))
+
+        if not space.len_w(w_unichr) == 1:
             raise OperationError(space.w_TypeError, space.wrap(
-                'argument 1 must be unicode'))
-
-        if not we_are_translated() and sys.maxunicode == 0xFFFF:
-            # Host CPython is narrow build, accept surrogates
-            try:
-                return ord_accepts_surrogate(space.unicode_w(w_unichr))
-            except TypeError:
-                raise OperationError(space.w_TypeError, space.wrap(
                     'need a single Unicode character as parameter'))
-        else:
-            if not space.len_w(w_unichr) == 1:
-                raise OperationError(space.w_TypeError, space.wrap(
-                    'need a single Unicode character as parameter'))
-            return space.int_w(space.ord(w_unichr))
-
-else:
-    # Target is narrow build
-    def unichr_to_code_w(space, w_unichr):
-        if not space.isinstance_w(w_unichr, space.w_unicode):
-            raise OperationError(space.w_TypeError, space.wrap(
-                'argument 1 must be unicode'))
-
-        if not we_are_translated() and sys.maxunicode > 0xFFFF:
-            # Host CPython is wide build, forbid surrogates
-            if not space.len_w(w_unichr) == 1:
-                raise OperationError(space.w_TypeError, space.wrap(
-                    'need a single Unicode character as parameter'))
-            return space.int_w(space.ord(w_unichr))
-
-        else:
-            # Accept surrogates
-            try:
-                return ord_accepts_surrogate(space.unicode_w(w_unichr))
-            except TypeError:
-                raise OperationError(space.w_TypeError, space.wrap(
-                    'need a single Unicode character as parameter'))
+    return space.int_w(space.ord(w_unichr))
 
 
 class UCD(W_Root):
@@ -108,7 +76,7 @@ class UCD(W_Root):
         except KeyError:
             msg = space.mod(space.wrap("undefined character name '%s'"), space.wrap(name))
             raise OperationError(space.w_KeyError, msg)
-        return space.wrap(code_to_unichr(code))
+        return space.wrap(utf8chr(code))
 
     def name(self, space, w_unichr, w_default=None):
         code = unichr_to_code_w(space, w_unichr)
