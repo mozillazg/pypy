@@ -727,7 +727,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
     else:
         bo = 1
     if size == 0:
-        return u'', 0, bo
+        return Utf8Str(''), 0, bo
     if bo == -1:
         # force little endian
         ihi = 1
@@ -911,7 +911,7 @@ def str_decode_utf_32_helper(s, size, errors, final=True,
     else:
         bo = 1
     if size == 0:
-        return u'', 0, bo
+        return Utf8Str(''), 0, bo
     if bo == -1:
         # force little endian
         iorder = [0, 1, 2, 3]
@@ -1285,7 +1285,7 @@ def str_decode_charmap(s, size, errors, final=False,
     if errorhandler is None:
         errorhandler = default_unicode_error_decode
     if size == 0:
-        return u'', 0
+        return Utf8Str(''), 0
 
     pos = 0
     result = Utf8Builder(size)
