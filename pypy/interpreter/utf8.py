@@ -7,15 +7,18 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 
 wchar_rint = rffi.r_uint
 WCHAR_INTP = rffi.UINTP
+WCHAR_INT = rffi.UINT
 if rffi.sizeof(rffi.WCHAR_T) == 2:
     wchar_rint = rffi.r_ushort
     WCHAR_INTP = rffi.USHORTP
+    WCHAR_INT = rffi.USHORT
 
 
-def utf8chr(value):
+def utf8chr(value, allow_large_codepoints=False):
     # Like unichr, but returns a Utf8Str object
+    # TODO: Do this without the builder so its faster
     b = Utf8Builder()
-    b.append(value)
+    b.append(value, allow_large_codepoints=allow_large_codepoints)
     return b.build()
 
 def utf8ord_bytes(bytes, start):
@@ -550,7 +553,7 @@ class Utf8Builder(object):
 
 
     @specialize.argtype(1)
-    def append(self, c):
+    def append(self, c, allow_large_codepoints=False):
         if isinstance(c, int) or isinstance(c, r_uint):
             if c < 0x80:
                 self._builder.append(chr(c))
@@ -563,7 +566,7 @@ class Utf8Builder(object):
                 self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))
                 self._builder.append(chr(0x80 | (c & 0x3F)))
                 self._is_ascii = False
-            elif c <= 0x10FFFF:
+            elif c <= 0x10FFFF or allow_large_codepoints:
                 self._builder.append(chr(0xF0 | (c >> 18)))
                 self._builder.append(chr(0x80 | (c >> 12 & 0x3F)))
                 self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))

@@ -3,7 +3,7 @@ from __future__ import with_statement
 from rpython.rlib import jit
 from rpython.rlib.buffer import Buffer
 from rpython.rlib.objectmodel import keepalive_until_here
-from rpython.rlib.rarithmetic import ovfcheck, widen
+from rpython.rlib.rarithmetic import ovfcheck, widen, intmask
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.rtyper.annlowlevel import llstr
 from rpython.rtyper.lltypesystem import lltype, rffi
@@ -15,6 +15,8 @@ from pypy.interpreter.gateway import (
     interp2app, interpindirect2app, unwrap_spec)
 from pypy.interpreter.typedef import (
     GetSetProperty, TypeDef, make_weakref_descr)
+from pypy.interpreter import utf8
+from pypy.interpreter.utf8 import Utf8Str, utf8ord, utf8chr
 from pypy.module._file.interp_file import W_File
 from pypy.objspace.std.floatobject import W_FloatObject
 
@@ -314,7 +316,7 @@ class W_ArrayBase(W_Root):
         """
         if self.typecode == 'u':
             buf = rffi.cast(UNICODE_ARRAY, self._buffer_as_unsigned())
-            return space.wrap(rffi.wcharpsize2unicode(buf, self.len))
+            return space.wrap(Utf8Str.from_wcharpsize(buf, self.len))
         else:
             msg = "tounicode() may only be called on type 'u' arrays"
             raise OperationError(space.w_ValueError, space.wrap(msg))
@@ -570,7 +572,7 @@ class TypeCode(object):
 
 types = {
     'c': TypeCode(lltype.Char,        'str_w', method=''),
-    'u': TypeCode(lltype.UniChar,     'unicode_w', method=''),
+    'u': TypeCode(utf8.WCHAR_INT,     'unicode_w', method=''),
     'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
     'B': TypeCode(rffi.UCHAR,         'int_w', True),
     'h': TypeCode(rffi.SHORT,         'int_w', True, True),
@@ -670,7 +672,10 @@ def make_array(mytype):
                 if len(item) != 1:
                     msg = 'array item must be char'
                     raise OperationError(space.w_TypeError, space.wrap(msg))
-                item = item[0]
+                if mytype.unwrap == 'str_w':
+                    item = item[0]
+                else:
+                    item = utf8ord(item)
                 return rffi.cast(mytype.itemtype, item)
             #
             # "regular" case: it fits in an rpython integer (lltype.Signed)
@@ -791,6 +796,9 @@ def make_array(mytype):
                 item = rffi.cast(lltype.Signed, item)
             elif mytype.typecode == 'f':
                 item = float(item)
+            elif mytype.typecode == 'u':
+                # TODO: Does this nned special handling for 16bit whar_t?
+                item = utf8chr(intmask(item), allow_large_codepoints=True)
             return space.wrap(item)
 
         # interface
