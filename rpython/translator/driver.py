@@ -306,6 +306,15 @@ class TranslationDriver(object):
             return
         else:
             self.log.info("%s..." % title)
+
+        fork_before = self.config.translation.fork_before
+        if fork_before == goal:
+            if fork_before == 'rtype':
+                assert 'rpython.rtyper.rmodel' not in sys.modules, (
+                    "cannot fork because the rtyper has already been imported")
+            from rpython.translator.goal import unixcheckpoint
+            unixcheckpoint.restartable_point(auto='run')
+
         debug_start('translation-task')
         debug_print('starting', goal)
         self.timer.start_event(goal)
@@ -467,9 +476,6 @@ class TranslationDriver(object):
             res = self._do(task.task_name, task)
         return res
 
-    def prereq_checkpt_rtype(self):
-        assert 'rpython.rtyper.rmodel' not in sys.modules, (
-            "cannot fork because the rtyper has already been imported")
 
 if os.name == 'posix':
     def shutil_copy(src, dst):
