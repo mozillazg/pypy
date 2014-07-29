@@ -28,121 +28,6 @@ def taskdef(title, idemp=False, earlycheck=None):
     return decorator
 
 
-class CBackend(object):
-    def __init__(self, driver):
-        self.driver = driver
-
-    def possibly_check_for_boehm(self):
-        if self.config.translation.gc == "boehm":
-            from rpython.rtyper.tool.rffi_platform import configure_boehm
-            from rpython.translator.platform import CompilationError
-            try:
-                configure_boehm(self.translator.platform)
-            except CompilationError, e:
-                i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=hybrid"'
-                raise Exception(str(e) + '\n' + i)
-
-    @taskdef("Creating database for generating c source",
-             earlycheck=possibly_check_for_boehm)
-    def task_database(self):
-        """ Create a database for further backend generation
-        """
-        translator = self.driver.translator
-        if translator.annotator is not None:
-            translator.frozen = True
-
-        if self.driver.standalone:
-            from rpython.translator.c.genc import CStandaloneBuilder
-            cbuilder = CStandaloneBuilder(translator, self.driver.entry_point,
-                                          config=self.driver.config,
-                      secondary_entrypoints=self.driver.secondary_entrypoints)
-        else:
-            from rpython.translator.c.dlltool import CLibraryBuilder
-            functions = [(self.driver.entry_point, None)] + \
-                        self.driver.secondary_entrypoints
-            cbuilder = CLibraryBuilder(translator, self.driver.entry_point,
-                                       functions=functions,
-                                       name='libtesting',
-                                       config=self.driver.config)
-            cbuilder.modulename = self.driver.extmod_name
-        database = cbuilder.build_database()
-        self.driver.log.info("database for generating C source was created")
-        self.cbuilder = self.driver.cbuilder = cbuilder
-        self.database = database
-
-    @taskdef("Generating c source")
-    def task_source(self):
-        """ Create C source files from the generated database
-        """
-        cbuilder = self.cbuilder
-        database = self.database
-        debug_def = self.driver._backend_extra_options.get('c_debug_defines', False)
-        if self.driver.exe_name is not None:
-            exe_name = self.driver.exe_name % self.driver.get_info()
-        else:
-            exe_name = None
-        c_source_filename = cbuilder.generate_source(
-                database, debug_defines=debug_def, exe_name=exe_name)
-        self.driver.log.info("written: %s" % (c_source_filename,))
-        if self.driver.config.translation.dump_static_data_info:
-            from rpython.translator.tool.staticsizereport import dump_static_data_info
-            targetdir = cbuilder.targetdir
-            fname = dump_static_data_info(self.driver.log, database, targetdir)
-            dstname = self.driver.compute_exe_name() + '.staticdata.info'
-            shutil_copy(str(fname), str(dstname))
-            self.driver.log.info('Static data info written to %s' % dstname)
-
-    @taskdef("Compiling c source")
-    def task_compile(self):
-        """ Compile the generated C code using either makefile or
-        translator/platform
-        """
-        cbuilder = self.cbuilder
-        kwds = {}
-        if self.driver.standalone and self.driver.exe_name is not None:
-            kwds['exe_name'] = self.driver.compute_exe_name().basename
-        cbuilder.compile(**kwds)
-
-        if self.driver.standalone:
-            self.driver.c_entryp = cbuilder.executable_name
-            self.create_exe()
-        else:
-            self.driver.c_entryp = cbuilder.get_entry_point()
-        return self.driver.c_entryp
-
-    def create_exe(self):
-        """ Copy the compiled executable into current directory, which is
-            pypy/goal on nightly builds
-        """
-        if self.driver.exe_name is not None:
-            exename = self.driver.c_entryp
-            newexename = self.driver.compute_exe_name()
-            if sys.platform == 'win32':
-                newexename = newexename.new(ext='exe')
-            shutil_copy(str(exename), str(newexename))
-            if self.cbuilder.shared_library_name is not None:
-                soname = self.cbuilder.shared_library_name
-                newsoname = newexename.new(basename=soname.basename)
-                shutil_copy(str(soname), str(newsoname))
-                self.driver.log.info("copied: %s" % (newsoname,))
-                if sys.platform == 'win32':
-                    # the import library is named python27.lib, according
-                    # to the pragma in pyconfig.h
-                    libname = str(newsoname.dirpath().join('python27.lib'))
-                    shutil.copyfile(str(soname.new(ext='lib')), libname)
-                    self.log.info("copied: %s" % (libname,))
-            self.driver.c_entryp = newexename
-        self.driver.log.info('usession directory: %s' % (udir,))
-        self.driver.log.info("created: %s" % (self.driver.c_entryp,))
-
-    def get_tasks(self):
-        yield self.task_database
-        yield self.task_source
-        yield self.task_compile
-
-backends = {'c': CBackend}
-
-
 # TODO:
 # sanity-checks using states
 
@@ -252,7 +137,10 @@ class TranslationDriver(object):
             expose_task(self.task_backendopt)
         expose_task(self.task_stackcheckinsertion)
         expose_task(self.task_transform)
-        for task in backends[self.config.translation.backend](self).get_tasks():
+        if self.config.translation.backend == 'c':
+            from rpython.translator.c.genc import CBackend
+            backend = CBackend(self)
+        for task in backend.get_tasks():
             expose_task(task)
 
     def instrument_result(self, args):
