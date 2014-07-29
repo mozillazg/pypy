@@ -377,7 +377,12 @@ class TranslationDriver(object):
         rtyper = self.translator.buildrtyper()
         rtyper.specialize(dont_simplify_again=True)
 
-    @taskdef("JIT compiler generation")
+    def jit_earlycheck(self):
+        # early check:
+        from rpython.jit.backend.detect_cpu import getcpuclassname
+        getcpuclassname(self.config.translation.jit_backend)
+
+    @taskdef("JIT compiler generation", earlycheck=jit_earlycheck)
     def task_pyjitpl(self):
         """ Generate bytecodes for JIT and flow the JIT helper functions
         """

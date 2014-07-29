@@ -250,11 +250,6 @@ def main():
                      empty_translator=t)
 
         log_config(translateconfig, "translate.py configuration")
-        if config.translation.jit:
-            # early check:
-            from rpython.jit.backend.detect_cpu import getcpuclassname
-            getcpuclassname(config.translation.jit_backend)
-
         log_config(config.translation, "translation configuration")
         pdb_plus_show.expose({'drv': drv, 'prof': prof})
 
