@@ -412,6 +412,9 @@ class AppTestStruct(object):
         assert s.unpack(s.pack(42)) == (42,)
         assert s.unpack_from(memoryview(s.pack(42))) == (42,)
 
+    def test_unicode_outofrange(self):
+        raises(ValueError, "self.struct.unpack('u', '0000')")
+
 
 class AppTestStructBuffer(object):
     spaceconfig = dict(usemodules=['struct', '__pypy__'])

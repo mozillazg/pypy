@@ -274,7 +274,7 @@ def read_ptr(ptr, ofs, TP):
                 return ptr_val
     else:
         if T is rffi.CWCHARP:
-            return utf8chr(int(rffi.cast(WCHAR_INTP, ptr)[ofs]))
+            return utf8chr(intmask(rffi.cast(WCHAR_INTP, ptr)[ofs]))
         return rffi.cast(T, ptr)[ofs]
 read_ptr._annspecialcase_ = 'specialize:arg(2)'
 
@@ -415,6 +415,7 @@ def unwrap_value(space, push_func, add_arg, argdesc, letter, w_arg):
                 "Expected unicode string of length one as wide character"))
 
         val = utf8ord(s)
+        #val = 0
         if rffi.sizeof(rffi.WCHAR_T) == 2 and val > 0xFFFF:
             # Utf-16 must be used on systems with a 2 byte wchar_t to
             # encode codepoints > 0xFFFF

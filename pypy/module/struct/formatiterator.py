@@ -3,9 +3,60 @@ from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rstring import StringBuilder
 from rpython.rlib.rstruct.error import StructError
 from rpython.rlib.rstruct.formatiterator import FormatIterator
+from rpython.rlib.rstruct.standardfmttable import standard_fmttable
+from rpython.rlib.unroll import unrolling_iterable
+from rpython.rtyper.lltypesystem import rffi
 
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, oefmt
+from pypy.interpreter.utf8 import utf8ord, utf8chr
 
+wchar_len = rffi.sizeof(rffi.WCHAR_T)
+
+unroll_pack_unichar_iter = unrolling_iterable(range(wchar_len-1, -1, -1))
+def pack_unichar(fmtiter):
+    value = utf8ord(fmtiter.accept_unicode_arg())
+
+    # TODO: What do I do on a system with sizeof(wchar_t) == 2? I can't
+    #       split it reasonably?
+    #if not min <= value <= max:
+    #    raise StructError(errormsg)
+
+    if fmtiter.bigendian:
+        for i in unroll_pack_unichar_iter:
+            x = (value >> (8*i)) & 0xff
+            fmtiter.result.append(chr(x))
+    else:
+        for i in unroll_pack_unichar_iter:
+            fmtiter.result.append(chr(value & 0xff))
+            value >>= 8
+
+unroll_upack_unichar_iter = unrolling_iterable(range(wchar_len))
+def unpack_unichar(fmtiter):
+    #intvalue = inttype(0)
+    intvalue = 0
+    s = fmtiter.read(wchar_len)
+    idx = 0
+    if fmtiter.bigendian:
+        for i in unroll_upack_unichar_iter:
+            x = ord(s[idx])
+            intvalue <<= 8
+            #intvalue |= inttype(x)
+            intvalue |= x
+            idx += 1
+    else:
+        for i in unroll_upack_unichar_iter:
+            x = ord(s[idx])
+            #intvalue |= inttype(x) << (8*i)
+            intvalue |= x << (8*i)
+            idx += 1
+
+    try:
+        value = utf8chr(intvalue)
+    except ValueError:
+        raise oefmt(fmtiter.space.w_ValueError,
+                    'character U+%s is not in range[U+0000; '
+                     'U+10ffff]', hex(intvalue))
+    fmtiter.appendobj(value)
 
 class PackFormatIterator(FormatIterator):
     def __init__(self, space, args_w, size):
@@ -20,11 +71,15 @@ class PackFormatIterator(FormatIterator):
     @jit.unroll_safe
     @specialize.arg(1)
     def operate(self, fmtdesc, repetitions):
+        pack = fmtdesc.pack
+        if fmtdesc.fmtchar == 'u':
+            pack = pack_unichar
+
         if fmtdesc.needcount:
-            fmtdesc.pack(self, repetitions)
+            pack(self, repetitions)
         else:
             for i in range(repetitions):
-                fmtdesc.pack(self)
+                pack(self)
     _operate_is_specialized_ = True
 
     @jit.unroll_safe
@@ -115,11 +170,15 @@ class UnpackFormatIterator(FormatIterator):
     @jit.unroll_safe
     @specialize.arg(1)
     def operate(self, fmtdesc, repetitions):
+        unpack = fmtdesc.unpack
+        if fmtdesc.fmtchar == 'u':
+            unpack = unpack_unichar
+
         if fmtdesc.needcount:
-            fmtdesc.unpack(self, repetitions)
+            unpack(self, repetitions)
         else:
             for i in range(repetitions):
-                fmtdesc.unpack(self)
+                unpack(self)
     _operate_is_specialized_ = True
 
     def align(self, mask):

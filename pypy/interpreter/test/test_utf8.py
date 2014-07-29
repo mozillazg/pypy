@@ -5,6 +5,7 @@ import sys
 from pypy.interpreter.utf8 import (
     Utf8Str, Utf8Builder, utf8chr, utf8ord)
 from rpython.rtyper.lltypesystem import rffi
+from rpython.rtyper.test.test_llinterp import interpret
 
 def build_utf8str():
     builder = Utf8Builder()
@@ -241,3 +242,25 @@ def test_from_wcharpsize():
     assert s == u[:4]
 
     rffi.free_wcharp(wcharp)
+
+def test_translate_utf8():
+    def f():
+        s = build_utf8str()
+
+        s *= 10
+        s += Utf8Str('one')
+        return len(s)
+    assert interpret(f, []) == f()
+
+    def f():
+        one = Utf8Str("one")
+        two = Utf8Str("one")
+
+        return int(one == two) + int(not (one != two))
+    assert interpret(f, []) == f()
+
+    def f():
+        one = Utf8Str("one")
+
+        return one == None
+    assert interpret(f, []) == f()

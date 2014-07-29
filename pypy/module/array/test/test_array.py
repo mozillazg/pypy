@@ -834,12 +834,6 @@ class BaseArrayTests:
         assert repr(mya('i', [1, 2, 3])) == "array('i', [1, 2, 3])"
         assert repr(mya('i', (1, 2, 3))) == "array('i', [1, 2, 3])"
 
-    def test_unicode_outofrange(self):
-        a = self.array('u', unicode(r'\x01\u263a\x00\ufeff', 'unicode-escape'))
-        b = self.array('u', unicode(r'\x01\u263a\x00\ufeff', 'unicode-escape'))
-        b.byteswap()
-        assert a != b
-
     def test_weakref(self):
         import weakref
         a = self.array('c', 'Hi!')
@@ -1031,6 +1025,11 @@ class AppTestArray(BaseArrayTests):
 
     def test_fresh_array_buffer_str(self):
         assert str(buffer(self.array('i'))) == ''
+
+    def test_unicode_outofrange(self):
+        b = self.array('u', unicode(r'\x01\u263a\x00\ufeff', 'unicode-escape'))
+        b.byteswap()
+        raises(ValueError, "b[0]")
 
 
 class AppTestArrayBuiltinShortcut(AppTestArray):

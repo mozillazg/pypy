@@ -1,9 +1,10 @@
 from rpython.rlib.rstring import StringBuilder
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import we_are_translated, specialize
 from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
-from rpython.rlib.rarithmetic import r_uint, intmask
+from rpython.rlib.rarithmetic import r_uint, intmask, base_int
 from rpython.rtyper.lltypesystem import rffi, lltype
+
 
 wchar_rint = rffi.r_uint
 WCHAR_INTP = rffi.UINTP
@@ -14,11 +15,11 @@ if rffi.sizeof(rffi.WCHAR_T) == 2:
     WCHAR_INT = rffi.USHORT
 
 
-def utf8chr(value, allow_large_codepoints=False):
+def utf8chr(value):
     # Like unichr, but returns a Utf8Str object
     # TODO: Do this without the builder so its faster
     b = Utf8Builder()
-    b.append(value, allow_large_codepoints=allow_large_codepoints)
+    b.append(value)
     return b.build()
 
 def utf8ord_bytes(bytes, start):
@@ -160,22 +161,26 @@ class Utf8Str(object):
         return hash(self.bytes)
 
     def __eq__(self, other):
-        """NOT_RPYTHON"""
         if isinstance(other, Utf8Str):
             return self.bytes == other.bytes
+        if other is None:
+            return False
         if isinstance(other, unicode):
+            assert not we_are_translated()
             return unicode(self.bytes, 'utf8') == other
 
-        return False
+        raise ValueError()
 
     def __ne__(self, other):
-        """NOT_RPYTHON"""
         if isinstance(other, Utf8Str):
             return self.bytes != other.bytes
+        if other is None:
+            return True
         if isinstance(other, unicode):
+            assert not we_are_translated()
             return unicode(self.bytes, 'utf8') != other
 
-        return True
+        raise ValueError()
 
     def __lt__(self, other):
         return self.bytes < other.bytes
@@ -194,7 +199,7 @@ class Utf8Str(object):
         if isinstance(other, Utf8Str):
             return other.bytes in self.bytes
         if isinstance(other, unicode):
-            # TODO: Assert fail if translated
+            assert not we_are_translated()
             return other in unicode(self.bytes, 'utf8')
         if isinstance(other, str):
             return other in self.bytes
@@ -247,6 +252,7 @@ class Utf8Str(object):
         else:
             end = self.index_of_char(end)
 
+        assert start >= 0
         return start, end
 
     @specialize.argtype(2, 3)
@@ -257,10 +263,12 @@ class Utf8Str(object):
 
         if isinstance(other, Utf8Str):
             pos = self.bytes.find(other.bytes, start, end)
-        elif isinstance(other, unicode):
-            pos = unicode(self.bytes, 'utf8').find(other, start, end)
         elif isinstance(other, str):
             pos = self.bytes.find(other, start, end)
+        else:
+            assert isinstance(other, unicode)
+            assert not we_are_translated()
+            pos = unicode(self.bytes, 'utf8').find(other, start, end)
 
         if pos == -1:
             return -1
@@ -469,7 +477,7 @@ class Utf8Str(object):
         builder = Utf8Builder()
         i = 0;
         while True:
-            c = int(array[i])
+            c = intmask(array[i])
             if c == 0:
                 break
 
@@ -504,7 +512,7 @@ class Utf8Str(object):
             if rffi.sizeof(rffi.WCHAR_T) == 2:
                 if i != size - 1 and 0xD800 <= c <= 0xDBFF:
                     i += 1
-                    c2 = int(array[i])
+                    c2 = intmask(array[i])
                     if c2 == 0:
                         builder.append(c)
                         break
@@ -530,7 +538,7 @@ class Utf8Str(object):
             if rffi.sizeof(rffi.WCHAR_T) == 2:
                 if i != size - 1 and 0xD800 <= c <= 0xDBFF:
                     i += 1
-                    c2 = int(array[i])
+                    c2 = intmask(array[i])
                     if not (0xDC00 <= c2 <= 0xDFFF):
                         builder.append(c)
                         c = c2
@@ -553,8 +561,14 @@ class Utf8Builder(object):
 
 
     @specialize.argtype(1)
-    def append(self, c, allow_large_codepoints=False):
-        if isinstance(c, int) or isinstance(c, r_uint):
+    def append(self, c):
+        if isinstance(c, Utf8Str):
+            self._builder.append(c.bytes)
+            if not c._is_ascii:
+                self._is_ascii = False
+        elif isinstance(c, int) or isinstance(c, r_uint):
+            if isinstance(c, base_int):
+                c = intmask(c)
             if c < 0x80:
                 self._builder.append(chr(c))
             elif c < 0x800:
@@ -566,7 +580,7 @@ class Utf8Builder(object):
                 self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))
                 self._builder.append(chr(0x80 | (c & 0x3F)))
                 self._is_ascii = False
-            elif c <= 0x10FFFF or allow_large_codepoints:
+            elif c <= 0x10FFFF:
                 self._builder.append(chr(0xF0 | (c >> 18)))
                 self._builder.append(chr(0x80 | (c >> 12 & 0x3F)))
                 self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))
@@ -574,10 +588,6 @@ class Utf8Builder(object):
                 self._is_ascii = False
             else:
                 raise ValueError("Invalid unicode codepoint > 0x10FFFF.")
-        elif isinstance(c, Utf8Str):
-            self._builder.append(c.bytes)
-            if not c._is_ascii:
-                self._is_ascii = False
         else:
             # TODO: Remove this check?
             if len(c) == 1:
@@ -769,3 +779,4 @@ del codepoint_calc_value
 del character_calc_value
 del ForwardIterBase
 del ReverseIterBase
+

@@ -5,7 +5,7 @@ from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.typedef import make_weakref_descr
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.utf8 import utf8ord
+from pypy.interpreter.utf8 import Utf8Str, utf8ord
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib import jit
 
@@ -286,7 +286,7 @@ class W_SRE_Pattern(W_Root):
                                      space.w_None))
 
         if space.isinstance_w(w_string, space.w_unicode):
-            w_emptystr = space.wrap(u'')
+            w_emptystr = space.wrap(Utf8Str(''))
         else:
             w_emptystr = space.wrap('')
         w_item = space.call_method(w_emptystr, 'join',

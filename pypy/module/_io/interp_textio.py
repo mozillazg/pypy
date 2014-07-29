@@ -383,7 +383,7 @@ class W_TextIOWrapper(W_TextIOBase):
         self.readtranslate = newline is None
         self.readnl = newline
 
-        self.writetranslate = (newline != Utf8Str(''))
+        self.writetranslate = (newline is None or len(newline) == 0)
         if not self.readuniversal:
             self.writenl = self.readnl
             if self.writenl == Utf8Str('\n'):

@@ -797,8 +797,13 @@ def make_array(mytype):
             elif mytype.typecode == 'f':
                 item = float(item)
             elif mytype.typecode == 'u':
-                # TODO: Does this nned special handling for 16bit whar_t?
-                item = utf8chr(intmask(item), allow_large_codepoints=True)
+                # TODO: Does this need special handling for 16bit whar_t?
+                try:
+                    item = utf8chr(intmask(item))
+                except ValueError:
+                    raise oefmt(space.w_ValueError,
+                                'character U+%s is not in range[U+0000; '
+                                'U+10ffff]', hex(intmask(item)))
             return space.wrap(item)
 
         # interface
@@ -998,9 +1003,9 @@ def make_array(mytype):
             start = 0
         # <a performance hack>
         if oldlen == 1:
-            if mytype.unwrap == 'str_w' or mytype.unwrap == 'unicode_w':
+            if mytype.unwrap == 'str_w':
                 zero = not ord(self.buffer[0])
-            elif mytype.unwrap == 'int_w' or mytype.unwrap == 'bigint_w':
+            elif mytype.unwrap in ('int_w', 'bigint_w', 'unicode_w'):
                 zero = not widen(self.buffer[0])
             #elif mytype.unwrap == 'float_w':
             #    value = ...float(self.buffer[0])  xxx handle the case of -0.0

@@ -143,20 +143,20 @@ class W_CTypePrimitiveUniChar(W_CTypePrimitiveCharOrUniChar):
         keepalive_until_here(cdataobj)
         return w_res
 
-    def _convert_to_unichar(self, w_ob):
+    def _convert_to_uni_codepoint(self, w_ob):
         space = self.space
         if space.isinstance_w(w_ob, space.w_unicode):
             s = space.unicode_w(w_ob)
             if len(s) == 1:
-                return s[0]
+                return utf8ord(s, 0)
         if (isinstance(w_ob, cdataobj.W_CData) and
                isinstance(w_ob.ctype, W_CTypePrimitiveUniChar)):
-            return rffi.cast(rffi.CWCHARP, w_ob._cdata)[0]
+            return rffi.cast(utf8.WCHAR_INTP, w_ob._cdata)[0]
         raise self._convert_error("unicode string of length 1", w_ob)
 
     def convert_from_object(self, cdata, w_ob):
-        value = self._convert_to_unichar(w_ob)
-        rffi.cast(utf8.WCHAR_INTP, cdata)[0] = utf8.wchar_rint(utf8ord(value))
+        value = self._convert_to_uni_codepoint(w_ob)
+        rffi.cast(utf8.WCHAR_INTP, cdata)[0] = utf8.wchar_rint(value)
 
 
 class W_CTypePrimitiveSigned(W_CTypePrimitive):

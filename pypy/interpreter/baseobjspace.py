@@ -10,6 +10,7 @@ from rpython.rlib.signature import signature
 from rpython.rlib.rarithmetic import r_uint, SHRT_MIN, SHRT_MAX, \
     INT_MIN, INT_MAX, UINT_MAX
 
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter.executioncontext import (ExecutionContext, ActionFlag,
     UserDelAction)
 from pypy.interpreter.error import OperationError, new_exception_class, oefmt
@@ -1545,7 +1546,10 @@ class ObjSpace(object):
         return self.str_w(w_obj)
 
     def unicode_w(self, w_obj):
-        return w_obj.unicode_w(self)
+        #return w_obj.unicode_w(self)
+        res = w_obj.unicode_w(self)
+        assert isinstance(res, Utf8Str)
+        return res
 
     def unicode0_w(self, w_obj):
         "Like unicode_w, but rejects strings with NUL bytes."

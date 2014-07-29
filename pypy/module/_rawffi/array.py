@@ -5,6 +5,7 @@ to app-level with apropriate interface
 
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, interp_attrproperty
+from pypy.interpreter.utf8 import utf8ord
 from rpython.rtyper.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError
 from pypy.module._rawffi.interp_rawffi import segfault_exception
