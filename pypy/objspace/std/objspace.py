@@ -2,7 +2,7 @@ import __builtin__
 import types
 from pypy.interpreter import special
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
-from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
                                transparent, callmethod)
@@ -24,6 +24,7 @@ from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.iterobject import W_AbstractSeqIterObject
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.longobject import W_LongObject, newlong
+from pypy.objspace.std.bufferobject import W_Buffer
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.objspace.std.iterobject import W_SeqIterObject
@@ -34,7 +35,7 @@ from pypy.objspace.std.tupleobject import W_AbstractTupleObject
 from pypy.objspace.std.typeobject import W_TypeObject
 
 # types
-from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.intobject import wrapint
 from pypy.objspace.std.unicodeobject import wrapunicode
 
 class StdObjSpace(ObjSpace):
@@ -58,8 +59,8 @@ class StdObjSpace(ObjSpace):
         self.w_None = W_NoneObject.w_None
         self.w_False = W_BoolObject.w_False
         self.w_True = W_BoolObject.w_True
-        self.w_NotImplemented = self.wrap(special.NotImplemented(self))
-        self.w_Ellipsis = self.wrap(special.Ellipsis(self))
+        self.w_NotImplemented = self.wrap(special.NotImplemented())
+        self.w_Ellipsis = self.wrap(special.Ellipsis())
 
         # types
         self.builtin_types = {}
@@ -292,8 +293,8 @@ class StdObjSpace(ObjSpace):
         assert not list_w or sizehint == -1
         return W_ListObject(self, list_w, sizehint)
 
-    def newlist_str(self, list_s):
-        return W_ListObject.newlist_str(self, list_s)
+    def newlist_bytes(self, list_s):
+        return W_ListObject.newlist_bytes(self, list_s)
 
     def newlist_unicode(self, list_u):
         return W_ListObject.newlist_unicode(self, list_u)
@@ -305,7 +306,6 @@ class StdObjSpace(ObjSpace):
                 strdict=strdict, kwargs=kwargs)
 
     def newset(self):
-        from pypy.objspace.std.setobject import newset
         return W_SetObject(self, None)
 
     def newslice(self, w_start, w_end, w_step):
@@ -313,6 +313,9 @@ class StdObjSpace(ObjSpace):
 
     def newseqiter(self, w_obj):
         return W_SeqIterObject(w_obj)
+
+    def newbuffer(self, w_obj):
+        return W_Buffer(w_obj)
 
     def type(self, w_obj):
         jit.promote(w_obj.__class__)
@@ -367,9 +370,9 @@ class StdObjSpace(ObjSpace):
             assert isinstance(instance, cls)
             instance.user_setup(self, w_subtype)
         else:
-            raise operationerrfmt(self.w_TypeError,
-                                  "%N.__new__(%N): only for the type %N",
-                                  w_type, w_subtype, w_type)
+            raise oefmt(self.w_TypeError,
+                        "%N.__new__(%N): only for the type %N",
+                        w_type, w_subtype, w_type)
         return instance
     allocate_instance._annspecialcase_ = "specialize:arg(1)"
 
@@ -418,32 +421,37 @@ class StdObjSpace(ObjSpace):
         assert expected_length >= 0
         return self.fixedview(w_obj, expected_length, unroll=True)
 
-    def listview(self, w_obj, expected_length=-1):
+    def listview_no_unpack(self, w_obj):
         if type(w_obj) is W_ListObject:
-            t = w_obj.getitems()
+            return w_obj.getitems()
         elif isinstance(w_obj, W_AbstractTupleObject) and self._uses_tuple_iter(w_obj):
-            t = w_obj.getitems_copy()
+            return w_obj.getitems_copy()
         elif isinstance(w_obj, W_ListObject) and self._uses_list_iter(w_obj):
-            t = w_obj.getitems()
+            return w_obj.getitems()
         else:
+            return None
+
+    def listview(self, w_obj, expected_length=-1):
+        t = self.listview_no_unpack(w_obj)
+        if t is None:
             return ObjSpace.unpackiterable(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
             raise self._wrap_expected_length(expected_length, len(t))
         return t
 
-    def listview_str(self, w_obj):
+    def listview_bytes(self, w_obj):
         # note: uses exact type checking for objects with strategies,
         # and isinstance() for others.  See test_listobject.test_uses_custom...
         if type(w_obj) is W_ListObject:
-            return w_obj.getitems_str()
+            return w_obj.getitems_bytes()
         if type(w_obj) is W_DictMultiObject:
-            return w_obj.listview_str()
+            return w_obj.listview_bytes()
         if type(w_obj) is W_SetObject or type(w_obj) is W_FrozensetObject:
-            return w_obj.listview_str()
+            return w_obj.listview_bytes()
         if isinstance(w_obj, W_BytesObject) and self._uses_no_iter(w_obj):
-            return w_obj.listview_str()
+            return w_obj.listview_bytes()
         if isinstance(w_obj, W_ListObject) and self._uses_list_iter(w_obj):
-            return w_obj.getitems_str()
+            return w_obj.getitems_bytes()
         return None
 
     def listview_unicode(self, w_obj):
@@ -516,7 +524,7 @@ class StdObjSpace(ObjSpace):
         # a shortcut for performance
         # NOTE! this method is typically overridden by builtinshortcut.py.
         if type(w_obj) is W_BoolObject:
-            return w_obj.boolval
+            return bool(w_obj.intval)
         return self._DescrOperation_is_true(w_obj)
 
     def getattr(self, w_obj, w_name):

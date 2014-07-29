@@ -50,7 +50,7 @@ def parse_ulonglong(a):
                                            unsigned_ffffffff)
 
 def compile(fn, argtypes, view=False, gcpolicy="none", backendopt=True,
-            annotatorpolicy=None, thread=False):
+            annotatorpolicy=None, thread=False, **kwds):
     argtypes_unroll = unrolling_iterable(enumerate(argtypes))
 
     for argtype in argtypes:

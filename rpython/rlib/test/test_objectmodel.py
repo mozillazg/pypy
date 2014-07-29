@@ -177,10 +177,13 @@ def test_compute_identity_hash():
     assert h == getattr(foo, '__precomputed_identity_hash')
 
 def test_compute_unique_id():
+    from rpython.rlib.rarithmetic import intmask
     class Foo(object):
         pass
     foo = Foo()
-    assert compute_unique_id(foo) == id(foo)
+    x = compute_unique_id(foo)
+    assert type(x) is int
+    assert x == intmask(id(foo))
 
 def test_current_object_addr_as_int():
     from rpython.rlib.rarithmetic import intmask
@@ -317,6 +320,14 @@ class TestObjectModel(BaseRtypingTest):
             return d[2]
         res = self.interpret(g, [3])
         assert res == 77
+
+    def test_prepare_dict_update(self):
+        def g(n):
+            d = {}
+            prepare_dict_update(d, n)
+            return 42
+        res = self.interpret(g, [3])
+        assert res == 42     # "did not crash"
 
     def test_compute_hash(self):
         class Foo(object):
@@ -621,3 +632,14 @@ def test_import_from_mixin():
     class B(A):
         import_from_mixin(M)
     assert B().foo == 42
+
+    d = dict(__name__='foo')
+    exec """class M(object):
+                @staticmethod
+                def f(): pass
+    """ in d
+    M = d['M']
+    class A(object):
+        import_from_mixin(M)
+    assert A.f is not M.f
+    assert A.f.__module__ != M.f.__module__

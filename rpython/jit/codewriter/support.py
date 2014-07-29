@@ -1,6 +1,7 @@
 import sys
 
 from rpython.annotator import model as annmodel
+from rpython.rtyper.llannotation import lltype_to_annotation
 from rpython.annotator.policy import AnnotatorPolicy
 from rpython.flowspace.model import Variable, Constant
 from rpython.jit.metainterp.typesystem import deref
@@ -32,7 +33,7 @@ def _annotation(a, x):
     if T == lltype.Ptr(ll_rstr.STR):
         t = str
     else:
-        t = annmodel.lltype_to_annotation(T)
+        t = lltype_to_annotation(T)
     return a.typeannotation(t)
 
 def annotate(func, values, inline=None, backendoptimize=True,
@@ -506,18 +507,7 @@ class LLtypeHelpers:
     _ll_1_dict_values.need_result_type = True
     _ll_1_dict_items .need_result_type = True
 
-    _dictnext_keys   = staticmethod(ll_rdict.ll_dictnext_group['keys'])
-    _dictnext_values = staticmethod(ll_rdict.ll_dictnext_group['values'])
-    _dictnext_items  = staticmethod(ll_rdict.ll_dictnext_group['items'])
-
-    def _ll_1_dictiter_nextkeys(iter):
-        return LLtypeHelpers._dictnext_keys(None, iter)
-    def _ll_1_dictiter_nextvalues(iter):
-        return LLtypeHelpers._dictnext_values(None, iter)
-    def _ll_1_dictiter_nextitems(RES, iter):
-        return LLtypeHelpers._dictnext_items(lltype.Ptr(RES), iter)
-    _ll_1_dictiter_nextitems.need_result_type = True
-
+    _ll_1_dictiter_next = ll_rdict._ll_dictnext
     _ll_1_dict_resize = ll_rdict.ll_dict_resize
 
     # ---------- ordered dict ----------
@@ -533,18 +523,7 @@ class LLtypeHelpers:
     _ll_1_odict_values.need_result_type = True
     _ll_1_odict_items .need_result_type = True
 
-    _odictnext_keys   = staticmethod(rordereddict.ll_dictnext_group['keys'])
-    _odictnext_values = staticmethod(rordereddict.ll_dictnext_group['values'])
-    _odictnext_items  = staticmethod(rordereddict.ll_dictnext_group['items'])
-
-    def _ll_1_odictiter_nextkeys(iter):
-        return LLtypeHelpers._odictnext_keys(None, iter)
-    def _ll_1_odictiter_nextvalues(iter):
-        return LLtypeHelpers._odictnext_values(None, iter)
-    def _ll_1_odictiter_nextitems(RES, iter):
-        return LLtypeHelpers._odictnext_items(lltype.Ptr(RES), iter)
-    _ll_1_odictiter_nextitems.need_result_type = True
-
+    _ll_1_odictiter_next = rordereddict._ll_dictnext
     _ll_1_odict_resize = rordereddict.ll_dict_resize
 
     # ---------- strings and unicode ----------
@@ -711,6 +690,11 @@ class LLtypeHelpers:
     build_ll_1_raw_free_no_track_allocation = (
         build_raw_free_builder(track_allocation=False))
 
+    def build_ll_0_threadlocalref_getter(opaqueid):
+        def _ll_0_threadlocalref_getter():
+            return llop.threadlocalref_get(rclass.OBJECTPTR, opaqueid)
+        return _ll_0_threadlocalref_getter
+
     def _ll_1_weakref_create(obj):
         return llop.weakref_create(llmemory.WeakRefPtr, obj)
 
@@ -814,12 +798,12 @@ def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res,
         return rtyper._builtin_func_for_spec_cache[key]
     except (KeyError, AttributeError):
         pass
-    args_s = [annmodel.lltype_to_annotation(v) for v in ll_args]
+    args_s = [lltype_to_annotation(v) for v in ll_args]
     if '.' not in oopspec_name:    # 'newxxx' operations
         LIST_OR_DICT = ll_res
     else:
         LIST_OR_DICT = ll_args[0]
-    s_result = annmodel.lltype_to_annotation(ll_res)
+    s_result = lltype_to_annotation(ll_res)
     impl = setup_extra_builtin(rtyper, oopspec_name, len(args_s), extra)
     if getattr(impl, 'need_result_type', False):
         bk = rtyper.annotator.bookkeeper

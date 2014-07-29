@@ -10,8 +10,14 @@ PyPy supports only being translated as a 32bit program, even on
 64bit Windows.  See at the end of this page for what is missing
 for a full 64bit translation.
 
-To build pypy-c you need a C compiler.  Microsoft Visual Studio is
-preferred, but can also use the mingw32 port of gcc.
+To build pypy-c you need a working python environment, and a C compiler.
+It is possible to translate with a CPython 2.6 or later, but this is not
+the preferred way, because it will take a lot longer to run – depending
+on your architecture, between two and three times as long. So head to 
+`our downloads`_ and get the latest stable version.
+
+Microsoft Visual Studio is preferred as a compiler, but there are reports 
+of success with the mingw32 port of gcc.
 
 
 Translating PyPy with Visual Studio
@@ -34,9 +40,19 @@ Multi-threaded DLL (/MD) runtime environment.
 **Note:** PyPy is currently not supported for 64 bit Windows, and translation
 will fail in this case.
 
-The compiler is all you need to build pypy-c, but it will miss some
+Python and a C compiler are all you need to build pypy, but it will miss some
 modules that relies on third-party libraries.  See below how to get
 and build them.
+
+Please see the `non-windows instructions`_ for more information, especially note
+that translation is RAM-hungry. A standard translation requires around 4GB, so
+special preparations are necessary, or you may want to use the method in the
+notes of the `build instructions`_ to reduce memory usage at the price of a
+slower translation::
+
+    set PYPY_GC_MAX_DELTA=200MB
+    pypy --jit loop_longevity=300 ../../rpython/bin/rpython -Ojit targetpypystandalone
+    set PYPY_GC_MAX_DELTA=
 
 Preping Windows for the Large Build
 -----------------------------------
@@ -52,9 +68,10 @@ Windows 64bit.
 
 Then you need to execute::
 
-    editbin /largeaddressaware pypy.exe
+    editbin /largeaddressaware translator.exe
 
-on the pypy.exe file you compiled.
+where ``translator.exe`` is the pypy.exe or cpython.exe you will use to 
+translate with. 
 
 Installing external packages
 ----------------------------
@@ -86,11 +103,26 @@ This library is needed if you plan to use the ``--gc=boehm`` translation
 option (this is the default at some optimization levels like ``-O1``,
 but unneeded for high-performance translations like ``-O2``).
 You may get it at
-http://www.hpl.hp.com/personal/Hans_Boehm/gc/gc_source/gc-7.1.tar.gz
+http://hboehm.info/gc/gc_source/gc-7.1.tar.gz
 
 Versions 7.0 and 7.1 are known to work; the 6.x series won't work with
-pypy. Unpack this folder in the base directory.  Then open a command
-prompt::
+pypy. Unpack this folder in the base directory. 
+The default GC_abort(...) function in misc.c will try to open a MessageBox.
+You may want to disable this with the following patch::
+
+    --- a/misc.c    Sun Apr 20 14:08:27 2014 +0300
+    +++ b/misc.c    Sun Apr 20 14:08:37 2014 +0300
+    @@ -1058,7 +1058,7 @@
+     #ifndef PCR
+      void GC_abort(const char *msg)
+       {
+       -#   if defined(MSWIN32)
+       +#   if 0 && defined(MSWIN32)
+              (void) MessageBoxA(NULL, msg, "Fatal error in gc", MB_ICONERROR|MB_OK);
+               #   else
+                      GC_err_printf("%s\n", msg);
+    
+Then open a command prompt::
 
     cd gc-7.1
     nmake -f NT_THREADS_MAKEFILE
@@ -100,19 +132,23 @@ The zlib compression library
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Download http://www.gzip.org/zlib/zlib-1.2.3.tar.gz and extract it in
-the base directory.  Then compile::
+the base directory.  Then compile as a static library::
 
     cd zlib-1.2.3
     nmake -f win32\Makefile.msc
-    copy zlib1.dll <somewhere in the PATH>\zlib.dll
+    copy zlib1.lib <somewhere in LIB>
+    copy zlib.h zconf.h <somewhere in INCLUDE>
 
 The bz2 compression library
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Get the same version of bz2 used by python and compile as a static library::
 
     svn export http://svn.python.org/projects/external/bzip2-1.0.6
     cd bzip2-1.0.6
     nmake -f makefile.msc
-    copy bzip.dll <somewhere in the PATH>\bzip.dll
+    copy libbz2.lib <somewhere in LIB>
+    copy bzlib.h <somewhere in INCLUDE>
+
     
 The sqlite3 database library
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -134,7 +170,8 @@ Multi-threaded DLL (/MD) and build the solution (the ``expat`` project
 is actually enough for pypy).
 
 Then, copy the file ``win32\bin\release\libexpat.dll`` somewhere in
-your PATH.
+your PATH, ``win32\bin\release\libexpat.lib`` somewhere in LIB, and
+both ``lib\expat.h`` and ``lib\expat_external.h`` somewhere in INCLUDE.
 
 The OpenSSL library
 ~~~~~~~~~~~~~~~~~~~
@@ -229,7 +266,9 @@ environment variable CC to the compliter exe, testing will use it.
 .. _`msys for mingw`: http://sourceforge.net/projects/mingw-w64/files/External%20binary%20packages%20%28Win64%20hosted%29/MSYS%20%2832-bit%29   
 .. _`libffi source files`: http://sourceware.org/libffi/
 .. _`RPython translation toolchain`: translation.html
-
+.. _`our downloads`: http://pypy.org/download.html   
+.. _`non-windows instructions`: getting-started-python.html#translating-the-pypy-python-interpreter
+.. _`build instructions`: http://pypy.org/download.html#building-from-source
 
 What is missing for a full 64-bit translation
 ---------------------------------------------
