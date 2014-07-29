@@ -4,8 +4,8 @@ Another name could be genEric, but well...
 """
 from os import write
 
-from rpython.annotator import model as annmodel
 from rpython.rtyper.annlowlevel import MixLevelHelperAnnotator
+from rpython.rtyper.llannotation import lltype_to_annotation
 from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
 
@@ -148,9 +148,9 @@ def make_main(translator, setup, entrypoint):
     rpython_main.c_name = 'rpython_main'
 
     mixlevelannotator = MixLevelHelperAnnotator(translator.rtyper)
-    arg1 = annmodel.lltype_to_annotation(rffi.INT)
-    arg2 = annmodel.lltype_to_annotation(rffi.CCHARPP)
-    res = annmodel.lltype_to_annotation(lltype.Signed)
+    arg1 = lltype_to_annotation(rffi.INT)
+    arg2 = lltype_to_annotation(rffi.CCHARPP)
+    res = lltype_to_annotation(lltype.Signed)
     graph = mixlevelannotator.getgraph(rpython_main, [arg1, arg2], res)
     mixlevelannotator.finish()
     mixlevelannotator.backend_optimize()

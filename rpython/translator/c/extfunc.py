@@ -1,5 +1,5 @@
-from rpython.annotator import model as annmodel
 from rpython.flowspace.model import FunctionGraph
+from rpython.rtyper.llannotation import lltype_to_annotation
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.rstr import STR
 from rpython.translator.c.support import cdecl
@@ -26,7 +26,7 @@ def predeclare_exception_data(db, rtyper):
     for exccls in exceptiondata.standardexceptions:
         exc_llvalue = exceptiondata.get_standard_ll_exc_instance_by_class(
             exccls)
-        rtyper.getrepr(annmodel.lltype_to_annotation(lltype.typeOf(exc_llvalue)))
+        rtyper.getrepr(lltype_to_annotation(lltype.typeOf(exc_llvalue)))
         # strange naming here because the macro name must be
         # a substring of PyExc_%s
         name = exccls.__name__
