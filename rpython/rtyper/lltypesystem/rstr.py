@@ -820,6 +820,32 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
         return result
 
+    def ll_join_chars_with_str(s, length, chars):
+        s_chars = s.chars
+        s_len = len(s_chars)
+        num_chars = length
+        if num_chars == 0:
+            return s.empty()
+
+        try:
+            seplen = ovfcheck(s_len * (num_chars - 1))
+        except OverflowError:
+            raise MemoryError
+
+        # a single '+' at the end is allowed to overflow: it gets
+        # a negative result, and the gc will complain
+        result = s.malloc(num_chars + seplen)
+        res_index = 1
+        result.chars[0] = chars[0]
+        i = 1
+        while i < num_chars:
+            s.copy_contents(s, result, 0, res_index, s_len)
+            res_index += s_len
+            result.chars[res_index] = chars[i]
+            res_index += 1
+            i += 1
+        return result
+
     @jit.oopspec('stroruni.slice(s1, start, stop)')
     @signature(types.any(), types.int(), types.int(), returns=types.any())
     @jit.elidable

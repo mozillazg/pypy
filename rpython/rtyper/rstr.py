@@ -235,6 +235,8 @@ class AbstractStringRepr(Repr):
         else:
             if r_lst.item_repr == rstr.repr:
                 llfn = self.ll.ll_join
+            elif r_lst.item_repr == char_repr:
+                llfn = self.ll.ll_join_chars_with_str
             else:
                 raise TyperError("sep.join() of non-string list: %r" % r_lst)
             return hop.gendirectcall(llfn, v_str, v_length, v_items)

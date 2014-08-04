@@ -516,6 +516,9 @@ class AbstractTestRstr(BaseRtypingTest):
         res = self.interpret(lambda: const('.').join([const('abc'), const('def')]), [])
         assert self.ll_to_string(res) == const('abc.def')
 
+        res = self.interpret(lambda: const('  ').join([const('a'), const('b'), const('c')]), [])
+        assert self.ll_to_string(res) == const('a  b  c')
+
         def fn(i, j):
             s1 = [ const(''), const(','), const(' and ')]
             s2 = [ [], [const('foo')], [const('bar'), const('baz'), const('bazz')]]
