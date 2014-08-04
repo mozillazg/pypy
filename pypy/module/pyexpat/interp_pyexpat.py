@@ -2,6 +2,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.interpreter.error import OperationError, oefmt
+from pypy.interpreter.utf8 import ORD
 from rpython.rlib import rgc, jit
 from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.rtyper.tool import rffi_platform
@@ -589,8 +590,8 @@ getting the advantage of providing document type information to the parser.
                         "multi-byte encodings are not supported")
 
         for i in range(256):
-            c = translationmap[i]
-            if c == u'\ufffd':
+            c = ORD(translationmap, i)
+            if c == 0xFFFD:
                 info.c_map[i] = rffi.cast(rffi.INT, -1)
             else:
                 info.c_map[i] = rffi.cast(rffi.INT, c)

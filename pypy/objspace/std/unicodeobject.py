@@ -8,6 +8,7 @@ from rpython.rlib.rstring import (
 
 from pypy.interpreter import unicodehelper
 from pypy.interpreter.baseobjspace import W_Root
+from pypy.interpreter import utf8
 from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord
 from pypy.interpreter.utf8_codecs import (
     make_unicode_escape_function, str_decode_ascii, str_decode_utf_8,
@@ -91,7 +92,7 @@ class W_UnicodeObject(W_Root):
         return W_UnicodeObject(value)
 
     def _new_from_list(self, value):
-        return W_UnicodeObject(u''.join(value))
+        return W_UnicodeObject(Utf8Str('').join(value))
 
     def _empty(self):
         return W_UnicodeObject.EMPTY
@@ -109,12 +110,21 @@ class W_UnicodeObject(W_Root):
 
     @staticmethod
     def _op_val(space, w_other):
+        if space.isinstance_w(w_other, space.w_str):
+            w_other = unicode_from_string(space, w_other)
+        elif not isinstance(w_other, W_UnicodeObject):
+            w_other = unicode_from_encoded_object(
+                space, w_other, None, "strict")
+        assert isinstance(w_other, W_UnicodeObject)
+        return w_other._value
+        '''
         if isinstance(w_other, W_UnicodeObject):
             return w_other._value
         if space.isinstance_w(w_other, space.w_str):
             return unicode_from_string(space, w_other)._value
         return unicode_from_encoded_object(
             space, w_other, None, "strict")._value
+        '''
 
     def _chr(self, char):
         assert len(char) == 1
@@ -228,7 +238,7 @@ class W_UnicodeObject(W_Root):
 
     def descr_eq(self, space, w_other):
         try:
-            res = self._val(space) == self._op_val(space, w_other)
+            res = self._val(space).__eq__(self._op_val(space, w_other))
         except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
@@ -244,7 +254,7 @@ class W_UnicodeObject(W_Root):
 
     def descr_ne(self, space, w_other):
         try:
-            res = self._val(space) != self._op_val(space, w_other)
+            res = self._val(space).__ne__(self._op_val(space, w_other))
         except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
@@ -260,7 +270,7 @@ class W_UnicodeObject(W_Root):
 
     def descr_lt(self, space, w_other):
         try:
-            res = self._val(space) < self._op_val(space, w_other)
+            res = self._val(space).__lt__(self._op_val(space, w_other))
         except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
@@ -269,7 +279,7 @@ class W_UnicodeObject(W_Root):
 
     def descr_le(self, space, w_other):
         try:
-            res = self._val(space) <= self._op_val(space, w_other)
+            res = self._val(space).__le__(self._op_val(space, w_other))
         except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
@@ -278,7 +288,7 @@ class W_UnicodeObject(W_Root):
 
     def descr_gt(self, space, w_other):
         try:
-            res = self._val(space) > self._op_val(space, w_other)
+            res = self._val(space).__gt__(self._op_val(space, w_other))
         except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
@@ -287,7 +297,7 @@ class W_UnicodeObject(W_Root):
 
     def descr_ge(self, space, w_other):
         try:
-            res = self._val(space) >= self._op_val(space, w_other)
+            res = self._val(space).__ge__(self._op_val(space, w_other))
         except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented

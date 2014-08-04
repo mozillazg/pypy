@@ -3,6 +3,7 @@ from rpython.rlib.rarithmetic import intmask
 
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import unwrap_spec
+from pypy.interpreter.utf8 import Utf8Str
 
 from rpython.rlib import rlocale
 from pypy.module.exceptions.interp_exceptions import _new_exception, W_Exception
@@ -136,8 +137,8 @@ def strcoll(space, w_s1, w_s2):
 
     s1, s2 = space.unicode_w(w_s1), space.unicode_w(w_s2)
 
-    s1_c = rffi.unicode2wcharp(s1)
-    s2_c = rffi.unicode2wcharp(s2)
+    s1_c = Utf8Str.copy_to_new_wcharp(s1)
+    s2_c = Utf8Str.copy_to_new_wcharp(s2)
     try:
         result = _wcscoll(s1_c, s2_c)
     finally:

@@ -9,7 +9,7 @@ from rpython.rlib.buffer import Buffer
 
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import WrappedDefault, unwrap_spec
-from pypy.interpreter.utf8 import ORD
+from pypy.interpreter import utf8
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 
@@ -29,6 +29,8 @@ class StringMethods(object):
         lenself = len(value)
         start, end = slicetype.unwrap_start_stop(
             space, lenself, w_start, w_end, upper_bound=upper_bound)
+        assert start >= 0
+        assert end >= 0
         return (value, start, end)
 
     def _multi_chr(self, c):
@@ -64,7 +66,7 @@ class StringMethods(object):
                 if e.match(space, space.w_TypeError):
                     return space.w_NotImplemented
                 raise
-            return self._new(self._val(space) + other)
+            return self._new(utf8.ADD(self._val(space), other))
 
         # Bytearray overrides this method, CPython doesn't support contacting
         # buffers and strs, and unicodes are always handled above
@@ -80,8 +82,9 @@ class StringMethods(object):
         if times <= 0:
             return self._empty()
         if self._len() == 1:
-            return self._new(self._multi_chr(self._val(space)[0]) * times)
-        return self._new(self._val(space) * times)
+            return self._new(utf8.MUL(self._multi_chr(self._val(space)[0]),
+                                      times))
+        return self._new(utf8.MUL(self._val(space), times))
 
     descr_rmul = descr_mul
 
@@ -142,7 +145,9 @@ class StringMethods(object):
         if d > 0:
             offset = d//2 + (d & width & 1)
             fillchar = self._multi_chr(fillchar[0])
-            centered = fillchar * offset + value + fillchar * (d - offset)
+            #centered = fillchar * offset + value + fillchar * (d - offset)
+            centered = utf8.ADD(utf8.ADD(utf8.MUL(fillchar, offset), value),
+                        utf8.MUL(fillchar, (d - offset)))
         else:
             centered = value
 
@@ -204,8 +209,11 @@ class StringMethods(object):
         expanded = oldtoken = splitted.pop(0)
 
         for token in splitted:
-            expanded += self._multi_chr(' ') * self._tabindent(oldtoken,
-                                                         tabsize) + token
+            #expanded += self._multi_chr(' ') * self._tabindent(oldtoken,
+            #                                             tabsize) + token
+            m = utf8.MUL(self._multi_chr(' '),
+                         self._tabindent(oldtoken, tabsize))
+            expanded = utf8.ADD(expanded, utf8.ADD(m, token))
             oldtoken = token
 
         return self._new(expanded)
@@ -219,8 +227,8 @@ class StringMethods(object):
             offset = len(token)
 
             while 1:
-                if (ORD(token, offset-1) == ord("\n") or
-                    ORD(token, offset-1) == ord("\r")):
+                if (utf8.ORD(token, offset-1) == ord("\n") or
+                    utf8.ORD(token, offset-1) == ord("\r")):
                     break
                 distance += 1
                 offset -= 1
@@ -457,7 +465,8 @@ class StringMethods(object):
         d = width - len(value)
         if d > 0:
             fillchar = self._multi_chr(fillchar[0])
-            value += fillchar * d
+            #value += fillchar * d
+            value = utf8.ADD(value, utf8.MUL(fillchar, d))
 
         return self._new(value)
 
@@ -471,7 +480,8 @@ class StringMethods(object):
         d = width - len(value)
         if d > 0:
             fillchar = self._multi_chr(fillchar[0])
-            value = fillchar * d + value
+            #value = fillchar * d + value
+            value = utf8.ADD(utf8.MUL(fillchar, d), value)
 
         return self._new(value)
 
@@ -606,8 +616,8 @@ class StringMethods(object):
             eol = pos
             pos += 1
             # read CRLF as one line break
-            if (pos < length and ORD(value, eol) == ord('\r') and
-                                 ORD(value, pos) == ord('\n')):
+            if (pos < length and utf8.ORD(value, eol) == ord('\r') and
+                                 utf8.ORD(value, pos) == ord('\n')):
                 pos += 1
             if keepends:
                 eol = pos
@@ -768,15 +778,16 @@ class StringMethods(object):
     def descr_zfill(self, space, width):
         selfval = self._val(space)
         if len(selfval) == 0:
-            return self._new(self._multi_chr('0') * width)
+            #return self._new(self._multi_chr('0') * width)
+            return self._new(utf8.MUL(self._multi_chr('0'), width))
         num_zeros = width - len(selfval)
         if num_zeros <= 0:
             # cannot return self, in case it is a subclass of str
             return self._new(selfval)
 
         builder = self._builder(width)
-        if len(selfval) > 0 and (ORD(selfval, 0) == ord('+') or
-                                 ORD(selfval, 0) == ord('-')):
+        if len(selfval) > 0 and (utf8.ORD(selfval, 0) == ord('+') or
+                                 utf8.ORD(selfval, 0) == ord('-')):
             # copy sign to first position
             builder.append(selfval[0])
             start = 1

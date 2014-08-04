@@ -6,6 +6,8 @@ from pypy.module._multibytecodec.interp_multibytecodec import (
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
+from pypy.interpreter import utf8
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.module._codecs.interp_codecs import CodecState
 
 
@@ -87,7 +89,7 @@ class MultibyteIncrementalEncoder(MultibyteIncrementalBase):
 
     def _initialize(self):
         self.encodebuf = c_codecs.pypy_cjk_enc_new(self.codec)
-        self.pending = u""
+        self.pending = Utf8Str("")
 
     def _free(self):
         self.pending = None
@@ -100,7 +102,7 @@ class MultibyteIncrementalEncoder(MultibyteIncrementalBase):
         space = self.space
         state = space.fromcache(CodecState)
         if len(self.pending) > 0:
-            object = self.pending + object
+            object = utf8.ADD(self.pending, object)
         try:
             output = c_codecs.encodeex(self.encodebuf, object, self.errors,
                                        state.encode_error_handler, self.name,

@@ -6,7 +6,8 @@ from rpython.rlib.rarithmetic import r_uint, intmask
 from rpython.rlib.unicodedata import unicodedb
 from rpython.rlib.runicode import utf8_code_length
 
-from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord, ORD
+from pypy.interpreter import utf8
+from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord
 
 
 BYTEORDER = sys.byteorder
@@ -416,7 +417,7 @@ def unicode_encode_ucs1_helper(p, size, errors,
                 result.append(rs)
                 continue
             for ch in ru:
-                cd = ORD(ch, 0)
+                cd = utf8.ORD(ch, 0)
                 if cd < limit:
                     result.append(chr(cd))
                 else:
@@ -1293,7 +1294,7 @@ def str_decode_charmap(s, size, errors, final=False,
         ch = s[pos]
 
         c = mapping.get(ch, ERROR_CHAR)
-        if c == ERROR_CHAR:
+        if utf8.EQ(c, ERROR_CHAR):
             r, pos = errorhandler(errors, "charmap",
                                   "character maps to <undefined>",
                                   s,  pos, pos + 1)
@@ -1543,7 +1544,7 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
             # py3k only
             errorhandler('strict', 'decimal', msg, s, collstart, collend)
         for i in range(len(ru)):
-            ch = ORD(ru, i)
+            ch = utf8.ORD(ru, i)
             if unicodedb.isspace(ch):
                 result.append(' ')
                 continue
@@ -1571,16 +1572,16 @@ def default_unicode_error_decode(errors, encoding, msg, s,
     if errors == 'replace':
         return _unicode_error_replacement, endingpos
     if errors == 'ignore':
-        return '', endingpos
+        return Utf8Str(''), endingpos
     raise UnicodeDecodeError(encoding, s, startingpos, endingpos, msg)
 _unicode_error_replacement = Utf8Str.from_unicode(u'\ufffd')
 
 def default_unicode_error_encode(errors, encoding, msg, u,
                                  startingpos, endingpos):
     if errors == 'replace':
-        return '?', None, endingpos
+        return Utf8Str('?'), None, endingpos
     if errors == 'ignore':
-        return '', None, endingpos
+        return Utf8Str(''), None, endingpos
 
     if we_are_translated():
         # The constructor for UnicodeEncodeError requires an actual unicode

@@ -3,6 +3,7 @@ from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.rstring import UnicodeBuilder
 from rpython.rlib.runicode import code_to_unichr, MAXUNICODE
 
+from pypy.interpreter import utf8
 from pypy.interpreter.utf8 import Utf8Builder, Utf8Str, utf8chr, utf8ord
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
@@ -213,7 +214,7 @@ def replace_errors(space, w_exc):
         text = utf8chr(0xfffd)
         return space.newtuple([space.wrap(text), w_end])
     elif space.isinstance_w(w_exc, space.w_UnicodeTranslateError):
-        text = utf8chr(0xfffd) * size
+        text = utf8.MUL(utf8chr(0xfffd), size)
         return space.newtuple([space.wrap(text), w_end])
     else:
         raise oefmt(space.w_TypeError,
@@ -264,7 +265,7 @@ def backslashreplace_errors(space, w_exc):
             lnum = len(num)
             nb = zeros + 2 - lnum # num starts with '0x'
             if nb > 0:
-                builder.append_multiple_char(u'0', nb)
+                builder.append_multiple_char('0', nb)
             builder.append_slice(num, 2, lnum)
             pos += 1
         return space.newtuple([space.wrap(builder.build()), w_end])
@@ -678,7 +679,7 @@ def unicode_internal_decode(space, w_string, errors="strict"):
     string = space.readbuf_w(w_string).as_str()
 
     if len(string) == 0:
-        return space.newtuple([space.wrap(u''), space.wrap(0)])
+        return space.newtuple([space.wrap(Utf8Str('')), space.wrap(0)])
 
     final = True
     state = space.fromcache(CodecState)

@@ -21,12 +21,16 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
 
     def specialize__wrap(pol,  funcdesc, args_s):
         from pypy.interpreter.baseobjspace import W_Root
+        from pypy.interpreter.utf8 import Utf8Str
         from rpython.annotator.classdef import ClassDef
         W_Root_def = funcdesc.bookkeeper.getuniqueclassdef(W_Root)
         typ = args_s[1].knowntype
         if isinstance(typ, ClassDef):
-            assert typ.issubclass(W_Root_def)
-            typ = W_Root
+            if typ.issubclass(W_Root_def):
+                typ = W_Root
+            else:
+                assert typ.classdesc.pyobj is Utf8Str
+                typ = Utf8Str
         else:
             assert not issubclass(typ, W_Root)
             assert typ != tuple, "space.wrap(tuple) forbidden; use newtuple()"

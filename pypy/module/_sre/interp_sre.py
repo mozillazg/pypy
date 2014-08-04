@@ -5,6 +5,7 @@ from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.typedef import make_weakref_descr
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.interpreter.error import OperationError
+from pypy.interpreter import utf8
 from pypy.interpreter.utf8 import Utf8Str, utf8ord
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib import jit
@@ -121,6 +122,8 @@ class W_SRE_Pattern(W_Root):
                 pos = len(unicodestr)
             if endpos > len(unicodestr):
                 endpos = len(unicodestr)
+            assert pos >= 0
+            assert endpos >= 0
             return rsre_core.UnicodeMatchContext(self.code, unicodestr,
                                                  pos, endpos, self.flags)
         else:
@@ -232,7 +235,7 @@ class W_SRE_Pattern(W_Root):
         else:
             if space.isinstance_w(w_ptemplate, space.w_unicode):
                 filter_as_unicode = space.unicode_w(w_ptemplate)
-                literal = u'\\' not in filter_as_unicode
+                literal = utf8.IN('\\', filter_as_unicode)
             else:
                 try:
                     filter_as_string = space.str_w(w_ptemplate)

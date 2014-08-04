@@ -1,9 +1,10 @@
 import sys
 from rpython.rlib.rstring import StringBuilder
 from rpython.rlib.objectmodel import specialize
-from rpython.rlib import rfloat, runicode
+from rpython.rlib import rfloat
 from rpython.rtyper.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError, oefmt
+from pypy.interpreter.utf8 import utf8chr
 from pypy.interpreter import unicodehelper
 
 OVF_DIGITS = len(str(sys.maxint))
@@ -30,6 +31,7 @@ def strslice2unicode_latin1(s, start, end):
 
     No bound checking is done, use carefully.
     """
+    '''
     from rpython.rtyper.annlowlevel import llstr, hlunicode
     from rpython.rtyper.lltypesystem.rstr import malloc, UNICODE
     from rpython.rtyper.lltypesystem.lltype import cast_primitive, UniChar
@@ -41,6 +43,12 @@ def strslice2unicode_latin1(s, start, end):
         ch = ll_s.chars[start+i]
         ll_res.chars[i] = cast_primitive(UniChar, ch)
     return hlunicode(ll_res)
+    '''
+    # TODO: Actually do this without slicing
+    from pypy.interpreter.utf8_codecs import str_decode_latin_1
+    assert start >= 0
+    assert end >= 0
+    return str_decode_latin_1(s[start:end], end - start, 'strict')[0]
 
 TYPE_UNKNOWN = 0
 TYPE_STRING = 1
@@ -369,7 +377,7 @@ class JSONDecoder(object):
             return # help the annotator to know that we'll never go beyond
                    # this point
         #
-        uchr = runicode.code_to_unichr(val)     # may be a surrogate pair again
+        uchr = utf8chr(val)     # may be a surrogate pair again
         utf8_ch = unicodehelper.encode_utf8(self.space, uchr)
         builder.append(utf8_ch)
         return i

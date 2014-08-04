@@ -9,7 +9,7 @@ from rpython.rlib.unroll import unrolling_iterable
 from rpython.rlib.rarithmetic import INT_MAX
 from rpython.tool.sourcetools import func_with_new_name
 from pypy.interpreter.error import OperationError, oefmt
-from pypy.interpreter.utf8 import Utf8Builder, ORD
+from pypy.interpreter.utf8 import Utf8Builder, ORD, utf8chr
 
 
 class BaseStringFormatter(object):
@@ -155,11 +155,6 @@ class BaseStringFormatter(object):
 def make_formatter_subclass(do_unicode):
     # to build two subclasses of the BaseStringFormatter class,
     # each one getting its own subtle differences and RPython types.
-
-    if do_unicode:
-        const = unicode
-    else:
-        const = str
 
     class StringFormatter(BaseStringFormatter):
         def __init__(self, space, fmt, values_w, w_valuedict):
@@ -365,6 +360,7 @@ def make_formatter_subclass(do_unicode):
                 return
             if prec >= 0 and prec < length:
                 length = prec   # ignore the end of the string if too long
+
             result = self.result
             padding = self.width - length
             if padding < 0:
@@ -475,7 +471,7 @@ def make_formatter_subclass(do_unicode):
                 n = space.int_w(w_value)
                 if do_unicode:
                     try:
-                        c = unichr(n)
+                        c = utf8chr(n)
                     except ValueError:
                         raise OperationError(space.w_OverflowError,
                             space.wrap("unicode character code out of range"))

@@ -151,7 +151,7 @@ class W_CTypePrimitiveUniChar(W_CTypePrimitiveCharOrUniChar):
                 return utf8ord(s, 0)
         if (isinstance(w_ob, cdataobj.W_CData) and
                isinstance(w_ob.ctype, W_CTypePrimitiveUniChar)):
-            return rffi.cast(utf8.WCHAR_INTP, w_ob._cdata)[0]
+            return intmask(rffi.cast(utf8.WCHAR_INTP, w_ob._cdata)[0])
         raise self._convert_error("unicode string of length 1", w_ob)
 
     def convert_from_object(self, cdata, w_ob):

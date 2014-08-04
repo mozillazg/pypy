@@ -6,7 +6,7 @@ from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, interp_attrproperty
-from pypy.interpreter.utf8 import utf8chr
+from pypy.interpreter.utf8 import Utf8Str, utf8chr
 from rpython.rlib.rarithmetic import r_longlong
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.unicodedata import unicodedb_5_2_0, unicodedb_3_2_0
@@ -225,10 +225,12 @@ class UCD(W_Root):
                 result[0] = ch
 
         if not composed: # If decomposed normalization we are done
-            return space.wrap(u''.join([unichr(i) for i in result[:j]]))
+            return space.wrap(Utf8Str('').join(
+                    [utf8chr(i) for i in result[:j]]))
 
         if j <= 1:
-            return space.wrap(u''.join([unichr(i) for i in result[:j]]))
+            return space.wrap(Utf8Str('').join(
+                    [utf8chr(i) for i in result[:j]]))
 
         current = result[0]
         starter_pos = 0
@@ -275,7 +277,8 @@ class UCD(W_Root):
 
         result[starter_pos] = current
 
-        return space.wrap(u''.join([unichr(i) for i in result[:next_insert]]))
+        return space.wrap(Utf8Str('').join(
+                    [utf8chr(i) for i in result[:next_insert]]))
 
 
 methods = {}

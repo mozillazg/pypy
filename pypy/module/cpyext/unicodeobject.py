@@ -1,5 +1,5 @@
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.utf8 import Utf8Str
+from pypy.interpreter.utf8 import Utf8Str, utf8chr
 from pypy.interpreter import utf8_codecs
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb
@@ -138,17 +138,17 @@ def Py_UNICODE_ISTITLE(space, ch):
 @cpython_api([Py_UNICODE], Py_UNICODE, error=CANNOT_FAIL)
 def Py_UNICODE_TOLOWER(space, ch):
     """Return the character ch converted to lower case."""
-    return unichr(unicodedb.tolower(ord(ch)))
+    return utf8chr(unicodedb.tolower(ord(ch)))
 
 @cpython_api([Py_UNICODE], Py_UNICODE, error=CANNOT_FAIL)
 def Py_UNICODE_TOUPPER(space, ch):
     """Return the character ch converted to upper case."""
-    return unichr(unicodedb.toupper(ord(ch)))
+    return utf8chr(unicodedb.toupper(ord(ch)))
 
 @cpython_api([Py_UNICODE], Py_UNICODE, error=CANNOT_FAIL)
 def Py_UNICODE_TOTITLE(space, ch):
     """Return the character ch converted to title case."""
-    return unichr(unicodedb.totitle(ord(ch)))
+    return utf8chr(unicodedb.totitle(ord(ch)))
 
 @cpython_api([Py_UNICODE], rffi.INT_real, error=CANNOT_FAIL)
 def Py_UNICODE_TODECIMAL(space, ch):
@@ -331,7 +331,7 @@ def PyUnicode_FromUnicode(space, wchar_p, length):
     Therefore, modification of the resulting Unicode object is only allowed when u
     is NULL."""
     if wchar_p:
-        s = rffi.Utf8Str.from_wcharpsize(wchar_p, length)
+        s = Utf8Str.from_wcharpsize(wchar_p, length)
         return make_ref(space, space.wrap(s))
     else:
         return rffi.cast(PyObject, new_empty_unicode(space, length))

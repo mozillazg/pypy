@@ -77,6 +77,7 @@ from pypy.interpreter.typedef import (TypeDef, GetSetProperty, descr_get_dict,
     descr_set_dict, descr_del_dict)
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.utf8 import Utf8Str
 from rpython.rlib import rwin32
 
 
@@ -126,7 +127,7 @@ class W_BaseException(W_Root):
             return space.call_function(space.w_unicode, w_as_str)
         lgt = len(self.args_w)
         if lgt == 0:
-            return space.wrap(u"")
+            return space.wrap(Utf8Str(""))
         if lgt == 1:
             return space.call_function(space.w_unicode, self.args_w[0])
         else:

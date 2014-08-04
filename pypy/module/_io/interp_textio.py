@@ -6,6 +6,7 @@ from pypy.interpreter.gateway import WrappedDefault, interp2app, unwrap_spec
 from pypy.interpreter.typedef import (
     GetSetProperty, TypeDef, generic_new_descr, interp_attrproperty,
     interp_attrproperty_w)
+from pypy.interpreter import utf8
 from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8ord
 from pypy.module._codecs import interp_codecs
 from pypy.module._io.interp_iobase import W_IOBase, convert_size, trap_eintr
@@ -76,7 +77,7 @@ class W_IncrementalNewlineDecoder(W_Root):
         output = space.unicode_w(w_output)
         output_len = len(output)
         if self.pendingcr and (final or output_len):
-            output = Utf8Str('\r') + output
+            output = utf8.ADD(Utf8Str('\r'), output)
             self.pendingcr = False
             output_len += 1
 
@@ -85,7 +86,7 @@ class W_IncrementalNewlineDecoder(W_Root):
         if not final and output_len > 0:
             last = output_len - 1
             assert last >= 0
-            if output[last] == Utf8Str('\r'):
+            if utf8ord(output, last) == ord('\r'):
                 output = output[:last]
                 self.pendingcr = True
                 output_len -= 1
@@ -101,7 +102,7 @@ class W_IncrementalNewlineDecoder(W_Root):
         # for the \r
         only_lf = False
         if seennl == SEEN_LF or seennl == 0:
-            only_lf = (output.find(Utf8Str('\r')) < 0)
+            only_lf = (output.find('\r') < 0)
 
         if only_lf:
             # If not already seen, quick scan for a possible "\n" character.
@@ -371,8 +372,9 @@ class W_TextIOWrapper(W_TextIOBase):
             newline = None
         else:
             newline = space.unicode_w(w_newline)
-        if newline and newline not in (Utf8Str('\n'), Utf8Str('\r\n'),
-                                       Utf8Str('\r')):
+        if newline and not (utf8.EQ(newline, Utf8Str('\n')) or
+            utf8.EQ(newline, Utf8Str('\r\n')) or
+            utf8.EQ(newline, Utf8Str('\r'))):
             r = space.str_w(space.repr(w_newline))
             raise OperationError(space.w_ValueError, space.wrap(
                 "illegal newline value: %s" % (r,)))
@@ -386,7 +388,7 @@ class W_TextIOWrapper(W_TextIOBase):
         self.writetranslate = (newline is None or len(newline) == 0)
         if not self.readuniversal:
             self.writenl = self.readnl
-            if self.writenl == Utf8Str('\n'):
+            if utf8.EQ(self.writenl, Utf8Str('\n')):
                 self.writenl = None
         elif _WINDOWS:
             self.writenl = Utf8Str("\r\n")
@@ -662,7 +664,7 @@ class W_TextIOWrapper(W_TextIOBase):
                 offset_to_buffer = 0
             else:
                 assert self.decoded_chars_used == 0
-                line = remaining + self.decoded_chars
+                line = utf8.ADD(remaining, self.decoded_chars)
                 start = 0
                 offset_to_buffer = len(remaining)
                 remaining = None

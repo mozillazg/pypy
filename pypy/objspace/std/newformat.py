@@ -681,8 +681,12 @@ def make_formatting_class():
                     buf.append(c)
             for i in range(d_state - 1, d_state - n_chars - 1, -1):
                 buf.append(digits[i])
+
+            zero = "0"
+            if self.is_unicode:
+                zero = Utf8Str("0")
             for i in range(n_zeros):
-                buf.append("0")
+                buf.append(zero)
 
         def _group_digits(self, spec, digits):
             buf = []
@@ -727,9 +731,12 @@ def make_formatting_class():
         def _upcase_string(self, s):
             buf = []
             for c in s:
-                index = ord(c)
+                index = ORD(c, 0)
                 if ord("a") <= index <= ord("z"):
-                    c = chr(index - 32)
+                    if self.is_unicode:
+                        c = utf8chr(index - 32)
+                    else:
+                        c = chr(index - 32)
                 buf.append(c)
             return self.empty.join(buf)
 
@@ -1061,7 +1068,7 @@ def make_formatting_class():
             tmp_align = self._align
             tmp_width = self._width
             self._fill_char = ord("\0")
-            self._align = "<"
+            self._align = ord("<")
             self._width = -1
 
             #determine if we have remainder, might include dec or exponent or both

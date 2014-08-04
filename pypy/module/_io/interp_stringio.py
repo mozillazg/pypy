@@ -111,7 +111,8 @@ class W_StringIO(W_TextIOBase):
 
     def resize_buffer(self, newlength):
         if len(self.buf) > newlength:
-            self.buf = self.buf[:newlength]
+            assert newlength >= 0
+            self.buf = self.buf[0:newlength]
         if len(self.buf) < newlength:
             self.buf.extend([Utf8Str('\0')] * (newlength - len(self.buf)))
 
@@ -190,8 +191,9 @@ class W_StringIO(W_TextIOBase):
             endpos += start
         else:
             endpos = end
-        assert endpos >= 0
         self.pos = endpos
+        assert start >= 0
+        assert endpos >= 0
         return space.wrap(Utf8Str("").join(self.buf[start:endpos]))
 
     @unwrap_spec(pos=int, mode=int)

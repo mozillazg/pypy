@@ -1,9 +1,11 @@
 from rpython.rlib.rstring import StringBuilder
-from rpython.rlib.objectmodel import we_are_translated, specialize
+from rpython.rlib.objectmodel import (
+    we_are_translated, specialize, import_from_mixin)
 from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
 from rpython.rlib.rarithmetic import r_uint, intmask, base_int
 from rpython.rtyper.lltypesystem import rffi, lltype
+from rpython.tool.sourcetools import func_with_new_name
 
 
 wchar_rint = rffi.r_uint
@@ -26,21 +28,24 @@ def utf8ord_bytes(bytes, start):
     codepoint_length = utf8_code_length[ord(bytes[start])]
 
     if codepoint_length == 1:
-        return ord(bytes[start])
+        res = ord(bytes[start])
 
     elif codepoint_length == 2:
-        return ((ord(bytes[start]) & 0x1F) << 6 |
-                (ord(bytes[start + 1]) & 0x3F))
+        res = ((ord(bytes[start]) & 0x1F) << 6 |
+               (ord(bytes[start + 1]) & 0x3F))
     elif codepoint_length == 3:
-        return ((ord(bytes[start]) & 0xF) << 12 |
-                (ord(bytes[start + 1]) & 0x3F) << 6 |
-                (ord(bytes[start + 2]) & 0x3F))
+        res = ((ord(bytes[start]) & 0xF) << 12 |
+               (ord(bytes[start + 1]) & 0x3F) << 6 |
+               (ord(bytes[start + 2]) & 0x3F))
     else:
         assert codepoint_length == 4
-        return ((ord(bytes[start]) & 0xF) << 18 |
-                (ord(bytes[start + 1]) & 0x3F) << 12 |
-                (ord(bytes[start + 2]) & 0x3F) << 6 |
-                (ord(bytes[start + 3]) & 0x3F))
+        res = ((ord(bytes[start]) & 0xF) << 18 |
+               (ord(bytes[start + 1]) & 0x3F) << 12 |
+               (ord(bytes[start + 2]) & 0x3F) << 6 |
+               (ord(bytes[start + 3]) & 0x3F))
+
+    assert res >= 0
+    return res
 
 def utf8ord(ustr, start=0):
     start = ustr.index_of_char(start)
@@ -52,6 +57,45 @@ def ORD(s, pos):
         return utf8ord(s, pos)
     else:
         return ord(s[pos])
+
+@specialize.argtype(0)
+def EQ(s1, s2):
+    if s1 is None:
+        return s1 is s2
+    if isinstance(s1, Utf8Str):
+        return s1.__eq__(s2)
+    else:
+        return s1 == s2
+
+@specialize.argtype(0)
+def NE(s1, s2):
+    if s1 is None:
+        return s1 is not s2
+    if isinstance(s1, Utf8Str):
+        return s1.__ne__(s2)
+    else:
+        return s1 != s2
+
+@specialize.argtype(0)
+def ADD(s1, s2):
+    if isinstance(s1, Utf8Str):
+        return s1.__add__(s2)
+    else:
+        return s1 + s2
+
+@specialize.argtype(0)
+def MUL(s1, s2):
+    if isinstance(s1, Utf8Str):
+        return s1.__mul__(s2)
+    else:
+        return s1 * s2
+
+@specialize.argtype(0, 1)
+def IN(s1, s2):
+    if isinstance(s1, Utf8Str):
+        return s2.__contains__(s1)
+    else:
+        return s1 in s2
 
 class Utf8Str(object):
     _immutable_fields_ = ['bytes', '_is_ascii', '_len']
@@ -69,7 +113,6 @@ class Utf8Str(object):
             self._len = length
         else:
             if not is_ascii:
-                #self._len = -1
                 self._calc_length()
             else:
                 self._len = len(data)
@@ -112,14 +155,22 @@ class Utf8Str(object):
             char_pos += self._len
         return self[char_pos:char_pos+1]
 
+    @specialize.argtype(1, 2)
     def __getslice__(self, start, stop):
+        if start is None:
+            start = 0
+        if stop is None:
+            stop = len(self)
+
+        assert start >= 0
         assert start <= stop
+
         if start == stop:
             return Utf8Str('')
-        # TODO: If start > _len or stop >= _len, then raise exception 
 
         if stop > len(self):
             stop = len(self)
+        assert stop >= 0
 
         if self._is_ascii:
             return Utf8Str(self.bytes[start:stop], True)
@@ -155,6 +206,7 @@ class Utf8Str(object):
         return Utf8Str(self.bytes * count, self._is_ascii)
 
     def __len__(self):
+        assert self._len >= 0
         return self._len
 
     def __hash__(self):
@@ -252,13 +304,12 @@ class Utf8Str(object):
         else:
             end = self.index_of_char(end)
 
-        assert start >= 0
         return start, end
 
-    @specialize.argtype(2, 3)
+    @specialize.argtype(1, 2, 3)
     def find(self, other, start=None, end=None):
         start, end = self._bound_check(start, end)
-        if start == -1:
+        if start < 0:
             return -1
 
         if isinstance(other, Utf8Str):
@@ -275,17 +326,18 @@ class Utf8Str(object):
 
         return self.char_index_of_byte(pos)
 
-    @specialize.argtype(2, 3)
+    @specialize.argtype(1, 2, 3)
     def rfind(self, other, start=None, end=None):
         start, end = self._bound_check(start, end)
-        if start == -1:
+        if start < 0:
             return -1
 
         if isinstance(other, Utf8Str):
             pos = self.bytes.rfind(other.bytes, start, end)
         elif isinstance(other, unicode):
             return unicode(self.bytes, 'utf8').rfind(other, start, end)
-        elif isinstance(other, str):
+        else:
+            assert isinstance(other, str)
             pos = self.bytes.rfind(other, start, end)
 
         if pos == -1:
@@ -293,17 +345,18 @@ class Utf8Str(object):
 
         return self.char_index_of_byte(pos)
 
-    @specialize.argtype(2, 3)
+    @specialize.argtype(1, 2, 3)
     def count(self, other, start=None, end=None):
         start, end = self._bound_check(start, end)
-        if start == -1:
+        if start < 0:
             return 0
 
         if isinstance(other, Utf8Str):
             count = self.bytes.count(other.bytes, start, end)
         elif isinstance(other, unicode):
             return unicode(self.bytes, 'utf8').count(other, start, end)
-        elif isinstance(other, str):
+        else:
+            assert isinstance(other, str)
             count = self.bytes.count(other, start, end)
 
         if count == -1:
@@ -319,7 +372,8 @@ class Utf8Str(object):
         if other is not None:
             if isinstance(other, str):
                 other_bytes = other
-            if isinstance(other, Utf8Str):
+            else:
+                assert isinstance(other, Utf8Str)
                 other_bytes = other.bytes
             return [Utf8Str(s) for s in self.bytes.split(other_bytes, maxsplit)]
 
@@ -334,6 +388,7 @@ class Utf8Str(object):
                 break
 
             start_byte = iter.byte_pos
+            assert start_byte >= 0
 
             if maxsplit == 0:
                 res.append(Utf8Str(self.bytes[start_byte:len(self.bytes)],
@@ -349,8 +404,9 @@ class Utf8Str(object):
                            self._is_ascii))
                 break
 
-            res.append(Utf8Str(self.bytes[start_byte:iter.byte_pos],
-                               self._is_ascii))
+            end = iter.byte_pos
+            assert end >= 0
+            res.append(Utf8Str(self.bytes[start_byte:end], self._is_ascii))
             maxsplit -= 1
 
         return res
@@ -360,7 +416,8 @@ class Utf8Str(object):
         if other is not None:
             if isinstance(other, str):
                 other_bytes = other
-            if isinstance(other, Utf8Str):
+            else:
+                assert isinstance(other, Utf8Str)
                 other_bytes = other.bytes
             return [Utf8Str(s) for s in self.bytes.rsplit(other_bytes, maxsplit)]
 
@@ -397,21 +454,22 @@ class Utf8Str(object):
         res.reverse()
         return res
 
-    @specialize.argtype(1)
+    #@specialize.argtype(1)
     def join(self, other):
         if len(other) == 0:
             return Utf8Str('')
 
         if isinstance(other[0], Utf8Str):
-            return Utf8Str(
-                self.bytes.join([s.bytes for s in other]),
-                self._is_ascii and all(s._is_ascii for s in other)
-            )
+            is_ascii = self._is_ascii
+            if is_ascii:
+                for s in other:
+                    if not s._is_ascii:
+                        is_ascii = False
+                    break
+            return Utf8Str(self.bytes.join([s.bytes for s in other]), is_ascii)
         else:
-            return Utf8Str(
-                self.bytes.join([s for s in other]),
-                self._is_ascii and all(s._is_ascii for s in other)
-            )
+            return Utf8Str(self.bytes.join([s for s in other]))
+    join._annspecialcase_ = 'specialize:arglistitemtype(1)'
 
     def as_unicode(self):
         """NOT_RPYTHON"""
@@ -423,6 +481,7 @@ class Utf8Str(object):
         return Utf8Str(u.encode('utf-8'))
 
     def next_char(self, byte_pos):
+        assert byte_pos >= 0
         return byte_pos + utf8_code_length[ord(self.bytes[byte_pos])]
 
     def prev_char(self, byte_pos):
@@ -558,6 +617,7 @@ class Utf8Builder(object):
         else:
             self._builder = StringBuilder(init_size)
         self._is_ascii = True
+        self._length = 0
 
 
     @specialize.argtype(1)
@@ -566,9 +626,11 @@ class Utf8Builder(object):
             self._builder.append(c.bytes)
             if not c._is_ascii:
                 self._is_ascii = False
-        elif isinstance(c, int) or isinstance(c, r_uint):
-            if isinstance(c, base_int):
-                c = intmask(c)
+            self._length += len(c)
+
+        elif isinstance(c, int) or isinstance(c, base_int):
+            c = intmask(c)
+
             if c < 0x80:
                 self._builder.append(chr(c))
             elif c < 0x800:
@@ -588,11 +650,18 @@ class Utf8Builder(object):
                 self._is_ascii = False
             else:
                 raise ValueError("Invalid unicode codepoint > 0x10FFFF.")
-        else:
+            self._length += 1
+        elif isinstance(c, str):
             # TODO: Remove this check?
             if len(c) == 1:
                 assert ord(c) < 128
             self._builder.append(c)
+
+            # XXX The assumption here is that the bytes being appended are
+            #     ASCII, ie 1:1 byte:char
+            self._length += len(c)
+        else:
+            raise TypeError()
 
     @specialize.argtype(1)
     def append_slice(self, s, start, end):
@@ -604,6 +673,7 @@ class Utf8Builder(object):
         else:
             raise TypeError("Invalid type '%s' for Utf8Str.append_slice" %
                             type(s))
+        self._length += end - start
 
     @specialize.argtype(1)
     def append_multiple_char(self, c, count):
@@ -613,12 +683,14 @@ class Utf8Builder(object):
             self._builder.append_multiple_char(chr(c), count)
             return
 
-        if len(c) > 1:
-            import pdb; pdb.set_trace()
         if isinstance(c, str):
             self._builder.append_multiple_char(c, count)
         else:
             self._builder.append_multiple_char(c.bytes, count)
+        self._length += count
+
+    def getlength(self):
+        return self._length
 
     def build(self):
         return Utf8Str(self._builder.build(), self._is_ascii)
@@ -746,9 +818,10 @@ class ReverseIterBase(object):
         return iter
 
 def make_iterator(name, base, calc_value, default):
-    class C(base):
+    class C(object):
+        import_from_mixin(base, ['__init__', '__iter__'])
         _default = default
-        _value = calc_value
+        _value = func_with_new_name(calc_value, '_value')
     C.__name__ = name
     return C
 
@@ -779,4 +852,6 @@ del codepoint_calc_value
 del character_calc_value
 del ForwardIterBase
 del ReverseIterBase
+
+
 

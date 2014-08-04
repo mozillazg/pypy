@@ -415,7 +415,6 @@ def unwrap_value(space, push_func, add_arg, argdesc, letter, w_arg):
                 "Expected unicode string of length one as wide character"))
 
         val = utf8ord(s)
-        #val = 0
         if rffi.sizeof(rffi.WCHAR_T) == 2 and val > 0xFFFF:
             # Utf-16 must be used on systems with a 2 byte wchar_t to
             # encode codepoints > 0xFFFF
@@ -597,7 +596,7 @@ def charp2rawstring(space, address, maxlength=-1):
 def wcharp2rawunicode(space, address, maxlength=-1):
     if maxlength == -1:
         return wcharp2unicode(space, address)
-    s = rffi.wcharpsize2unicode(rffi.cast(rffi.CWCHARP, address), maxlength)
+    s = Utf8Str.from_wcharpsize(rffi.cast(rffi.CWCHARP, address), maxlength)
     return space.wrap(s)
 
 @unwrap_spec(address=r_uint, newcontent='bufferstr')
