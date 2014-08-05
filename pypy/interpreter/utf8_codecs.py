@@ -288,7 +288,7 @@ def str_decode_raw_unicode_escape(s, size, errors, final=False,
 
         # Non-escape characters are interpreted as Unicode ordinals
         if ch != '\\':
-            result.append(ch)
+            result.append(ord(ch))
             pos += 1
             continue
 
@@ -310,7 +310,7 @@ def str_decode_raw_unicode_escape(s, size, errors, final=False,
             pos >= size or
             (s[pos] != 'u' and s[pos] != 'U')):
             result.append('\\')
-            result.append(s[pos])
+            result.append(ord(s[pos]))
             pos += 1
             continue
 

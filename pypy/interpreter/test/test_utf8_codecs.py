@@ -740,6 +740,12 @@ class TestEncoding(UnicodeTests):
                        Utf8Str.from_unicode(u' 12, \u1234 '), 7, None)
         assert encoder(Utf8Str.from_unicode(u'u\u1234'), 2, 'replace') == 'u?'
 
+    def test_decode_raw_unicode_escape(self):
+        decoder = self.getdecoder('raw-unicode-escape')
+        s = '\xffab\x80\n'
+        u = Utf8Str.from_unicode(unicode(s, 'raw-unicode-escape'))
+        assert decoder(s, len(s), 'strict')[0] == u
+
 
 class TestTranslation(object):
     def test_utf8(self):
