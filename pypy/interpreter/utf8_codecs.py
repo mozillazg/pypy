@@ -163,7 +163,7 @@ def hexescape(builder, s, pos, digits,
         else:
             # when we get here, chr is a 32-bit unicode character
             if chr <= MAXUNICODE:
-                builder.append(chr)
+                builder.append(intmask(chr))
                 pos += digits
 
             else:

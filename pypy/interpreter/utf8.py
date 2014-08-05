@@ -642,9 +642,7 @@ class Utf8Builder(object):
                 self._is_ascii = False
             self._length += len(c)
 
-        elif isinstance(c, int) or isinstance(c, base_int):
-            c = intmask(c)
-
+        elif isinstance(c, int):
             if c < 0x80:
                 self._builder.append(chr(c))
             elif c < 0x800:
@@ -665,14 +663,13 @@ class Utf8Builder(object):
             else:
                 raise ValueError("Invalid unicode codepoint > 0x10FFFF.")
             self._length += 1
-        elif isinstance(c, str):
+        else:
+            assert isinstance(c, str)
             self._builder.append(c)
 
             # XXX The assumption here is that the bytes being appended are
             #     ASCII, ie 1:1 byte:char
             self._length += len(c)
-        else:
-            raise TypeError()
 
     @specialize.argtype(1)
     def append_slice(self, s, start, end):
