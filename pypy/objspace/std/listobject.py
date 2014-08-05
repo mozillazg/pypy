@@ -16,6 +16,7 @@ from pypy.interpreter.gateway import (WrappedDefault, unwrap_spec, applevel,
     interp2app)
 from pypy.interpreter.generator import GeneratorIterator
 from pypy.interpreter.signature import Signature
+from pypy.interpreter import utf8
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.bytesobject import W_BytesObject
 from pypy.objspace.std.floatobject import W_FloatObject
@@ -1807,7 +1808,7 @@ class StringSort(StringBaseTimSort):
 
 class UnicodeSort(UnicodeBaseTimSort):
     def lt(self, a, b):
-        return a < b
+        return utf8.LT(a, b)
 
 
 class CustomCompareSort(SimpleSort):

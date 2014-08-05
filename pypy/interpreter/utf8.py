@@ -53,6 +53,7 @@ def utf8ord(ustr, start=0):
 
 @specialize.argtype(0)
 def ORD(s, pos):
+    assert s is not None
     if isinstance(s, Utf8Str):
         return utf8ord(s, pos)
     else:
@@ -76,8 +77,17 @@ def NE(s1, s2):
     else:
         return s1 != s2
 
+@specialize.argtype(0, 1)
+def LT(s1, s2):
+    assert s1 is not None
+    if isinstance(s1, Utf8Str):
+        return s1.__lt__(s2)
+    else:
+        return s1 < s2
+
 @specialize.argtype(0)
 def ADD(s1, s2):
+    assert s1 is not None
     if isinstance(s1, Utf8Str):
         return s1.__add__(s2)
     else:
@@ -85,14 +95,17 @@ def ADD(s1, s2):
 
 @specialize.argtype(0)
 def MUL(s1, s2):
+    assert s1 is not None
     if isinstance(s1, Utf8Str):
         return s1.__mul__(s2)
     else:
+        assert not isinstance(s1, Utf8Str)
         return s1 * s2
 
 @specialize.argtype(0, 1)
 def IN(s1, s2):
-    if isinstance(s1, Utf8Str):
+    assert s1 is not None
+    if isinstance(s2, Utf8Str):
         return s2.__contains__(s1)
     else:
         return s1 in s2
@@ -468,6 +481,7 @@ class Utf8Str(object):
                     break
             return Utf8Str(self.bytes.join([s.bytes for s in other]), is_ascii)
         else:
+            assert isinstance(other[0], str)
             return Utf8Str(self.bytes.join([s for s in other]))
     join._annspecialcase_ = 'specialize:arglistitemtype(1)'
 
@@ -652,9 +666,6 @@ class Utf8Builder(object):
                 raise ValueError("Invalid unicode codepoint > 0x10FFFF.")
             self._length += 1
         elif isinstance(c, str):
-            # TODO: Remove this check?
-            if len(c) == 1:
-                assert ord(c) < 128
             self._builder.append(c)
 
             # XXX The assumption here is that the bytes being appended are

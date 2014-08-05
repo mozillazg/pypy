@@ -521,7 +521,6 @@ class W_TextIOWrapper(W_TextIOBase):
         if self.decoded_chars_used > 0 or size < available:
             start = self.decoded_chars_used
             end = self.decoded_chars_used + size
-            assert start >= 0
             assert end >= 0
             chars = self.decoded_chars[start:end]
         else:

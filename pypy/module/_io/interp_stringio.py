@@ -1,6 +1,7 @@
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.typedef import (
     TypeDef, generic_new_descr, GetSetProperty)
+from pypy.interpreter import utf8
 from pypy.interpreter.utf8 import Utf8Str, utf8ord
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
 from pypy.module._io.interp_textio import W_TextIOBase, W_IncrementalNewlineDecoder
@@ -28,7 +29,9 @@ class W_StringIO(W_TextIOBase):
             newline = space.unicode_w(w_newline)
 
         if (newline is not None and len(newline) != 0 and
-            newline not in (Utf8Str('\n'), Utf8Str('\r\n'), Utf8Str('\r'))):
+             utf8.NE(newline, Utf8Str('\n')) and
+             utf8.NE(newline, Utf8Str('\r\n')) and
+             utf8.NE(newline, Utf8Str('\r'))):
             # Not using oefmt() because I don't know how to ues it
             # with unicode
             raise OperationError(space.w_ValueError,

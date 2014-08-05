@@ -663,11 +663,11 @@ class StringMethods(object):
         rpos = len(value)
 
         if left:
-            while lpos < rpos and value[lpos] in chars:
+            while lpos < rpos and utf8.IN(value[lpos], chars):
                 lpos += 1
 
         if right:
-            while rpos > lpos and value[rpos - 1] in chars:
+            while rpos > lpos and utf8.IN(value[rpos - 1], chars):
                 rpos -= 1
 
         assert rpos >= lpos    # annotator hint, don't remove
