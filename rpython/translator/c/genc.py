@@ -313,7 +313,7 @@ class CStandaloneBuilder(CBuilder):
 
     def cmdexec(self, args='', env=None, err=False, expect_crash=False):
         assert self._compiled
-        if expect_crash and sys.platform == 'win32':
+        if sys.platform == 'win32':
             #Prevent opening a dialog box
             import ctypes
             winapi = ctypes.windll.kernel32
@@ -328,9 +328,14 @@ class CStandaloneBuilder(CBuilder):
             #Since there is no GetErrorMode, do a double Set
             old_mode = SetErrorMode(flags)
             SetErrorMode(old_mode | flags)
+        if env is None:
+            envrepr = ''
+        else:
+            envrepr = ' [env=%r]' % (env,)
+        log.cmdexec('%s %s%s' % (self.executable_name, args, envrepr))
         res = self.translator.platform.execute(self.executable_name, args,
                                                env=env)
-        if expect_crash and sys.platform == 'win32':
+        if sys.platform == 'win32':
             SetErrorMode(old_mode)
         if res.returncode != 0:
             if expect_crash:

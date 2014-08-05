@@ -461,6 +461,10 @@ class W_TextIOWrapper(W_TextIOBase):
         self._check_init(space)
         return space.call_method(self.w_buffer, "seekable")
 
+    def isatty_w(self, space):
+        self._check_init(space)
+        return space.call_method(self.w_buffer, "isatty")
+
     def fileno_w(self, space):
         self._check_init(space)
         return space.call_method(self.w_buffer, "fileno")
@@ -1038,6 +1042,7 @@ W_TextIOWrapper.typedef = TypeDef(
     readable = interp2app(W_TextIOWrapper.readable_w),
     writable = interp2app(W_TextIOWrapper.writable_w),
     seekable = interp2app(W_TextIOWrapper.seekable_w),
+    isatty = interp2app(W_TextIOWrapper.isatty_w),
     fileno = interp2app(W_TextIOWrapper.fileno_w),
     name = GetSetProperty(W_TextIOWrapper.name_get_w),
     buffer = interp_attrproperty_w("w_buffer", cls=W_TextIOWrapper),
