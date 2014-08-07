@@ -134,7 +134,7 @@ def str_decode_unicode_escape(s, size, errors, final=False,
                 builder.append(res)
         else:
             builder.append('\\')
-            builder.append(ch)
+            builder.append(ord(ch))
 
     return builder.build(), pos
 

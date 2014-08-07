@@ -746,6 +746,12 @@ class TestEncoding(UnicodeTests):
         u = Utf8Str.from_unicode(unicode(s, 'raw-unicode-escape'))
         assert decoder(s, len(s), 'strict')[0] == u
 
+    def test_decode_unicode_escape(self):
+        decoder = self.getdecoder('unicode-escape')
+        s = '\\\xff'
+        u = Utf8Str.from_unicode(unicode(s, 'unicode-escape'))
+        assert decoder(s, len(s), 'strict')[0] == u
+
 
 class TestTranslation(object):
     def test_utf8(self):

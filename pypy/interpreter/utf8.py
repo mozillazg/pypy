@@ -478,7 +478,7 @@ class Utf8Str(object):
                 for s in other:
                     if not s._is_ascii:
                         is_ascii = False
-                    break
+                        break
             return Utf8Str(self.bytes.join([s.bytes for s in other]), is_ascii)
         else:
             assert isinstance(other[0], str)
@@ -678,6 +678,8 @@ class Utf8Builder(object):
         elif isinstance(s, Utf8Str):
             self._builder.append_slice(s.bytes, s.index_of_char(start),
                                        s.index_of_char(end))
+            if not s._is_ascii:
+                self._is_ascii = False
         else:
             raise TypeError("Invalid type '%s' for Utf8Str.append_slice" %
                             type(s))
