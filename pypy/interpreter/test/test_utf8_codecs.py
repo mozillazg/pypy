@@ -58,7 +58,7 @@ class UnicodeTests(object):
             assert t is s
             assert start == startingpos
             assert stop == endingpos
-            return "42424242", None, stop
+            return Utf8Str("42424242"), None, stop
         encoder = self.getencoder(encoding)
         result = encoder(s, len(s), "foo!", errorhandler)
         assert called[0]
@@ -85,8 +85,8 @@ class UnicodeTests(object):
                 assert stop == endingpos
                 if msg is not None:
                     assert errmsg == msg
-                return "42424242", stop
-            return "", endingpos
+                return Utf8Str("42424242"), stop
+            return Utf8Str(""), endingpos
         decoder = self.getdecoder(encoding)
         if addstuff:
             s += "some rest in ascii"

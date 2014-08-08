@@ -141,9 +141,9 @@ class W_IncrementalNewlineDecoder(W_Root):
                         i += 1
                     else:
                         seennl |= SEEN_CR
-                    builder.append('\n')
+                    builder.append_ascii('\n')
                     continue
-                builder.append(c)
+                builder.append_codepoint(c)
             output = builder.build()
 
         self.seennl |= seennl
@@ -614,7 +614,7 @@ class W_TextIOWrapper(W_TextIOBase):
         # Keep reading chunks until we have n characters to return
         while True:
             data = self._get_decoded_chars(remaining)
-            builder.append(data)
+            builder.append_utf8(data)
             remaining -= len(data)
 
             if remaining <= 0: # Done

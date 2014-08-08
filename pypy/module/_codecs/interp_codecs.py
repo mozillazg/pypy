@@ -231,9 +231,9 @@ def xmlcharrefreplace_errors(space, w_exc):
         pos = start
         while pos < end:
             code = utf8ord(obj, pos)
-            builder.append("&#")
-            builder.append(str(code))
-            builder.append(";")
+            builder.append_ascii("&#")
+            builder.append_ascii(str(code))
+            builder.append_ascii(";")
             pos += 1
         return space.newtuple([space.wrap(builder.build()), w_end])
     else:
@@ -254,13 +254,13 @@ def backslashreplace_errors(space, w_exc):
             oc = utf8ord(obj, pos)
             num = hex(oc)
             if (oc >= 0x10000):
-                builder.append("\\U")
+                builder.append_ascii("\\U")
                 zeros = 8
             elif (oc >= 0x100):
-                builder.append("\\u")
+                builder.append_ascii("\\u")
                 zeros = 4
             else:
-                builder.append("\\x")
+                builder.append_ascii("\\x")
                 zeros = 2
             lnum = len(num)
             nb = zeros + 2 - lnum # num starts with '0x'

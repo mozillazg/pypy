@@ -418,8 +418,8 @@ def make_formatter_subclass(do_unicode):
                 result.append_multiple_char(' ', padding)
                 # pad with spaces on the left
             if sign:
-                # TODO: Why r[0]?
                 result.append(r[0])        # the sign
+            # prefix is is only every '' or '0x', ie always ascii
             result.append(prefix)               # the prefix
             if padnumber == '0':
                 result.append_multiple_char('0', padding)

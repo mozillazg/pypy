@@ -21,7 +21,7 @@ def utf8chr(value):
     # Like unichr, but returns a Utf8Str object
     # TODO: Do this without the builder so its faster
     b = Utf8Builder()
-    b.append(value)
+    b.append_codepoint(value)
     return b.build()
 
 def utf8ord_bytes(bytes, start):
@@ -129,6 +129,13 @@ class Utf8Str(object):
                 self._calc_length()
             else:
                 self._len = len(data)
+
+        if not we_are_translated():
+            self.bytes.decode('utf8')
+
+            if self._is_ascii:
+                for i in self.bytes:
+                    assert ord(i) < 128
 
     def _calc_length(self):
         pos = 0
@@ -559,15 +566,15 @@ class Utf8Str(object):
                     i += 1
                     c2 = intmask(array[i])
                     if c2 == 0:
-                        builder.append(c)
+                        builder.append_codepoint(c)
                         break
                     elif not (0xDC00 <= c2 <= 0xDFFF):
-                        builder.append(c)
+                        builder.append_codepoint(c)
                         c = c2
                     else:
                         c = (((c & 0x3FF)<<10) | (c2 & 0x3FF)) + 0x10000;
 
-            builder.append(c)
+            builder.append_codepoint(c)
             i += 1
 
         return builder.build()
@@ -587,15 +594,15 @@ class Utf8Str(object):
                     i += 1
                     c2 = intmask(array[i])
                     if c2 == 0:
-                        builder.append(c)
+                        builder.append_codepoint(c)
                         break
                     elif not (0xDC00 <= c2 <= 0xDFFF):
-                        builder.append(c)
+                        builder.append_codepoint(c)
                         c = c2
                     else:
                         c = (((c & 0x3FF)<<10) | (c2 & 0x3FF)) + 0x10000;
 
-            builder.append(c)
+            builder.append_codepoint(c)
             i += 1
 
         return builder.build()
@@ -613,12 +620,12 @@ class Utf8Str(object):
                     i += 1
                     c2 = intmask(array[i])
                     if not (0xDC00 <= c2 <= 0xDFFF):
-                        builder.append(c)
+                        builder.append_codepoint(c)
                         c = c2
                     else:
                         c = (((c & 0x3FF)<<10) | (c2 & 0x3FF)) + 0x10000;
 
-            builder.append(c)
+            builder.append_codepoint(c)
             i += 1
 
         return builder.build()
@@ -634,42 +641,54 @@ class Utf8Builder(object):
         self._length = 0
 
 
+    def append_codepoint(self, c):
+        if c < 0x80:
+            self._builder.append(chr(c))
+        elif c < 0x800:
+            self._builder.append(chr(0xC0 | (c >> 6)))
+            self._builder.append(chr(0x80 | (c & 0x3F)))
+            self._is_ascii = False
+        elif c < 0x10000:
+            self._builder.append(chr(0xE0 | (c >> 12)))
+            self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))
+            self._builder.append(chr(0x80 | (c & 0x3F)))
+            self._is_ascii = False
+        elif c <= 0x10FFFF:
+            self._builder.append(chr(0xF0 | (c >> 18)))
+            self._builder.append(chr(0x80 | (c >> 12 & 0x3F)))
+            self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))
+            self._builder.append(chr(0x80 | (c & 0x3F)))
+            self._is_ascii = False
+        else:
+            raise ValueError("Invalid unicode codepoint > 0x10FFFF.")
+        self._length += 1
+
+    def append_ascii(self, str):
+        if not we_are_translated():
+            # XXX For testing purposes, make sure this is actually ascii
+            for i in str:
+                assert ord(i) < 128
+
+        self._builder.append(str)
+        self._length += len(str)
+
+    def append_utf8(self, ustr):
+        self._builder.append(ustr.bytes)
+        if not ustr._is_ascii:
+            self._is_ascii = False
+        self._length += len(ustr)
+
+    def _append_bytes(self, bytes, is_ascii=False):
+        # XXX This breaks getlength()
+        self._builder.append(bytes)
+        self._is_ascii = self._is_ascii and is_ascii
+
     @specialize.argtype(1)
     def append(self, c):
         if isinstance(c, Utf8Str):
-            self._builder.append(c.bytes)
-            if not c._is_ascii:
-                self._is_ascii = False
-            self._length += len(c)
-
-        elif isinstance(c, int):
-            if c < 0x80:
-                self._builder.append(chr(c))
-            elif c < 0x800:
-                self._builder.append(chr(0xC0 | (c >> 6)))
-                self._builder.append(chr(0x80 | (c & 0x3F)))
-                self._is_ascii = False
-            elif c < 0x10000:
-                self._builder.append(chr(0xE0 | (c >> 12)))
-                self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))
-                self._builder.append(chr(0x80 | (c & 0x3F)))
-                self._is_ascii = False
-            elif c <= 0x10FFFF:
-                self._builder.append(chr(0xF0 | (c >> 18)))
-                self._builder.append(chr(0x80 | (c >> 12 & 0x3F)))
-                self._builder.append(chr(0x80 | (c >> 6 & 0x3F)))
-                self._builder.append(chr(0x80 | (c & 0x3F)))
-                self._is_ascii = False
-            else:
-                raise ValueError("Invalid unicode codepoint > 0x10FFFF.")
-            self._length += 1
+            self.append_utf8(c)
         else:
-            assert isinstance(c, str)
-            self._builder.append(c)
-
-            # XXX The assumption here is that the bytes being appended are
-            #     ASCII, ie 1:1 byte:char
-            self._length += len(c)
+            self.append_ascii(c)
 
     @specialize.argtype(1)
     def append_slice(self, s, start, end):
@@ -685,18 +704,12 @@ class Utf8Builder(object):
                             type(s))
         self._length += end - start
 
-    @specialize.argtype(1)
     def append_multiple_char(self, c, count):
         # TODO: What do I do when I have an int? Is it fine to just loop over
         #       .append(c) then? Should (can) I force a resize first?
-        if isinstance(c, int):
-            self._builder.append_multiple_char(chr(c), count)
-            return
-
-        if isinstance(c, str):
-            self._builder.append_multiple_char(c, count)
-        else:
-            self._builder.append_multiple_char(c.bytes, count)
+        if ord(c) > 127:
+            raise ValueError("an ascii char is required")
+        self._builder.append_multiple_char(c, count)
         self._length += count
 
     def getlength(self):
@@ -704,6 +717,7 @@ class Utf8Builder(object):
 
     def build(self):
         return Utf8Str(self._builder.build(), self._is_ascii)
+
 
 class WCharContextManager(object):
     def __init__(self, str):

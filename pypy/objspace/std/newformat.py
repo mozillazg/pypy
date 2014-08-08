@@ -7,7 +7,7 @@ from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, ORD, utf8chr
 from pypy.interpreter.utf8_codecs import (
     unicode_encode_latin_1, unicode_encode_ascii, str_decode_ascii)
-from rpython.rlib import rstring, runicode, rlocale, rfloat, jit
+from rpython.rlib import rstring, rlocale, rfloat, jit
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rfloat import copysign, formatd
 
@@ -698,6 +698,7 @@ def make_formatting_class():
             need_separator = False
             done = False
             previous = 0
+
             while True:
                 group = ord(grouping[grouping_state])
                 if group > 0:
@@ -750,9 +751,7 @@ def make_formatting_class():
 
             if spec.n_sign:
                 if self.is_unicode:
-                    # TODO: A better way to do this might be to check if
-                    # spec.sign < 127 ...
-                    sign  = str_decode_ascii(chr(spec.sign), 1, 'strict')[0]
+                    sign = str_decode_ascii(chr(spec.sign), 1, 'strict')[0]
                 else:
                     sign = chr(spec.sign)
                 out.append(sign)

@@ -9,10 +9,10 @@ from rpython.rtyper.test.test_llinterp import interpret
 
 def build_utf8str():
     builder = Utf8Builder()
-    builder.append('A') #0x41
-    builder.append(0x10F) #0xC4 0x8F
-    builder.append(0x20AC) #0xE2 0x82 0xAC
-    builder.append(0x1F63D) #0xF0 0x9F 0x98 0xBD
+    builder.append_ascii('A') #0x41
+    builder.append_codepoint(0x10F) #0xC4 0x8F
+    builder.append_codepoint(0x20AC) #0xE2 0x82 0xAC
+    builder.append_codepoint(0x1F63D) #0xF0 0x9F 0x98 0xBD
     return builder.build()
 
 def test_builder():
@@ -88,7 +88,7 @@ def test_eq():
 
 def test_unicode_literal_comparison():
     builder = Utf8Builder()
-    builder.append(0x10F)
+    builder.append_codepoint(0x10F)
     s = builder.build()
     assert s == u'\u010F'
     assert s[0] == u'\u010F'
