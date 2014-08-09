@@ -1351,12 +1351,8 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
 
 def str_decode_unicode_internal(s, size, errors, final=False,
                                 errorhandler=None):
-    if BYTEORDER == 'little':
-        result, length, byteorder = str_decode_utf_32_helper(
-            s, size, errors, final, errorhandler, "little", "unicode_internal")
-    else:
-        result, length, byteorder = str_decode_utf_32_helper(
-            s, size, errors, final, errorhandler, "internal", "unicode_internal")
+    result, length = str_decode_unicode_internal_helper(
+        s, size, errors, final, errorhandler)
     return result, length
 
 def unicode_encode_unicode_internal(s, size, errors, errorhandler=None):
@@ -1364,6 +1360,46 @@ def unicode_encode_unicode_internal(s, size, errors, errorhandler=None):
         return unicode_encode_utf_32_le(s, size, errors, errorhandler)
     else:
         return unicode_encode_utf_32_be(s, size, errors, errorhandler)
+
+def str_decode_unicode_internal_helper(s, size, errors, final=True,
+                                       errorhandler=None):
+    if errorhandler is None:
+        errorhandler = default_unicode_error_decode
+
+    if BYTEORDER == 'little':
+        iorder = [0, 1, 2, 3]
+    else:
+        iorder = [3, 2, 1, 0]
+
+    if size == 0:
+        return Utf8Str(''), 0
+
+    pos = 0
+    result = Utf8Builder(size // 4)
+
+    while pos < size:
+        # remaining bytes at the end? (size should be divisible by 4)
+        if len(s) - pos < 4:
+            if not final:
+                break
+            r, pos = errorhandler(errors, "unicode_internal", "truncated data",
+                                  s, pos, len(s))
+            result.append_utf8(r)
+            if len(s) - pos < 4:
+                break
+            continue
+        ch = ((ord(s[pos + iorder[3]]) << 24) | (ord(s[pos + iorder[2]]) << 16) |
+              (ord(s[pos + iorder[1]]) << 8)  | ord(s[pos + iorder[0]]))
+        if ch >= 0x110000:
+            r, pos = errorhandler(errors, "unicode_internal",
+                                  "codepoint not in range(0x110000)",
+                                  s, pos, pos + 4)
+            result.append_utf8(r)
+            continue
+
+        result.append_codepoint(ch)
+        pos += 4
+    return result.build(), pos
 
 # }}}
 

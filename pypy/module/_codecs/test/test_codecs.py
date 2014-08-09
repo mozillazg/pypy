@@ -727,3 +727,12 @@ class AppTestPartialEvaluation:
         _codecs.register_error("test.test_codecs_not_a_string", f)
         raises(TypeError, u'\u1234'.encode, 'ascii',
                'test.test_codecs_not_a_string')
+
+    def test_decode_callback(self):
+        import codecs
+        codecs.register_error("UnicodeInternalTest", codecs.ignore_errors)
+        decoder = codecs.getdecoder("unicode_internal")
+        ab = u"ab".encode("unicode_internal")
+        ignored = decoder("%s\x22\x22\x22\x22%s" % (ab[:4], ab[4:]),
+            "UnicodeInternalTest")
+        assert (u"ab", 12) == ignored
