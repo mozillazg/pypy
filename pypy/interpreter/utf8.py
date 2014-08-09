@@ -642,7 +642,9 @@ class Utf8Builder(object):
 
 
     def append_codepoint(self, c):
-        if c < 0x80:
+        if c < 0:
+            raise ValueError("Invalid unicode codepoint < 0.")
+        elif c < 0x80:
             self._builder.append(chr(c))
         elif c < 0x800:
             self._builder.append(chr(0xC0 | (c >> 6)))
