@@ -50,6 +50,9 @@ def utf8ord_bytes(bytes, start):
     return res
 
 def utf8ord(ustr, start=0):
+    if start >= len(ustr):
+        raise IndexError()
+
     start = ustr.index_of_char(start)
     return utf8ord_bytes(ustr.bytes, start)
 
