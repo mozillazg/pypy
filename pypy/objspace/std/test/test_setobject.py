@@ -109,9 +109,9 @@ class TestW_SetObject:
         w_set = W_SetObject(self.space)
         _initialize_set(self.space, w_set, w_list)
         assert w_set.strategy is self.space.fromcache(UnicodeSetStrategy)
-        assert w_set.strategy.unerase(w_set.sstorage) == {Utf8Str("1") :None,
-                                                          Utf8Str("2") :None,
-                                                          Utf8Str("3") :None}
+        assert dict(w_set.strategy.unerase(w_set.sstorage)) == {Utf8Str("1") :None,
+                                                                Utf8Str("2") :None,
+                                                                Utf8Str("3") :None}
 
         w_list = W_ListObject(self.space, [w("1"), w(2), w("3")])
         w_set = W_SetObject(self.space)

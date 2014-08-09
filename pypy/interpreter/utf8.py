@@ -1,6 +1,6 @@
 from rpython.rlib.rstring import StringBuilder
 from rpython.rlib.objectmodel import (
-    we_are_translated, specialize, import_from_mixin)
+    we_are_translated, specialize, import_from_mixin, compute_hash)
 from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
 from rpython.rlib.rarithmetic import r_uint, intmask, base_int
@@ -230,7 +230,7 @@ class Utf8Str(object):
         return self._len
 
     def __hash__(self):
-        return hash(self.bytes)
+        return compute_hash(self.bytes)
 
     def __eq__(self, other):
         if isinstance(other, Utf8Str):

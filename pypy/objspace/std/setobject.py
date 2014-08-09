@@ -2,6 +2,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.signature import Signature
 from pypy.interpreter.baseobjspace import W_Root
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.objspace.std.bytesobject import W_BytesObject
 from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.stdtypedef import StdTypeDef
@@ -1250,10 +1251,14 @@ class UnicodeSetStrategy(AbstractUnwrappedSetStrategy, SetStrategy):
                                   name='set(unicode).intersect')
 
     def get_empty_storage(self):
-        return self.erase({})
+        new_dict = r_dict(Utf8Str.__eq__, Utf8Str.__hash__,
+                          force_non_null=True)
+        return self.erase(new_dict)
 
     def get_empty_dict(self):
-        return {}
+        new_dict = r_dict(Utf8Str.__eq__, Utf8Str.__hash__,
+                          force_non_null=True)
+        return new_dict
 
     def listview_unicode(self, w_set):
         return self.unerase(w_set.sstorage).keys()

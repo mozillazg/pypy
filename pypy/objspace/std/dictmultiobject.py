@@ -9,6 +9,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import (
     WrappedDefault, applevel, interp2app, unwrap_spec)
+from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.interpreter.signature import Signature
 from pypy.objspace.std.stdtypedef import StdTypeDef
@@ -1035,7 +1036,6 @@ class BytesDictStrategy(AbstractTypedStrategy, DictStrategy):
 
 create_iterator_classes(BytesDictStrategy)
 
-
 class UnicodeDictStrategy(AbstractTypedStrategy, DictStrategy):
     erase, unerase = rerased.new_erasing_pair("unicode")
     erase = staticmethod(erase)
@@ -1052,9 +1052,9 @@ class UnicodeDictStrategy(AbstractTypedStrategy, DictStrategy):
         return space.is_w(space.type(w_obj), space.w_unicode)
 
     def get_empty_storage(self):
-        res = {}
-        mark_dict_non_null(res)
-        return self.erase(res)
+        new_dict = r_dict(Utf8Str.__eq__, Utf8Str.__hash__,
+                          force_non_null=True)
+        return self.erase(new_dict)
 
     def _never_equal_to(self, w_lookup_type):
         return _never_equal_to_string(self.space, w_lookup_type)
