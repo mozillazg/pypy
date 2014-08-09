@@ -8,13 +8,13 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.tool.sourcetools import func_with_new_name
 
 
-wchar_rint = rffi.r_uint
-WCHAR_INTP = rffi.UINTP
-WCHAR_INT = rffi.UINT
+wchar_rint = rffi.r_int
+WCHAR_INTP = rffi.INTP
+WCHAR_INT = rffi.INT
 if rffi.sizeof(rffi.WCHAR_T) == 2:
-    wchar_rint = rffi.r_ushort
-    WCHAR_INTP = rffi.USHORTP
-    WCHAR_INT = rffi.USHORT
+    wchar_rint = rffi.r_short
+    WCHAR_INTP = rffi.SHORTP
+    WCHAR_INT = rffi.SHORT
 
 
 def utf8chr(value):
@@ -26,6 +26,8 @@ def utf8chr(value):
 
 def utf8ord_bytes(bytes, start):
     codepoint_length = utf8_code_length[ord(bytes[start])]
+
+    assert codepoint_length != 0, "byte index isn't the start of a character"
 
     if codepoint_length == 1:
         res = ord(bytes[start])
@@ -168,6 +170,9 @@ class Utf8Str(object):
         return pos
 
     def __getitem__(self, char_pos):
+        if not isinstance(char_pos, int):
+            raise TyperError("string index must be an integer, not %r" %
+                              type(char_pos))
         # This if statement is needed for [-1:0] to slice correctly
         if char_pos >= self._len:
             raise IndexError()
@@ -222,8 +227,15 @@ class Utf8Str(object):
         return Utf8Str(self.bytes + other.bytes,
                        self._is_ascii and other._is_ascii)
 
+    def __radd__(self, other):
+        return Utf8Str(other.bytes + self.bytes,
+                       self._is_ascii and other._is_ascii)
+
     def __mul__(self, count):
         return Utf8Str(self.bytes * count, self._is_ascii)
+
+    def __rmul__(self, count):
+        return Utf8Str(count * self.bytes, self._is_ascii)
 
     def __len__(self):
         assert self._len >= 0
