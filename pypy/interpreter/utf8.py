@@ -171,7 +171,7 @@ class Utf8Str(object):
 
     def __getitem__(self, char_pos):
         if not isinstance(char_pos, int):
-            raise TyperError("string index must be an integer, not %r" %
+            raise TypeError("string index must be an integer, not %r" %
                               type(char_pos))
         # This if statement is needed for [-1:0] to slice correctly
         if char_pos >= self._len:
