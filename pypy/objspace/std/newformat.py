@@ -340,11 +340,19 @@ def make_template_formatting_class():
                     space = self.space
                     startm1 = start - 1
                     assert startm1 >= self.last_end
+
+                    w_conv = space.w_None
+                    if conversion != -1:
+                        if self.is_unicode:
+                            w_conv = space.wrap(utf8chr((conversion)))
+                        else:
+                            w_conv = space.wrap(chr((conversion)))
+
                     w_entry = space.newtuple([
                         space.wrap(self.template[self.last_end:startm1]),
                         space.wrap(name),
                         space.wrap(spec),
-                        space.wrap(conversion)])
+                        w_conv])
                     self.parser_list_w.append(w_entry)
                     self.last_end = end + 1
                 return self.empty
