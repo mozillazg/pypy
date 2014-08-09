@@ -1718,6 +1718,14 @@ class UnicodeListStrategy(ListStrategy):
     def list_is_correct_type(self, w_list):
         return w_list.strategy is self.space.fromcache(UnicodeListStrategy)
 
+    def _safe_find(self, w_list, obj, start, stop):
+        l = self.unerase(w_list.lstorage)
+        for i in range(start, min(stop, len(l))):
+            val = l[i]
+            if utf8.EQ(val, obj):
+                return i
+        raise ValueError
+
     def sort(self, w_list, reverse):
         l = self.unerase(w_list.lstorage)
         sorter = UnicodeSort(l, len(l))

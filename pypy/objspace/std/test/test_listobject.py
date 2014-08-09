@@ -973,6 +973,10 @@ class AppTestListObject(object):
         assert c.index(0) == 0.0
         raises(ValueError, c.index, 3)
 
+        c = [u'1', u'2']
+        assert c.index(u'2') == 1
+        raises(ValueError, c.index, u'3')
+
     def test_index_cpython_bug(self):
         if self.on_cpython:
             skip("cpython has a bug here")
