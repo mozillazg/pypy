@@ -196,6 +196,10 @@ def test_rsplit():
     assert s.rsplit(' ', 2) == u.rsplit(' ', 2)
     assert s.rsplit('\n') == [s]
 
+def test_untranslated_bool():
+    r = bool(Utf8Str(''))
+    assert r == True
+
 def test_copy_to_new_wcharp():
     s = build_utf8str()
     if sys.maxunicode < 0x10000 and rffi.sizeof(rffi.WCHAR_T) == 4:

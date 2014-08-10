@@ -194,7 +194,7 @@ class StringMethods(object):
     @unwrap_spec(tabsize=int)
     def descr_expandtabs(self, space, tabsize=8):
         value = self._val(space)
-        if not value:
+        if value is None or len(value) == 0:
             return self._empty()
 
         if self._use_rstr_ops(space, self):
@@ -222,7 +222,7 @@ class StringMethods(object):
         """calculates distance behind the token to the next tabstop"""
 
         distance = tabsize
-        if token:
+        if token is not None and len(token) != 0:
             distance = 0
             offset = len(token)
 

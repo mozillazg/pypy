@@ -382,11 +382,11 @@ class W_TextIOWrapper(W_TextIOBase):
 
         self.line_buffering = line_buffering
 
-        self.readuniversal = not newline # null or empty
+        self.readuniversal = newline is None or len(newline) == 0
         self.readtranslate = newline is None
         self.readnl = newline
 
-        self.writetranslate = (newline is None or len(newline) == 0)
+        self.writetranslate = newline is None or len(newline) == 0
         if not self.readuniversal:
             self.writenl = self.readnl
             if utf8.EQ(self.writenl, Utf8Str('\n')):
@@ -646,7 +646,7 @@ class W_TextIOWrapper(W_TextIOBase):
         while True:
             # First, get some data if necessary
             has_data = True
-            while not self.decoded_chars:
+            while self.decoded_chars is None or len(self.decoded_chars) == 0:
                 try:
                     if not self._read_chunk(space):
                         has_data = False
@@ -935,7 +935,7 @@ class W_TextIOWrapper(W_TextIOBase):
         w_pos = space.call_method(self.w_buffer, "tell")
 
         if self.w_decoder is None or self.snapshot is None:
-            assert not self.decoded_chars
+            assert self.decoded_chars is None or len(self.decoded_chars) == 0
             return w_pos
 
         cookie = PositionCookie(space.bigint_w(w_pos))

@@ -245,9 +245,9 @@ class Utf8Str(object):
         assert self._len >= 0
         return self._len
 
-    def __bool__(self):
+    def __nonzero__(self):
         # XXX Make the untranslated behavior the same as the translated behavior
-        raise True
+        return True
 
     def __hash__(self):
         return compute_hash(self.bytes)

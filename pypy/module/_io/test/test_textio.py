@@ -132,6 +132,14 @@ class AppTestTextIO:
         t.read(4)
         assert t.tell() == 4
 
+        r = _io.BytesIO("abc")
+        t = _io.TextIOWrapper(r)
+        assert t.read(2) ==  "ab"
+        assert t.read(1) ==  "c"
+        assert t.read(1) ==  ""
+        assert t.read() ==  ""
+        assert t.tell() ==  3
+
     def test_destructor(self):
         import _io
         l = []

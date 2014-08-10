@@ -43,7 +43,8 @@ class W_StringIO(W_TextIOBase):
             self.readnl = newline
         self.readuniversal = newline is None or len(newline) == 0
         self.readtranslate = newline is None
-        if newline and utf8ord(newline) == ord("\r"):
+        if (newline is not None and len(newline) > 0 and
+            utf8ord(newline) == ord("\r")):
             self.writenl = newline
         if self.readuniversal:
             self.w_decoder = space.call_function(
