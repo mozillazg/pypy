@@ -50,15 +50,16 @@ def utf8ord_bytes(bytes, start):
     return res
 
 def utf8ord(ustr, start=0):
-    if start >= len(ustr):
-        raise IndexError()
-
     start = ustr.index_of_char(start)
     return utf8ord_bytes(ustr.bytes, start)
 
 @specialize.argtype(0)
 def ORD(s, pos):
     assert s is not None
+
+    if pos >= len(s):
+        raise IndexError()
+
     if isinstance(s, Utf8Str):
         return utf8ord(s, pos)
     else:
@@ -493,7 +494,6 @@ class Utf8Str(object):
         res.reverse()
         return res
 
-    #@specialize.argtype(1)
     def join(self, other):
         if len(other) == 0:
             return Utf8Str('')
