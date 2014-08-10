@@ -988,7 +988,7 @@ class LLHelpers(AbstractLLHelpers):
         markerlen = len(c.chars)
         pos = s.rfind(c, 0, pos)
         while pos >= 0 and count <= max:
-            pos = s.rfind(c, 0, pos - markerlen)
+            pos = s.rfind(c, 0, pos)
             count += 1
         res = LIST.ll_newlist(count)
         items = res.ll_items()

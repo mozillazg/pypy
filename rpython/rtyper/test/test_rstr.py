@@ -760,6 +760,11 @@ class AbstractTestRstr(BaseRtypingTest):
             res = self.interpret(f, [i])
             assert res == True
 
+        def f():
+            return "a//b//c//d".rsplit("//") == ["a", "b", "c", "d"]
+        res = self.interpret(f, [])
+        assert res == f()
+
     def test_rsplit(self):
         fn = self._make_split_test('rsplit')
         for i in range(5):
