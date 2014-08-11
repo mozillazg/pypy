@@ -192,6 +192,26 @@ class AppTestTextIO:
                         assert got_line == exp_line
                     assert len(got_lines) == len(exp_lines)
 
+    def test_newlines_output(self):
+        import _io
+        import os
+        testdict = {
+            "": b"AAA\nBBB\nCCC\nX\rY\r\nZ",
+            "\n": b"AAA\nBBB\nCCC\nX\rY\r\nZ",
+            "\r": b"AAA\rBBB\rCCC\rX\rY\r\rZ",
+            "\r\n": b"AAA\r\nBBB\r\nCCC\r\nX\rY\r\r\nZ",
+            }
+        tests = [(None, testdict[os.linesep])] + sorted(testdict.items())
+        for newline, expected in tests:
+            buf = _io.BytesIO()
+            txt = _io.TextIOWrapper(buf, encoding="ascii", newline=newline)
+            txt.write(u"AAA\nB")
+            txt.write(u"BB\nCCC\n")
+            txt.write(u"X\rY\r\nZ")
+            txt.flush()
+            assert buf.closed == False
+            assert buf.getvalue() == expected
+
     def test_readline(self):
         import _io
 

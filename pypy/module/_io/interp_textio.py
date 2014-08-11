@@ -372,6 +372,7 @@ class W_TextIOWrapper(W_TextIOBase):
             newline = None
         else:
             newline = space.unicode_w(w_newline)
+
         if (newline is not None and len(newline) > 0 and
             not (utf8.EQ(newline, Utf8Str('\n')) or
                  utf8.EQ(newline, Utf8Str('\r\n')) or
@@ -379,20 +380,23 @@ class W_TextIOWrapper(W_TextIOBase):
             r = space.str_w(space.repr(w_newline))
             raise OperationError(space.w_ValueError, space.wrap(
                 "illegal newline value: %s" % (r,)))
+        elif newline is not None:
+            # newline is guaranteed to be either empty or ascii
+            newline = newline.bytes
 
         self.line_buffering = line_buffering
 
-        self.readuniversal = newline is None or len(newline) == 0
+        self.readuniversal = not newline
         self.readtranslate = newline is None
         self.readnl = newline
 
-        self.writetranslate = newline is None or len(newline) == 0
+        self.writetranslate = (newline is not None and newline != '')
         if not self.readuniversal:
             self.writenl = self.readnl
-            if utf8.EQ(self.writenl, Utf8Str('\n')):
+            if self.writenl == '\n':
                 self.writenl = None
         elif _WINDOWS:
-            self.writenl = Utf8Str("\r\n")
+            self.writenl = "\r\n"
         else:
             self.writenl = None
 
