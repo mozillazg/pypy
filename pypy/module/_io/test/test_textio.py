@@ -1,5 +1,5 @@
 class AppTestTextIO:
-    spaceconfig = dict(usemodules=['_io', '_locale'])
+    spaceconfig = dict(usemodules=['_io', '_locale', 'thread', 'time', 'signal'])
 
     def test_constructor(self):
         import _io
@@ -279,6 +279,58 @@ class AppTestTextIO:
         raises(TypeError, t.readline)
         t = _io.TextIOWrapper(NonbytesStream(u'a'))
         t.read() == u'a'
+
+
+    def test_interrupted_write(self):
+        import _io
+        import os
+        import threading
+        import sys
+        import signal
+        import errno
+
+        item = u'xy'
+        bytes = 'xy'
+
+        signal.signal(signal.SIGALRM, lambda x, y: 1 // 0)
+
+        read_results = []
+        def _read():
+            s = os.read(r, 1)
+            read_results.append(s)
+        t = threading.Thread(target=_read)
+        t.daemon = True
+        r, w = os.pipe()
+        try:
+            wio = _io.open(w, mode='w', encoding="ascii")
+            t.start()
+            signal.alarm(1)
+            # Fill the pipe enough that the write will be blocking.
+            # It will be interrupted by the timer armed above.  Since the
+            # other thread has read one byte, the low-level write will
+            # return with a successful (partial) result rather than an EINTR.
+            # The buffered IO layer must check for pending signal
+            # handlers, which in this case will invoke alarm_interrupt().
+
+            raises(ZeroDivisionError, wio.write, item * (4194305 // len(item) + 1))
+
+            t.join()
+            # We got one byte, get another one and check that it isn't a
+            # repeat of the first one.
+            read_results.append(os.read(r, 1))
+
+            assert read_results == [bytes[0:1], bytes[1:2]]
+        finally:
+            os.close(w)
+            os.close(r)
+            # This is deliberate. If we didn't close the file descriptor
+            # before closing wio, wio would try to flush its internal
+            # buffer, and block again.
+            try:
+                wio.close()
+            except IOError as e:
+                if e.errno != errno.EBADF:
+                    raise
 
 
 class AppTestIncrementalNewlineDecoder:
