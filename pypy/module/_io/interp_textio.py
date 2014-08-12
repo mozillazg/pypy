@@ -372,17 +372,14 @@ class W_TextIOWrapper(W_TextIOBase):
             newline = None
         else:
             newline = space.unicode_w(w_newline)
+            # newline is guaranteed to be either empty or ascii
+            newline = newline.bytes
 
-        if (newline is not None and len(newline) > 0 and
-            not (utf8.EQ(newline, Utf8Str('\n')) or
-                 utf8.EQ(newline, Utf8Str('\r\n')) or
-                 utf8.EQ(newline, Utf8Str('\r')))):
+        if (newline and newline != '\n' and newline != '\r\n' and
+            newline != '\r'):
             r = space.str_w(space.repr(w_newline))
             raise OperationError(space.w_ValueError, space.wrap(
                 "illegal newline value: %s" % (r,)))
-        elif newline is not None:
-            # newline is guaranteed to be either empty or ascii
-            newline = newline.bytes
 
         self.line_buffering = line_buffering
 

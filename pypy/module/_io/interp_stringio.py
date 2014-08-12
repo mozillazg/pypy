@@ -27,11 +27,10 @@ class W_StringIO(W_TextIOBase):
             newline = None
         else:
             newline = space.unicode_w(w_newline)
+            newline = newline.bytes
 
-        if (newline is not None and len(newline) != 0 and
-             utf8.NE(newline, Utf8Str('\n')) and
-             utf8.NE(newline, Utf8Str('\r\n')) and
-             utf8.NE(newline, Utf8Str('\r'))):
+        if (newline and newline != '\n' and newline != '\r\n' and
+            newline != '\r'):
             # Not using oefmt() because I don't know how to ues it
             # with unicode
             raise OperationError(space.w_ValueError,
@@ -39,12 +38,12 @@ class W_StringIO(W_TextIOBase):
                     space.wrap("illegal newline value: %s"), space.wrap(newline)
                 )
             )
+
         if newline is not None:
             self.readnl = newline
-        self.readuniversal = newline is None or len(newline) == 0
+        self.readuniversal = not newline
         self.readtranslate = newline is None
-        if (newline is not None and len(newline) > 0 and
-            utf8ord(newline) == ord("\r")):
+        if newline and newline[0] == '\r':
             self.writenl = newline
         if self.readuniversal:
             self.w_decoder = space.call_function(
@@ -146,7 +145,8 @@ class W_StringIO(W_TextIOBase):
 
         if self.writenl:
             w_decoded = space.call_method(
-                w_decoded, "replace", space.wrap("\n"), space.wrap(self.writenl)
+                w_decoded, "replace", space.wrap("\n"),
+                space.wrap(Utf8Str(self.writenl))
             )
 
         string = space.unicode_w(w_decoded)
