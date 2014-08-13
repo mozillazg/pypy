@@ -462,7 +462,7 @@ def make_formatting_class():
             self._precision = -1
 
             spec = self.spec
-            if not spec:
+            if (spec is None or not len(spec)):
                 return True
 
             length = len(spec)
@@ -656,7 +656,7 @@ def make_formatting_class():
 
             if self._fill_char == ord("0") and self._align == ord("="):
                 spec.n_min_width = self._width - extra_length
-            if self._loc_thousands:
+            if self._loc_thousands is not None and len(self._loc_thousands):
                 self._group_digits(spec, digits[to_number:])
                 n_grouped_digits = len(self._grouped_digits)
             else:
@@ -774,7 +774,7 @@ def make_formatting_class():
                 out.append_multiple_char(chr(fill_char), spec.n_spadding)
 
             if spec.n_digits != 0:
-                if self._loc_thousands:
+                if self._loc_thousands is not None and len(self._loc_thousands):
                     if grouped_digits is not None:
                         digits = grouped_digits
                     else:

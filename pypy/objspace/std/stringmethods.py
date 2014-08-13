@@ -447,7 +447,7 @@ class StringMethods(object):
 
         sb = self._builder(prealloc_size)
         for i in range(size):
-            if value and i != 0:
+            if (value is not None and len(value)) and i != 0:
                 sb.append(value)
             sb.append(unwrapped[i])
         return self._new(sb.build())
