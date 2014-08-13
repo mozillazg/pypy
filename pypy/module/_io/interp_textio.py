@@ -372,28 +372,28 @@ class W_TextIOWrapper(W_TextIOBase):
             newline = None
         else:
             newline = space.unicode_w(w_newline)
-            # newline is guaranteed to be either empty or ascii
-            newline = newline.bytes
 
-        if (newline and newline != '\n' and newline != '\r\n' and
-            newline != '\r'):
+        if (newline is not None and len(newline) and
+            not (utf8.EQ(newline, Utf8Str('\n')) or
+                 utf8.EQ(newline, Utf8Str('\r\n')) or
+                 utf8.EQ(newline, Utf8Str('\r')))):
             r = space.str_w(space.repr(w_newline))
             raise OperationError(space.w_ValueError, space.wrap(
                 "illegal newline value: %s" % (r,)))
 
         self.line_buffering = line_buffering
 
-        self.readuniversal = not newline
+        self.readuniversal = newline is None or not len(newline)
         self.readtranslate = newline is None
         self.readnl = newline
 
-        self.writetranslate = (newline is not None and newline != '')
+        self.writetranslate = (newline is not None and len(newline))
         if not self.readuniversal:
             self.writenl = self.readnl
-            if self.writenl == '\n':
+            if utf8.EQ(self.writenl, Utf8Str('\n')):
                 self.writenl = None
         elif _WINDOWS:
-            self.writenl = "\r\n"
+            self.writenl = Utf8Str("\r\n")
         else:
             self.writenl = None
 
@@ -663,7 +663,7 @@ class W_TextIOWrapper(W_TextIOBase):
                 start = endpos = offset_to_buffer = 0
                 break
 
-            if not remaining:
+            if remaining is None or not len(remaining):
                 line = self.decoded_chars
                 start = self.decoded_chars_used
                 offset_to_buffer = 0
@@ -705,22 +705,22 @@ class W_TextIOWrapper(W_TextIOBase):
             # We have consumed the buffer
             self._set_decoded_chars(None)
 
-        if line:
+        if line is not None and len(line):
             # Our line ends in the current buffer
             decoded_chars_used = endpos - offset_to_buffer
             assert decoded_chars_used >= 0
             self.decoded_chars_used = decoded_chars_used
             if start > 0 or endpos < len(line):
                 line = line[start:endpos]
-        if remaining:
+        if remaining is not None and len(remaining):
             chunks.append(remaining)
             remaining = None
         if chunks:
-            if line:
+            if line is not None and len(line):
                 chunks.append(line)
             line = Utf8Str('').join(chunks)
 
-        if line:
+        if line is not None and len(line):
             return space.wrap(line)
         else:
             return space.wrap(Utf8Str(''))
@@ -743,10 +743,12 @@ class W_TextIOWrapper(W_TextIOBase):
         textlen = len(text)
 
         haslf = False
-        if (self.writetranslate and self.writenl) or self.line_buffering:
+        if (self.writetranslate and self.writenl is not None and
+            len(self.writenl)) or self.line_buffering:
             if text.find('\n') >= 0:
                 haslf = True
-        if haslf and self.writetranslate and self.writenl:
+        if (haslf and self.writetranslate and
+            self.writenl is not None and len(self.writenl)):
             w_text = space.call_method(w_text, "replace",
                                        space.wrap(Utf8Str('\n')),
                                        space.wrap(self.writenl))
