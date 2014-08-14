@@ -2,8 +2,7 @@
 
 import py
 import sys
-from pypy.interpreter.utf8 import (
-    Utf8Str, Utf8Builder, utf8chr, utf8ord)
+from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord
 from rpython.rtyper.lltypesystem import rffi
 from rpython.rtyper.test.test_llinterp import interpret
 
@@ -29,23 +28,7 @@ def test_builder():
 def test_iterator():
     s = build_utf8str()
     iter = s.codepoint_iter()
-    assert iter.peek_next() == 0x41
     assert list(iter) == [0x41, 0x10F, 0x20AC, 0x1F63D]
-
-    for i in range(1, 5):
-        iter = s.codepoint_iter()
-        iter.move(i)
-        if i != 4:
-            assert iter.peek_next() == [0x41, 0x10F, 0x20AC, 0x1F63D][i]
-        l = list(iter)
-        assert l == [0x41, 0x10F, 0x20AC, 0x1F63D][i:]
-
-    for i in range(1, 5):
-        iter = s.codepoint_iter()
-        list(iter) # move the iterator to the end
-        iter.move(-i)
-        l = list(iter)
-        assert l == [0x41, 0x10F, 0x20AC, 0x1F63D][4-i:]
 
     iter = s.char_iter()
     l = [s.bytes.decode('utf8') for s in list(iter)]
@@ -54,26 +37,17 @@ def test_iterator():
     else:
         assert l == [u'A', u'\u010F', u'\u20AC', u'\U0001F63D']
 
-def test_reverse_iterator():
+def test_new_iterator():
     s = build_utf8str()
-    iter = s.reverse_codepoint_iter()
-    assert iter.peek_next() == 0x1F63D
-    assert list(iter) == [0x1F63D, 0x20AC, 0x10F, 0x41]
+    i = s.iter()
+    while not i.finished():
+        assert utf8ord(s, i.pos()) == i.current()
+        i.move(1)
 
-    for i in range(1, 5):
-        iter = s.reverse_codepoint_iter()
-        iter.move(i)
-        if i != 4:
-            assert iter.peek_next() == [0x1F63D, 0x20AC, 0x10F, 0x41][i]
-        l = list(iter)
-        assert l == [0x1F63D, 0x20AC, 0x10F, 0x41][i:]
-
-    for i in range(1, 5):
-        iter = s.reverse_codepoint_iter()
-        list(iter) # move the iterator to the end
-        iter.move(-i)
-        l = list(iter)
-        assert l == [0x1F63D, 0x20AC, 0x10F, 0x41][4-i:]
+    i = s.iter(len(s) - 1)
+    while i.pos() >= 0:
+        assert utf8ord(s, i.pos()) == i.current()
+        i.move(-1)
 
 def test_builder_append_slice():
     builder = Utf8Builder()
@@ -146,7 +120,6 @@ def test_join():
     s = Utf8Str(' ')
     assert s.join([]) == u''
 
-    
     assert s.join([Utf8Str('one')]) == u'one'
     assert s.join([Utf8Str('one'), Utf8Str('two')]) == u'one two'
 

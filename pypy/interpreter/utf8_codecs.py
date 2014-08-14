@@ -327,15 +327,15 @@ def unicode_encode_raw_unicode_escape(s, size, errors, errorhandler=None):
     if size == 0:
         return ''
     result = StringBuilder(size)
-    pos = 0
-    while pos < size:
-        oc = utf8ord(s, pos)
-
+    iter = s.iter()
+    while not iter.finished():
+        oc = iter.current()
         if oc < 0x100:
             result.append(chr(oc))
         else:
             raw_unicode_escape_helper(result, oc)
-        pos += 1
+
+        iter.move(1)
 
     return result.build()
 
@@ -397,28 +397,29 @@ def unicode_encode_ucs1_helper(p, size, errors,
     if size == 0:
         return ''
     result = StringBuilder(size)
-    pos = 0
-    while pos < size:
-        od = utf8ord(p, pos)
+    iter = p.iter()
+    while not iter.finished():
+        od = iter.current()
 
         if od < limit:
             result.append(chr(od))
-            pos += 1
+            iter.move(1)
         else:
-            # startpos for collecting unencodable chars
-            collstart = pos
-            collend = pos+1
-            while collend < len(p) and utf8ord(p, collend) >= limit:
-                collend += 1
+            coll = iter.copy()
+            while not coll.finished() and coll.current() >= limit:
+                coll.move(1)
+            collstart = iter.pos()
+            collend = coll.pos()
+
             ru, rs, pos = errorhandler(errors, encoding, reason, p,
                                        collstart, collend)
+            iter.move(pos - iter.pos())
             if rs is not None:
                 # py3k only
                 result.append(rs)
                 continue
 
-            for ch in ru:
-                cd = utf8ord(ch, 0)
+            for cd in ru.codepoint_iter():
                 if cd < limit:
                     result.append(chr(cd))
                 else:
@@ -452,41 +453,48 @@ def unicode_encode_utf_8(s, size, errors, errorhandler=None,
                                      allow_surrogates)
 
 def unicode_encode_utf_8_impl(s, size, errors, errorhandler, allow_surrogates):
-    iter = s.codepoint_iter()
-    for oc in iter:
+    iter = s.iter()
+
+    while not iter.finished():
+        oc = iter.current()
         if oc >= 0xD800 and oc <= 0xDFFF:
             break
-        if iter.pos == size:
-            return s.bytes
-    else:
+        iter.move(1)
+    if iter.finished():
         return s.bytes
 
     result = Utf8Builder(len(s.bytes))
-    result.append_slice(s.bytes, 0, iter.byte_pos)
+    result.append_slice(s.bytes, 0, iter.byte_pos())
 
-    iter.move(-1)
-    for oc in iter:
+    while not iter.finished():
+        oc = iter.current()
+        iter.move(1)
+
         if oc >= 0xD800 and oc <= 0xDFFF:
             # Check the next character to see if this is a surrogate pair
-            if (iter.pos != len(s) and oc <= 0xDBFF and
-                0xDC00 <= iter.peek_next() <= 0xDFFF):
-                oc2 = iter.next()
+            if (not iter.finished() and oc <= 0xDBFF and
+                0xDC00 <= iter.current() <= 0xDFFF):
+
+                oc2 = iter.current()
                 result.append_codepoint(
                         ((oc - 0xD800) << 10 | (oc2 - 0xDC00)) + 0x10000)
+                iter.move(1)
+
             elif allow_surrogates:
                 result.append_codepoint(oc)
             else:
                 ru, rs, pos = errorhandler(errors, 'utf8',
                                         'surrogates not allowed', s,
-                                        iter.pos-1, iter.pos)
-                iter.move(pos - iter.pos)
+                                        iter.pos()-2, iter.pos()-1)
+                iter.move(pos - iter.pos())
                 if rs is not None:
                     # py3k only
                     result.append_utf8(rs)
+                    iter.move(1)
                     continue
-                for ch in ru:
-                    if ord(ch) < 0x80:
-                        result.append_ascii(ch)
+                for ch in ru.codepoint_iter():
+                    if ch < 0x80:
+                        result.append_ascii(chr(ch))
                     else:
                         errorhandler('strict', 'utf8',
                                     'surrogates not allowed',
@@ -809,10 +817,10 @@ def unicode_encode_utf_16_helper(s, size, errors,
         _STORECHAR(result, 0xFEFF, BYTEORDER)
         byteorder = BYTEORDER
 
-    i = 0
-    while i < size:
-        ch = utf8ord(s, i)
-        i += 1
+    iter = s.iter()
+    while not iter.finished():
+        ch = iter.current()
+        iter.move(1)
         ch, ch2 = create_surrogate_pair(ch)
 
         _STORECHAR(result, ch, byteorder)
@@ -980,16 +988,16 @@ def unicode_encode_utf_32_helper(s, size, errors,
         _STORECHAR32(result, 0xFEFF, BYTEORDER)
         byteorder = BYTEORDER
 
-    i = 0
-    while i < size:
-        ch = utf8ord(s, i)
-        i += 1
+    iter = s.iter()
+    while not iter.finished():
+        ch = iter.current()
+        iter.move(1)
         ch2 = 0
         if MAXUNICODE < 65536 and 0xD800 <= ch <= 0xDBFF and i < size:
-            ch2 = ord(s[i])
+            ch2 = iter.current()
             if 0xDC00 <= ch2 <= 0xDFFF:
                 ch = (((ch & 0x3FF)<<10) | (ch2 & 0x3FF)) + 0x10000;
-                i += 1
+                iter.move(1)
         _STORECHAR32(result, ch, byteorder)
 
     return result.build()
@@ -1228,10 +1236,9 @@ def unicode_encode_utf_7(s, size, errors, errorhandler=None):
     base64bits = 0
     base64buffer = 0
 
-    # TODO: Looping like this is worse than O(n)
-    pos = 0
-    while pos < size:
-        oc = utf8ord(s, pos)
+    iter = s.iter()
+    while not iter.finished():
+        oc = iter.current()
         if not inShift:
             if oc == ord('+'):
                 result.append('+-')
@@ -1260,7 +1267,7 @@ def unicode_encode_utf_7(s, size, errors, errorhandler=None):
             else:
                 base64bits, base64buffer = _utf7_ENCODE_CHAR(
                     result, oc, base64bits, base64buffer)
-        pos += 1
+        iter.move(1)
 
     if base64bits:
         result.append(_utf7_TO_BASE64(base64buffer << (6 - base64bits)))
@@ -1318,15 +1325,17 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
     if size == 0:
         return ''
     result = StringBuilder(size)
-    pos = 0
-    while pos < size:
-        ch = s[pos]
+
+    iter = s.iter()
+    while not iter.finished():
+        ch = utf8chr(iter.current())
 
         c = mapping.get(ch, '')
         if len(c) == 0:
             ru, rs, pos = errorhandler(errors, "charmap",
                                        "character maps to <undefined>",
-                                       s, pos, pos + 1)
+                                       s, iter.pos(), iter.pos() + 1)
+            iter.move(pos - iter.pos())
             if rs is not None:
                 # py3k only
                 result.append(rs)
@@ -1337,11 +1346,11 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
                     errorhandler(
                         "strict", "charmap",
                         "character maps to <undefined>",
-                        s,  pos, pos + 1)
+                        s, iter.pos(), iter.pos() + 1)
                 result.append(c2)
             continue
         result.append(c)
-        pos += 1
+        iter.move(1)
     return result.build()
 
 # }}}
@@ -1367,9 +1376,9 @@ def str_decode_unicode_internal_helper(s, size, errors, final=True,
         errorhandler = default_unicode_error_decode
 
     if BYTEORDER == 'little':
-        iorder = [0, 1, 2, 3]
+        iorder = (0, 1, 2, 3)
     else:
-        iorder = [3, 2, 1, 0]
+        iorder = (3, 2, 1, 0)
 
     if size == 0:
         return Utf8Str(''), 0
@@ -1542,30 +1551,35 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
     if size == 0:
         return ''
     result = StringBuilder(size)
-    pos = 0
-    while pos < size:
-        ch = utf8ord(s, pos)
+
+    iter = s.iter()
+    while not iter.finished():
+        ch = iter.current()
+
         if unicodedb.isspace(ch):
             result.append(' ')
-            pos += 1
+            iter.move(1)
             continue
+
         try:
             decimal = unicodedb.decimal(ch)
         except KeyError:
             pass
         else:
             result.append(chr(48 + decimal))
-            pos += 1
+            iter.move(1)
             continue
+
         if 0 < ch < 256:
             result.append(chr(ch))
-            pos += 1
+            iter.move(1)
             continue
+
         # All other characters are considered unencodable
-        collstart = pos
-        collend = collstart + 1
-        while collend < size:
-            ch = utf8ord(s, collend)
+        colliter = iter.copy()
+        colliter.move(1)
+        while not colliter.finished():
+            ch = colliter.current()
             try:
                 if (0 < ch < 256 or
                     unicodedb.isspace(ch) or
@@ -1574,15 +1588,19 @@ def unicode_encode_decimal(s, size, errors, errorhandler=None):
             except KeyError:
                 # not a decimal
                 pass
-            collend += 1
+            colliter.move(1)
+
+        collstart = iter.pos()
+        collend = colliter.pos()
+
         msg = "invalid decimal Unicode string"
         ru, rs, pos = errorhandler(errors, 'decimal',
                                    msg, s, collstart, collend)
+        iter.move(pos - iter.pos())
         if rs is not None:
             # py3k only
             errorhandler('strict', 'decimal', msg, s, collstart, collend)
-        for i in range(len(ru)):
-            ch = utf8.ORD(ru, i)
+        for ch in ru.codepoint_iter():
             if unicodedb.isspace(ch):
                 result.append(' ')
                 continue

@@ -309,17 +309,14 @@ class Utf8Str(object):
     def __unicode__(self):
         return unicode(self.bytes, 'utf8')
 
+    def iter(self, start=0):
+        return Utf8Iterator(self, start)
+
     def char_iter(self):
         return Utf8CharacterIter(self)
 
-    def reverse_char_iter(self):
-        return Utf8ReverseCharacterIter(self)
-
     def codepoint_iter(self):
         return Utf8CodePointIter(self)
-
-    def reverse_codepoint_iter(self):
-        return Utf8ReverseCodePointIter(self)
 
     @specialize.argtype(1, 2)
     def _bound_check(self, start, end):
@@ -432,7 +429,7 @@ class Utf8Str(object):
             else:
                 break
 
-            start_byte = iter.byte_pos
+            start_byte = iter._byte_pos
             assert start_byte >= 0
 
             if maxsplit == 0:
@@ -449,7 +446,7 @@ class Utf8Str(object):
                            self._is_ascii))
                 break
 
-            end = iter.byte_pos
+            end = iter._byte_pos
             assert end >= 0
             res.append(Utf8Str(self.bytes[start_byte:end], self._is_ascii))
             maxsplit -= 1
@@ -466,32 +463,32 @@ class Utf8Str(object):
                 other_bytes = other.bytes
             return [Utf8Str(s) for s in self.bytes.rsplit(other_bytes, maxsplit)]
 
+        if len(self) == 0:
+            return []
+
         res = []
-        iter = self.reverse_codepoint_iter()
+        iter = self.iter(len(self) - 1)
         while True:
             # Find the start of the next word
-            for cd in iter:
-                if not unicodedb.isspace(cd):
-                    break
-            else:
+            while iter.pos() >= 0 and unicodedb.isspace(iter.current()):
+                iter.move(-1)
+            if iter.pos() < 0:
                 break
 
-            start_byte = self.next_char(iter.byte_pos)
-
+            start_byte = self.next_char(iter.byte_pos())
             if maxsplit == 0:
                 res.append(Utf8Str(self.bytes[0:start_byte], self._is_ascii))
                 break
 
             # Find the end of the word
-            for cd in iter:
-                if unicodedb.isspace(cd):
-                    break
-            else:
+            while iter.pos() >= 0 and not unicodedb.isspace(iter.current()):
+                iter.move(-1)
+            if iter.pos() < 0:
                 # We hit the end of the string
                 res.append(Utf8Str(self.bytes[0:start_byte], self._is_ascii))
                 break
 
-            end_byte = self.next_char(iter.byte_pos)
+            end_byte = self.next_char(iter.byte_pos())
             res.append(Utf8Str(self.bytes[end_byte:start_byte],
                                self._is_ascii))
             maxsplit -= 1
@@ -756,116 +753,26 @@ class WCharContextManager(object):
 
 # _______________________________________________
 
-# iter.current is the current (ie the last returned) element
-# iter.pos isthe position of the current element
-# iter.byte_pos isthe byte position of the current element
-# In the before-the-start state, for foward iterators iter.pos and
-# iter.byte_pos are -1. For reverse iterators, they are len(ustr) and
-# len(ustr.bytes) respectively.
-
 class ForwardIterBase(object):
     def __init__(self, ustr):
-        self.ustr = ustr
-        self.pos = -1
-
-        self._byte_pos = 0
-        self.byte_pos = -1
-        self.current = self._default
+        self._str = ustr
+        self._byte_pos = -1
 
     def __iter__(self):
         return self
 
     def next(self):
-        if self.pos + 1 == len(self.ustr):
+        if self._byte_pos == -1:
+            if len(self._str) == 0:
+                raise StopIteration()
+            self._byte_pos = 0
+            return self._value(0)
+
+        self._byte_pos = self._str.next_char(self._byte_pos)
+        if self._byte_pos == len(self._str.bytes):
             raise StopIteration()
 
-        self.pos += 1
-        self.byte_pos = self._byte_pos
-
-        self.current = self._value(self.byte_pos)
-
-        self._byte_pos = self.ustr.next_char(self._byte_pos)
-        return self.current
-
-    def peek_next(self):
         return self._value(self._byte_pos)
-
-    def peek_prev(self):
-        return self._value(self._move_backward(self.byte_pos))
-
-    def move(self, count):
-        if count > 0:
-            self.pos += count
-
-            while count != 1:
-                self._byte_pos = self.ustr.next_char(self._byte_pos)
-                count -= 1
-            self.byte_pos = self._byte_pos
-            self._byte_pos = self.ustr.next_char(self._byte_pos)
-            self.current = self._value(self.byte_pos)
-
-        elif count < 0:
-            self.pos += count
-            while count < -1:
-                self.byte_pos = self.ustr.prev_char(self.byte_pos)
-                count += 1
-            self._byte_pos = self.byte_pos
-            self.byte_pos = self.ustr.prev_char(self.byte_pos)
-            self.current = self._value(self.byte_pos)
-
-    def copy(self):
-        iter = self.__class__(self.ustr)
-        iter.pos = self.pos
-        iter.byte_pos = self.byte_pos
-        iter._byte_pos = self._byte_pos
-        iter.current = self.current
-        return iter
-
-class ReverseIterBase(object):
-    def __init__(self, ustr):
-        self.ustr = ustr
-        self.pos = len(ustr)
-        self.byte_pos = len(ustr.bytes)
-        self.current = self._default
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        if self.pos == 0:
-            raise StopIteration()
-
-        self.pos -= 1
-        self.byte_pos = self.ustr.prev_char(self.byte_pos)
-        self.current = self._value(self.byte_pos)
-        return self.current
-
-    def peek_next(self):
-        return self._value(self.ustr.prev_char(self.byte_pos))
-
-    def peek_prev(self):
-        return self._value(self.ustr.next_char(self.byte_pos))
-
-    def move(self, count):
-        if count > 0:
-            self.pos -= count
-            while count != 0:
-                self.byte_pos = self.ustr.prev_char(self.byte_pos)
-                count -= 1
-            self.current = self._value(self.byte_pos)
-        elif count < 0:
-            self.pos -= count
-            while count != 0:
-                self.byte_pos = self.ustr.next_char(self.byte_pos)
-                count += 1
-            self.current = self._value(self.byte_pos)
-
-    def copy(self):
-        iter = self.__class__(self.ustr)
-        iter.pos = self.pos
-        iter.byte_pos = self.byte_pos
-        iter.current = self.current
-        return iter
 
 def make_iterator(name, base, calc_value, default):
     class C(object):
@@ -876,32 +783,91 @@ def make_iterator(name, base, calc_value, default):
     return C
 
 def codepoint_calc_value(self, byte_pos):
-    if byte_pos == -1 or byte_pos == len(self.ustr.bytes):
+    if byte_pos == -1 or byte_pos == len(self._str.bytes):
         return -1
-    return utf8ord_bytes(self.ustr.bytes, byte_pos)
+    return utf8ord_bytes(self._str.bytes, byte_pos)
 
 def character_calc_value(self, byte_pos):
-    if byte_pos == -1 or byte_pos == len(self.ustr.bytes):
+    if byte_pos == -1 or byte_pos == len(self._str.bytes):
         return None
-    length = utf8_code_length[ord(self.ustr.bytes[self.byte_pos])]
-    return Utf8Str(''.join([self.ustr.bytes[i]
-                    for i in range(self.byte_pos, self.byte_pos + length)]),
+    length = utf8_code_length[ord(self._str.bytes[self._byte_pos])]
+    return Utf8Str(''.join([self._str.bytes[i]
+                    for i in range(self._byte_pos, self._byte_pos + length)]),
                     length == 1)
 
 Utf8CodePointIter = make_iterator("Utf8CodePointIter", ForwardIterBase,
                                   codepoint_calc_value, -1)
 Utf8CharacterIter = make_iterator("Utf8CharacterIter", ForwardIterBase,
                                   character_calc_value, None)
-Utf8ReverseCodePointIter = make_iterator(
-    "Utf8ReverseCodePointIter", ReverseIterBase, codepoint_calc_value, -1)
-Utf8ReverseCharacterIter = make_iterator(
-    "Utf8ReverseCharacterIter", ReverseIterBase, character_calc_value, None)
 
 del make_iterator
 del codepoint_calc_value
 del character_calc_value
 del ForwardIterBase
-del ReverseIterBase
 
+
+
+# _______________________________________________
+
+class Utf8Iterator(object):
+    def __init__(self, str, start=0):
+        self._str = str
+
+        self._pos = start
+        self._byte_pos = str.index_of_char(start)
+
+        self._calc_current()
+
+    def _calc_current(self):
+        if self._pos >= len(self._str) or self._pos < 0:
+            raise IndexError()
+        else:
+            self._current = utf8ord_bytes(self._str.bytes, self._byte_pos)
+
+    def current(self):
+        if self._current == -1:
+            self._calc_current()
+        return self._current
+
+    def pos(self):
+        return self._pos
+
+    def byte_pos(self):
+        return self._byte_pos
+
+    def move(self, count):
+        # TODO: As an optimization, we could delay moving byte_pos until we
+        #       _calc_current
+        if count > 0:
+            self._pos += count
+
+            if self._pos < 0:
+                self._byte_pos = 0
+            else:
+                while count != 0:
+                    self._byte_pos = self._str.next_char(self._byte_pos)
+                    count -= 1
+            self._current = -1
+
+        elif count < 0:
+            self._pos += count
+
+            if self._pos < 0:
+                self._byte_pos = 0
+            else:
+                while count < 0:
+                    self._byte_pos = self._str.prev_char(self._byte_pos)
+                    count += 1
+            self._current = -1
+
+    def finished(self):
+        return self._pos >= len(self._str)
+
+    def copy(self):
+        i = Utf8Iterator(self._str)
+        i._pos = self._pos
+        i._byte_pos = self._byte_pos
+        i._current = self._current
+        return i
 
 
