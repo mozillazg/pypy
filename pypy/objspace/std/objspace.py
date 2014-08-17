@@ -22,7 +22,7 @@ from pypy.objspace.std.complexobject import W_ComplexObject
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
 from pypy.objspace.std.floatobject import W_FloatObject
 from pypy.objspace.std.intobject import W_IntObject
-from pypy.objspace.std.iterobject import W_AbstractSeqIterObject
+from pypy.objspace.std.iterobject import W_AbstractSeqIterObject, W_FastUnicodeIterObject
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.longobject import W_LongObject, newlong
 from pypy.objspace.std.bufferobject import W_Buffer
@@ -317,6 +317,8 @@ class StdObjSpace(ObjSpace):
         return W_SliceObject(w_start, w_end, w_step)
 
     def newseqiter(self, w_obj):
+        if isinstance(w_obj, W_UnicodeObject):
+            return W_FastUnicodeIterObject(w_obj)
         return W_SeqIterObject(w_obj)
 
     def newbuffer(self, w_obj):

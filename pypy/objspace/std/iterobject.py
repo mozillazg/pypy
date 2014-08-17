@@ -113,6 +113,19 @@ class W_FastTupleIterObject(W_AbstractSeqIterObject):
         self.index = index + 1
         return w_item
 
+class W_FastUnicodeIterObject(W_AbstractSeqIterObject):
+    def __init__(self, w_uni, index=0):
+        W_AbstractSeqIterObject.__init__(self, w_uni, index)
+        self.iter = iter(w_uni._value)
+
+    def descr_next(self, space):
+        try:
+            next = self.iter.next()
+        except StopIteration:
+            raise OperationError(space.w_StopIteration, space.w_None)
+        self.index += 1
+        return space.wrap(next)
+
 
 class W_ReverseSeqIterObject(W_Root):
     def __init__(self, space, w_seq, index=-1):
