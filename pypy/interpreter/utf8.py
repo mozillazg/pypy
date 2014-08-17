@@ -814,18 +814,30 @@ class Utf8Iterator(object):
         self._str = str
 
         self._pos = start
+        self._calculated_pos = start
         self._byte_pos = str.index_of_char(start)
-
-        self._calc_current()
+        self._current = utf8ord_bytes(self._str.bytes, self._byte_pos)
 
     def _calc_current(self):
         if self._pos >= len(self._str) or self._pos < 0:
             raise IndexError()
-        else:
+
+        count = self._pos - self._calculated_pos
+        self._calculated_pos = self._pos
+        if count > 0:
+            while count != 0:
+                self._byte_pos = self._str.next_char(self._byte_pos)
+                count -= 1
+            self._current = utf8ord_bytes(self._str.bytes, self._byte_pos)
+
+        elif count < 0:
+            while count < 0:
+                self._byte_pos = self._str.prev_char(self._byte_pos)
+                count += 1
             self._current = utf8ord_bytes(self._str.bytes, self._byte_pos)
 
     def current(self):
-        if self._current == -1:
+        if self._calculated_pos != self._pos:
             self._calc_current()
         return self._current
 
@@ -833,32 +845,12 @@ class Utf8Iterator(object):
         return self._pos
 
     def byte_pos(self):
+        if self._calculated_pos != self._pos:
+            self._calc_current()
         return self._byte_pos
 
     def move(self, count):
-        # TODO: As an optimization, we could delay moving byte_pos until we
-        #       _calc_current
-        if count > 0:
-            self._pos += count
-
-            if self._pos < 0:
-                self._byte_pos = 0
-            else:
-                while count != 0:
-                    self._byte_pos = self._str.next_char(self._byte_pos)
-                    count -= 1
-            self._current = -1
-
-        elif count < 0:
-            self._pos += count
-
-            if self._pos < 0:
-                self._byte_pos = 0
-            else:
-                while count < 0:
-                    self._byte_pos = self._str.prev_char(self._byte_pos)
-                    count += 1
-            self._current = -1
+        self._pos += count
 
     def finished(self):
         return self._pos >= len(self._str)
@@ -866,6 +858,7 @@ class Utf8Iterator(object):
     def copy(self):
         i = Utf8Iterator(self._str)
         i._pos = self._pos
+        i._calculated_pos = self._calculated_pos
         i._byte_pos = self._byte_pos
         i._current = self._current
         return i
