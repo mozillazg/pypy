@@ -1031,9 +1031,13 @@ class AppTestArray(BaseArrayTests):
         assert str(buffer(self.array('i'))) == ''
 
     def test_unicode_outofrange(self):
+        a = self.array('u', unicode(r'\x01\u263a\x00\ufeff', 'unicode-escape'))
         b = self.array('u', unicode(r'\x01\u263a\x00\ufeff', 'unicode-escape'))
         b.byteswap()
-        raises(ValueError, "b[0]")
+        if b.itemsize == 4:
+            raises(ValueError, "b[0]")
+        else:
+            assert a != b
 
 
 class AppTestArrayBuiltinShortcut(AppTestArray):

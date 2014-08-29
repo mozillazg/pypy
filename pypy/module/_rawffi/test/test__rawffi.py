@@ -861,7 +861,7 @@ class AppTestFfi:
         a[2] = u'z'
         assert a[0] == u'x'
         b = _rawffi.Array('c').fromaddress(a.buffer, 38)
-        if sys.maxunicode > 65535:
+        if _rawffi.sizeof('u') == 4:
             # UCS4 build
             assert b[0] == 'x'
             assert b[1] == '\x00'
