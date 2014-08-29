@@ -1483,7 +1483,9 @@ if sys.platform == 'win32':
                 if MultiByteToWideChar(CP_ACP, flags,
                                        dataptr, size, buf.raw, usize) == 0:
                     _decode_mbcs_error(s, errorhandler)
-                return buf.str(usize), size
+                # TODO Is this cast necessary for rpython static-typing?
+                #return Utf8Str.from_wcharp(rffi.cast(rffi.CWCHARP, buf.raw)), size
+                return Utf8Str.from_wcharpsize(buf.raw, size), size
 
     def unicode_encode_mbcs(s, size, errors, errorhandler=None,
                             force_replace=True):
@@ -1507,7 +1509,7 @@ if sys.platform == 'win32':
             used_default_p[0] = rffi.cast(rwin32.BOOL, False)
 
         try:
-            with rffi.scoped_nonmoving_unicodebuffer(s) as dataptr:
+            with s.scoped_wcharp_copy() as dataptr:
                 # first get the size of the result
                 mbcssize = WideCharToMultiByte(CP_ACP, flags,
                                                dataptr, size, None, 0,

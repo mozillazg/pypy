@@ -9,12 +9,18 @@ from rpython.tool.sourcetools import func_with_new_name
 
 
 wchar_rint = rffi.r_int
+wchar_ruint = rffi.r_uint
 WCHAR_INTP = rffi.INTP
+WCHAR_UINTP = rffi.UINTP
 WCHAR_INT = rffi.INT
+WCHAR_UINT = rffi.UINT
 if rffi.sizeof(rffi.WCHAR_T) == 2:
     wchar_rint = rffi.r_short
+    wchar_ruint = rffi.r_ushort
     WCHAR_INTP = rffi.SHORTP
+    WCHAR_UINTP = rffi.USHORTP
     WCHAR_INT = rffi.SHORT
+    WCHAR_UINT = rffi.USHORT
 
 
 def utf8chr(value):
@@ -541,11 +547,11 @@ class Utf8Str(object):
                 if c > 0xFFFF:
                     length += 1
 
-        array = lltype.malloc(WCHAR_INTP.TO, length, flavor='raw',
+        array = lltype.malloc(WCHAR_UINTP.TO, length, flavor='raw',
                               track_allocation=track_allocation)
 
         self.copy_to_wcharp(array, 0, length)
-        array[length - 1] = wchar_rint(0)
+        array[length - 1] = wchar_ruint(0)
 
         array = rffi.cast(rffi.CWCHARP, array)
         return array
@@ -560,12 +566,12 @@ class Utf8Str(object):
 
             if rffi.sizeof(rffi.WCHAR_T) == 2:
                 c1, c2 = create_surrogate_pair(c)
-                dst[i + dststart] = wchar_rint(c1)
+                dst[i + dststart] = wchar_ruint(c1)
                 if c2:
                     i += 1
-                    dst[i + dststart] = wchar_rint(c2)
+                    dst[i + dststart] = wchar_ruint(c2)
             else:
-                dst[i + dststart] = wchar_rint(c)
+                dst[i + dststart] = wchar_ruint(c)
 
             i += 1
 
@@ -574,7 +580,7 @@ class Utf8Str(object):
 
     @staticmethod
     def from_wcharp(wcharp):
-        array = rffi.cast(WCHAR_INTP, wcharp)
+        array = rffi.cast(WCHAR_UINTP, wcharp)
         builder = Utf8Builder()
         i = 0;
         while True:
@@ -602,7 +608,7 @@ class Utf8Str(object):
 
     @staticmethod
     def from_wcharpn(wcharp, size):
-        array = rffi.cast(WCHAR_INTP, wcharp)
+        array = rffi.cast(WCHAR_UINTP, wcharp)
         builder = Utf8Builder()
         i = 0;
         while i < size:
@@ -630,7 +636,7 @@ class Utf8Str(object):
 
     @staticmethod
     def from_wcharpsize(wcharp, size):
-        array = rffi.cast(WCHAR_INTP, wcharp)
+        array = rffi.cast(WCHAR_UINTP, wcharp)
         builder = Utf8Builder()
         i = 0;
         while i < size:

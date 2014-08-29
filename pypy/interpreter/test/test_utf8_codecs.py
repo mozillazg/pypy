@@ -727,7 +727,7 @@ class TestEncoding(UnicodeTests):
     def test_mbcs_encode_force_replace(self):
         if sys.platform != 'win32':
             py.test.skip("mbcs encoding is win32-specific")
-        u = u'@test_2224_tmp-?L??\udc80'
+        u = Utf8Str.from_unicode(u'@test_2224_tmp-?L??\udc80')
         encoder = self.getencoder('mbcs')
         assert encoder(u, len(u), 'strict') == '@test_2224_tmp-?L???'
         py.test.raises(UnicodeEncodeError, encoder, u, len(u), 'strict',
