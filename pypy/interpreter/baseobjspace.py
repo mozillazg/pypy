@@ -10,6 +10,7 @@ from rpython.rlib.signature import signature
 from rpython.rlib.rarithmetic import r_uint, SHRT_MIN, SHRT_MAX, \
     INT_MIN, INT_MAX, UINT_MAX
 
+from pypy.interpreter import utf8
 from pypy.interpreter.utf8 import Utf8Str
 from pypy.interpreter.executioncontext import (ExecutionContext, ActionFlag,
     UserDelAction)
@@ -1567,7 +1568,7 @@ class ObjSpace(object):
         "Like unicode_w, but rejects strings with NUL bytes."
         from rpython.rlib import rstring
         result = w_obj.unicode_w(self)
-        if Utf8Str('\x00') in result:
+        if utf8.IN('\00', result):
             raise OperationError(self.w_TypeError, self.wrap(
                     'argument must be a unicode string without NUL characters'))
         return rstring.assert_str0(result)

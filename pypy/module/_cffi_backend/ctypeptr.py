@@ -101,10 +101,10 @@ class W_CTypePtrOrArray(W_CType):
                             "initializer unicode string is too long for '%s' "
                             "(got %d characters)", self.name, n)
 
-            unichardata = rffi.cast(utf8.WCHAR_INTP, cdata)
+            unichardata = rffi.cast(utf8.WCHAR_UINTP, cdata)
             s.copy_to_wcharp(unichardata, 0, n)
             if n != self.length:
-                unichardata[n] = utf8.wchar_rint(0)
+                unichardata[n] = utf8.wchar_ruint(0)
         else:
             raise self._convert_error("list or tuple", w_ob)
 
