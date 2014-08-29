@@ -625,9 +625,10 @@ def charmap_encode(space, uni, errors="strict", w_mapping=None):
 def charmap_build(space, chars):
     # XXX CPython sometimes uses a three-level trie
     w_charmap = space.newdict()
-    for num in range(len(chars)):
-        elem = chars[num]
+    num = 0
+    for elem in chars:
         space.setitem(w_charmap, space.newint(utf8ord(elem)), space.newint(num))
+        num += 1
     return w_charmap
 
 # ____________________________________________________________
