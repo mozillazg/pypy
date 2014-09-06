@@ -4,6 +4,7 @@ from rpython.rlib.objectmodel import (
 from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
 from rpython.rlib.rarithmetic import r_uint, intmask, base_int
+from rpython.rlib.jit import elidable
 from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.tool.sourcetools import func_with_new_name
 
@@ -132,6 +133,7 @@ class Utf8Str(object):
         #       have to iterate the bytes while checking for (& 0b01000000)
 
         self.bytes = data
+        self._cache_scheme = LastAccessCache(self)
         self._is_ascii = is_ascii
 
         if length != -1:
@@ -160,22 +162,51 @@ class Utf8Str(object):
         self._len = length
 
     def index_of_char(self, char):
-        if char >= len(self):
-            return len(self.bytes)
-        byte = 0
-        pos = 0
-        while pos < char:
-            pos += 1
-            byte += utf8_code_length[ord(self.bytes[byte])]
+        return self._cache_scheme.byte_index_of_char(char)
 
-        return byte
+    def index_of_char_from_known(self, char, start_char, start_byte):
+        if start_char > char:
+            pos = start_char
+            byte_pos = start_byte
+            while pos != char:
+                byte_pos -= 1
+                if utf8_code_length[ord(self.bytes[byte_pos])]:
+                    pos -= 1
 
-    def char_index_of_byte(self, byte_):
-        byte = 0
-        pos = 0
-        while byte < byte_:
-            pos += 1
-            byte += utf8_code_length[ord(self.bytes[byte])]
+        elif start_char < char:
+            diff = char - start_char
+            byte_pos = start_byte
+            while diff:
+                byte_pos = self.next_char(byte_pos)
+                diff -= 1
+
+        else:
+            return start_byte
+
+        return byte_pos
+
+
+    def char_index_of_byte(self, byte_pos):
+        return self._cache_scheme.char_index_of_byte(byte_pos)
+
+    def char_index_of_byte_from_known(self, byte_pos, start_char, start_byte):
+        if start_byte > byte_pos:
+            pos = start_char - 1
+            cur_byte_pos = start_byte - 1
+            while byte_pos != cur_byte_pos:
+                if utf8_code_length[ord(self.bytes[cur_byte_pos])]:
+                    pos -= 1
+                cur_byte_pos -= 1
+
+        elif start_byte < byte_pos:
+            pos = start_char
+            cur_byte_pos = start_byte
+            while byte_pos != cur_byte_pos:
+                cur_byte_pos = self.next_char(cur_byte_pos)
+                pos += 1
+
+        else:
+            return start_char
 
         return pos
 
@@ -870,3 +901,60 @@ class Utf8Iterator(object):
         return i
 
 
+#__________________
+
+
+class LastAccessCache(object):
+    _immutable_fields_ = ['str']
+    def __init__(self, str):
+        self.str = str
+        self.prev_byte_pos = 0
+        self.prev_pos = 0
+
+    def byte_index_of_char(self, pos):
+        if pos == 0:
+            return 0
+
+        # Calculate the distance from the start, the last known position, and
+        # the end
+        # (cost, known char, known byte)
+        start_dist = (pos, 0, 0)
+        end_dist = (2 * (len(self.str) - pos), len(self.str),
+                    len(self.str.bytes))
+
+        if pos <= self.prev_pos:
+            min = (2 * (self.prev_pos - pos), self.prev_pos, self.prev_byte_pos)
+        else:
+            min = (pos - self.prev_pos, self.prev_pos, self.prev_byte_pos)
+
+        if start_dist[0] < min[0]:
+            min = start_dist
+        if end_dist[0] < min[0]:
+            min = end_dist
+
+        b =  self.str.index_of_char_from_known(pos, min[1], min[2])
+        self.prev_pos = pos
+        self.prev_byte_pos = b
+        return b
+
+    def char_index_of_byte(self, byte_pos):
+        if byte_pos == 0:
+            return 0
+
+        # (cost, known char, known byte)
+        start_dist = (byte_pos, 0, 0)
+        end_dist = (2 * (len(self.str.bytes) - byte_pos), len(self.str),
+                    len(self.str.bytes))
+
+        min = (2 * abs(byte_pos - self.prev_byte_pos), self.prev_pos,
+               self.prev_byte_pos)
+
+        if start_dist[0] < min[0]:
+            min = start_dist
+        if end_dist[0] < min[0]:
+            min = end_dist
+
+        i = self.str.char_index_of_byte_from_known(byte_pos, min[1], min[2])
+        self.prev_pos = i
+        self.prev_byte_pos = byte_pos
+        return i

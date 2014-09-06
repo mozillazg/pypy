@@ -2,7 +2,8 @@
 
 import py
 import sys
-from pypy.interpreter.utf8 import Utf8Str, Utf8Builder, utf8chr, utf8ord
+from pypy.interpreter.utf8 import (
+    Utf8Str, Utf8Builder, utf8chr, utf8ord, utf8ord_bytes, LastAccessCache)
 from rpython.rtyper.lltypesystem import rffi
 from rpython.rtyper.test.test_llinterp import interpret
 
@@ -221,3 +222,14 @@ def test_from_wcharpsize():
     rffi.free_wcharp(wcharp)
 
 
+def test_mru_cache():
+    s = Utf8Str.from_unicode(u'abcdefg')
+    cacher = LastAccessCache(s)
+
+    for i in range(len(s)):
+        assert i == cacher.byte_index_of_char(i)
+    assert cacher.byte_index_of_char(1) == 1
+
+    l = [unichr(utf8ord_bytes(s.bytes, cacher.byte_index_of_char(i)))
+         for i in range(len(s))]
+    assert u''.join(l)
