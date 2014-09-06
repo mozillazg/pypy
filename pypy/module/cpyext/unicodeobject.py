@@ -693,8 +693,8 @@ def PyUnicode_Tailmatch(space, w_str, w_substr, start, end, direction):
     suffix match), 0 otherwise. Return -1 if an error occurred."""
     str = space.unicode_w(w_str)
     substr = space.unicode_w(w_substr)
-    start = str.index_of_char(start)
-    end = str.index_of_char(end)
+    start = str.byte_index_of_char(start)
+    end = str.byte_index_of_char(end)
     if rffi.cast(lltype.Signed, direction) <= 0:
         return rstring.startswith(str.bytes, substr.bytes, start, end)
     else:

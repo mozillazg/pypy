@@ -57,7 +57,7 @@ def utf8ord_bytes(bytes, start):
     return res
 
 def utf8ord(ustr, start=0):
-    start = ustr.index_of_char(start)
+    start = ustr.byte_index_of_char(start)
     return utf8ord_bytes(ustr.bytes, start)
 
 @specialize.argtype(0)
@@ -161,10 +161,10 @@ class Utf8Str(object):
 
         self._len = length
 
-    def index_of_char(self, char):
+    def byte_index_of_char(self, char):
         return self._cache_scheme.byte_index_of_char(char)
 
-    def index_of_char_from_known(self, char, start_char, start_byte):
+    def byte_index_of_char_from_known(self, char, start_char, start_byte):
         if start_char > char:
             pos = start_char
             byte_pos = start_byte
@@ -246,7 +246,7 @@ class Utf8Str(object):
         if self._is_ascii:
             return Utf8Str(self.bytes[start:stop], True)
 
-        start_byte = self.index_of_char(start)
+        start_byte = self.byte_index_of_char(start)
         stop_byte = start_byte
         stop_pos = start
         # TODO: Is detecting ascii-ness here actually useful? If it will
@@ -364,11 +364,11 @@ class Utf8Str(object):
             if start < 0:
                 start = 0
             else:
-                start = self.index_of_char(start)
+                start = self.byte_index_of_char(start)
         elif start > len(self):
             start = -1
         else:
-            start = self.index_of_char(start)
+            start = self.byte_index_of_char(start)
 
         if end is None or end >= len(self):
             end = len(self.bytes)
@@ -377,11 +377,11 @@ class Utf8Str(object):
             if end < 0:
                 end = 0
             else:
-                end = self.index_of_char(end)
+                end = self.byte_index_of_char(end)
         elif end > len(self):
             end = len(self.bytes)
         else:
-            end = self.index_of_char(end)
+            end = self.byte_index_of_char(end)
 
         return start, end
 
@@ -755,8 +755,8 @@ class Utf8Builder(object):
         if isinstance(s, str):
             self._builder.append_slice(s, start, end)
         elif isinstance(s, Utf8Str):
-            self._builder.append_slice(s.bytes, s.index_of_char(start),
-                                       s.index_of_char(end))
+            self._builder.append_slice(s.bytes, s.byte_index_of_char(start),
+                                       s.byte_index_of_char(end))
             if not s._is_ascii:
                 self._is_ascii = False
         else:
@@ -852,7 +852,7 @@ class Utf8Iterator(object):
 
         self._pos = start
         self._calculated_pos = start
-        self._byte_pos = str.index_of_char(start)
+        self._byte_pos = str.byte_index_of_char(start)
         self._current = utf8ord_bytes(self._str.bytes, self._byte_pos)
 
     def _calc_current(self):
@@ -932,7 +932,7 @@ class LastAccessCache(object):
         if end_dist[0] < min[0]:
             min = end_dist
 
-        b =  self.str.index_of_char_from_known(pos, min[1], min[2])
+        b =  self.str.byte_index_of_char_from_known(pos, min[1], min[2])
         self.prev_pos = pos
         self.prev_byte_pos = b
         return b

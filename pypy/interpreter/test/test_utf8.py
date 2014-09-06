@@ -109,13 +109,13 @@ def test_getslice():
 def test_convert_indices():
     s = build_utf8str()
 
-    assert s.index_of_char(0) == 0
-    assert s.index_of_char(1) == 1
-    assert s.index_of_char(2) == 3
-    assert s.index_of_char(3) == 6
+    assert s.byte_index_of_char(0) == 0
+    assert s.byte_index_of_char(1) == 1
+    assert s.byte_index_of_char(2) == 3
+    assert s.byte_index_of_char(3) == 6
 
     for i in range(len(s)):
-        assert s.char_index_of_byte(s.index_of_char(i)) == i
+        assert s.char_index_of_byte(s.byte_index_of_char(i)) == i
 
 def test_join():
     s = Utf8Str(' ')

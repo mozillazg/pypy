@@ -334,11 +334,13 @@ class W_UnicodeObject(W_Root):
 
     def _startswith(self, space, value, w_prefix, start, end):
         return startswith(value.bytes, self._op_val(space, w_prefix).bytes,
-                          value.index_of_char(start), value.index_of_char(end))
+                          value.byte_index_of_char(start),
+                          value.byte_index_of_char(end))
 
     def _endswith(self, space, value, w_prefix, start, end):
         return endswith(value.bytes, self._op_val(space, w_prefix).bytes,
-                        value.index_of_char(start), value.index_of_char(end))
+                        value.byte_index_of_char(start),
+                        value.byte_index_of_char(end))
 
     @staticmethod
     def _split(value, sep=None, maxsplit=-1):
