@@ -124,7 +124,7 @@ def IN(s1, s2):
         return s1 in s2
 
 class Utf8Str(object):
-    _immutable_fields_ = ['bytes', '_is_ascii', '_len']
+    _immutable_fields_ = ['bytes', '_is_ascii', '_len', '_cache_scheme']
 
     def __init__(self, data, is_ascii=False, length=-1):
         # TODO: Maybe I can determine is_ascii rather than have it passed in?
@@ -162,7 +162,12 @@ class Utf8Str(object):
         self._len = length
 
     def byte_index_of_char(self, char):
-        return self._cache_scheme.byte_index_of_char(char)
+        if self._is_ascii:
+            return char
+
+        res = self._cache_scheme.byte_index_of_char(char)
+        assert res >= 0
+        return res
 
     def byte_index_of_char_from_known(self, char, start_char, start_byte):
         if start_char > char:
@@ -187,6 +192,9 @@ class Utf8Str(object):
 
 
     def char_index_of_byte(self, byte_pos):
+        if self._is_ascii:
+            return byte_pos
+
         return self._cache_scheme.char_index_of_byte(byte_pos)
 
     def char_index_of_byte_from_known(self, byte_pos, start_char, start_byte):
@@ -915,24 +923,21 @@ class LastAccessCache(object):
         if pos == 0:
             return 0
 
-        # Calculate the distance from the start, the last known position, and
-        # the end
-        # (cost, known char, known byte)
-        start_dist = (pos, 0, 0)
-        end_dist = (2 * (len(self.str) - pos), len(self.str),
-                    len(self.str.bytes))
-
-        if pos <= self.prev_pos:
-            min = (2 * (self.prev_pos - pos), self.prev_pos, self.prev_byte_pos)
+        if pos < 2 * (len(self.str) - pos):
+            cost = pos
+            known_char = 0
+            known_byte = 0
         else:
-            min = (pos - self.prev_pos, self.prev_pos, self.prev_byte_pos)
+            cost = 2 * (len(self.str) - pos)
+            known_char = len(self.str)
+            known_byte = len(self.str.bytes)
 
-        if start_dist[0] < min[0]:
-            min = start_dist
-        if end_dist[0] < min[0]:
-            min = end_dist
+        if 2 * abs(pos - self.prev_pos) < cost:
+            known_char = self.prev_pos
+            known_byte = self.prev_byte_pos
 
-        b =  self.str.byte_index_of_char_from_known(pos, min[1], min[2])
+        b =  self.str.byte_index_of_char_from_known(pos, known_char,
+                                                    known_byte)
         self.prev_pos = pos
         self.prev_byte_pos = b
         return b
@@ -942,19 +947,21 @@ class LastAccessCache(object):
             return 0
 
         # (cost, known char, known byte)
-        start_dist = (byte_pos, 0, 0)
-        end_dist = (2 * (len(self.str.bytes) - byte_pos), len(self.str),
-                    len(self.str.bytes))
+        if byte_pos < 2 * (len(self.str.bytes) - byte_pos):
+            cost = byte_pos
+            known_char = 0
+            known_byte = 0
+        else:
+            cost = 2 * (len(self.str.bytes) - byte_pos)
+            known_char = len(self.str)
+            known_byte = len(self.str.bytes)
 
-        min = (2 * abs(byte_pos - self.prev_byte_pos), self.prev_pos,
-               self.prev_byte_pos)
+        if 2 * abs(byte_pos - self.prev_byte_pos) < cost:
+            known_char = self.prev_pos
+            known_byte = self.prev_byte_pos
 
-        if start_dist[0] < min[0]:
-            min = start_dist
-        if end_dist[0] < min[0]:
-            min = end_dist
-
-        i = self.str.char_index_of_byte_from_known(byte_pos, min[1], min[2])
+        i = self.str.char_index_of_byte_from_known(byte_pos, known_char,
+                                                   known_byte)
         self.prev_pos = i
         self.prev_byte_pos = byte_pos
         return i
