@@ -4,7 +4,6 @@ from rpython.rlib.objectmodel import (
 from rpython.rlib.runicode import utf8_code_length
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
 from rpython.rlib.rarithmetic import r_uint, intmask, base_int
-from rpython.rlib.jit import elidable
 from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.tool.sourcetools import func_with_new_name
 
@@ -190,7 +189,6 @@ class Utf8Str(object):
 
         return byte_pos
 
-
     def char_index_of_byte(self, byte_pos):
         if self._is_ascii:
             return byte_pos
@@ -268,6 +266,8 @@ class Utf8Str(object):
                 is_ascii = False
             stop_byte += increment
 
+        assert start_byte >= 0
+        assert stop_byte >= 0
         return Utf8Str(self.bytes[start_byte:stop_byte], is_ascii,
                        stop - start)
 
@@ -399,6 +399,7 @@ class Utf8Str(object):
         if start < 0:
             return -1
 
+        assert end >= 0
         if isinstance(other, Utf8Str):
             pos = self.bytes.find(other.bytes, start, end)
         elif isinstance(other, str):
@@ -419,6 +420,7 @@ class Utf8Str(object):
         if start < 0:
             return -1
 
+        assert end >= 0
         if isinstance(other, Utf8Str):
             pos = self.bytes.rfind(other.bytes, start, end)
         elif isinstance(other, unicode):
@@ -438,6 +440,7 @@ class Utf8Str(object):
         if start < 0:
             return 0
 
+        assert end >= 0
         if isinstance(other, Utf8Str):
             count = self.bytes.count(other.bytes, start, end)
         elif isinstance(other, unicode):
