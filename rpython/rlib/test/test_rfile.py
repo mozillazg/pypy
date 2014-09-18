@@ -104,15 +104,53 @@ class TestFile(BaseRtypingTest):
         f()
         self.interpret(f, [])
 
+    @py.test.mark.skipif("sys.platform == 'win32'")
+    # http://msdn.microsoft.com/en-us/library/86cebhfs.aspx
+    def test_fdopen_buffering_line(self):
+        fname = str(self.tmpdir.join('file_1a'))
+
+        def f():
+            g = open(fname, 'w')
+            f = os.fdopen(os.dup(g.fileno()), 'w', 1)
+            g.close()
+            f.write('dupa\ndupb')
+            f2 = open(fname, 'r')
+            assert f2.read() == 'dupa\n'
+            f.close()
+            assert f2.read() == 'dupb'
+            f2.close()
+
+        f()
+        self.interpret(f, [])
+
     def test_open_buffering_full(self):
         fname = str(self.tmpdir.join('file_1b'))
 
         def f():
             f = open(fname, 'w', 128)
-            f.write('dupa')
+            f.write('dupa\ndupb')
             f2 = open(fname, 'r')
             assert f2.read() == ''
-            f.write('z' * 5000)
+            f.write('z' * 120)
+            assert f2.read() != ''
+            f.close()
+            assert f2.read() != ''
+            f2.close()
+
+        f()
+        self.interpret(f, [])
+
+    def test_fdopen_buffering_full(self):
+        fname = str(self.tmpdir.join('file_1b'))
+
+        def f():
+            g = open(fname, 'w')
+            f = os.fdopen(os.dup(g.fileno()), 'w', 128)
+            g.close()
+            f.write('dupa\ndupb')
+            f2 = open(fname, 'r')
+            assert f2.read() == ''
+            f.write('z' * 120)
             assert f2.read() != ''
             f.close()
             assert f2.read() != ''
@@ -132,10 +170,22 @@ class TestFile(BaseRtypingTest):
                 pass
             else:
                 assert False
+            try:
+                f.readline()
+            except IOError as e:
+                pass
+            else:
+                assert False
             f.write("dupa\x00dupb")
             f.close()
             for mode in ['r', 'U']:
                 f2 = open(fname, mode)
+                try:
+                    f2.write('z')
+                except IOError as e:
+                    pass
+                else:
+                    assert False
                 dupa = f2.read(0)
                 assert dupa == ""
                 dupa = f2.read()
@@ -173,6 +223,39 @@ class TestFile(BaseRtypingTest):
             assert c == "p"
             assert d == "a"
             assert e == ""
+
+        f()
+        self.interpret(f, [])
+
+    def test_read_universal(self):
+        fname = str(self.tmpdir.join('read_univ'))
+        with open(fname, 'wb') as f:
+            f.write("dupa\ndupb\r\ndupc\rdupd")
+
+        def f():
+            f = open(fname, 'U')
+            assert f.read() == "dupa\ndupb\ndupc\ndupd"
+            assert f.read() == ""
+            f.seek(0)
+            assert f.read(10) == "dupa\ndupb\n"
+            assert f.read(42) == "dupc\ndupd"
+            assert f.read(1) == ""
+            f.seek(0)
+            assert f.readline() == "dupa\n"
+            assert f.tell() == 5
+            assert f.readline() == "dupb\n"
+            assert f.tell() == 11
+            assert f.readline() == "dupc\n"
+            assert f.tell() == 16
+            assert f.readline() == "dupd"
+            assert f.tell() == 20
+            assert f.readline() == ""
+            f.seek(0)
+            assert f.readline() == "dupa\n"
+            assert f.readline() == "dupb\n"
+            f.seek(4)
+            assert f.read(1) == "\n"
+            f.close()
 
         f()
         self.interpret(f, [])
@@ -215,6 +298,12 @@ class TestFile(BaseRtypingTest):
             new_fno = os.dup(f.fileno())
             f2 = os.fdopen(new_fno, "w")
             f.close()
+            try:
+                f2.read()
+            except IOError as e:
+                pass
+            else:
+                assert False
             f2.write("xxx")
             f2.close()
 
@@ -228,6 +317,7 @@ class TestFile(BaseRtypingTest):
 
         def f():
             f = open(fname, "w")
+            assert not f.isatty()
             try:
                 return f.fileno()
             finally:
@@ -281,6 +371,14 @@ class TestFile(BaseRtypingTest):
             data = f.read()
             assert data == "hello w"
             f.close()
+            f = open(fname)
+            try:
+                f.truncate()
+            except IOError as e:
+                pass
+            else:
+                assert False
+            f.close()
 
         f()
         self.interpret(f, [])
@@ -290,6 +388,13 @@ class TestDirect:
     def setup_class(cls):
         cls.tmpdir = udir.join('test_rfile_direct')
         cls.tmpdir.ensure(dir=True)
+
+    def test_stdio(self):
+        i, o, e = rfile.create_stdio()
+        o.write("test\n")
+        i.close()
+        o.close()
+        e.close()
 
     def test_auto_close(self):
         fname = str(self.tmpdir.join('file_auto_close'))

@@ -259,9 +259,6 @@ def ll_max(i1, i2):
         return i1
     return i2
 
-def rtype_Exception__init__(hop):
-    hop.exception_cannot_occur()
-
 def rtype_object__init__(hop):
     hop.exception_cannot_occur()
 
@@ -269,17 +266,19 @@ def rtype_EnvironmentError__init__(hop):
     hop.exception_cannot_occur()
     v_self = hop.args_v[0]
     r_self = hop.args_r[0]
-    if hop.nb_args >= 2:
-        v_errno = hop.inputarg(lltype.Signed, arg=1)
-    else:
+    if hop.nb_args <= 2:
         v_errno = hop.inputconst(lltype.Signed, 0)
-    r_self.setfield(v_self, 'errno', v_errno, hop.llops)
-    if hop.nb_args >= 3:
+        if hop.nb_args == 2:
+            v_strerror = hop.inputarg(rstr.string_repr, arg=1)
+            r_self.setfield(v_self, 'strerror', v_strerror, hop.llops)
+    else:
+        v_errno = hop.inputarg(lltype.Signed, arg=1)
         v_strerror = hop.inputarg(rstr.string_repr, arg=2)
         r_self.setfield(v_self, 'strerror', v_strerror, hop.llops)
         if hop.nb_args >= 4:
             v_filename = hop.inputarg(rstr.string_repr, arg=3)
             r_self.setfield(v_self, 'filename', v_filename, hop.llops)
+    r_self.setfield(v_self, 'errno', v_errno, hop.llops)
 
 def rtype_WindowsError__init__(hop):
     hop.exception_cannot_occur()
@@ -339,6 +338,9 @@ for name, value in globals().items():
         original = getattr(__builtin__, name[14:])
         BUILTIN_TYPER[original] = value
 
+BUILTIN_TYPER[getattr(object.__init__, 'im_func', object.__init__)] = (
+    rtype_object__init__)
+
 BUILTIN_TYPER[getattr(EnvironmentError.__init__, 'im_func', EnvironmentError.__init__)] = (
     rtype_EnvironmentError__init__)
 
@@ -351,8 +353,6 @@ else:
         getattr(WindowsError.__init__, 'im_func', WindowsError.__init__)] = (
         rtype_WindowsError__init__)
 
-BUILTIN_TYPER[getattr(object.__init__, 'im_func', object.__init__)] = (
-    rtype_object__init__)
 # annotation of low-level types
 
 def rtype_malloc(hop, i_flavor=None, i_zero=None, i_track_allocation=None,

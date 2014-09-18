@@ -1,11 +1,11 @@
 =================================================
-PyPy 2.4 - ????????
+PyPy 2.4 - Snow White
 =================================================
 
 We're pleased to announce PyPy 2.4, which contains significant performance
 enhancements and bug fixes. 
 
-You can download the PyPy 2.4 release here:
+You can already download the PyPy 2.4-beta1 pre-release here:
 
     http://pypy.org/download.html
 
@@ -58,7 +58,8 @@ Benchmarks improved after internal enhancements in string and
 bytearray handling, and a major rewrite of the GIL handling. This means
 that external calls are now a lot faster, especially the CFFI ones. It also
 means better performance in a lot of corner cases with handling strings or
-bytearrays.
+bytearrays. The main bugfix is handling of many socket objects in your
+program which in the long run used to "leak" memory.
 
 PyPy now uses Python 2.7.8 standard library.
 
@@ -82,7 +83,7 @@ for more information see `whats-new`_:
   this mostly affects errno handling on linux, which makes external calls
   faster.
 
-* Move to a mixed polling and mutex GIL model that make mutli-threaded jitted
+* Move to a mixed polling and mutex GIL model that make mutlithreaded jitted
   code run *much* faster
 
 * Optimize errno handling in linux (x86 and x86-64 only)
@@ -97,13 +98,17 @@ for more information see `whats-new`_:
 
 * Upgrade stdlib from 2.7.5 to 2.7.8
 
+* Win32 now links statically to zlib, expat, bzip, and openssl-1.0.1i.
+  No more missing DLLs
+  
 * Many issues were resolved_ since the 2.3.1 release on June 8
 
 .. _`whats-new`: http://doc.pypy.org/en/latest/whatsnew-2.3.1.html
 .. _resolved: https://bitbucket.org/pypy/pypy/issues?status=resolved
 
-We have further improvements on the way: rpython file handling and
-usable numpy linalg compatabiity should be merged soon.
+We have further improvements on the way: rpython file handling,
+numpy linalg compatibility, as well
+as improved GC and many smaller improvements.
 
 Please try it out and let us know what you think. We especially welcome
 success stories, we know you are using PyPy, please tell us about it!
