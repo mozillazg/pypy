@@ -93,20 +93,10 @@ def fixeggblocks(graph):
     for link in list(graph.iterlinks()):
         block = link.target
         if isinstance(block, EggBlock):
-            if (not block.operations and len(block.exits) == 1 and
-                link.args == block.inputargs):   # not renamed
-                # if the variables are not renamed across this link
-                # (common case for EggBlocks) then it's easy enough to
-                # get rid of the empty EggBlock.
-                link2 = block.exits[0]
-                link.args = list(link2.args)
-                link.target = link2.target
-                assert link2.exitcase is None
-            else:
-                mapping = {}
-                for a in block.inputargs:
-                    mapping[a] = Variable(a)
-                block.renamevariables(mapping)
+            mapping = {}
+            for a in block.inputargs:
+                mapping[a] = Variable(a)
+            block.renamevariables(mapping)
 
 # ____________________________________________________________
 
@@ -413,15 +403,19 @@ class FlowContext(object):
             return w_condition.value
         return self.recorder.guessbool(self, w_condition)
 
-    def record(self, spaceop):
+    def merge_point(self):
         recorder = self.recorder
         if getattr(recorder, 'final_state', None) is not None:
             self.mergeblock(recorder.crnt_block, recorder.final_state)
             raise StopFlowing
+
+    def record(self, spaceop):
+        recorder = self.recorder
         spaceop.offset = self.last_instr
         recorder.append(spaceop)
 
     def do_op(self, op):
+        self.merge_point()
         self.record(op)
         self.guessexception(op.canraise)
         return op.result

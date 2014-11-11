@@ -10,6 +10,7 @@ from collections import defaultdict
 from rpython.flowspace.model import (Variable, Constant,
                                      c_last_exception, checkgraph, mkentrymap)
 from rpython.flowspace.operation import OverflowingOperation, op
+from rpython.annotator.expression import V_Type
 from rpython.rlib import rarithmetic
 from rpython.translator import unsimplify
 from rpython.translator.backendopt import ssa
@@ -70,6 +71,8 @@ def eliminate_empty_blocks(graph):
             if not block1.exits:
                 break
             exit = block1.exits[0]
+            if any(isinstance(arg, V_Type) for arg in exit.args):
+                break
             assert block1 is not exit.target, (
                 "the graph contains an empty infinite loop")
             subst = dict(zip(block1.inputargs, link.args))
@@ -256,7 +259,8 @@ def join_blocks(graph):
             for vprev, vtarg in zip(link.args, link.target.inputargs):
                 renaming[vtarg] = vprev
             def rename(v):
-                return renaming.get(v, v)
+                if v is not None:
+                    return v.replace(renaming)
             def rename_op(op):
                 op = op.replace(renaming)
                 # special case...
