@@ -601,6 +601,10 @@ class W_UnicodeBox(W_CharacterBox):
         #    arr.storage[i] = arg[i]
         return W_UnicodeBox(arr, 0, arr.dtype)
 
+class W_ObjectBox(W_GenericBox):
+    def __init__(self, w_obj):
+        self.w_obj = w_obj
+
 
 W_GenericBox.typedef = TypeDef("numpy.generic",
     __new__ = interp2app(W_GenericBox.descr__new__.im_func),

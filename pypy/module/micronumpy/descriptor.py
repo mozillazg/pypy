@@ -850,6 +850,13 @@ class DtypeCache(object):
             char=NPY.UINTPLTR,
             w_box_type=space.gettypefor(boxes.W_ULongBox),
         )
+        self.w_objectdtype = W_Dtype(
+            types.ObjectType(),
+            num=NPY.OBJECT,
+            kind=NPY.OBJECTLTR,
+            char=NPY.OBJECTLTR,
+            w_box_type=space.gettypefor(boxes.W_ObjectBox),
+        )
         aliases = {
             NPY.BOOL:        ['bool_', 'bool8'],
             NPY.BYTE:        ['byte'],
@@ -868,6 +875,7 @@ class DtypeCache(object):
             NPY.CLONGDOUBLE: ['clongdouble', 'clongfloat'],
             NPY.STRING:      ['string_', 'str'],
             NPY.UNICODE:     ['unicode_'],
+            NPY.OBJECT:      ['object_'],
         }
         self.alternate_constructors = {
             NPY.BOOL:     [space.w_bool],
@@ -886,6 +894,8 @@ class DtypeCache(object):
             NPY.UNICODE:  [space.w_unicode],
             NPY.VOID:     [space.gettypefor(boxes.W_GenericBox)],
                            #space.w_buffer,  # XXX no buffer in space
+            NPY.OBJECT:   [space.gettypefor(boxes.W_ObjectBox),
+                           space.w_object],
         }
         float_dtypes = [self.w_float16dtype, self.w_float32dtype,
                         self.w_float64dtype, self.w_floatlongdtype]
@@ -905,7 +915,7 @@ class DtypeCache(object):
             self.w_int64dtype, self.w_uint64dtype,
             ] + float_dtypes + complex_dtypes + [
             self.w_stringdtype, self.w_unicodedtype, self.w_voiddtype,
-            self.w_intpdtype, self.w_uintpdtype,
+            self.w_intpdtype, self.w_uintpdtype, self.w_objectdtype,
         ]
         self.float_dtypes_by_num_bytes = sorted(
             (dtype.elsize, dtype)
@@ -957,6 +967,7 @@ class DtypeCache(object):
             'USHORT': self.w_uint16dtype,
             'FLOAT': self.w_float32dtype,
             'BOOL': self.w_booldtype,
+            'OBJECT': self.w_objectdtype,
         }
 
         typeinfo_partial = {

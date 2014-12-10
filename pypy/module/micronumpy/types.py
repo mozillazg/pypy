@@ -1614,6 +1614,20 @@ elif boxes.long_double_size in (12, 16):
         BoxType = boxes.W_ComplexLongBox
         ComponentBoxType = boxes.W_FloatLongBox
 
+class ObjectType(BaseType):
+    T = lltype.Signed
+    
+    def get_element_size(self):
+        return rffi.sizeof(lltype.Signed)
+
+    def coerce(self, space, dtype, w_item):
+        if isinstance(w_item, boxes.W_ObjectBox):
+            return w_item
+        return boxes.W_ObjectBox(w_item)
+
+    def store(self, arr, i, offset, box):
+        self._write(arr.storage, i, offset, self.unbox(box))
+
 class FlexibleType(BaseType):
     def get_element_size(self):
         return rffi.sizeof(self.T)
