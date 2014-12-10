@@ -34,7 +34,6 @@ includes += [
 eci = ExternalCompilationInfo(
     libraries = libraries,
     includes = includes,
-    export_symbols = [],
     post_include_bits = [
         # Unnamed structures are not supported by rffi_platform.
         # So we replace an attribute access with a macro call.
@@ -69,6 +68,7 @@ class CConfig:
     SSLEAY_VERSION = rffi_platform.DefinedConstantString(
         "SSLEAY_VERSION", "SSLeay_version(SSLEAY_VERSION)")
     OPENSSL_NO_SSL2 = rffi_platform.Defined("OPENSSL_NO_SSL2")
+    OPENSSL_NO_SSL3 = rffi_platform.Defined("OPENSSL_NO_SSL3")
     SSL_FILETYPE_PEM = rffi_platform.ConstantInteger("SSL_FILETYPE_PEM")
     SSL_OP_ALL = rffi_platform.ConstantInteger("SSL_OP_ALL")
     SSL_OP_NO_SSLv2 = rffi_platform.ConstantInteger("SSL_OP_NO_SSLv2")
@@ -171,8 +171,6 @@ HAVE_SSL_CTX_CLEAR_OPTIONS = OPENSSL_VERSION_NUMBER >= 0x009080df
 
 def external(name, argtypes, restype, **kw):
     kw['compilation_info'] = eci
-    if not kw.get('macro', False):
-        eci.export_symbols += (name,)
     return rffi.llexternal(
         name, argtypes, restype, **kw)
 
