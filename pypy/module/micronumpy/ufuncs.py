@@ -398,7 +398,9 @@ class W_Ufunc2(W_Ufunc):
         w_rhs = numpify(space, w_rhs)
         w_ldtype = _get_dtype(space, w_lhs)
         w_rdtype = _get_dtype(space, w_rhs)
-        if w_ldtype.is_str() and w_rdtype.is_str() and \
+        if w_ldtype.is_object() or w_rdtype.is_object():
+            pass
+        elif w_ldtype.is_str() and w_rdtype.is_str() and \
                 self.comparison_func:
             pass
         elif (w_ldtype.is_str() or w_rdtype.is_str()) and \

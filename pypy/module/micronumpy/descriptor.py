@@ -110,6 +110,9 @@ class W_Dtype(W_Root):
     def is_str(self):
         return self.num == NPY.STRING
 
+    def is_object(self):
+        return self.num == NPY.OBJECT
+
     def is_str_or_unicode(self):
         return self.num == NPY.STRING or self.num == NPY.UNICODE
 

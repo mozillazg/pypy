@@ -3,8 +3,9 @@ import math
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.objspace.std.floatobject import float2string
 from pypy.objspace.std.complexobject import str_format
+from pypy.interpreter.baseobjspace import W_Root
 from rpython.rlib import clibffi, jit, rfloat, rcomplex
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import specialize, we_are_translated
 from rpython.rlib.rarithmetic import widen, byteswap, r_ulonglong, \
     most_neg_value_of, LONG_BIT
 from rpython.rlib.rawstorage import (alloc_raw_storage,
@@ -14,7 +15,9 @@ from rpython.rlib.rstruct.ieee import (float_pack, float_unpack, unpack_float,
                                        pack_float80, unpack_float80)
 from rpython.rlib.rstruct.nativefmttable import native_is_bigendian
 from rpython.rlib.rstruct.runpack import runpack
-from rpython.rtyper.lltypesystem import lltype, rffi
+from rpython.rtyper.annlowlevel import cast_instance_to_gcref,\
+     cast_gcref_to_instance
+from rpython.rtyper.lltypesystem import lltype, rffi, llmemory
 from rpython.tool.sourcetools import func_with_new_name
 from pypy.module.micronumpy import boxes
 from pypy.module.micronumpy.concrete import SliceArray, VoidBoxStorage
@@ -344,7 +347,7 @@ class Bool(BaseType, Primitive):
     def to_builtin_type(self, space, w_item):
         return space.wrap(self.unbox(w_item))
 
-    def str_format(self, box):
+    def str_format(self, space, box):
         return "True" if self.unbox(box) else "False"
 
     @staticmethod
@@ -409,7 +412,7 @@ class Integer(Primitive):
     def _coerce(self, space, w_item):
         return self._base_coerce(space, w_item)
 
-    def str_format(self, box):
+    def str_format(self, space, box):
         return str(self.for_computation(self.unbox(box)))
 
     @staticmethod
@@ -647,7 +650,7 @@ class Float(Primitive):
             return self.box(rfloat.NAN)
         return self.box(space.float_w(space.call_function(space.w_float, w_item)))
 
-    def str_format(self, box):
+    def str_format(self, space, box):
         return float2string(self.for_computation(self.unbox(box)), "g",
                             rfloat.DTSF_STR_PRECISION)
 
@@ -1038,7 +1041,7 @@ class ComplexFloating(object):
         w_obj.__init__(w_tmpobj.real, w_tmpobj.imag)
         return w_obj
 
-    def str_format(self, box):
+    def str_format(self, space, box):
         real, imag = self.for_computation(self.unbox(box))
         imag_str = str_format(imag)
         if not rfloat.isfinite(imag):
@@ -1619,9 +1622,12 @@ elif boxes.long_double_size in (12, 16):
         BoxType = boxes.W_ComplexLongBox
         ComponentBoxType = boxes.W_FloatLongBox
 
+_all_objs_for_tests = [] # for tests
+
 class ObjectType(BaseType):
     T = lltype.Signed
-    
+    BoxType = boxes.W_ObjectBox
+
     def get_element_size(self):
         return rffi.sizeof(lltype.Signed)
 
@@ -1632,6 +1638,36 @@ class ObjectType(BaseType):
 
     def store(self, arr, i, offset, box):
         self._write(arr.storage, i, offset, self.unbox(box))
+
+    def read(self, arr, i, offset, dtype=None):
+        return self.box(self._read(arr.storage, i, offset))
+
+    def _write(self, storage, i, offset, w_obj):
+        if we_are_translated():
+            value = rffi.cast(lltype.Signed, cast_instance_to_gcref(w_obj))
+        else:
+            value = len(_all_objs_for_tests)
+            _all_objs_for_tests.append(w_obj)
+        raw_storage_setitem_unaligned(storage, i + offset, value)
+
+    def _read(self, storage, i, offset):
+        res = raw_storage_getitem_unaligned(self.T, storage, i + offset)
+        if we_are_translated():
+            gcref = rffi.cast(llmemory.GCREF, res)
+            w_obj = cast_gcref_to_instance(W_Root, gcref)
+        else:
+            w_obj = _all_objs_for_tests[res]
+        return w_obj
+
+    def unbox(self, box):
+        assert isinstance(box, self.BoxType)
+        return box.w_obj
+
+    def box(self, w_obj):
+        return self.BoxType(w_obj)
+
+    def str_format(self, space, box):
+        return space.str_w(space.repr(self.unbox(box)))
 
 class FlexibleType(BaseType):
     def get_element_size(self):
@@ -1702,7 +1738,7 @@ class StringType(FlexibleType):
             dtype = arr.dtype
         return boxes.W_StringBox(arr, i + offset, dtype)
 
-    def str_format(self, item):
+    def str_format(self, space, item):
         builder = StringBuilder()
         builder.append("'")
         builder.append(self.to_str(item))
@@ -1832,7 +1868,7 @@ class VoidType(FlexibleType):
         return boxes.W_VoidBox(arr, i + offset, dtype)
 
     @jit.unroll_safe
-    def str_format(self, box):
+    def str_format(self, space, box):
         assert isinstance(box, boxes.W_VoidBox)
         arr = self.readarray(box.arr, box.ofs, 0, box.dtype)
         return arr.dump_data(prefix='', suffix='')
@@ -1932,7 +1968,7 @@ class RecordType(FlexibleType):
         return space.newtuple(items)
 
     @jit.unroll_safe
-    def str_format(self, box):
+    def str_format(self, space, box):
         assert isinstance(box, boxes.W_VoidBox)
         pieces = ["("]
         first = True
