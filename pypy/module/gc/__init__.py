@@ -10,6 +10,7 @@ class Module(MixedModule):
         'enable_finalizers': 'interp_gc.enable_finalizers',
         'disable_finalizers': 'interp_gc.disable_finalizers',
         'garbage': 'space.newlist([])',
+        'get_tid_counters': 'interp_gc.get_tid_counters',
         #'dump_heap_stats': 'interp_gc.dump_heap_stats',
     }
     appleveldefs = {}

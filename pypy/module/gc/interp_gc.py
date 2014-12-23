@@ -61,3 +61,13 @@ def dump_heap_stats(space, filename):
         f.write("%d %d " % (tb[i].count, tb[i].size))
         f.write(",".join([str(tb[i].links[j]) for j in range(len(tb))]) + "\n")
     f.close()
+
+def get_tid_counters(space):
+    a = rgc.get_tid_counters()
+    l_w = [None] * 65536
+    i = 0
+    while i < 65536:
+        l_w[i] = space.wrap(a[i])
+        i += 1
+    rgc.reset_tid_counters()
+    return space.newlist(l_w)
