@@ -1548,6 +1548,32 @@ class TestIncrementalMiniMarkGC(TestMiniMarkGC):
         res = self.run("random_pin")
         assert res == 28495
 
+    def define_get_tid_ptr(self):
+        class A(object):
+            pass
+
+        prebuilt = A()
+        prebuilt.a = []
+
+        def f():
+            rgc.reset_tid_counters()
+            for i in range(1000):
+                prebuilt.a.append(A())
+                prebuilt.a[-1] = A()
+                prebuilt.a[-1] = A()
+                prebuilt.a[-1] = A()
+                prebuilt.a[-1] = A()
+            llop.gc__collect(lltype.Void)
+            a = rgc.get_tid_counters()
+            sum = 0
+            for i in range(65536):
+                sum += a[i]
+            return sum
+        return f
+
+    def test_get_tid_ptr(self):
+        res = self.run("get_tid_ptr")
+        assert 1050 > res > 1000 # counting objects surviving minor collections
 
 # ____________________________________________________________________
 

@@ -495,6 +495,8 @@ LL_OPERATIONS = {
     'gc_typeids_z'        : LLOp(),
     'gc_gcflag_extra'     : LLOp(),
     'gc_add_memory_pressure': LLOp(),
+    'gc_reset_tid_counters': LLOp(),
+    'gc_get_tid_counters'  : LLOp(),
 
     # ------- JIT & GC interaction, only for some GCs ----------
 

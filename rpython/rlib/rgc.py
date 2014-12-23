@@ -676,3 +676,32 @@ class RegisterGcTraceEntry(ExtRegistryEntry):
         lambda_func = hop.args_s[1].const
         hop.exception_cannot_occur()
         hop.rtyper.custom_trace_funcs.append((TP, lambda_func()))
+
+def get_tid_counters():
+    return []
+
+def reset_tid_counters():
+    pass
+
+class GetTidCountersEntry(ExtRegistryEntry):
+    _about_ = get_tid_counters
+
+    def compute_result_annotation(self):
+        from rpython.rtyper.llannotation import SomePtr
+        from rpython.rtyper.lltypesystem import lltype
+        
+        return SomePtr(lltype.Ptr(lltype.Array(lltype.Signed)))
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        return hop.genop('gc_get_tid_counters', [], resulttype=hop.r_result)
+
+class ResetTidCountersEntry(ExtRegistryEntry):
+    _about_ = reset_tid_counters
+
+    def compute_result_annotation(self):
+        pass
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        hop.genop('gc_reset_tid_counters', [])

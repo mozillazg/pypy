@@ -175,6 +175,8 @@ NURSARRAY = lltype.Array(llmemory.Address)
 
 # ____________________________________________________________
 
+MAX_TID = 65536
+
 class IncrementalMiniMarkGC(MovingGCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
@@ -302,6 +304,8 @@ class IncrementalMiniMarkGC(MovingGCBase):
         self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = lltype.nullptr(NURSARRAY)
         self.extra_threshold = 0
+        self.tid_counters = lltype.malloc(lltype.Array(lltype.Signed), MAX_TID,
+                                          zero=True, immortal=True)
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
@@ -1856,6 +1860,10 @@ class IncrementalMiniMarkGC(MovingGCBase):
         # A bit of no-ops to convince llarena that we are changing
         # the layout, in non-translated versions.
         typeid = self.get_type_id(obj)
+
+        # XXX
+        self.tid_counters[typeid] += 1
+        
         obj = llarena.getfakearenaaddress(obj)
         llarena.arena_reset(obj - size_gc_header, totalsize, 0)
         llarena.arena_reserve(obj - size_gc_header,
@@ -2590,3 +2598,12 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 (obj + offset).address[0] = llmemory.NULL
         self.old_objects_with_weakrefs.delete()
         self.old_objects_with_weakrefs = new_with_weakref
+
+    def reset_tid_counters(self):
+        i = 0
+        while i < MAX_TID:
+            self.tid_counters[i] = 0
+            i += 1
+
+    def get_tid_counters(self):
+        return self.tid_counters

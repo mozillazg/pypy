@@ -474,6 +474,14 @@ class BaseFrameworkGCTransformer(GCTransformer):
                                         [s_gc, SomeAddress()],
                                         annmodel.SomeBool())
 
+        if hasattr(GCClass, 'get_tid_counters'):
+            self.get_tid_ptr = getfn(GCClass.get_tid_counters,
+                                     [s_gc],
+                                     SomePtr(lltype.Ptr(
+                                         lltype.Array(lltype.Signed))))
+            self.reset_tid_ptr = getfn(GCClass.reset_tid_counters,
+                                       [s_gc], annmodel.s_None)
+
         self.write_barrier_ptr = None
         self.write_barrier_from_array_ptr = None
         if GCClass.needs_write_barrier:
@@ -1257,6 +1265,17 @@ class BaseFrameworkGCTransformer(GCTransformer):
             self.transform_setfield_typeptr(hop)
         else:
             GCTransformer.gct_setfield(self, hop)
+
+    def gct_gc_reset_tid_counters(self, hop):
+        if hasattr(self, 'reset_tid_ptr'):
+            hop.genop("direct_call", [self.reset_tid_ptr,
+                                      self.c_const_gc])
+
+    def gct_gc_get_tid_counters(self, hop):
+        if hasattr(self, 'get_tid_ptr'):
+            hop.genop("direct_call", [self.get_tid_ptr,
+                                      self.c_const_gc],
+                resultvar=hop.spaceop.result)
 
     def var_needs_set_transform(self, var):
         return var_needsgc(var)
