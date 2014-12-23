@@ -1862,7 +1862,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
         typeid = self.get_type_id(obj)
 
         # XXX
-        self.tid_counters[typeid] += 1
+        self.tid_counters[typeid] += totalsize
         
         obj = llarena.getfakearenaaddress(obj)
         llarena.arena_reset(obj - size_gc_header, totalsize, 0)
