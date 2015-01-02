@@ -183,9 +183,9 @@ def ensure_correct_math():
     gcv['OPT'] = opt
 
 
-def try_compile(c_files, eci):
+def try_compile(c_files, eci, noerr=False):
     try:
-        build_executable(c_files, eci)
+        build_executable(c_files, eci, noerr=noerr)
         result = True
     except (distutils.errors.CompileError,
             distutils.errors.LinkError):

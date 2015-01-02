@@ -143,12 +143,12 @@ class _CWriter(object):
         print >> f, '}'
         f.close()
 
-    def ask_gcc(self, question):
+    def ask_gcc(self, question, noerr=False):
         self.start_main()
         self.f.write(question + "\n")
         self.close()
         eci = self.config._compilation_info_
-        return try_compile([self.path], eci)
+        return try_compile([self.path], eci, noerr=noerr)
 
         
 def configure(CConfig, noerr=False):
@@ -457,7 +457,7 @@ class Has(CConfigSingleEntry):
 
 class Works(CConfigSingleEntry):
     def question(self, ask_gcc):
-        return ask_gcc("")
+        return ask_gcc("", noerr=True)
 
 class SizeOf(CConfigEntry):
     """An entry in a CConfig class that stands for
