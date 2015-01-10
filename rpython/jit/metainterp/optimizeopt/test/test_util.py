@@ -21,7 +21,7 @@ from rpython.jit.metainterp.jitprof import EmptyProfiler
 from rpython.jit.metainterp.counter import DeterministicJitCounter
 from rpython.config.translationoption import get_combined_translation_config
 from rpython.jit.metainterp.resoperation import rop, opname, ResOperation
-from rpython.jit.metainterp.optimizeopt.unroll import Inliner
+from rpython.jit.metainterp.inliner import Inliner
 
 def test_sort_descrs():
     class PseudoDescr(AbstractDescr):

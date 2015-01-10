@@ -31,7 +31,7 @@ ALL_OPTS_NAMES = ':'.join([name for name, _ in ALL_OPTS])
 assert ENABLE_ALL_OPTS == ALL_OPTS_NAMES, (
     'please fix rlib/jit.py to say ENABLE_ALL_OPTS = %r' % (ALL_OPTS_NAMES,))
 
-def build_opt_chain(metainterp_sd, enable_opts):
+def build_opt_chain(enable_opts):
     optimizations = []
     unroll = 'unroll' in enable_opts    # 'enable_opts' is normally a dict
     for name, opt in unroll_all_opts:
@@ -57,7 +57,7 @@ def optimize_trace(metainterp_sd, jitdriver_sd, loop, enable_opts,
     try:
         loop.logops = metainterp_sd.logger_noopt.log_loop(loop.inputargs,
                                                           loop.operations)
-        optimizations, unroll = build_opt_chain(metainterp_sd, enable_opts)
+        optimizations, unroll = build_opt_chain(enable_opts)
         if unroll:
             return optimize_unroll(metainterp_sd, jitdriver_sd, loop,
                                    optimizations,
