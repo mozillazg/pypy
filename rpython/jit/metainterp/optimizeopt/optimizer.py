@@ -847,6 +847,20 @@ class Optimizer(Optimization):
                                  op.getopnum(), argboxes, op.getdescr())
         return resbox.constbox()
 
+    # for unrolling
+    def reuse_pure_result(self, box):
+        #if box in self.short_boxes_seen:
+        #    return
+        label1_op = self.loop.operations[0]
+        label1_args = label1_op.getarglist()
+        label2_op = self.loop.operations[-1]
+        label2_args = label2_op.getarglist()
+        assert len(label1_args) == len(self.loop.inputargs)
+        assert len(label2_args) == len(self.loop.inputargs)
+        self.loop.inputargs.append(box)
+        label1_args.append(box)
+        label2_args.append(box)
+
     #def optimize_GUARD_NO_OVERFLOW(self, op):
     #    # otherwise the default optimizer will clear fields, which is unwanted
     #    # in this case
