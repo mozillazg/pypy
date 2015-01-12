@@ -95,11 +95,13 @@ class OptPure(Optimization):
     def setup(self):
         self.optimizer.optpure = self
 
-    def pure(self, opnum, args, result):
+    def pure(self, opnum, args, result, value=None):
         op = ResOperation(opnum, args, result)
         key = self.optimizer.make_args_key(op)
         if key not in self.pure_operations:
-            self.pure_operations[key] = self.getvalue(result)
+            if value is None:
+                value = self.getvalue(result)
+            self.pure_operations[key] = value
 
     def has_pure_result(self, opnum, args, descr):
         op = ResOperation(opnum, args, None, descr)
@@ -108,20 +110,6 @@ class OptPure(Optimization):
 
     def get_pure_result(self, key):
         return self.pure_operations.get(key, None)
-
-    def produce_potential_short_preamble_ops(self, sb):
-        xxx
-        ops = sb.optimizer._newoperations
-        for i, op in enumerate(ops):
-            if op.is_always_pure():
-                sb.add_potential(op)
-            if op.is_ovf() and ops[i + 1].getopnum() == rop.GUARD_NO_OVERFLOW:
-                sb.add_potential(op)
-        for i in self.call_pure_positions:
-            op = ops[i]
-            assert op.getopnum() == rop.CALL
-            op = op.copy_and_change(rop.CALL_PURE)
-            sb.add_potential(op)
 
 dispatch_opt = make_dispatcher_method(OptPure, 'optimize_',
                                       default=OptPure.optimize_default)

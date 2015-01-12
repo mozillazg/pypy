@@ -6,7 +6,7 @@ from rpython.jit.metainterp.optimizeopt.unroll import Unroller
 from rpython.jit.metainterp.optimizeopt.test.test_util import BaseTest,\
      FakeMetaInterpStaticData
 from rpython.jit.metainterp.optimizeopt.pure import OptPure
-from rpython.jit.metainterp.resoperation import rop
+from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.jit.metainterp.history import ConstInt, BoxInt
 from rpython.jit.backend.llgraph import runner
 
@@ -54,8 +54,10 @@ class TestUnrollDirect(BaseTest):
         i1 = BoxInt()
         unroller = Unroller()
         unroller.optimizer = Optimizer(self.metainterp_sd, None, None, [pure])
+        unroller.optimizer._newoperations = [
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1)
+        ]
         pure.optimizer = unroller.optimizer
-        pure.pure(rop.INT_ADD, [i0, ConstInt(1)], i1)
         expected = """
         [i0, i1]
         label(i0, i1)

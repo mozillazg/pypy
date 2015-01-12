@@ -44,7 +44,26 @@ class Unroller(object):
         if old_optpure:
             # import all pure operations from the old optimizer
             new_optpure = self.optimizer.optpure
-            for opargs, value in old_optpure.pure_operations.items():
-                if not value.is_virtual():
-                    pure_value = OptPureValue(self, value.box)
-                    new_optpure.pure_operations[opargs] = pure_value
+            old_ops = old_optimizer._newoperations
+            for op in old_ops:
+                if op.is_always_pure():
+                    pure_value = OptPureValue(self, op.result)
+                    new_optpure.pure(op.getopnum(), op.getarglist(),
+                                     op.result, pure_value)
+    #         for opargs, value in old_optpure.pure_operations.items():
+    #             if not value.is_virtual():
+    #                 pure_value = OptPureValue(self, value.box)
+    #                 new_optpure.pure_operations[opargs] = pure_value
+
+    # def produce_potential_short_preamble_ops(self, sb):
+    #     ops = sb.optimizer._newoperations
+    #     for i, op in enumerate(ops):
+    #         if op.is_always_pure():
+    #             sb.add_potential(op)
+    #         if op.is_ovf() and ops[i + 1].getopnum() == rop.GUARD_NO_OVERFLOW:
+    #             sb.add_potential(op)
+    #     for i in self.call_pure_positions:
+    #         op = ops[i]
+    #         assert op.getopnum() == rop.CALL
+    #         op = op.copy_and_change(rop.CALL_PURE)
+    #         sb.add_potential(op)
