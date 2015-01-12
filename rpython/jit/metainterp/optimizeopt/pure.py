@@ -7,6 +7,7 @@ class OptPure(Optimization):
     def __init__(self):
         self.postponed_op = None
         self.pure_operations = args_dict()
+        self.call_pure_positions = []
 
     def propagate_forward(self, op):
         dispatch_opt(self, op)
@@ -79,6 +80,7 @@ class OptPure(Optimization):
         args = op.getarglist()
         self.emit_operation(ResOperation(rop.CALL, args, op.result,
                                          op.getdescr()))
+        self.call_pure_positions.append(len(self.optimizer._newoperations) - 1)
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:
@@ -106,6 +108,20 @@ class OptPure(Optimization):
 
     def get_pure_result(self, key):
         return self.pure_operations.get(key, None)
+
+    def produce_potential_short_preamble_ops(self, sb):
+        xxx
+        ops = sb.optimizer._newoperations
+        for i, op in enumerate(ops):
+            if op.is_always_pure():
+                sb.add_potential(op)
+            if op.is_ovf() and ops[i + 1].getopnum() == rop.GUARD_NO_OVERFLOW:
+                sb.add_potential(op)
+        for i in self.call_pure_positions:
+            op = ops[i]
+            assert op.getopnum() == rop.CALL
+            op = op.copy_and_change(rop.CALL_PURE)
+            sb.add_potential(op)
 
 dispatch_opt = make_dispatcher_method(OptPure, 'optimize_',
                                       default=OptPure.optimize_default)
