@@ -20,11 +20,17 @@ class OptPureValue(OptValue):
         self.unroller = unroller
         self.keybox = keybox
 
+    def is_virtual(self):
+        return False
+
     def force_box(self, optforce):
         if self.box is None:
             self.box = self.keybox
             optforce.optimizer.reuse_pure_result(self.box)
         return self.box
+
+    def get_key_box(self):
+        return self.keybox
 
 
 class Unroller(object):
@@ -50,7 +56,7 @@ class Unroller(object):
                     pure_value = OptPureValue(self, op.result)
                     new_optpure.pure(op.getopnum(), op.getarglist(),
                                      op.result, pure_value)
-                    
+                    self.optimizer.pure_reverse(op)
     #         for opargs, value in old_optpure.pure_operations.items():
     #             if not value.is_virtual():
     #                 pure_value = OptPureValue(self, value.box)

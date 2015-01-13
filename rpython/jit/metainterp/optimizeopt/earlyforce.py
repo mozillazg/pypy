@@ -25,7 +25,8 @@ class OptEarlyForce(Optimization):
             for arg in op.getarglist():
                 if arg in self.optimizer.values:
                     value = self.getvalue(arg)
-                    value.force_box(self)
+                    if value.is_virtual():
+                        value.force_box(self)
         self.emit_operation(op)
 
     def setup(self):
