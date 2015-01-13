@@ -50,6 +50,7 @@ class Unroller(object):
                     pure_value = OptPureValue(self, op.result)
                     new_optpure.pure(op.getopnum(), op.getarglist(),
                                      op.result, pure_value)
+                    
     #         for opargs, value in old_optpure.pure_operations.items():
     #             if not value.is_virtual():
     #                 pure_value = OptPureValue(self, value.box)

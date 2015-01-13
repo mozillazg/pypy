@@ -428,8 +428,9 @@ class BaseTest(object):
         start_state = self._do_optimize_loop(preamble, call_pure_results)
 
         assert preamble.operations[-1].getopnum() == rop.LABEL
+        new_inp_args = preamble.operations[-1].getarglist()
 
-        inliner = Inliner(inputargs, jump_args)
+        inliner = Inliner(inputargs, new_inp_args)
         loop.operations = [preamble.operations[-1]] + \
                           [inliner.inline_op(op, clone=False) for op in cloned_operations] + \
                           [ResOperation(rop.JUMP, [inliner.inline_arg(a) for a in jump_args],
