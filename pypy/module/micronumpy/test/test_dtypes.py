@@ -472,11 +472,8 @@ class AppTestDtypes(BaseAppTestDtypes):
         class O(object):
             pass
         for o in [object, O]:
-            if '__pypy__' not in sys.builtin_module_names:
-                assert np.dtype(o).str == '|O8'
-            else:
-                exc = raises(NotImplementedError, "np.dtype(o)")
-                assert exc.value[0] == "cannot create dtype with type '%s'" % o.__name__
+            print np.dtype(o).byteorder
+            assert np.dtype(o).str == '|O8'
 
 class AppTestTypes(BaseAppTestDtypes):
     def test_abstract_types(self):
