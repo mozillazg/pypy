@@ -54,7 +54,7 @@ class W_Dtype(W_Root):
         self.char = char
         self.w_box_type = w_box_type
         if byteorder is None:
-            if itemtype.get_element_size() == 1:
+            if itemtype.get_element_size() == 1 or isinstance(itemtype, types.ObjectType):
                 byteorder = NPY.IGNORE
             else:
                 byteorder = NPY.NATIVE
