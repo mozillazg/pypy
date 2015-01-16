@@ -1871,7 +1871,7 @@ class VoidType(FlexibleType):
     def str_format(self, space, box):
         assert isinstance(box, boxes.W_VoidBox)
         arr = self.readarray(box.arr, box.ofs, 0, box.dtype)
-        return arr.dump_data(prefix='', suffix='')
+        return arr.dump_data(space, prefix='', suffix='')
 
     def to_builtin_type(self, space, item):
         ''' From the documentation of ndarray.item():
@@ -1980,7 +1980,7 @@ class RecordType(FlexibleType):
             else:
                 pieces.append(", ")
             val = tp.read(box.arr, box.ofs, ofs, subdtype)
-            pieces.append(tp.str_format(val))
+            pieces.append(tp.str_format(space, val))
         pieces.append(")")
         return "".join(pieces)
 

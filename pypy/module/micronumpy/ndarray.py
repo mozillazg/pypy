@@ -254,16 +254,16 @@ class __extend__(W_NDimArray):
     def descr_repr(self, space):
         cache = get_appbridge_cache(space)
         if cache.w_array_repr is None:
-            return space.wrap(self.dump_data())
+            return space.wrap(self.dump_data(space))
         return space.call_function(cache.w_array_repr, self)
 
     def descr_str(self, space):
         cache = get_appbridge_cache(space)
         if cache.w_array_str is None:
-            return space.wrap(self.dump_data(prefix='', separator='', suffix=''))
+            return space.wrap(self.dump_data(space, prefix='', separator='', suffix=''))
         return space.call_function(cache.w_array_str, self)
 
-    def dump_data(self, prefix='array(', separator=',', suffix=')'):
+    def dump_data(self, space, prefix='array(', separator=',', suffix=')'):
         i, state = self.create_iter()
         first = True
         dtype = self.get_dtype()
@@ -280,7 +280,7 @@ class __extend__(W_NDimArray):
             if self.is_scalar() and dtype.is_str():
                 s.append(dtype.itemtype.to_str(i.getitem(state)))
             else:
-                s.append(dtype.itemtype.str_format(i.getitem(state)))
+                s.append(dtype.itemtype.str_format(space, i.getitem(state)))
             state = i.next(state)
         if not self.is_scalar():
             s.append(']')
@@ -1189,7 +1189,7 @@ class __extend__(W_NDimArray):
                         "improper dtype '%R'", dtype)
         self.implementation = W_NDimArray.from_shape_and_storage(
             space, [space.int_w(i) for i in space.listview(shape)],
-            rffi.str2charp(space.str_w(storage), track_allocation=False), 
+            rffi.str2charp(space.str_w(storage), track_allocation=False),
             dtype, storage_bytes=space.len_w(storage), owning=True).implementation
 
     def descr___array_finalize__(self, space, w_obj):
