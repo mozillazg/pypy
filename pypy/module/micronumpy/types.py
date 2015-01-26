@@ -32,10 +32,10 @@ log10 = math.log(10)
 def simple_unary_op(func):
     specialize.argtype(1)(func)
     @functools.wraps(func)
-    def dispatcher(self, v):
+    def dispatcher(self, space, v):
         return self.box(
             func(
-                self,
+                self, space,
                 self.for_computation(self.unbox(v)),
             )
         )
@@ -56,10 +56,10 @@ def complex_unary_op(func):
 def complex_to_real_unary_op(func):
     specialize.argtype(1)(func)
     @functools.wraps(func)
-    def dispatcher(self, v):
+    def dispatcher(self, space, v):
         return self.box_component(
             func(
-                self,
+                self, space,
                 self.for_computation(self.unbox(v))
             )
         )
@@ -68,9 +68,9 @@ def complex_to_real_unary_op(func):
 def raw_unary_op(func):
     specialize.argtype(1)(func)
     @functools.wraps(func)
-    def dispatcher(self, v):
+    def dispatcher(self, space, v):
         return func(
-            self,
+            self, space,
             self.for_computation(self.unbox(v))
         )
     return dispatcher
@@ -78,10 +78,11 @@ def raw_unary_op(func):
 def simple_binary_op(func):
     specialize.argtype(1, 2)(func)
     @functools.wraps(func)
-    def dispatcher(self, v1, v2):
+    def dispatcher(self, space, v1, v2):
         return self.box(
             func(
                 self,
+                space,
                 self.for_computation(self.unbox(v1)),
                 self.for_computation(self.unbox(v2)),
             )
@@ -91,10 +92,10 @@ def simple_binary_op(func):
 def complex_binary_op(func):
     specialize.argtype(1, 2)(func)
     @functools.wraps(func)
-    def dispatcher(self, v1, v2):
+    def dispatcher(self, space, v1, v2):
         return self.box_complex(
             *func(
-                self,
+                self, space,
                 self.for_computation(self.unbox(v1)),
                 self.for_computation(self.unbox(v2)),
             )
@@ -104,8 +105,8 @@ def complex_binary_op(func):
 def raw_binary_op(func):
     specialize.argtype(1, 2)(func)
     @functools.wraps(func)
-    def dispatcher(self, v1, v2):
-        return func(self,
+    def dispatcher(self, space, v1, v2):
+        return func(self, space,
             self.for_computation(self.unbox(v1)),
             self.for_computation(self.unbox(v2))
         )
@@ -203,23 +204,23 @@ class Primitive(object):
         return self.box(v)
 
     @simple_binary_op
-    def add(self, v1, v2):
+    def add(self, space, v1, v2):
         return v1 + v2
 
     @simple_binary_op
-    def sub(self, v1, v2):
+    def sub(self, space, v1, v2):
         return v1 - v2
 
     @simple_binary_op
-    def mul(self, v1, v2):
+    def mul(self, space, v1, v2):
         return v1 * v2
 
     @simple_unary_op
-    def pos(self, v):
+    def pos(self, space, v):
         return +v
 
     @simple_unary_op
-    def neg(self, v):
+    def neg(self, space, v):
         return -v
 
     def byteswap(self, w_v):
@@ -227,85 +228,85 @@ class Primitive(object):
         return self.box(byteswap(self.unbox(w_v)))
 
     @simple_unary_op
-    def conj(self, v):
+    def conj(self, space, v):
         return v
 
     @simple_unary_op
-    def real(self, v):
+    def real(self, space, v):
         return v
 
     @simple_unary_op
-    def imag(self, v):
+    def imag(self, space, v):
         return 0
 
     @simple_unary_op
-    def abs(self, v):
+    def abs(self, space, v):
         return abs(v)
 
     @raw_unary_op
-    def isnan(self, v):
+    def isnan(self, space, v):
         return False
 
     @raw_unary_op
-    def isinf(self, v):
+    def isinf(self, space, v):
         return False
 
     @raw_binary_op
-    def eq(self, v1, v2):
+    def eq(self, space, v1, v2):
         return v1 == v2
 
     @raw_binary_op
-    def ne(self, v1, v2):
+    def ne(self, space, v1, v2):
         return v1 != v2
 
     @raw_binary_op
-    def lt(self, v1, v2):
+    def lt(self, space, v1, v2):
         return v1 < v2
 
     @raw_binary_op
-    def le(self, v1, v2):
+    def le(self, space, v1, v2):
         return v1 <= v2
 
     @raw_binary_op
-    def gt(self, v1, v2):
+    def gt(self, space, v1, v2):
         return v1 > v2
 
     @raw_binary_op
-    def ge(self, v1, v2):
+    def ge(self, space, v1, v2):
         return v1 >= v2
 
     @raw_binary_op
-    def logical_and(self, v1, v2):
+    def logical_and(self, space, v1, v2):
         return bool(v1) and bool(v2)
 
     @raw_binary_op
-    def logical_or(self, v1, v2):
+    def logical_or(self, space, v1, v2):
         return bool(v1) or bool(v2)
 
     @raw_unary_op
-    def logical_not(self, v):
+    def logical_not(self, space, v):
         return not bool(v)
 
     @raw_binary_op
-    def logical_xor(self, v1, v2):
+    def logical_xor(self, space, v1, v2):
         a = bool(v1)
         b = bool(v2)
         return (not b and a) or (not a and b)
 
     @raw_unary_op
-    def bool(self, v):
+    def bool(self, space, v):
         return bool(v)
 
     @simple_binary_op
-    def max(self, v1, v2):
+    def max(self, space, v1, v2):
         return max(v1, v2)
 
     @simple_binary_op
-    def min(self, v1, v2):
+    def min(self, space, v1, v2):
         return min(v1, v2)
 
     @raw_unary_op
-    def rint(self, v):
+    def rint(self, space, v):
         float64 = Float64()
         return float64.rint(float64.box(v))
 
@@ -358,39 +359,39 @@ class Bool(BaseType, Primitive):
         return self.box(True)
 
     @simple_binary_op
-    def lshift(self, v1, v2):
+    def lshift(self, space, v1, v2):
         return v1 << v2
 
     @simple_binary_op
-    def rshift(self, v1, v2):
+    def rshift(self, space, v1, v2):
         return v1 >> v2
 
     @simple_binary_op
-    def bitwise_and(self, v1, v2):
+    def bitwise_and(self, space, v1, v2):
         return v1 & v2
 
     @simple_binary_op
-    def bitwise_or(self, v1, v2):
+    def bitwise_or(self, space, v1, v2):
         return v1 | v2
 
     @simple_binary_op
-    def bitwise_xor(self, v1, v2):
+    def bitwise_xor(self, space, v1, v2):
         return v1 ^ v2
 
     @simple_unary_op
-    def invert(self, v):
+    def invert(self, space, v):
         return not v
 
     @raw_unary_op
-    def isfinite(self, v):
+    def isfinite(self, space, v):
         return True
 
     @raw_unary_op
-    def signbit(self, v):
+    def signbit(self, space, v):
         return False
 
     @simple_unary_op
-    def reciprocal(self, v):
+    def reciprocal(self, space, v):
         if v:
             return 1
         return 0
@@ -423,7 +424,7 @@ class Integer(Primitive):
         return self.box(0)
 
     @specialize.argtype(1, 2)
-    def div(self, b1, b2):
+    def div(self, space, b1, b2):
         v1 = self.for_computation(self.unbox(b1))
         v2 = self.for_computation(self.unbox(b2))
         if v2 == 0:
@@ -435,7 +436,7 @@ class Integer(Primitive):
         return self.box(v1 / v2)
 
     @specialize.argtype(1, 2)
-    def floordiv(self, b1, b2):
+    def floordiv(self, space, b1, b2):
         v1 = self.for_computation(self.unbox(b1))
         v2 = self.for_computation(self.unbox(b2))
         if v2 == 0:
@@ -447,12 +448,12 @@ class Integer(Primitive):
         return self.box(v1 // v2)
 
     @simple_binary_op
-    def mod(self, v1, v2):
+    def mod(self, space, v1, v2):
         return v1 % v2
 
     @simple_binary_op
-    @jit.look_inside_iff(lambda self, v1, v2: jit.isconstant(v2))
-    def pow(self, v1, v2):
+    @jit.look_inside_iff(lambda self, space, v1, v2: jit.isconstant(v2))
+    def pow(self, space, v1, v2):
         if v2 < 0:
             return 0
         res = 1
@@ -466,15 +467,15 @@ class Integer(Primitive):
         return res
 
     @simple_binary_op
-    def lshift(self, v1, v2):
+    def lshift(self, space, v1, v2):
         return v1 << v2
 
     @simple_binary_op
-    def rshift(self, v1, v2):
+    def rshift(self, space, v1, v2):
         return v1 >> v2
 
     @simple_unary_op
-    def sign(self, v):
+    def sign(self, space, v):
         if v > 0:
             return 1
         elif v < 0:
@@ -484,31 +485,31 @@ class Integer(Primitive):
             return 0
 
     @raw_unary_op
-    def isfinite(self, v):
+    def isfinite(self, space, v):
         return True
 
     @raw_unary_op
-    def isnan(self, v):
+    def isnan(self, space, v):
         return False
 
     @raw_unary_op
-    def isinf(self, v):
+    def isinf(self, space, v):
         return False
 
     @simple_binary_op
-    def bitwise_and(self, v1, v2):
+    def bitwise_and(self, space, v1, v2):
         return v1 & v2
 
     @simple_binary_op
-    def bitwise_or(self, v1, v2):
+    def bitwise_or(self, space, v1, v2):
         return v1 | v2
 
     @simple_binary_op
-    def bitwise_xor(self, v1, v2):
+    def bitwise_xor(self, space, v1, v2):
         return v1 ^ v2
 
     @simple_unary_op
-    def invert(self, v):
+    def invert(self, space, v):
         return ~v
 
     @specialize.argtype(1)
@@ -541,7 +542,7 @@ class Integer(Primitive):
         return self.box(ans)
 
     @raw_unary_op
-    def signbit(self, v):
+    def signbit(self, space, v):
         return v < 0
 
 class Int8(BaseType, Integer):
@@ -662,7 +663,7 @@ class Float(Primitive):
         return self.box(-1.0)
 
     @simple_binary_op
-    def div(self, v1, v2):
+    def div(self, space, v1, v2):
         try:
             return v1 / v2
         except ZeroDivisionError:
@@ -671,7 +672,7 @@ class Float(Primitive):
             return rfloat.copysign(rfloat.INFINITY, v1 * v2)
 
     @simple_binary_op
-    def floordiv(self, v1, v2):
+    def floordiv(self, space, v1, v2):
         try:
             return math.floor(v1 / v2)
         except ZeroDivisionError:
@@ -680,11 +681,11 @@ class Float(Primitive):
             return rfloat.copysign(rfloat.INFINITY, v1 * v2)
 
     @simple_binary_op
-    def mod(self, v1, v2):
+    def mod(self, space, v1, v2):
         return math.fmod(v1, v2)
 
     @simple_binary_op
-    def pow(self, v1, v2):
+    def pow(self, space, v1, v2):
         try:
             return math.pow(v1, v2)
         except ValueError:
@@ -696,58 +697,58 @@ class Float(Primitive):
             return rfloat.INFINITY
 
     @simple_binary_op
-    def copysign(self, v1, v2):
+    def copysign(self, space, v1, v2):
         return math.copysign(v1, v2)
 
     @simple_unary_op
-    def sign(self, v):
+    def sign(self, space, v):
         if v == 0.0:
             return 0.0
         return rfloat.copysign(1.0, v)
 
     @raw_unary_op
-    def signbit(self, v):
+    def signbit(self, space, v):
         return rfloat.copysign(1.0, v) < 0.0
 
     @simple_unary_op
-    def fabs(self, v):
+    def fabs(self, space, v):
         return math.fabs(v)
 
     @simple_binary_op
-    def max(self, v1, v2):
+    def max(self, space, v1, v2):
         return v1 if v1 >= v2 or rfloat.isnan(v1) else v2
 
     @simple_binary_op
-    def min(self, v1, v2):
+    def min(self, space, v1, v2):
         return v1 if v1 <= v2 or rfloat.isnan(v1) else v2
 
     @simple_binary_op
-    def fmax(self, v1, v2):
+    def fmax(self, space, v1, v2):
         return v1 if v1 >= v2 or rfloat.isnan(v2) else v2
 
     @simple_binary_op
-    def fmin(self, v1, v2):
+    def fmin(self, space, v1, v2):
         return v1 if v1 <= v2 or rfloat.isnan(v2) else v2
 
     @simple_binary_op
-    def fmod(self, v1, v2):
+    def fmod(self, space, v1, v2):
         try:
             return math.fmod(v1, v2)
         except ValueError:
             return rfloat.NAN
 
     @simple_unary_op
-    def reciprocal(self, v):
+    def reciprocal(self, space, v):
         if v == 0.0:
             return rfloat.copysign(rfloat.INFINITY, v)
         return 1.0 / v
 
     @simple_unary_op
-    def floor(self, v):
+    def floor(self, space, v):
         return math.floor(v)
 
     @simple_unary_op
-    def ceil(self, v):
+    def ceil(self, space, v):
         return math.ceil(v)
 
     @specialize.argtype(1)
@@ -761,89 +762,89 @@ class Float(Primitive):
         return self.box(ans)
 
     @simple_unary_op
-    def trunc(self, v):
+    def trunc(self, space, v):
         if v < 0:
             return math.ceil(v)
         else:
             return math.floor(v)
 
     @simple_unary_op
-    def exp(self, v):
+    def exp(self, space, v):
         try:
             return math.exp(v)
         except OverflowError:
             return rfloat.INFINITY
 
     @simple_unary_op
-    def exp2(self, v):
+    def exp2(self, space, v):
         try:
             return math.pow(2, v)
         except OverflowError:
             return rfloat.INFINITY
 
     @simple_unary_op
-    def expm1(self, v):
+    def expm1(self, space, v):
         try:
             return rfloat.expm1(v)
         except OverflowError:
             return rfloat.INFINITY
 
     @simple_unary_op
-    def sin(self, v):
+    def sin(self, space, v):
         return math.sin(v)
 
     @simple_unary_op
-    def cos(self, v):
+    def cos(self, space, v):
         return math.cos(v)
 
     @simple_unary_op
-    def tan(self, v):
+    def tan(self, space, v):
         return math.tan(v)
 
     @simple_unary_op
-    def arcsin(self, v):
+    def arcsin(self, space, v):
         if not -1.0 <= v <= 1.0:
             return rfloat.NAN
         return math.asin(v)
 
     @simple_unary_op
-    def arccos(self, v):
+    def arccos(self, space, v):
         if not -1.0 <= v <= 1.0:
             return rfloat.NAN
         return math.acos(v)
 
     @simple_unary_op
-    def arctan(self, v):
+    def arctan(self, space, v):
         return math.atan(v)
 
     @simple_binary_op
-    def arctan2(self, v1, v2):
+    def arctan2(self, space, v1, v2):
         return math.atan2(v1, v2)
 
     @simple_unary_op
-    def sinh(self, v):
+    def sinh(self, space, v):
         return math.sinh(v)
 
     @simple_unary_op
-    def cosh(self, v):
+    def cosh(self, space, v):
         return math.cosh(v)
 
     @simple_unary_op
-    def tanh(self, v):
+    def tanh(self, space, v):
         return math.tanh(v)
 
     @simple_unary_op
-    def arcsinh(self, v):
+    def arcsinh(self, space, v):
         return math.asinh(v)
 
     @simple_unary_op
-    def arccosh(self, v):
+    def arccosh(self, space, v):
         if v < 1.0:
             return rfloat.NAN
         return math.acosh(v)
 
     @simple_unary_op
-    def arctanh(self, v):
+    def arctanh(self, space, v):
         if v == 1.0 or v == -1.0:
             return math.copysign(rfloat.INFINITY, v)
         if not -1.0 < v < 1.0:
@@ -851,39 +852,39 @@ class Float(Primitive):
         return math.atanh(v)
 
     @simple_unary_op
-    def sqrt(self, v):
+    def sqrt(self, space, v):
         try:
             return math.sqrt(v)
         except ValueError:
             return rfloat.NAN
 
     @simple_unary_op
-    def square(self, v):
+    def square(self, space, v):
         return v*v
 
     @raw_unary_op
-    def isnan(self, v):
+    def isnan(self, space, v):
         return rfloat.isnan(v)
 
     @raw_unary_op
-    def isinf(self, v):
+    def isinf(self, space, v):
         return rfloat.isinf(v)
 
     @raw_unary_op
-    def isfinite(self, v):
+    def isfinite(self, space, v):
         return rfloat.isfinite(v)
 
     @simple_unary_op
-    def radians(self, v):
+    def radians(self, space, v):
         return v * degToRad
     deg2rad = radians
 
     @simple_unary_op
-    def degrees(self, v):
+    def degrees(self, space, v):
         return v / degToRad
 
     @simple_unary_op
-    def log(self, v):
+    def log(self, space, v):
         try:
             return math.log(v)
         except ValueError:
@@ -894,7 +895,7 @@ class Float(Primitive):
             return rfloat.NAN
 
     @simple_unary_op
-    def log2(self, v):
+    def log2(self, space, v):
         try:
             return math.log(v) / log2
         except ValueError:
@@ -905,7 +906,7 @@ class Float(Primitive):
             return rfloat.NAN
 
     @simple_unary_op
-    def log10(self, v):
+    def log10(self, space, v):
         try:
             return math.log10(v)
         except ValueError:
@@ -916,7 +917,7 @@ class Float(Primitive):
             return rfloat.NAN
 
     @simple_unary_op
-    def log1p(self, v):
+    def log1p(self, space, v):
         try:
             return rfloat.log1p(v)
         except OverflowError:
@@ -925,7 +926,7 @@ class Float(Primitive):
             return rfloat.NAN
 
     @simple_binary_op
-    def logaddexp(self, v1, v2):
+    def logaddexp(self, space, v1, v2):
         tmp = v1 - v2
         if tmp > 0:
             return v1 + rfloat.log1p(math.exp(-tmp))
@@ -938,7 +939,7 @@ class Float(Primitive):
         return log2e * rfloat.log1p(v)
 
     @simple_binary_op
-    def logaddexp2(self, v1, v2):
+    def logaddexp2(self, space, v1, v2):
         tmp = v1 - v2
         if tmp > 0:
             return v1 + self.npy_log2_1p(math.pow(2, -tmp))
@@ -948,7 +949,7 @@ class Float(Primitive):
             return v1 + v2
 
     @simple_unary_op
-    def rint(self, v):
+    def rint(self, space, v):
         x = float(v)
         if rfloat.isfinite(x):
             import math
@@ -1078,7 +1079,7 @@ class ComplexFloating(object):
         real, imag = self.for_computation(self.unbox(box))
         return space.newcomplex(real, imag)
 
-    def bool(self, v):
+    def bool(self, space, v):
         real, imag = self.for_computation(self.unbox(v))
         return bool(real) or bool(imag)
 
@@ -1155,19 +1156,19 @@ class ComplexFloating(object):
             self._write(storage, i, offset, value)
 
     @complex_binary_op
-    def add(self, v1, v2):
+    def add(self, space, v1, v2):
         return rcomplex.c_add(v1, v2)
 
     @complex_binary_op
-    def sub(self, v1, v2):
+    def sub(self, space, v1, v2):
         return rcomplex.c_sub(v1, v2)
 
     @complex_binary_op
-    def mul(self, v1, v2):
+    def mul(self, space, v1, v2):
         return rcomplex.c_mul(v1, v2)
 
     @complex_binary_op
-    def div(self, v1, v2):
+    def div(self, space, v1, v2):
         try:
             return rcomplex.c_div(v1, v2)
         except ZeroDivisionError:
@@ -1177,36 +1178,36 @@ class ComplexFloating(object):
             return rfloat.INFINITY, rfloat.INFINITY
 
     @complex_unary_op
-    def pos(self, v):
+    def pos(self, space, v):
         return v
 
     @complex_unary_op
-    def neg(self, v):
+    def neg(self, space, v):
         return -v[0], -v[1]
 
     @complex_unary_op
-    def conj(self, v):
+    def conj(self, space, v):
         return v[0], -v[1]
 
     @complex_to_real_unary_op
-    def real(self, v):
+    def real(self, space, v):
         return v[0]
 
     @complex_to_real_unary_op
-    def imag(self, v):
+    def imag(self, space, v):
         return v[1]
 
     @complex_to_real_unary_op
-    def abs(self, v):
+    def abs(self, space, v):
         return rcomplex.c_abs(v[0], v[1])
 
     @raw_unary_op
-    def isnan(self, v):
+    def isnan(self, space, v):
         '''a complex number is nan if one of the parts is nan'''
         return rfloat.isnan(v[0]) or rfloat.isnan(v[1])
 
     @raw_unary_op
-    def isinf(self, v):
+    def isinf(self, space, v):
         '''a complex number is inf if one of the parts is inf'''
         return rfloat.isinf(v[0]) or rfloat.isinf(v[1])
 
@@ -1214,12 +1215,12 @@ class ComplexFloating(object):
         return v1[0] == v2[0] and v1[1] == v2[1]
 
     @raw_binary_op
-    def eq(self, v1, v2):
+    def eq(self, space, v1, v2):
         #compare the parts, so nan == nan is False
         return self._eq(v1, v2)
 
     @raw_binary_op
-    def ne(self, v1, v2):
+    def ne(self, space, v1, v2):
         return not self._eq(v1, v2)
 
     def _lt(self, v1, v2):
@@ -1231,38 +1232,38 @@ class ComplexFloating(object):
         return False
 
     @raw_binary_op
-    def lt(self, v1, v2):
+    def lt(self, space, v1, v2):
         return self._lt(v1, v2)
 
     @raw_binary_op
-    def le(self, v1, v2):
+    def le(self, space, v1, v2):
         return self._lt(v1, v2) or self._eq(v1, v2)
 
     @raw_binary_op
-    def gt(self, v1, v2):
+    def gt(self, space, v1, v2):
         return self._lt(v2, v1)
 
     @raw_binary_op
-    def ge(self, v1, v2):
+    def ge(self, space, v1, v2):
         return self._lt(v2, v1) or self._eq(v2, v1)
 
     def _bool(self, v):
         return bool(v[0]) or bool(v[1])
 
     @raw_binary_op
-    def logical_and(self, v1, v2):
+    def logical_and(self, space, v1, v2):
         return self._bool(v1) and self._bool(v2)
 
     @raw_binary_op
-    def logical_or(self, v1, v2):
+    def logical_or(self, space, v1, v2):
         return self._bool(v1) or self._bool(v2)
 
     @raw_unary_op
-    def logical_not(self, v):
+    def logical_not(self, space, v):
         return not self._bool(v)
 
     @raw_binary_op
-    def logical_xor(self, v1, v2):
+    def logical_xor(self, space, v1, v2):
         a = self._bool(v1)
         b = self._bool(v2)
         return (not b and a) or (not a and b)
@@ -1278,7 +1279,7 @@ class ComplexFloating(object):
         return v2
 
     @complex_binary_op
-    def floordiv(self, v1, v2):
+    def floordiv(self, space, v1, v2):
         try:
             ab = v1[0]*v2[0] + v1[1]*v2[1]
             bb = v2[0]*v2[0] + v2[1]*v2[1]
@@ -1291,7 +1292,7 @@ class ComplexFloating(object):
     #def mod(self, v1, v2):
     #    return math.fmod(v1, v2)
 
-    def pow(self, v1, v2):
+    def pow(self, space, v1, v2):
         y = self.for_computation(self.unbox(v2))
         if y[1] == 0:
             if y[0] == 0:
@@ -1316,7 +1317,7 @@ class ComplexFloating(object):
     #           rfloat.copysign(v1[1], v2[1]))
 
     @complex_unary_op
-    def sign(self, v):
+    def sign(self, space, v):
         '''
         sign of complex number could be either the point closest to the unit circle
         or {-1,0,1}, for compatability with numpy we choose the latter
@@ -1349,7 +1350,7 @@ class ComplexFloating(object):
     #        return rfloat.NAN
 
     @complex_unary_op
-    def reciprocal(self, v):
+    def reciprocal(self, space, v):
         if rfloat.isinf(v[1]) and rfloat.isinf(v[0]):
             return rfloat.NAN, rfloat.NAN
         if rfloat.isinf(v[0]):
@@ -1390,7 +1391,7 @@ class ComplexFloating(object):
     #        return math.floor(v)
 
     @complex_unary_op
-    def exp(self, v):
+    def exp(self, space, v):
         if rfloat.isinf(v[1]):
             if rfloat.isinf(v[0]):
                 if v[0] < 0:
@@ -1407,7 +1408,7 @@ class ComplexFloating(object):
             return rfloat.INFINITY, rfloat.NAN
 
     @complex_unary_op
-    def exp2(self, v):
+    def exp2(self, space, v):
         try:
             return rcomplex.c_pow((2,0), v)
         except OverflowError:
@@ -1416,7 +1417,7 @@ class ComplexFloating(object):
             return rfloat.NAN, rfloat.NAN
 
     @complex_unary_op
-    def expm1(self, v):
+    def expm1(self, space, v):
         # duplicate exp() so in the future it will be easier
         # to implement seterr
         if rfloat.isinf(v[1]):
@@ -1437,7 +1438,7 @@ class ComplexFloating(object):
             return rfloat.INFINITY, rfloat.NAN
 
     @complex_unary_op
-    def sin(self, v):
+    def sin(self, space, v):
         if rfloat.isinf(v[0]):
             if v[1] == 0.:
                 return rfloat.NAN, 0.
@@ -1448,7 +1449,7 @@ class ComplexFloating(object):
         return rcomplex.c_sin(*v)
 
     @complex_unary_op
-    def cos(self, v):
+    def cos(self, space, v):
         if rfloat.isinf(v[0]):
             if v[1] == 0.:
                 return rfloat.NAN, 0.0
@@ -1459,21 +1460,21 @@ class ComplexFloating(object):
         return rcomplex.c_cos(*v)
 
     @complex_unary_op
-    def tan(self, v):
+    def tan(self, space, v):
         if rfloat.isinf(v[0]) and rfloat.isfinite(v[1]):
             return rfloat.NAN, rfloat.NAN
         return rcomplex.c_tan(*v)
 
     @complex_unary_op
-    def arcsin(self, v):
+    def arcsin(self, space, v):
         return rcomplex.c_asin(*v)
 
     @complex_unary_op
-    def arccos(self, v):
+    def arccos(self, space, v):
         return rcomplex.c_acos(*v)
 
     @complex_unary_op
-    def arctan(self, v):
+    def arctan(self, space, v):
         if v[0] == 0 and (v[1] == 1 or v[1] == -1):
             #This is the place to print a "runtime warning"
             return rfloat.NAN, math.copysign(rfloat.INFINITY, v[1])
@@ -1484,7 +1485,7 @@ class ComplexFloating(object):
     #    return rcomplex.c_atan2(v1, v2)
 
     @complex_unary_op
-    def sinh(self, v):
+    def sinh(self, space, v):
         if rfloat.isinf(v[1]):
             if rfloat.isfinite(v[0]):
                 if v[0] == 0.0:
@@ -1495,7 +1496,7 @@ class ComplexFloating(object):
         return rcomplex.c_sinh(*v)
 
     @complex_unary_op
-    def cosh(self, v):
+    def cosh(self, space, v):
         if rfloat.isinf(v[1]):
             if rfloat.isfinite(v[0]):
                 if v[0] == 0.0:
@@ -1506,36 +1507,36 @@ class ComplexFloating(object):
         return rcomplex.c_cosh(*v)
 
     @complex_unary_op
-    def tanh(self, v):
+    def tanh(self, space, v):
         if rfloat.isinf(v[1]) and rfloat.isfinite(v[0]):
             return rfloat.NAN, rfloat.NAN
         return rcomplex.c_tanh(*v)
 
     @complex_unary_op
-    def arcsinh(self, v):
+    def arcsinh(self, space, v):
         return rcomplex.c_asinh(*v)
 
     @complex_unary_op
-    def arccosh(self, v):
+    def arccosh(self, space, v):
         return rcomplex.c_acosh(*v)
 
     @complex_unary_op
-    def arctanh(self, v):
+    def arctanh(self, space, v):
         if v[1] == 0 and (v[0] == 1.0 or v[0] == -1.0):
             return (math.copysign(rfloat.INFINITY, v[0]),
                    math.copysign(0., v[1]))
         return rcomplex.c_atanh(*v)
 
     @complex_unary_op
-    def sqrt(self, v):
+    def sqrt(self, space, v):
         return rcomplex.c_sqrt(*v)
 
     @complex_unary_op
-    def square(self, v):
+    def square(self, space, v):
         return rcomplex.c_mul(v,v)
 
     @raw_unary_op
-    def isfinite(self, v):
+    def isfinite(self, space, v):
         return rfloat.isfinite(v[0]) and rfloat.isfinite(v[1])
 
     #@simple_unary_op
@@ -1548,14 +1549,14 @@ class ComplexFloating(object):
     #    return v / degToRad
 
     @complex_unary_op
-    def log(self, v):
+    def log(self, space, v):
         try:
             return rcomplex.c_log(*v)
         except ValueError:
             return -rfloat.INFINITY, math.atan2(v[1], v[0])
 
     @complex_unary_op
-    def log2(self, v):
+    def log2(self, space, v):
         try:
             r = rcomplex.c_log(*v)
         except ValueError:
@@ -1563,14 +1564,14 @@ class ComplexFloating(object):
         return r[0] / log2, r[1] / log2
 
     @complex_unary_op
-    def log10(self, v):
+    def log10(self, space, v):
         try:
             return rcomplex.c_log10(*v)
         except ValueError:
             return -rfloat.INFINITY, math.atan2(v[1], v[0]) / log10
 
     @complex_unary_op
-    def log1p(self, v):
+    def log1p(self, space, v):
         try:
             return rcomplex.c_log(v[0] + 1, v[1])
         except OverflowError:
@@ -1673,6 +1674,14 @@ class ObjectType(Primitive, BaseType):
     def for_computation(v):
         return v
 
+    @simple_binary_op
+    def add(self, space, v1, v2):
+        return space.add(v1, v2)
+
+    @raw_binary_op
+    def eq(self, space, v1, v2):
+        return space.eq_w(v1, v2)
+
 class FlexibleType(BaseType):
     def get_element_size(self):
         return rffi.sizeof(self.T)
@@ -1701,8 +1710,8 @@ def str_unary_op(func):
 def str_binary_op(func):
     specialize.argtype(1, 2)(func)
     @functools.wraps(func)
-    def dispatcher(self, v1, v2):
-        return func(self,
+    def dispatcher(self, space, v1, v2):
+        return func(self, space,
             self.to_str(v1),
             self.to_str(v2)
         )
@@ -1754,43 +1763,43 @@ class StringType(FlexibleType):
         return space.wrap(self.to_str(box))
 
     @str_binary_op
-    def eq(self, v1, v2):
+    def eq(self, space, v1, v2):
         return v1 == v2
 
     @str_binary_op
-    def ne(self, v1, v2):
+    def ne(self, space, v1, v2):
         return v1 != v2
 
     @str_binary_op
-    def lt(self, v1, v2):
+    def lt(self, space, v1, v2):
         return v1 < v2
 
     @str_binary_op
-    def le(self, v1, v2):
+    def le(self, space, v1, v2):
         return v1 <= v2
 
     @str_binary_op
-    def gt(self, v1, v2):
+    def gt(self, space, v1, v2):
         return v1 > v2
 
     @str_binary_op
-    def ge(self, v1, v2):
+    def ge(self, space, v1, v2):
         return v1 >= v2
 
     @str_binary_op
-    def logical_and(self, v1, v2):
+    def logical_and(self, space, v1, v2):
         return bool(v1) and bool(v2)
 
     @str_binary_op
-    def logical_or(self, v1, v2):
+    def logical_or(self, space, v1, v2):
         return bool(v1) or bool(v2)
 
     @str_unary_op
-    def logical_not(self, v):
+    def logical_not(self, space, v):
         return not bool(v)
 
     @str_binary_op
-    def logical_xor(self, v1, v2):
+    def logical_xor(self, space, v1, v2):
         a = bool(v1)
         b = bool(v2)
         return (not b and a) or (not a and b)

@@ -228,7 +228,7 @@ class W_GenericBox(W_NumpyObject):
         return space.hex(self.descr_int(space))
 
     def descr_nonzero(self, space):
-        return space.wrap(self.get_dtype(space).itemtype.bool(self))
+        return space.wrap(self.get_dtype(space).itemtype.bool(space, self))
 
     def _unaryop_impl(ufunc_name):
         def impl(self, space, w_out=None):
@@ -412,10 +412,10 @@ class W_GenericBox(W_NumpyObject):
         return space.call_args(w_meth, __args__)
 
     def descr_get_real(self, space):
-        return self.get_dtype(space).itemtype.real(self)
+        return self.get_dtype(space).itemtype.real(space, self)
 
     def descr_get_imag(self, space):
-        return self.get_dtype(space).itemtype.imag(self)
+        return self.get_dtype(space).itemtype.imag(space, self)
 
     w_flags = None
 

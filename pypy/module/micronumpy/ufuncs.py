@@ -11,12 +11,12 @@ from pypy.module.micronumpy.ctors import numpify
 from pypy.module.micronumpy.strides import shape_agreement
 
 
-def done_if_true(dtype, val):
-    return dtype.itemtype.bool(val)
+def done_if_true(space, dtype, val):
+    return dtype.itemtype.bool(space, val)
 
 
-def done_if_false(dtype, val):
-    return not dtype.itemtype.bool(val)
+def done_if_false(space, dtype, val):
+    return not dtype.itemtype.bool(space, val)
 
 
 def _get_dtype(space, w_npyobj):
@@ -343,7 +343,7 @@ class W_Ufunc1(W_Ufunc):
                 else:
                     res_dtype = descriptor.get_dtype_cache(space).w_float64dtype
         if w_obj.is_scalar():
-            w_val = self.func(calc_dtype,
+            w_val = self.func(space, calc_dtype,
                               w_obj.get_scalar_value().convert_to(space, calc_dtype))
             if out is None:
                 return w_val
@@ -450,7 +450,7 @@ class W_Ufunc2(W_Ufunc):
         else:
             res_dtype = calc_dtype
         if w_lhs.is_scalar() and w_rhs.is_scalar():
-            arr = self.func(calc_dtype,
+            arr = self.func(space, calc_dtype,
                 w_lhs.get_scalar_value().convert_to(space, calc_dtype),
                 w_rhs.get_scalar_value().convert_to(space, calc_dtype)
             )
@@ -494,6 +494,10 @@ def find_binop_result_dtype(space, dt1, dt2, promote_to_float=False,
         return dt1
     if dt1 is None:
         return dt2
+
+    if dt1.num == NPY.OBJECT or dt2.num == NPY.OBJECT:
+        return descriptor.get_dtype_cache(space).w_objectdtype
+
     # dt1.num should be <= dt2.num
     if dt1.num > dt2.num:
         dt1, dt2 = dt2, dt1
@@ -656,14 +660,14 @@ def ufunc_dtype_caller(space, ufunc_name, op_name, argcount, comparison_func,
                         ufunc_name, dtype.get_name())
     dtype_cache = descriptor.get_dtype_cache(space)
     if argcount == 1:
-        def impl(res_dtype, value):
-            res = get_op(res_dtype)(value)
+        def impl(space, res_dtype, value):
+            res = get_op(res_dtype)(space, value)
             if bool_result:
                 return dtype_cache.w_booldtype.box(res)
             return res
     elif argcount == 2:
-        def impl(res_dtype, lvalue, rvalue):
-            res = get_op(res_dtype)(lvalue, rvalue)
+        def impl(space, res_dtype, lvalue, rvalue):
+            res = get_op(res_dtype)(space, lvalue, rvalue)
             if comparison_func:
                 return dtype_cache.w_booldtype.box(res)
             return res

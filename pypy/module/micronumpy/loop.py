@@ -72,7 +72,7 @@ def call2(space, shape, func, calc_dtype, res_dtype, w_lhs, w_rhs, out):
         if right_iter:
             w_right = right_iter.getitem(right_state).convert_to(space, calc_dtype)
             right_state = right_iter.next(right_state)
-        out_iter.setitem(out_state, func(calc_dtype, w_left, w_right).convert_to(
+        out_iter.setitem(out_state, func(space, calc_dtype, w_left, w_right).convert_to(
             space, res_dtype))
         out_state = out_iter.next(out_state)
     return out
@@ -94,7 +94,7 @@ def call1(space, shape, func, calc_dtype, res_dtype, w_obj, out):
         call1_driver.jit_merge_point(shapelen=shapelen, func=func,
                                      calc_dtype=calc_dtype, res_dtype=res_dtype)
         elem = obj_iter.getitem(obj_state).convert_to(space, calc_dtype)
-        out_iter.setitem(out_state, func(calc_dtype, elem).convert_to(space, res_dtype))
+        out_iter.setitem(out_state, func(space, calc_dtype, elem).convert_to(space, res_dtype))
         out_state = out_iter.next(out_state)
         obj_state = obj_iter.next(obj_state)
     return out
@@ -153,9 +153,9 @@ def compute_reduce(space, obj, calc_dtype, func, done_func, identity):
                                       done_func=done_func,
                                       calc_dtype=calc_dtype)
         rval = obj_iter.getitem(obj_state).convert_to(space, calc_dtype)
-        if done_func is not None and done_func(calc_dtype, rval):
+        if done_func is not None and done_func(space, calc_dtype, rval):
             return rval
-        cur_value = func(calc_dtype, cur_value, rval)
+        cur_value = func(space, calc_dtype, cur_value, rval)
         obj_state = obj_iter.next(obj_state)
     return cur_value
 
@@ -179,7 +179,7 @@ def compute_reduce_cumulative(space, obj, out, calc_dtype, func, identity):
         reduce_cum_driver.jit_merge_point(shapelen=shapelen, func=func,
                                           dtype=calc_dtype)
         rval = obj_iter.getitem(obj_state).convert_to(space, calc_dtype)
-        cur_value = func(calc_dtype, cur_value, rval)
+        cur_value = func(space, calc_dtype, cur_value, rval)
         out_iter.setitem(out_state, cur_value)
         out_state = out_iter.next(out_state)
         obj_state = obj_iter.next(obj_state)
@@ -222,7 +222,7 @@ def where(space, out, shape, arr, x, y, dtype):
         where_driver.jit_merge_point(shapelen=shapelen, dtype=dtype,
                                         arr_dtype=arr_dtype)
         w_cond = arr_iter.getitem(arr_state)
-        if arr_dtype.itemtype.bool(w_cond):
+        if arr_dtype.itemtype.bool(space, w_cond):
             w_val = x_iter.getitem(x_state).convert_to(space, dtype)
         else:
             w_val = y_iter.getitem(y_state).convert_to(space, dtype)
@@ -354,7 +354,7 @@ def multidim_dot(space, left, right, result, dtype, right_critical_dim):
                 dot_driver.jit_merge_point(dtype=dtype)
                 lval = left_impl.getitem(i1).convert_to(space, dtype)
                 rval = right_impl.getitem(i2).convert_to(space, dtype)
-                oval = dtype.itemtype.add(oval, dtype.itemtype.mul(lval, rval))
+                oval = dtype.itemtype.add(space, oval, dtype.itemtype.mul(space, lval, rval))
                 i1 += s1
                 i2 += s2
             outi.setitem(outs, oval)

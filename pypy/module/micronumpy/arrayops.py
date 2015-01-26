@@ -83,7 +83,7 @@ def where(space, w_arr, w_x=None, w_y=None):
     x = convert_to_array(space, w_x)
     y = convert_to_array(space, w_y)
     if x.is_scalar() and y.is_scalar() and arr.is_scalar():
-        if arr.get_dtype().itemtype.bool(arr.get_scalar_value()):
+        if arr.get_dtype().itemtype.bool(space, arr.get_scalar_value()):
             return x
         return y
     dtype = ufuncs.find_binop_result_dtype(space, x.get_dtype(),
