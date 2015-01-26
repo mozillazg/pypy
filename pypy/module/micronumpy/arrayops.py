@@ -192,7 +192,7 @@ def repeat(space, w_arr, repeats, w_axis):
 
 
 def count_nonzero(space, w_obj):
-    return space.wrap(loop.count_all_true(convert_to_array(space, w_obj)))
+    return space.wrap(loop.count_all_true(space, convert_to_array(space, w_obj)))
 
 
 def choose(space, w_arr, w_choices, w_out, w_mode):

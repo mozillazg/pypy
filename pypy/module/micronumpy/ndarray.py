@@ -1068,7 +1068,7 @@ class __extend__(W_NDimArray):
                 raise oefmt(space.w_NotImplementedError,
                             '%s not implemented for %s',
                             op_name, self.get_dtype().get_name())
-            return space.wrap(getattr(loop, op_name)(self))
+            return space.wrap(getattr(loop, op_name)(space, self))
         return func_with_new_name(impl, "reduce_%s_impl" % op_name)
 
     descr_argmax = _reduce_argmax_argmin_impl("max")

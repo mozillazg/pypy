@@ -268,10 +268,10 @@ def do_axis_reduce(space, shape, func, arr, dtype, axis, out, identity, cumulati
         out_indices = out_iter.indices(out_state)
         if out_indices[axis] == 0:
             if identity is not None:
-                w_val = func(dtype, identity, w_val)
+                w_val = func(space, dtype, identity, w_val)
         else:
             cur = temp_iter.getitem(temp_state)
-            w_val = func(dtype, cur, w_val)
+            w_val = func(space, dtype, cur, w_val)
 
         out_iter.setitem(out_state, w_val)
         out_state = out_iter.next(out_state)
@@ -288,7 +288,7 @@ def _new_argmin_argmax(op_name):
                                greens = ['shapelen', 'dtype'],
                                reds = 'auto')
 
-    def argmin_argmax(arr):
+    def argmin_argmax(space, arr):
         result = 0
         idx = 1
         dtype = arr.get_dtype()
@@ -299,8 +299,8 @@ def _new_argmin_argmax(op_name):
         while not iter.done(state):
             arg_driver.jit_merge_point(shapelen=shapelen, dtype=dtype)
             w_val = iter.getitem(state)
-            new_best = getattr(dtype.itemtype, op_name)(cur_best, w_val)
-            if dtype.itemtype.ne(new_best, cur_best):
+            new_best = getattr(dtype.itemtype, op_name)(space, cur_best, w_val)
+            if dtype.itemtype.ne(space, new_best, cur_best):
                 result = idx
                 cur_best = new_best
             state = iter.next(state)
@@ -379,9 +379,9 @@ def count_all_true_concrete(impl):
         state = iter.next(state)
     return s
 
-def count_all_true(arr):
+def count_all_true(space, arr):
     if arr.is_scalar():
-        return arr.get_dtype().itemtype.bool(arr.get_scalar_value())
+        return arr.get_dtype().itemtype.bool(space, arr.get_scalar_value())
     else:
         return count_all_true_concrete(arr.implementation)
 
@@ -662,12 +662,12 @@ def clip(space, arr, shape, min, max, out):
         arr_state = arr_iter.next(arr_state)
         if min_iter is not None:
             w_min = min_iter.getitem(min_state).convert_to(space, dtype)
-            if dtype.itemtype.lt(w_v, w_min):
+            if dtype.itemtype.lt(space, w_v, w_min):
                 w_v = w_min
             min_state = min_iter.next(min_state)
         if max_iter is not None:
             w_max = max_iter.getitem(max_state).convert_to(space, dtype)
-            if dtype.itemtype.gt(w_v, w_max):
+            if dtype.itemtype.gt(space, w_v, w_max):
                 w_v = w_max
             max_state = max_iter.next(max_state)
         out_iter.setitem(out_state, w_v)
@@ -750,7 +750,7 @@ def _new_binsearch(side, op_name):
         last_key_val = key_iter.getitem(key_state)
         while not key_iter.done(key_state):
             key_val = key_iter.getitem(key_state)
-            if dtype.itemtype.lt(last_key_val, key_val):
+            if dtype.itemtype.lt(space, last_key_val, key_val):
                 max_idx = size
             else:
                 min_idx = 0
@@ -760,7 +760,7 @@ def _new_binsearch(side, op_name):
                 binsearch_driver.jit_merge_point(dtype=dtype)
                 mid_idx = min_idx + ((max_idx - min_idx) >> 1)
                 mid_val = arr.getitem(space, [mid_idx]).convert_to(space, dtype)
-                if op(mid_val, key_val):
+                if op(space, mid_val, key_val):
                     min_idx = mid_idx + 1
                 else:
                     max_idx = mid_idx

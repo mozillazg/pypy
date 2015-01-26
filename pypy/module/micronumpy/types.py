@@ -44,10 +44,10 @@ def simple_unary_op(func):
 def complex_unary_op(func):
     specialize.argtype(1)(func)
     @functools.wraps(func)
-    def dispatcher(self, v):
+    def dispatcher(self, space, v):
         return self.box_complex(
             *func(
-                self,
+                self, space,
                 self.for_computation(self.unbox(v))
             )
         )
@@ -308,7 +308,7 @@ class Primitive(object):
     @raw_unary_op
     def rint(self, space, v):
         float64 = Float64()
-        return float64.rint(float64.box(v))
+        return float64.rint(space, float64.box(v))
 
 class Bool(BaseType, Primitive):
     T = lltype.Bool
@@ -513,7 +513,7 @@ class Integer(Primitive):
         return ~v
 
     @specialize.argtype(1)
-    def reciprocal(self, v):
+    def reciprocal(self, space, v):
         raw = self.for_computation(self.unbox(v))
         ans = 0
         if raw == 0:
@@ -1268,13 +1268,13 @@ class ComplexFloating(object):
         b = self._bool(v2)
         return (not b and a) or (not a and b)
 
-    def min(self, v1, v2):
-        if self.le(v1, v2) or self.isnan(v1):
+    def min(self, space, v1, v2):
+        if self.le(space, v1, v2) or self.isnan(space, v1):
             return v1
         return v2
 
-    def max(self, v1, v2):
-        if self.ge(v1, v2) or self.isnan(v1):
+    def max(self, space, v1, v2):
+        if self.ge(space, v1, v2) or self.isnan(space, v1):
             return v1
         return v2
 
@@ -1300,14 +1300,14 @@ class ComplexFloating(object):
             if y[0] == 1:
                 return v1
             if y[0] == 2:
-                return self.mul(v1, v1)
+                return self.mul(space, v1, v1)
         x = self.for_computation(self.unbox(v1))
         if x[0] == 0 and x[1] == 0:
             if y[0] > 0 and y[1] == 0:
                 return self.box_complex(0, 0)
             return self.box_complex(rfloat.NAN, rfloat.NAN)
-        b = self.for_computation(self.unbox(self.log(v1)))
-        return self.exp(self.box_complex(b[0] * y[0] - b[1] * y[1],
+        b = self.for_computation(self.unbox(self.log(space, v1)))
+        return self.exp(space, self.box_complex(b[0] * y[0] - b[1] * y[1],
                                          b[0] * y[1] + b[1] * y[0]))
 
     #complex copysign does not exist in numpy
@@ -1332,13 +1332,13 @@ class ComplexFloating(object):
             return 1,0
         return -1,0
 
-    def fmax(self, v1, v2):
-        if self.ge(v1, v2) or self.isnan(v2):
+    def fmax(self, space, v1, v2):
+        if self.ge(space, v1, v2) or self.isnan(space, v2):
             return v1
         return v2
 
-    def fmin(self, v1, v2):
-        if self.le(v1, v2) or self.isnan(v2):
+    def fmin(self, space, v1, v2):
+        if self.le(space, v1, v2) or self.isnan(space, v2):
             return v1
         return v2
 
@@ -1363,7 +1363,7 @@ class ComplexFloating(object):
             return rfloat.NAN, rfloat.NAN
 
     @specialize.argtype(1)
-    def round(self, v, decimals=0):
+    def round(self, space, v, decimals=0):
         ans = list(self.for_computation(self.unbox(v)))
         if rfloat.isfinite(ans[0]):
             ans[0] = rfloat.round_double(ans[0], decimals, half_even=True)
@@ -1371,8 +1371,8 @@ class ComplexFloating(object):
             ans[1] = rfloat.round_double(ans[1], decimals, half_even=True)
         return self.box_complex(ans[0], ans[1])
 
-    def rint(self, v):
-        return self.round(v)
+    def rint(self, space, v):
+        return self.round(space, v)
 
     # No floor, ceil, trunc in numpy for complex
     #@simple_unary_op
@@ -1804,7 +1804,7 @@ class StringType(FlexibleType):
         b = bool(v2)
         return (not b and a) or (not a and b)
 
-    def bool(self, v):
+    def bool(self, space, v):
         return bool(self.to_str(v))
 
     def fill(self, storage, width, box, start, stop, offset):
@@ -1997,7 +1997,7 @@ class RecordType(FlexibleType):
         pieces.append(")")
         return "".join(pieces)
 
-    def eq(self, v1, v2):
+    def eq(self, space, v1, v2):
         assert isinstance(v1, boxes.W_VoidBox)
         assert isinstance(v2, boxes.W_VoidBox)
         s1 = v1.dtype.elsize
@@ -2008,8 +2008,8 @@ class RecordType(FlexibleType):
                 return False
         return True
 
-    def ne(self, v1, v2):
-        return not self.eq(v1, v2)
+    def ne(self, space, v1, v2):
+        return not self.eq(space, v1, v2)
 
 for tp in [Int32, Int64]:
     if tp.T == lltype.Signed:
