@@ -586,8 +586,7 @@ def descr__new__(space, w_subtype, w_dtype, w_align=None, w_copy=None, w_shape=N
         if w_dtype is dtype.w_box_type:
             return dtype
     if space.isinstance_w(w_dtype, space.w_type):
-        raise oefmt(space.w_NotImplementedError,
-            "cannot create dtype with type '%N'", w_dtype)
+        return cache.w_objectdtype
     raise oefmt(space.w_TypeError, "data type not understood")
 
 

@@ -608,6 +608,7 @@ def find_dtype_for_scalar(space, w_obj, current_guess=None):
     uint64_dtype = descriptor.get_dtype_cache(space).w_uint64dtype
     complex_dtype = descriptor.get_dtype_cache(space).w_complex128dtype
     float_dtype = descriptor.get_dtype_cache(space).w_float64dtype
+    object_dtype = descriptor.get_dtype_cache(space).w_objectdtype
     if isinstance(w_obj, boxes.W_GenericBox):
         dtype = w_obj.get_dtype(space)
         return find_binop_result_dtype(space, dtype, current_guess)
@@ -638,9 +639,10 @@ def find_dtype_for_scalar(space, w_obj, current_guess=None):
                 return descriptor.variable_dtype(space,
                                                    'S%d' % space.len_w(w_obj))
         return current_guess
-    raise oefmt(space.w_NotImplementedError,
-                'unable to create dtype from objects, "%T" instance not '
-                'supported', w_obj)
+    return object_dtype
+    #raise oefmt(space.w_NotImplementedError,
+    #            'unable to create dtype from objects, "%T" instance not '
+    #            'supported', w_obj)
 
 
 def ufunc_dtype_caller(space, ufunc_name, op_name, argcount, comparison_func,

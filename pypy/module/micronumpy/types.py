@@ -1624,7 +1624,7 @@ elif boxes.long_double_size in (12, 16):
 
 _all_objs_for_tests = [] # for tests
 
-class ObjectType(BaseType):
+class ObjectType(Primitive, BaseType):
     T = lltype.Signed
     BoxType = boxes.W_ObjectBox
 
@@ -1668,6 +1668,10 @@ class ObjectType(BaseType):
 
     def str_format(self, space, box):
         return space.str_w(space.repr(self.unbox(box)))
+
+    @staticmethod
+    def for_computation(v):
+        return v
 
 class FlexibleType(BaseType):
     def get_element_size(self):
