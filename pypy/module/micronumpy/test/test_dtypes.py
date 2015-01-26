@@ -1354,3 +1354,12 @@ class AppTestObjectDtypes(BaseNumpyAppTest):
         a = np.ndarray([5], dtype="O")
 
         assert a[0] == None
+
+    def test_object_arrays_add(self):
+        import numpy as np
+
+        a = np.array(["foo"], dtype=object)
+        b = np.array(["bar"], dtype=object)
+
+        res = a + b
+        assert res[0] == "foobar"
