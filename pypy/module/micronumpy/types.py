@@ -1625,7 +1625,7 @@ elif boxes.long_double_size in (12, 16):
 
 _all_objs_for_tests = [] # for tests
 
-class ObjectType(Primitive, BaseType):
+class ObjectType(BaseType):
     T = lltype.Signed
     BoxType = boxes.W_ObjectBox
 
@@ -1659,6 +1659,11 @@ class ObjectType(Primitive, BaseType):
         else:
             w_obj = _all_objs_for_tests[res]
         return w_obj
+
+    def fill(self, storage, width, box, start, stop, offset):
+        value = self.unbox(box)
+        for i in xrange(start, stop, width):
+            self._write(storage, i, offset, value)
 
     def unbox(self, box):
         assert isinstance(box, self.BoxType)
