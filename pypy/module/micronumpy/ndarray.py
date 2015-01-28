@@ -157,6 +157,8 @@ class __extend__(W_NDimArray):
             if (isinstance(w_item, W_NDimArray) or
                     space.isinstance_w(w_item, space.w_list)):
                 w_item = convert_to_array(space, w_item)
+                if w_item.implementation.dtype.num == NPY.OBJECT:
+                    raise OperationError(space.w_TypeError, space.wrap("long() argument must be a string or a number, not 'object'")) # Mimic numpy's error message
                 if shape is None:
                     shape = w_item.get_shape()
                 else:
