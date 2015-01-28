@@ -397,7 +397,7 @@ class Bool(BaseType, Primitive):
         return 0
 
     @specialize.argtype(1)
-    def round(self, v, decimals=0):
+    def round(self, space, v, decimals=0):
         if decimals != 0:
             return v
         return Float64().box(self.unbox(v))
@@ -525,7 +525,7 @@ class Integer(Primitive):
         return self.box(ans)
 
     @specialize.argtype(1)
-    def round(self, v, decimals=0):
+    def round(self, space, v, decimals=0):
         raw = self.for_computation(self.unbox(v))
         if decimals < 0:
             # No ** in rpython
@@ -752,7 +752,7 @@ class Float(Primitive):
         return math.ceil(v)
 
     @specialize.argtype(1)
-    def round(self, v, decimals=0):
+    def round(self, space, v, decimals=0):
         raw = self.for_computation(self.unbox(v))
         if rfloat.isinf(raw):
             return v

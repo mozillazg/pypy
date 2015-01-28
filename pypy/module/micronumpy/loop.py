@@ -684,7 +684,7 @@ def round(space, arr, dtype, shape, decimals, out):
     while not arr_iter.done(arr_state):
         round_driver.jit_merge_point(shapelen=shapelen, dtype=dtype)
         w_v = arr_iter.getitem(arr_state).convert_to(space, dtype)
-        w_v = dtype.itemtype.round(w_v, decimals)
+        w_v = dtype.itemtype.round(space, w_v, decimals)
         out_iter.setitem(out_state, w_v)
         arr_state = arr_iter.next(arr_state)
         out_state = out_iter.next(out_state)
