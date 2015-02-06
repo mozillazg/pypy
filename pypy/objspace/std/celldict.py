@@ -199,7 +199,7 @@ def _finditem_with_cache(space, frame, nameindex, pycode, w_dict, entry_version,
                 result = entry_value
             else:
                 # need to fill the cache
-                result = strategy.getitem_str(
+                result = strategy.getdictvalue_no_unwrapping(
                         w_dict, frame.getname_u(nameindex))
                 entry = pycode._celldict_cache[nameindex]
                 if entry is INVALID_CACHE_ENTRY:

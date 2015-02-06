@@ -1,6 +1,7 @@
 import py
 
-from pypy.objspace.std.celldict import ModuleDictStrategy
+from pypy.objspace.std.celldict import (
+    ModuleDictStrategy, init_celldict_cache, _finditem_with_cache)
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
 from pypy.objspace.std.test.test_dictmultiobject import (
     BaseTestRDictImplementation, BaseTestDevolvedDictImplementation, FakeSpace,
@@ -56,6 +57,71 @@ class TestCellDict(object):
         d.setitem("a", x)
         v3 = strategy.version
         assert v2 is v3
+
+    def test_global_cache(self):
+        class FakePycode(object):
+            co_names_w = ['a', 'b']
+        class FakeFrame(object):
+            def getname_u(self, i):
+                return FakePycode.co_names_w[i]
+        pycode = FakePycode()
+        frame = FakeFrame()
+        init_celldict_cache(pycode)
+        assert pycode._celldict_cache
+
+        strategy = ModuleDictStrategy(space)
+        storage = strategy.get_empty_storage()
+        d = W_DictMultiObject(space, strategy, storage)
+
+        v1 = strategy.version
+
+        # fill cache
+        assert _finditem_with_cache(space, frame, 0, pycode, d, None, None) == None
+        assert pycode._celldict_cache[0].version is v1
+        assert pycode._celldict_cache[0].value is None
+        assert pycode._celldict_cache[1].version is None
+        assert pycode._celldict_cache[1].value is None
+        # does not need the pycode any more
+        assert _finditem_with_cache(space, frame, 0, None, d, v1, None) == None
+
+        # insert a key
+        key = "a"
+        w_key = self.FakeString(key)
+        d.setitem(w_key, 1)
+        v2 = strategy.version
+
+        # fill cache
+        assert _finditem_with_cache(space, frame, 0, pycode, d, v1, None) == 1
+        assert pycode._celldict_cache[0].version is v2
+        assert pycode._celldict_cache[0].value == 1
+        assert pycode._celldict_cache[1].version is None
+        assert pycode._celldict_cache[1].value is None
+        # does not need the pycode any more
+        assert _finditem_with_cache(space, frame, 0, None, d, v2, 1) == 1
+
+        # overwrite key, now it's a cell
+        d.setitem(w_key, 2)
+        v3 = strategy.version
+        # the cell is cached
+        cell = _finditem_with_cache(space, frame, 0, pycode, d, v2, None)
+        assert cell.w_value == 2
+        assert pycode._celldict_cache[0].version is v3
+        assert pycode._celldict_cache[0].value is cell
+        # does not need the pycode any more
+        assert _finditem_with_cache(space, frame, 0, None, d, v3, 2) == 2
+
+        d.setitem(w_key, 3)
+        v4 = strategy.version
+        assert v3 is v4
+        assert d.getitem(w_key) == 3
+        assert d.strategy.getdictvalue_no_unwrapping(d, key).w_value == 3
+
+        d.delitem(w_key)
+        v5 = strategy.version
+        assert v5 is not v4
+        assert d.getitem(w_key) is None
+        assert d.strategy.getdictvalue_no_unwrapping(d, key) is None
+
 
 class AppTestModuleDict(object):
     spaceconfig = {"objspace.std.withcelldict": True}
