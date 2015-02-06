@@ -45,6 +45,7 @@ def unwrap_cell(space, w_value):
 
 def write_cell(space, w_cell, w_value):
     from pypy.objspace.std.intobject import W_IntObject
+    assert w_value is not None
     if w_cell is None:
         # attribute does not exist at all, write it without a cell first
         return w_value

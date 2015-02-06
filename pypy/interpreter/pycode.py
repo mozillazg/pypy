@@ -123,6 +123,9 @@ class PyCode(eval.Code):
         if self.space.config.objspace.std.withmapdict:
             from pypy.objspace.std.mapdict import init_mapdict_cache
             init_mapdict_cache(self)
+        if self.space.config.objspace.std.withcelldict:
+            from pypy.objspace.std.celldict import init_celldict_cache
+            init_celldict_cache(self)
 
     def _cleanup_(self):
         if (self.magic == cpython_magic and

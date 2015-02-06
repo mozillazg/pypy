@@ -872,8 +872,12 @@ class __extend__(pyframe.PyFrame):
         self.space.delattr(w_obj, w_attributename)
 
     def STORE_GLOBAL(self, nameindex, next_instr):
-        varname = self.getname_u(nameindex)
         w_newvalue = self.popvalue()
+        if self.space.config.objspace.std.withcelldict and jit.we_are_jitted():
+            from pypy.objspace.std.celldict import STORE_GLOBAL_celldict
+            STORE_GLOBAL_celldict(self.space, self, nameindex, w_newvalue)
+            return
+        varname = self.getname_u(nameindex)
         self.space.setitem_str(self.w_globals, varname, w_newvalue)
 
     def DELETE_GLOBAL(self, nameindex, next_instr):
@@ -905,7 +909,12 @@ class __extend__(pyframe.PyFrame):
     _load_global_failed._dont_inline_ = True
 
     def LOAD_GLOBAL(self, nameindex, next_instr):
-        self.pushvalue(self._load_global(self.getname_u(nameindex)))
+        if self.space.config.objspace.std.withcelldict and jit.we_are_jitted():
+            from pypy.objspace.std.celldict import LOAD_GLOBAL_celldict
+            w_result = LOAD_GLOBAL_celldict(self.space, self, nameindex)
+        else:
+            w_result = self._load_global(self.getname_u(nameindex))
+        self.pushvalue(w_result)
     LOAD_GLOBAL._always_inline_ = True
 
     def DELETE_FAST(self, varindex, next_instr):

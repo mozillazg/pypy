@@ -172,3 +172,79 @@ class ModuleDictStrategy(DictStrategy):
 
 
 create_iterator_classes(ModuleDictStrategy)
+
+class CelldictCache(object):
+    def __init__(self):
+        self.version = None
+        self.value = None
+        self.builtin_version = None
+        self.builtin_value = None
+INVALID_CACHE_ENTRY = CelldictCache()
+
+def init_celldict_cache(pycode):
+    num_entries = len(pycode.co_names_w)
+    pycode._celldict_cache = [INVALID_CACHE_ENTRY] * num_entries
+
+def _finditem_with_cache(space, frame, nameindex, pycode, w_dict, entry_version, entry_value, builtin=False):
+    from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+    if (isinstance(w_dict, W_DictMultiObject) and
+            not w_dict.user_overridden_class):
+        strategy = w_dict.strategy
+        if isinstance(strategy, ModuleDictStrategy):
+            # it's enough to check that the version is the same
+            # if the version is the same, that means that both the same globals
+            # object is used, and that that object did not change
+            version = strategy.version
+            if version is entry_version:
+                result = entry_value
+            else:
+                # need to fill the cache
+                result = strategy.getitem_str(
+                        w_dict, frame.getname_u(nameindex))
+                entry = pycode._celldict_cache[nameindex]
+                if entry is INVALID_CACHE_ENTRY:
+                    entry = pycode._celldict_cache[nameindex] = CelldictCache()
+                if builtin:
+                    entry.builtin_version = version
+                    entry.builtin_value = result
+                else:
+                    entry.version = version
+                    entry.value = result
+            return result
+    return space.finditem_str(w_dict, frame.getname_u(nameindex))
+
+def LOAD_GLOBAL_celldict(space, frame, nameindex):
+    from pypy.interpreter.mixedmodule import MixedModule
+    pycode = frame.getcode()
+    w_globals = frame.w_globals
+    entry = pycode._celldict_cache[nameindex]
+    cell = _finditem_with_cache(space, frame, nameindex, pycode, w_globals,
+                                  entry.version, entry.value)
+    if cell is None:
+        assert not space.config.objspace.honor__builtins__
+        # not in the globals, now look in the built-ins
+        builtin = frame.get_builtin()
+        assert isinstance(builtin, MixedModule)
+        cell = _finditem_with_cache(space, frame, nameindex, pycode, builtin.w_dict,
+                                      entry.builtin_version, entry.builtin_value,
+                                      builtin=True)
+        if cell is None and builtin.lazy:
+            w_result = builtin._load_lazily(space, frame.getname_u(nameindex))
+        else:
+            w_result = unwrap_cell(space, cell)
+        if w_result is None:
+            frame._load_global_failed(frame.getname_u(nameindex))
+    else:
+        w_result = unwrap_cell(space, cell)
+    return w_result
+
+def STORE_GLOBAL_celldict(space, frame, nameindex, w_value):
+    pycode = frame.getcode()
+    w_globals = frame.w_globals
+    entry = pycode._celldict_cache[nameindex]
+    cell = _finditem_with_cache(space, frame, nameindex, pycode, w_globals,
+                                entry.version, entry.value)
+    w_newvalue = write_cell(space, cell, w_value)
+    if w_newvalue is None:
+        return
+    space.setitem_str(w_globals, frame.getname_u(nameindex), w_value)
