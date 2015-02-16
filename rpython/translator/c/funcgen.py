@@ -792,6 +792,7 @@ class FunctionCodeGenerator(object):
             return x
 
     def OP_DEBUG_START(self, op):
+        self.db.seen_debug_start(op)
         return self._op_debug('PYPY_DEBUG_START', op.args[0])
 
     def OP_DEBUG_STOP(self, op):

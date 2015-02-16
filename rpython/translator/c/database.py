@@ -16,6 +16,7 @@ from rpython.translator.c.support import log, barebonearray
 from rpython.translator.c.extfunc import do_the_getting
 from rpython.translator.c import gc
 from rpython.tool.identity_dict import identity_dict
+from rpython.flowspace.model import Constant
 
 
 class NoCorrespondingNode(Exception):
@@ -47,6 +48,7 @@ class LowLevelDatabase(object):
         self.containerstats = {}
         self.externalfuncs = {}
         self.helper2ptr = {}
+        self.debug_nodes = set()
 
         # late_initializations is for when the value you want to
         # assign to a constant object is something C doesn't think is
@@ -231,6 +233,13 @@ class LowLevelDatabase(object):
                 return '((%s) NULL)' % (cdecl(self.gettype(T), ''), )
         else:
             raise Exception("don't know about %r" % (obj,))
+
+    def seen_debug_start(self, op):
+        arg = op.args[0]
+        if not isinstance(arg, Constant):
+            return
+        name = ''.join(arg.value.chars)
+        self.debug_nodes.add(name)
 
     def complete(self, show_progress=True):
         assert not self.completed

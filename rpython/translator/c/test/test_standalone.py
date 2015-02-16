@@ -1390,7 +1390,6 @@ class TestThread(object):
                 and result.count('a') == 1
                 and result.count('d') == 6)
 
-
 class TestShared(StandaloneTests):
 
     def test_entrypoint(self):

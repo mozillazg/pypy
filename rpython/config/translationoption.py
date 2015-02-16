@@ -189,6 +189,9 @@ translation_optiondescription = OptionDescription(
     BoolOption("lldebug0",
                "If true, makes an lldebug0 build", default=False,
                cmdline="--lldebug0"),
+    BoolOption("dtrace",
+               "If true, enable emitting dtrace debug probes", default=False,
+               cmdline='--enable-dtrace'),
 
     OptionDescription("backendopt", "Backend Optimization Options", [
         # control inlining

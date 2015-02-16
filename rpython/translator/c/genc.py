@@ -246,7 +246,21 @@ class CBuilder(object):
         self.extrafiles = self.eventually_copy(extra)
         self.gen_makefile(targetdir, exe_name=exe_name,
                           headers_to_precompile=headers_to_precompile)
+        if self.config.translation.dtrace:
+            self._generate_dtrace_probe_file(db.debug_nodes)
         return cfile
+
+    def _generate_dtrace_probe_file(self, debug_nodes):
+        name = self.targetdir.join('pypy.p')
+        f = name.open('w')
+        f.write('provider pypy_probes {\n')
+        for debug_node in debug_nodes:
+            debug_node = debug_node.replace('-', '_')
+            f.write('  probe %s__start(void);' % debug_node)
+            f.write('  probe %s__done(void);' % debug_node)
+        f.write('};')
+        f.close()
+        # XXX run dtrace
 
     def eventually_copy(self, cfiles):
         extrafiles = []
