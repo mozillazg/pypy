@@ -67,11 +67,6 @@ class OptValue(object):
         self._tag = (self._tag & (~0x3)) | level
 
     def import_from(self, other, optimizer):
-        if self.getlevel() == LEVEL_CONSTANT:
-            assert other.getlevel() == LEVEL_CONSTANT
-            assert other.box.same_constant(self.box)
-            return
-        assert self.getlevel() <= LEVEL_NONNULL
         if other.getlevel() == LEVEL_CONSTANT:
             self.make_constant(other.get_key_box())
         elif other.getlevel() == LEVEL_KNOWNCLASS:
@@ -256,14 +251,13 @@ class PtrOptValue(OptValue):
 
     def import_from(self, other, optimizer):
         OptValue.import_from(self, other, optimizer)
-        if self.getlevel() != LEVEL_CONSTANT:
-            if other.getlenbound():
-                if self.lenbound:
-                    assert other.getlenbound().mode == self.lenbound.mode
-                    assert other.getlenbound().descr == self.lenbound.descr
-                    self.lenbound.bound.intersect(other.getlenbound().bound)
-                else:
-                    self.lenbound = other.getlenbound().clone()
+        if other.getlenbound():
+            if self.lenbound:
+                assert other.getlenbound().mode == self.lenbound.mode
+                assert other.getlenbound().descr == self.lenbound.descr
+                self.lenbound.bound.intersect(other.getlenbound().bound)
+            else:
+                self.lenbound = other.getlenbound().clone()
 
     def make_guards(self, box):
         guards = []
@@ -360,9 +354,8 @@ class IntOptValue(OptValue):
 
     def import_from(self, other, optimizer):
         OptValue.import_from(self, other, optimizer)
-        if self.getlevel() != LEVEL_CONSTANT:
-            if other.getintbound() is not None: # VRawBufferValue
-                self.intbound.intersect(other.getintbound())
+        if other.getintbound() is not None: # VRawBufferValue
+            self.intbound.intersect(other.getintbound())
 
     def make_guards(self, box):
         guards = []
@@ -606,7 +599,6 @@ class Optimizer(Optimization):
                 value = self.values[box] = IntOptValue(box)
             else:
                 value = self.values[box] = OptValue(box)
-        self.ensure_imported(value)
         return value
 
     def get_box_replacement(self, box):
@@ -616,16 +608,12 @@ class Optimizer(Optimization):
             return box
         return v.get_key_box()
 
-    def ensure_imported(self, value):
-        pass
-
     @specialize.argtype(0)
     def get_constant_box(self, box):
         if isinstance(box, Const):
             return box
         try:
             value = self.values[box]
-            self.ensure_imported(value)
         except KeyError:
             return None
         if value.is_constant():
@@ -738,7 +726,6 @@ class Optimizer(Optimization):
             except KeyError:
                 pass
             else:
-                self.ensure_imported(value)
                 newbox = value.force_box(self)
                 if arg is not newbox:
                     if not changed:
