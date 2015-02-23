@@ -59,13 +59,10 @@ class Unroller(object):
                                      op.result, pure_value)
                     self.optimizer.pure_reverse(op)
         for box in self.optimizer.loop.operations[0].getarglist():
-            try:
-                # XXX do the same thing for pure opt value
-                other = old_optimizer.values[box]
-                self.optimizer.getvalue(box).import_from(other,
-                                                         self.optimizer)
-            except KeyError:
-                pass
+            # XXX do the same thing for pure opt value
+            other = old_optimizer.values.get(box, None)
+            if other is not None:
+                self.optimizer.getvalue(box).import_from(other, self.optimizer)
         
     #         for opargs, value in old_optpure.pure_operations.items():
     #             if not value.is_virtual():
