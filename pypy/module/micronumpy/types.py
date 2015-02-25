@@ -42,7 +42,7 @@ def simple_unary_op(func):
     return dispatcher
 
 def complex_unary_op(func):
-    specialize.argtype(1)(func)
+    specialize.argtype(2)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v):
         return self.box_complex(
@@ -54,7 +54,7 @@ def complex_unary_op(func):
     return dispatcher
 
 def complex_to_real_unary_op(func):
-    specialize.argtype(1)(func)
+    specialize.argtype(2)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v):
         return self.box_component(
@@ -76,7 +76,7 @@ def raw_unary_op(func):
     return dispatcher
 
 def simple_binary_op(func):
-    specialize.argtype(1, 2)(func)
+    specialize.argtype(2, 3)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v1, v2):
         return self.box(
@@ -90,7 +90,7 @@ def simple_binary_op(func):
     return dispatcher
 
 def complex_binary_op(func):
-    specialize.argtype(1, 2)(func)
+    specialize.argtype(2, 3)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v1, v2):
         return self.box_complex(
@@ -103,7 +103,7 @@ def complex_binary_op(func):
     return dispatcher
 
 def raw_binary_op(func):
-    specialize.argtype(1, 2)(func)
+    specialize.argtype(2, 3)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v1, v2):
         return func(self, space,
@@ -174,6 +174,7 @@ class Primitive(object):
 
     @staticmethod
     def read_from_storage(T, storage, native, offset):
+        assert isinstance(T, lltype.Primitive)
         res = raw_storage_getitem_unaligned(T, storage, offset)
         if not native:
             res = byteswap(res)
@@ -400,7 +401,7 @@ class Bool(BaseType, Primitive):
             return 1
         return 0
 
-    @specialize.argtype(1)
+    @specialize.argtype(2)
     def round(self, space, v, decimals=0):
         if decimals != 0:
             return v
@@ -427,7 +428,7 @@ class Integer(Primitive):
     def default_fromstring(self, space):
         return self.box(0)
 
-    @specialize.argtype(1, 2)
+    @specialize.argtype(2, 3)
     def div(self, space, b1, b2):
         v1 = self.for_computation(self.unbox(b1))
         v2 = self.for_computation(self.unbox(b2))
@@ -439,7 +440,7 @@ class Integer(Primitive):
                 return self.box(0)
         return self.box(v1 / v2)
 
-    @specialize.argtype(1, 2)
+    @specialize.argtype(2, 3)
     def floordiv(self, space, b1, b2):
         v1 = self.for_computation(self.unbox(b1))
         v2 = self.for_computation(self.unbox(b2))
@@ -516,7 +517,7 @@ class Integer(Primitive):
     def invert(self, space, v):
         return ~v
 
-    @specialize.argtype(1)
+    @specialize.argtype(2)
     def reciprocal(self, space, v):
         raw = self.for_computation(self.unbox(v))
         ans = 0
@@ -528,7 +529,7 @@ class Integer(Primitive):
             ans = raw
         return self.box(ans)
 
-    @specialize.argtype(1)
+    @specialize.argtype(2)
     def round(self, space, v, decimals=0):
         raw = self.for_computation(self.unbox(v))
         if decimals < 0:
@@ -755,7 +756,7 @@ class Float(Primitive):
     def ceil(self, space, v):
         return math.ceil(v)
 
-    @specialize.argtype(1)
+    @specialize.argtype(2)
     def round(self, space, v, decimals=0):
         raw = self.for_computation(self.unbox(v))
         if rfloat.isinf(raw):
@@ -998,6 +999,7 @@ class Float16(BaseType, Float):
 
     @staticmethod
     def read_from_storage(T, storage, native, offset):
+        assert isinstance(T, lltype.Primitive)
         hbits = raw_storage_getitem_unaligned(FLOAT16_STORAGE_T, storage, offset)
         if not native:
             hbits = byteswap(hbits)
@@ -1136,6 +1138,7 @@ class ComplexFloating(object):
 
     @staticmethod
     def read_from_storage(T, storage, native, offset):
+        assert isinstance(T, lltype.Primitive)
         real = raw_storage_getitem_unaligned(T, storage, offset)
         imag = raw_storage_getitem_unaligned(T, storage, offset + rffi.sizeof(T))
         if not native:
@@ -1669,6 +1672,7 @@ class ObjectType(BaseType):
 
     @staticmethod
     def read_from_storage(T, storage, native, offset):
+        assert isinstance(T, lltype.Primitive)
         res = raw_storage_getitem_unaligned(T, storage, offset)
         if we_are_translated():
             gcref = rffi.cast(llmemory.GCREF, res)
@@ -1726,14 +1730,14 @@ class FlexibleType(BaseType):
         return builder.build()
 
 def str_unary_op(func):
-    specialize.argtype(1)(func)
+    specialize.argtype(2)(func)
     @functools.wraps(func)
-    def dispatcher(self, v1):
-        return func(self, self.to_str(v1))
+    def dispatcher(self, space, v1):
+        return func(self, space, self.to_str(v1))
     return dispatcher
 
 def str_binary_op(func):
-    specialize.argtype(1, 2)(func)
+    specialize.argtype(2, 3)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v1, v2):
         return func(self, space,
