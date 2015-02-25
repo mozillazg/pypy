@@ -30,7 +30,7 @@ log10 = math.log(10)
 
 
 def simple_unary_op(func):
-    specialize.argtype(1)(func)
+    specialize.argtype(2)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v):
         return self.box(
@@ -66,7 +66,7 @@ def complex_to_real_unary_op(func):
     return dispatcher
 
 def raw_unary_op(func):
-    specialize.argtype(1)(func)
+    specialize.argtype(2)(func)
     @functools.wraps(func)
     def dispatcher(self, space, v):
         return func(
@@ -172,30 +172,34 @@ class Primitive(object):
     def default_fromstring(self, space):
         raise NotImplementedError
 
-    def _read(self, storage, i, offset):
-        res = raw_storage_getitem_unaligned(self.T, storage, i + offset)
-        if not self.native:
+    @staticmethod
+    def read_from_storage(T, storage, native, offset):
+        res = raw_storage_getitem_unaligned(T, storage, offset)
+        if not native:
             res = byteswap(res)
         return res
 
-    def _write(self, storage, i, offset, value):
-        if not self.native:
+    @staticmethod
+    def write_to_storage(T, storage, native, offset, value):
+        if not native:
             value = byteswap(value)
-        raw_storage_setitem_unaligned(storage, i + offset, value)
+        raw_storage_setitem_unaligned(storage, offset, value)
 
     def read(self, arr, i, offset, dtype=None):
-        return self.box(self._read(arr.storage, i, offset))
+        return self.box(self.read_from_storage(
+                                self.T, arr.storage, self.native, i + offset))
 
     def read_bool(self, arr, i, offset):
-        return bool(self.for_computation(self._read(arr.storage, i, offset)))
+        return bool(self.for_computation(self.read_from_storage(
+                self.T, arr.storage, self.native, i + offset)))
 
     def store(self, arr, i, offset, box):
-        self._write(arr.storage, i, offset, self.unbox(box))
+        self.write_to_storage(self.T, arr.storage, self.native, i + offset, self.unbox(box))
 
     def fill(self, storage, width, box, start, stop, offset):
         value = self.unbox(box)
         for i in xrange(start, stop, width):
-            self._write(storage, i, offset, value)
+            self.write_to_storage(self.T, storage, self.native, i + offset, value)
 
     def runpack_str(self, space, s):
         v = rffi.cast(self.T, runpack(self.format_code, s))
@@ -967,8 +971,8 @@ class Float(Primitive):
         else:
             return x
 
+FLOAT16_STORAGE_T = rffi.USHORT
 class Float16(BaseType, Float):
-    _STORAGE_T = rffi.USHORT
     T = rffi.SHORT
     BoxType = boxes.W_Float16Box
 
@@ -989,24 +993,26 @@ class Float16(BaseType, Float):
     def byteswap(self, w_v):
         value = self.unbox(w_v)
         hbits = float_pack(value, 2)
-        swapped = byteswap(rffi.cast(self._STORAGE_T, hbits))
+        swapped = byteswap(rffi.cast(FLOAT16_STORAGE_T, hbits))
         return self.box(float_unpack(r_ulonglong(swapped), 2))
 
-    def _read(self, storage, i, offset):
-        hbits = raw_storage_getitem_unaligned(self._STORAGE_T, storage, i + offset)
-        if not self.native:
+    @staticmethod
+    def read_from_storage(T, storage, native, offset):
+        hbits = raw_storage_getitem_unaligned(FLOAT16_STORAGE_T, storage, offset)
+        if not native:
             hbits = byteswap(hbits)
         return float_unpack(r_ulonglong(hbits), 2)
 
-    def _write(self, storage, i, offset, value):
+    @staticmethod
+    def write_to_storage(T, storage, native, offset, value):
         try:
             hbits = float_pack(value, 2)
         except OverflowError:
             hbits = float_pack(rfloat.INFINITY, 2)
-        hbits = rffi.cast(self._STORAGE_T, hbits)
-        if not self.native:
+        hbits = rffi.cast(FLOAT16_STORAGE_T, hbits)
+        if not native:
             hbits = byteswap(hbits)
-        raw_storage_setitem_unaligned(storage, i + offset, hbits)
+        raw_storage_setitem_unaligned(storage, offset, hbits)
 
 class Float32(BaseType, Float):
     T = rffi.FLOAT
@@ -1084,7 +1090,8 @@ class ComplexFloating(object):
         return bool(real) or bool(imag)
 
     def read_bool(self, arr, i, offset):
-        v = self.for_computation(self._read(arr.storage, i, offset))
+        v = self.for_computation(self.read_from_storage(
+                self.T, arr.storage, self.native, i + offset))
         return bool(v[0]) or bool(v[1])
 
     def get_element_size(self):
@@ -1127,33 +1134,36 @@ class ComplexFloating(object):
         assert isinstance(box, self.BoxType)
         return box.real, box.imag
 
-    def _read(self, storage, i, offset):
-        real = raw_storage_getitem_unaligned(self.T, storage, i + offset)
-        imag = raw_storage_getitem_unaligned(self.T, storage, i + offset + rffi.sizeof(self.T))
-        if not self.native:
+    @staticmethod
+    def read_from_storage(T, storage, native, offset):
+        real = raw_storage_getitem_unaligned(T, storage, offset)
+        imag = raw_storage_getitem_unaligned(T, storage, offset + rffi.sizeof(T))
+        if not native:
             real = byteswap(real)
             imag = byteswap(imag)
         return real, imag
 
     def read(self, arr, i, offset, dtype=None):
-        real, imag = self._read(arr.storage, i, offset)
+        real, imag = self.read_from_storage(
+                                self.T, arr.storage, self.native, i + offset)
         return self.box_complex(real, imag)
 
-    def _write(self, storage, i, offset, value):
+    @staticmethod
+    def write_to_storage(T, storage, native, offset, value):
         real, imag = value
-        if not self.native:
+        if not native:
             real = byteswap(real)
             imag = byteswap(imag)
-        raw_storage_setitem_unaligned(storage, i + offset, real)
-        raw_storage_setitem_unaligned(storage, i + offset + rffi.sizeof(self.T), imag)
+        raw_storage_setitem_unaligned(storage, offset, real)
+        raw_storage_setitem_unaligned(storage, offset + rffi.sizeof(T), imag)
 
     def store(self, arr, i, offset, box):
-        self._write(arr.storage, i, offset, self.unbox(box))
+        self.write_to_storage(self.T, arr.storage, self.native, i + offset, self.unbox(box))
 
     def fill(self, storage, width, box, start, stop, offset):
         value = self.unbox(box)
         for i in xrange(start, stop, width):
-            self._write(storage, i, offset, value)
+            self.write_to_storage(self.T, storage, self.native, i + offset, value)
 
     @complex_binary_op
     def add(self, space, v1, v2):
@@ -1642,21 +1652,24 @@ class ObjectType(BaseType):
         return boxes.W_ObjectBox(w_item)
 
     def store(self, arr, i, offset, box):
-        self._write(arr.storage, i, offset, self.unbox(box))
+        self.write_to_storage(self.T, arr.storage, self.native, i + offset, self.unbox(box))
 
     def read(self, arr, i, offset, dtype=None):
-        return self.box(self._read(arr.storage, i, offset))
+        return self.box(self.read_from_storage(
+                            self.T, arr.storage, self.native, i + offset))
 
-    def _write(self, storage, i, offset, w_obj):
+    @staticmethod
+    def write_to_storage(T, storage, native, offset, w_obj):
         if we_are_translated():
             value = rffi.cast(lltype.Signed, cast_instance_to_gcref(w_obj))
         else:
             value = len(_all_objs_for_tests)
             _all_objs_for_tests.append(w_obj)
-        raw_storage_setitem_unaligned(storage, i + offset, value)
+        raw_storage_setitem_unaligned(storage, offset, value)
 
-    def _read(self, storage, i, offset):
-        res = raw_storage_getitem_unaligned(self.T, storage, i + offset)
+    @staticmethod
+    def read_from_storage(T, storage, native, offset):
+        res = raw_storage_getitem_unaligned(T, storage, offset)
         if we_are_translated():
             gcref = rffi.cast(llmemory.GCREF, res)
             w_obj = cast_gcref_to_instance(W_Root, gcref)
@@ -1667,13 +1680,16 @@ class ObjectType(BaseType):
     def fill(self, storage, width, box, start, stop, offset):
         value = self.unbox(box)
         for i in xrange(start, stop, width):
-            self._write(storage, i, offset, value)
+            self.write_to_storage(self.T, storage, self.native, i + offset, value)
 
     def unbox(self, box):
         assert isinstance(box, self.BoxType)
         return box.w_obj
 
+    @specialize.argtype(1)
     def box(self, w_obj):
+        if we_are_translated():
+            assert isinstance(w_obj, W_Root)
         return self.BoxType(w_obj)
 
     def str_format(self, space, box):
@@ -1685,11 +1701,11 @@ class ObjectType(BaseType):
 
     @simple_binary_op
     def add(self, space, v1, v2):
-        return space.add(v1, v2)
+        return space.add(space.wrap(v1), space.wrap(v2))
 
     @raw_binary_op
     def eq(self, space, v1, v2):
-        return space.eq_w(v1, v2)
+        return space.eq_w(space.wrap(v1), space.wrap(v2))
 
 class FlexibleType(BaseType):
     def get_element_size(self):

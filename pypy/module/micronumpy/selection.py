@@ -13,18 +13,19 @@ from pypy.module.micronumpy.iterators import AllButAxisIter
 INT_SIZE = rffi.sizeof(lltype.Signed)
 
 all_types = (types.all_float_types + types.all_complex_types +
-             types.all_int_types)
-all_types = [i for i in all_types if not issubclass(i[0], types.Float16)]
+             types.all_int_types + [(types.ObjectType, 'object')])
 all_types = unrolling_iterable(all_types)
 
 
 def make_argsort_function(space, itemtype, comp_type, count=1):
     TP = itemtype.T
     step = rffi.sizeof(TP)
+    reader = itemtype.read_from_storage
+    writer = itemtype.write_to_storage
 
     class Repr(object):
         def __init__(self, index_stride_size, stride_size, size, values,
-                     indexes, index_start, start):
+                     indexes, index_start, start, native):
             self.index_stride_size = index_stride_size
             self.stride_size = stride_size
             self.index_start = index_start
@@ -32,39 +33,34 @@ def make_argsort_function(space, itemtype, comp_type, count=1):
             self.size = size
             self.values = values
             self.indexes = indexes
+            self.native = native
 
-        def getitem(self, item):
-            if count < 2:
-                v = raw_storage_getitem(TP, self.values, item * self.stride_size
-                                    + self.start)
-            else:
-                v = []
-                for i in range(count):
-                    _v = raw_storage_getitem(TP, self.values, item * self.stride_size
-                                    + self.start + step * i)
-                    v.append(_v)
+        def getitem(self, idx):
+            v = reader(TP, self.values, self.native, idx * self.stride_size + self.start)
             if comp_type == 'int':
                 v = widen(v)
             elif comp_type == 'float':
                 v = float(v)
             elif comp_type == 'complex':
                 v = [float(v[0]),float(v[1])]
+            elif comp_type == 'object':
+                pass
             else:
                 raise NotImplementedError('cannot reach')
             return (v, raw_storage_getitem(lltype.Signed, self.indexes,
-                                           item * self.index_stride_size +
+                                           idx * self.index_stride_size +
                                            self.index_start))
 
         def setitem(self, idx, item):
-            if count < 2:
-                raw_storage_setitem(self.values, idx * self.stride_size +
+            if comp_type == 'object':
+                writer(TP, self.values, self.native, idx * self.stride_size +
+                                self.start, item[0])
+            elif count == 1:
+                writer(TP, self.values, self.native, idx * self.stride_size +
                                 self.start, rffi.cast(TP, item[0]))
             else:
-                i = 0
-                for val in item[0]:
-                    raw_storage_setitem(self.values, idx * self.stride_size +
-                                self.start + i*step, rffi.cast(TP, val))
-                    i += 1
+                writer(TP, self.values, self.native, idx * self.stride_size +
+                                self.start, [rffi.cast(TP, i) for i in item[0]])
             raw_storage_setitem(self.indexes, idx * self.index_stride_size +
                                 self.index_start, item[1])
 
@@ -76,7 +72,7 @@ def make_argsort_function(space, itemtype, comp_type, count=1):
             values = alloc_raw_storage(size * stride_size,
                                             track_allocation=False)
             Repr.__init__(self, dtype.elsize, stride_size,
-                          size, values, indexes, start, start)
+                          size, values, indexes, start, start, True)
 
         def __del__(self):
             free_raw_storage(self.indexes, track_allocation=False)
@@ -135,11 +131,12 @@ def make_argsort_function(space, itemtype, comp_type, count=1):
         dtype = descriptor.get_dtype_cache(space).w_longdtype
         index_arr = W_NDimArray.from_shape(space, arr.get_shape(), dtype)
         storage = index_arr.implementation.get_storage()
+        native = arr.dtype.is_native()
         if len(arr.get_shape()) == 1:
             for i in range(arr.get_size()):
                 raw_storage_setitem(storage, i * INT_SIZE, i)
             r = Repr(INT_SIZE, itemsize, arr.get_size(), arr.get_storage(),
-                     storage, 0, arr.start)
+                     storage, 0, arr.start, native)
             ArgSort(r).sort()
         else:
             shape = arr.get_shape()
@@ -160,7 +157,8 @@ def make_argsort_function(space, itemtype, comp_type, count=1):
                     raw_storage_setitem(storage, i * index_stride_size +
                                         index_state.offset, i)
                 r = Repr(index_stride_size, stride_size, axis_size,
-                         arr.get_storage(), storage, index_state.offset, arr_state.offset)
+                         arr.get_storage(), storage, index_state.offset,
+                         arr_state.offset, native)
                 ArgSort(r).sort()
                 arr_state = arr_iter.next(arr_state)
                 index_state = index_iter.next(index_state)
@@ -185,52 +183,49 @@ def argsort_array(arr, space, w_axis):
 def make_sort_function(space, itemtype, comp_type, count=1):
     TP = itemtype.T
     step = rffi.sizeof(TP)
+    reader = itemtype.read_from_storage
+    writer = itemtype.write_to_storage
 
     class Repr(object):
-        def __init__(self, stride_size, size, values, start):
+        def __init__(self, stride_size, size, values, start, native):
             self.stride_size = stride_size
             self.start = start
             self.size = size
             self.values = values
+            self.native = native
 
-        def getitem(self, item):
-            if count < 2:
-                v = raw_storage_getitem(TP, self.values, item * self.stride_size
-                                    + self.start)
-            else:
-                v = []
-                for i in range(count):
-                    _v = raw_storage_getitem(TP, self.values, item * self.stride_size
-                                    + self.start + step * i)
-                    v.append(_v)
+        def getitem(self, idx):
+            v = reader(TP, self.values, self.native, idx * self.stride_size + self.start)
             if comp_type == 'int':
                 v = widen(v)
             elif comp_type == 'float':
                 v = float(v)
             elif comp_type == 'complex':
                 v = [float(v[0]),float(v[1])]
+            elif comp_type == 'object':
+                pass
             else:
                 raise NotImplementedError('cannot reach')
             return (v)
 
         def setitem(self, idx, item):
-            if count < 2:
-                raw_storage_setitem(self.values, idx * self.stride_size +
+            if comp_type == 'object':
+                writer(TP, self.values, self.native, idx * self.stride_size +
+                                self.start, item)
+            elif count == 1:
+                writer(TP, self.values, self.native, idx * self.stride_size +
                                 self.start, rffi.cast(TP, item))
             else:
-                i = 0
-                for val in item:
-                    raw_storage_setitem(self.values, idx * self.stride_size +
-                                self.start + i*step, rffi.cast(TP, val))
-                    i += 1
+                writer(TP, self.values, self.native, idx * self.stride_size +
+                                self.start, [rffi.cast(TP, i) for i in item])
 
     class ArgArrayRepWithStorage(Repr):
-        def __init__(self, stride_size, size):
+        def __init__(self, stride_size, size, native):
             start = 0
             values = alloc_raw_storage(size * stride_size,
                                             track_allocation=False)
             Repr.__init__(self, stride_size,
-                          size, values, start)
+                          size, values, start, native)
 
         def __del__(self):
             free_raw_storage(self.values, track_allocation=False)
@@ -283,9 +278,10 @@ def make_sort_function(space, itemtype, comp_type, count=1):
         else:
             axis = space.int_w(w_axis)
         # create array of indexes
+        native = arr.dtype.is_native()
         if len(arr.get_shape()) == 1:
             r = Repr(itemsize, arr.get_size(), arr.get_storage(),
-                     arr.start)
+                     arr.start, native)
             ArgSort(r).sort()
         else:
             shape = arr.get_shape()
@@ -298,7 +294,8 @@ def make_sort_function(space, itemtype, comp_type, count=1):
             stride_size = arr.strides[axis]
             axis_size = arr.shape[axis]
             while not arr_iter.done(arr_state):
-                r = Repr(stride_size, axis_size, arr.get_storage(), arr_state.offset)
+                r = Repr(stride_size, axis_size, arr.get_storage(),
+                                                 arr_state.offset, native)
                 ArgSort(r).sort()
                 arr_state = arr_iter.next(arr_state)
 
@@ -308,9 +305,6 @@ def make_sort_function(space, itemtype, comp_type, count=1):
 def sort_array(arr, space, w_axis, w_order):
     cache = space.fromcache(SortCache)  # that populates SortClasses
     itemtype = arr.dtype.itemtype
-    if arr.dtype.byteorder == NPY.OPPBYTE:
-        raise oefmt(space.w_NotImplementedError,
-                    "sorting of non-native byteorder not supported yet")
     for tp in all_types:
         if isinstance(itemtype, tp[0]):
             return cache._lookup(tp)(arr, space, w_axis,

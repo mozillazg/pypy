@@ -949,7 +949,7 @@ def find_binop_result_dtype(space, dt1, dt2, promote_to_float=False,
         return dt2
 
     if dt1.num == NPY.OBJECT or dt2.num == NPY.OBJECT:
-        return descriptor.get_dtype_cache(space).w_objectdtype
+        return get_dtype_cache(space).w_objectdtype
 
     # dt1.num should be <= dt2.num
     if dt1.num > dt2.num:
@@ -1065,7 +1065,7 @@ def find_dtype_for_scalar(space, w_obj, current_guess=None):
     uint64_dtype = get_dtype_cache(space).w_uint64dtype
     complex_dtype = get_dtype_cache(space).w_complex128dtype
     float_dtype = get_dtype_cache(space).w_float64dtype
-    object_dtype = descriptor.get_dtype_cache(space).w_objectdtype
+    object_dtype = get_dtype_cache(space).w_objectdtype
     if isinstance(w_obj, boxes.W_GenericBox):
         dtype = w_obj.get_dtype(space)
         return find_binop_result_dtype(space, dtype, current_guess)
