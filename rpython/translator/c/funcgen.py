@@ -784,8 +784,18 @@ class FunctionCodeGenerator(object):
 
     def _op_debug(self, opname, arg):
         if isinstance(arg, Constant):
-            string_literal = c_string_constant(''.join(arg.value.chars))
-            return "%s(%s);" % (opname, string_literal)
+            val = ''.join(arg.value.chars)
+            if self.db.translator.config.translation.dtrace:
+                if opname == 'PYPY_DEBUG_START':
+                    name_for_op = 'START'
+                else:
+                    name_for_op = 'END'
+                prefix = 'PYPY_PROBES_%s_%s();' % (
+                    val.replace('-', '_').upper(), name_for_op)
+            else:
+                prefix = ''
+            string_literal = c_string_constant(val)
+            return prefix + "%s(%s);" % (opname, string_literal)
         else:
             x = "%s(RPyString_AsCharP(%s));\n" % (opname, self.expr(arg))
             x += "RPyString_FreeCache();"

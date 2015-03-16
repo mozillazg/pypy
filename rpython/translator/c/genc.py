@@ -15,6 +15,7 @@ from rpython.translator.c.support import log
 from rpython.translator.gensupp import uniquemodulename, NameManager
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
+
 _CYGWIN = sys.platform == 'cygwin'
 
 _CPYTHON_RE = py.std.re.compile('^Python 2.[567]')
@@ -241,7 +242,8 @@ class CBuilder(object):
                 defines['PYPY_MAIN_FUNCTION'] = "pypy_main_startup"
         self.eci, cfile, extra, headers_to_precompile = \
                 gen_source(db, modulename, targetdir,
-                           self.eci, defines=defines, split=self.split)
+                           self.eci, defines=defines, split=self.split,
+                           dtrace=self.config.translation.dtrace)
         self.c_source_filename = py.path.local(cfile)
         self.extrafiles = self.eventually_copy(extra)
         self.gen_makefile(targetdir, exe_name=exe_name,
@@ -251,16 +253,20 @@ class CBuilder(object):
         return cfile
 
     def _generate_dtrace_probe_file(self, debug_nodes):
-        name = self.targetdir.join('pypy.p')
+        name = self.targetdir.join('pypy.d')
         f = name.open('w')
         f.write('provider pypy_probes {\n')
         for debug_node in debug_nodes:
             debug_node = debug_node.replace('-', '_')
-            f.write('  probe %s__start(void);' % debug_node)
-            f.write('  probe %s__done(void);' % debug_node)
-        f.write('};')
+            f.write('  probe %s__start();\n' % debug_node)
+            f.write('  probe %s__end();\n' % debug_node)
+        f.write('};\n')
         f.close()
-        # XXX run dtrace
+        returncode, stdout, stderr = runsubprocess.run_subprocess(
+            'dtrace', ['-o', str(self.targetdir.join('pypy_probes.h')),
+                '-h', '-s', str(name)])
+        if returncode:
+            raise Exception("Dtrace exploded: %s" % stderr)
 
     def eventually_copy(self, cfiles):
         extrafiles = []
@@ -818,7 +824,7 @@ def add_extra_files(eci):
 
 
 def gen_source(database, modulename, targetdir,
-               eci, defines={}, split=False):
+               eci, defines={}, split=False, dtrace=False):
     if isinstance(targetdir, str):
         targetdir = py.path.local(targetdir)
 
@@ -839,6 +845,8 @@ def gen_source(database, modulename, targetdir,
 
     eci.write_c_header(fi)
     print >> fi, '#include "src/g_prerequisite.h"'
+    if dtrace:
+        print >> fi, '#include "pypy_probes.h"'
     fi.write('#endif /* _PY_COMMON_HEADER_H*/\n')
 
     fi.close()
