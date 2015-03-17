@@ -488,6 +488,14 @@ class CStandaloneBuilder(CBuilder):
                     mk.definition('DEBUGFLAGS', '-O1 -g -fPIC')
                 else:
                     mk.definition('DEBUGFLAGS', '-O1 -g')
+        if (self.config.translation.dtrace and
+            not self.translator.platform.name.startswith('darwin')):
+            # right now dtrace is incompatible with asmgcc on all platforms
+            # I think
+            assert self.config.translation.gcrootfinder != 'asmgcc'
+            mk.definition('OBJECTS1', '$(subst .c,.o,$(SOURCES))')
+            mk.definition('OBJECTS', '$(OBJECTS1) dtrace_marker')
+            mk.rule('dtrace_marker', '', 'dtrace -G -s pypy.d $(OBJECTS)')
         if self.translator.platform.name == 'msvc':
             mk.rule('debug_target', 'debugmode_$(DEFAULT_TARGET)', 'rem')
         else:
