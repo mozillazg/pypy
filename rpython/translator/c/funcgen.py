@@ -790,7 +790,7 @@ class FunctionCodeGenerator(object):
                     name_for_op = 'START'
                 else:
                     name_for_op = 'END'
-                prefix = 'PYPY_PROBES_%s_%s();' % (
+                prefix = 'RPYTHON_%s_%s();' % (
                     val.replace('-', '_').upper(), name_for_op)
             else:
                 prefix = ''

@@ -253,9 +253,9 @@ class CBuilder(object):
         return cfile
 
     def _generate_dtrace_probe_file(self, debug_nodes):
-        name = self.targetdir.join('pypy.d')
+        name = self.targetdir.join('rpython.d')
         f = name.open('w')
-        f.write('provider pypy_probes {\n')
+        f.write('provider rpython {\n')
         for debug_node in debug_nodes:
             debug_node = debug_node.replace('-', '_')
             f.write('  probe %s__start();\n' % debug_node)
@@ -263,7 +263,7 @@ class CBuilder(object):
         f.write('};\n')
         f.close()
         returncode, stdout, stderr = runsubprocess.run_subprocess(
-            'dtrace', ['-o', str(self.targetdir.join('pypy_probes.h')),
+            'dtrace', ['-o', str(self.targetdir.join('rpython_dtrace.h')),
                 '-h', '-s', str(name)])
         if returncode:
             raise Exception("Dtrace exploded: %s" % stderr)
@@ -488,18 +488,16 @@ class CStandaloneBuilder(CBuilder):
                     mk.definition('DEBUGFLAGS', '-O1 -g -fPIC')
                 else:
                     mk.definition('DEBUGFLAGS', '-O1 -g')
-        if (self.config.translation.dtrace and
-            not self.translator.platform.name.startswith('darwin')):
-            # right now dtrace is incompatible with asmgcc on all platforms
-            # I think
-            assert self.config.translation.gcrootfinder != 'asmgcc'
-            mk.definition('OBJECTS1', '$(subst .c,.o,$(SOURCES))')
-            mk.definition('OBJECTS', '$(OBJECTS1) dtrace_marker')
-            mk.rule('dtrace_marker', '', 'dtrace -G -s pypy.d $(OBJECTS)')
         if self.translator.platform.name == 'msvc':
             mk.rule('debug_target', 'debugmode_$(DEFAULT_TARGET)', 'rem')
         else:
             mk.rule('debug_target', '$(DEFAULT_TARGET)', '#')
+        if (self.config.translation.dtrace and
+            not self.translator.platform.name.startswith('darwin')):
+            assert self.config.translation.gcrootfinder != 'asmgcc'
+            mk.definition('OBJECTS1', '$(subst .c,.o,$(SOURCES))')
+            mk.definition('OBJECTS', '$(OBJECTS1) rpython_dtrace.o')
+            mk.rule('rpython_dtrace.o', 'rpython.d $(OBJECTS1)', 'dtrace -G -s rpython.d -o rpython_dtrace.o $(OBJECTS1)')
         mk.write()
         #self.translator.platform,
         #                           ,
@@ -854,7 +852,7 @@ def gen_source(database, modulename, targetdir,
     eci.write_c_header(fi)
     print >> fi, '#include "src/g_prerequisite.h"'
     if dtrace:
-        print >> fi, '#include "pypy_probes.h"'
+        print >> fi, '#include "rpython_dtrace.h"'
     fi.write('#endif /* _PY_COMMON_HEADER_H*/\n')
 
     fi.close()

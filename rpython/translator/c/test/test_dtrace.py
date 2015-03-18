@@ -1,4 +1,5 @@
 
+import subprocess
 from rpython.translator.c.test.test_standalone import StandaloneTests
 from rpython.rlib.debug import debug_start, debug_stop
 from rpython.config.translationoption import get_combined_translation_config
@@ -16,4 +17,10 @@ class TestDTrace(StandaloneTests):
             return 0
 
         _, cbuilder = self.compile(f)
-        cbuilder.cmdexec('')
+        exe = cbuilder.executable_name
+        p = subprocess.Popen(['dtrace', '-n', ':' + exe.basename + '::',
+                              '-c', str(exe)], stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
+        out = p.stdout.read()
+        assert 'pypy_g_f:x-start' in out
+        assert 'pypy_g_f:x-end' in out

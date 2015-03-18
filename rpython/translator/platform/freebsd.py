@@ -7,7 +7,7 @@ class Freebsd(BSD):
     name = "freebsd"
 
     link_flags = tuple(
-        ['-pthread'] +
+        ['-pthread', '-lelf'] +
         os.environ.get('LDFLAGS', '').split())
     cflags = tuple(
         ['-O3', '-pthread', '-fomit-frame-pointer'] +

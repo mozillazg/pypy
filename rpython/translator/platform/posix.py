@@ -172,9 +172,11 @@ class BasePosix(Platform):
         for args in definitions:
             m.definition(*args)
 
+        target_rule = ('$(CC_LINK) $(LDFLAGSEXTRA) -o $@ $(OBJECTS)'
+                       ' $(LIBDIRS) $(LIBS) $(LINKFILES) $(LDFLAGS)')
         rules = [
             ('all', '$(DEFAULT_TARGET)', []),
-            ('$(TARGET)', '$(OBJECTS)', '$(CC_LINK) $(LDFLAGSEXTRA) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS) $(LINKFILES) $(LDFLAGS)'),
+            ('$(TARGET)', '$(OBJECTS)', target_rule),
             ('%.o', '%.c', '$(CC) $(CFLAGS) $(CFLAGSEXTRA) -o $@ -c $< $(INCLUDEDIRS)'),
             ('%.o', '%.cxx', '$(CXX) $(CFLAGS) $(CFLAGSEXTRA) -o $@ -c $< $(INCLUDEDIRS)'),
             ]
