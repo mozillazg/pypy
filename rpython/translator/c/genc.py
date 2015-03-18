@@ -256,10 +256,9 @@ class CBuilder(object):
         name = self.targetdir.join('rpython.d')
         f = name.open('w')
         f.write('provider rpython {\n')
-        for debug_node in debug_nodes:
+        for debug_node, args in debug_nodes.iteritems():
             debug_node = debug_node.replace('-', '_')
-            f.write('  probe %s__start();\n' % debug_node)
-            f.write('  probe %s__end();\n' % debug_node)
+            f.write('  probe %s(%s);\n' % (debug_node, args))
         f.write('};\n')
         f.close()
         returncode, stdout, stderr = runsubprocess.run_subprocess(

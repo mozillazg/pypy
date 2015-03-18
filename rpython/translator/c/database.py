@@ -48,7 +48,7 @@ class LowLevelDatabase(object):
         self.containerstats = {}
         self.externalfuncs = {}
         self.helper2ptr = {}
-        self.debug_nodes = set()
+        self.debug_nodes = {}
 
         # late_initializations is for when the value you want to
         # assign to a constant object is something C doesn't think is
@@ -234,12 +234,12 @@ class LowLevelDatabase(object):
         else:
             raise Exception("don't know about %r" % (obj,))
 
-    def seen_debug_start(self, op):
+    def seen_debug_node(self, op, suffix, args=''):
         arg = op.args[0]
         if not isinstance(arg, Constant):
             return
-        name = ''.join(arg.value.chars)
-        self.debug_nodes.add(name)
+        name = ''.join(arg.value.chars) + suffix
+        self.debug_nodes[name] = args
 
     def complete(self, show_progress=True):
         assert not self.completed

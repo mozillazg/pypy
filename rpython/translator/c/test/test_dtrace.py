@@ -11,7 +11,8 @@ class TestDTrace(StandaloneTests):
     config.translation.dtrace = True
 
     def setup_class(cls):
-        if sys.platform not in ['freebsd', 'darwin']:
+        if not (sys.platform.startswith('freebsd') or
+                sys.platform.startswith('darwin')):
             py.test.skip("not supported on other platforms")
     
     def test_dtrace_probes(self):
