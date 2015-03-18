@@ -808,6 +808,14 @@ class FunctionCodeGenerator(object):
     def OP_DEBUG_STOP(self, op):
         return self._op_debug('PYPY_DEBUG_STOP', op.args[0])
 
+    def OP_DEBUG_PROBE(self, op):
+        if not self.db.translator.config.translation.dtrace:
+            return
+        assert isinstance(op.args[0], Constant)
+        val = ''.join(op.args[0].value.chars)
+        string_literal = c_string_constant(val)
+        return 'RPYTHON_%s(%d);' % (string_literal, self.expr(op.args[1]))
+
     def OP_DEBUG_ASSERT(self, op):
         return 'RPyAssert(%s, %s);' % (self.expr(op.args[0]),
                                        c_string_constant(op.args[1].value))

@@ -594,6 +594,9 @@ def op_debug_offset():
 def op_debug_flush():
     pass
 
+def op_debug_probe(probename, arg):
+    pass
+
 def op_have_debug_prints():
     return debug.have_debug_prints()
 

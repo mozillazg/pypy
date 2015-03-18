@@ -557,6 +557,8 @@ LL_OPERATIONS = {
     # __________ debugging __________
     'debug_view':           LLOp(),
     'debug_print':          LLOp(canrun=True),
+    'debug_probe':          LLOp(canrun=True),
+    # dtrace or similar probe call
     'debug_start':          LLOp(canrun=True),
     'debug_stop':           LLOp(canrun=True),
     'have_debug_prints':    LLOp(canrun=True),
