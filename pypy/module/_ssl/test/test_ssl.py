@@ -236,6 +236,9 @@ class AppTestConnectedSSL:
 
     def test_npn_protocol(self):
         import socket, _ssl, gc
+        if not _ssl.HAS_NPN:
+            skip("NPN requires OpenSSL 1.0.1 or greater")
+
         ctx = _ssl._SSLContext(_ssl.PROTOCOL_TLSv1)
         ctx._set_npn_protocols(b'\x08http/1.1\x06spdy/2')
         ss = ctx._wrap_socket(self.s._sock, True,
@@ -361,12 +364,14 @@ class AppTestContext:
         assert ctx.cert_store_stats() == {'x509_ca': 0, 'crl': 0, 'x509': 1}
 
     def test_load_dh_params(self):
-        import _ssl
+        import _ssl, errno
         ctx = _ssl._SSLContext(_ssl.PROTOCOL_TLSv1)
         ctx.load_dh_params(self.dh512)
         raises(TypeError, ctx.load_dh_params)
         raises(TypeError, ctx.load_dh_params, None)
         raises(_ssl.SSLError, ctx.load_dh_params, self.keycert)
+        exc = raises(IOError, ctx.load_dh_params, "inexistent.pem")
+        assert exc.value.errno == errno.ENOENT
 
     def test_set_ecdh_curve(self):
         import _ssl

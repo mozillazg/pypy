@@ -1176,6 +1176,10 @@ class MIFrame(object):
         if have_debug_prints():
             loc = jitdriver_sd.warmstate.get_location_str(greenkey)
             debug_print(loc)
+        #
+        # Note: the logger hides the jd_index argument, so we see in the logs:
+        #    debug_merge_point(portal_call_depth, current_call_id, 'location')
+        #
         args = [ConstInt(jd_index), ConstInt(portal_call_depth), ConstInt(current_call_id)] + greenkey
         self.metainterp.history.record(rop.DEBUG_MERGE_POINT, args, None)
 
@@ -2193,7 +2197,8 @@ class MetaInterp(object):
                 duplicates[box] = None
 
     def reached_loop_header(self, greenboxes, redboxes):
-        self.heapcache.reset(reset_virtuals=False)
+        self.heapcache.reset() #reset_virtuals=False)
+        #self.heapcache.reset_keep_likely_virtuals()
 
         duplicates = {}
         self.remove_consts_and_duplicates(redboxes, len(redboxes),
@@ -2879,7 +2884,8 @@ class MetaInterp(object):
         box_result = op.result
         # for now, any call via libffi saves and restores everything
         # (that is, errno and SetLastError/GetLastError on Windows)
-        c_saveall = ConstInt(rffi.RFFI_ERR_ALL)
+        # Note these flags match the ones in clibffi.ll_callback
+        c_saveall = ConstInt(rffi.RFFI_ERR_ALL | rffi.RFFI_ALT_ERRNO)
         self.history.record(rop.CALL_RELEASE_GIL,
                             [c_saveall, op.getarg(2)] + arg_boxes,
                             box_result, calldescr)
