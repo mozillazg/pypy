@@ -56,6 +56,16 @@ class TestCall(LLJitMixin):
         assert self.interp_operations(main, [10]) == 1
         assert self.interp_operations(main, [5]) == 0
 
+    def test_cond_call_value(self):
+        def f(n):
+            return n
+
+        def main(n):
+            return jit.conditional_call_value(n == 10, f, -3, n)
+
+        assert self.interp_operations(main, [10]) == 10
+        assert self.interp_operations(main, [5]) == -3
+
     def test_cond_call_disappears(self):
         driver = jit.JitDriver(greens = [], reds = ['n'])
 

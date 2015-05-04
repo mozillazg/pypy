@@ -1492,7 +1492,7 @@ class Transformer(object):
             return []
         return getattr(self, 'handle_jit_marker__%s' % key)(op, jitdriver)
 
-    def rewrite_op_jit_conditional_call(self, op):
+    def _rewrite_op_jit_conditional_call(self, op):
         have_floats = False
         for arg in op.args:
             if getkind(arg.concretetype) == 'float':
@@ -1500,15 +1500,26 @@ class Transformer(object):
                 break
         if len(op.args) > 4 + 2 or have_floats:
             raise Exception("Conditional call does not support floats or more than 4 arguments")
-        callop = SpaceOperation('direct_call', op.args[1:], op.result)
+        import pdb
+        pdb.set_trace()
+        if op.opname == 'jit_conditional_call':
+            callop = SpaceOperation('direct_call', op.args[1:], op.result)
+            cutoff = 2
+        else:
+            callop = SpaceOperation('direct_call', [op.args[1]] + op.args[3:],
+                                    op.result)
+            cutoff = 3
         calldescr = self.callcontrol.getcalldescr(callop)
         assert not calldescr.get_extra_info().check_forces_virtual_or_virtualizable()
         op1 = self.rewrite_call(op, 'conditional_call',
-                                op.args[:2], args=op.args[2:],
+                                op.args[:cutoff], args=op.args[cutoff:],
                                 calldescr=calldescr)
         if self.callcontrol.calldescr_canraise(calldescr):
             op1 = [op1, SpaceOperation('-live-', [], None)]
         return op1
+
+    rewrite_op_jit_conditional_call = _rewrite_op_jit_conditional_call
+    rewrite_op_jit_conditional_call_value = _rewrite_op_jit_conditional_call
 
     def handle_jit_marker__jit_merge_point(self, op, jitdriver):
         assert self.portal_jd is not None, (
