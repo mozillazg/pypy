@@ -687,7 +687,7 @@ class RaisingCallOperationWrongGuardException(BaseCallOperation):
         builder.loop.operations.append(op)
 
 # 6. a conditional call (for now always with no exception raised)
-class CondCallOperation(BaseCallOperation):
+class BaseCondCallOperation(BaseCallOperation):
     def produce_into(self, builder, r):
         fail_subset = builder.subset_of_intvars(r)
         v_cond = builder.get_bool_var(r)
@@ -702,17 +702,31 @@ class CondCallOperation(BaseCallOperation):
                 seen.append(args)
             else:
                 assert seen[0] == args
+            if self.RESULT_TYPE is lltype.Signed:
+                return len(args)
         #
-        TP = lltype.FuncType([lltype.Signed] * len(subset), lltype.Void)
+        TP = lltype.FuncType([lltype.Signed] * len(subset), self.RESULT_TYPE)
         ptr = llhelper(lltype.Ptr(TP), call_me)
         c_addr = ConstAddr(llmemory.cast_ptr_to_adr(ptr), builder.cpu)
-        args = [v_cond, c_addr] + subset
+        if self.opnum == rop.COND_CALL:
+            args = [v_cond, c_addr] + subset
+        else:
+            v_default = r.choice(builder.intvars)
+            args = [v_cond, v_default, c_addr] + subset
         descr = self.getcalldescr(builder, TP)
         self.put(builder, args, descr)
         op = ResOperation(rop.GUARD_NO_EXCEPTION, [], None,
                           descr=builder.getfaildescr())
         op.setfailargs(fail_subset)
         builder.loop.operations.append(op)
+
+class CondCallOperation(BaseCondCallOperation):
+    RESULT_TYPE = lltype.Void
+    opnum = rop.COND_CALL
+
+class CondCallValueOperation(BaseCondCallOperation):
+    RESULT_TYPE = lltype.Signed
+    opnum = rop.COND_CALL_VALUE
 
 # ____________________________________________________________
 
@@ -752,6 +766,7 @@ for i in range(2):
     OPERATIONS.append(RaisingCallOperationWrongGuardException(rop.CALL))
     OPERATIONS.append(CallOperationException(rop.CALL))
     OPERATIONS.append(CondCallOperation(rop.COND_CALL))
+    OPERATIONS.append(CondCallValueOperation(rop.COND_CALL_VALUE))
 OPERATIONS.append(GuardNonNullClassOperation(rop.GUARD_NONNULL_CLASS))
 
 LLtypeOperationBuilder.OPERATIONS = OPERATIONS
