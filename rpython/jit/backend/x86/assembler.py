@@ -152,7 +152,8 @@ class Assembler386(BaseAssembler):
         mc.RET()
         self._frame_realloc_slowpath = mc.materialize(self.cpu, [])
 
-    def _build_cond_call_slowpath(self, supports_floats, callee_only):
+    def _build_cond_call_slowpath(self, supports_floats, callee_only,
+                                  has_result):
         """ This builds a general call slowpath, for whatever call happens to
         come.
         """
@@ -161,7 +162,8 @@ class Assembler386(BaseAssembler):
         # 'cond_call_register_arguments' and eax, because these have already
         # been saved by the caller.  Note that this is not symmetrical:
         # these 5 registers are saved by the caller but restored here at
-        # the end of this function.
+        # the end of this function. if has_result is True, we don't restore
+        # eax as we use the result of the function
         self._push_all_regs_to_frame(mc, cond_call_register_arguments + [eax],
                                      supports_floats, callee_only)
         if IS_X86_64:
@@ -182,7 +184,11 @@ class Assembler386(BaseAssembler):
             mc.ADD(esp, imm(WORD * 7))
         self.set_extra_stack_depth(mc, 0)
         self._reload_frame_if_necessary(mc, align_stack=True)
-        self._pop_all_regs_from_frame(mc, [], supports_floats, callee_only)
+        if has_result:
+            lst = [eax]
+        else:
+            lst = []
+        self._pop_all_regs_from_frame(mc, lst, supports_floats, callee_only)
         self.pop_gcmap(mc)   # push_gcmap(store=True) done by the caller
         mc.RET()
         return mc.materialize(self.cpu, [])
@@ -2223,7 +2229,9 @@ class Assembler386(BaseAssembler):
     def label(self):
         self._check_frame_depth_debug(self.mc)
 
-    def cond_call(self, op, gcmap, loc_cond, imm_func, arglocs):
+    def cond_call(self, op, gcmap, loc_cond, loc_def, imm_func, arglocs):
+        if loc_def is not None:
+            self.mc.MOV(eax, loc_def)
         self.mc.TEST(loc_cond, loc_cond)
         self.mc.J_il8(rx86.Conditions['Z'], 0) # patched later
         jmp_adr = self.mc.get_relative_pos()
@@ -2231,10 +2239,15 @@ class Assembler386(BaseAssembler):
         self.push_gcmap(self.mc, gcmap, store=True)
         #
         # first save away the 4 registers from 'cond_call_register_arguments'
-        # plus the register 'eax'
+        # plus the register 'eax', if res is False
         base_ofs = self.cpu.get_baseofs_of_frame_field()
         should_be_saved = self._regalloc.rm.reg_bindings.values()
-        for gpr in cond_call_register_arguments + [eax]:
+        res = loc_def is not None
+        if res:
+            extra = [eax]
+        else:
+            extra = []
+        for gpr in cond_call_register_arguments + extra:
             if gpr not in should_be_saved:
                 continue
             v = gpr_reg_mgr_cls.all_reg_indexes[gpr.value]
@@ -2260,7 +2273,8 @@ class Assembler386(BaseAssembler):
                 callee_only = True
             if self._regalloc.xrm.reg_bindings:
                 floats = True
-        cond_call_adr = self.cond_call_slowpath[floats * 2 + callee_only]
+        cond_call_adr = self.cond_call_slowpath[res * 4 + floats * 2 +
+                                                callee_only]
         self.mc.CALL(imm(follow_jump(cond_call_adr)))
         # restoring the registers saved above, and doing pop_gcmap(), is left
         # to the cond_call_slowpath helper.  We never have any result value.

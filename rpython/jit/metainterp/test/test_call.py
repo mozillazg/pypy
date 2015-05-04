@@ -2,7 +2,7 @@
 from rpython.jit.metainterp.test.support import LLJitMixin
 from rpython.rlib import jit
 
-class TestCall(LLJitMixin):
+class CallTest(object):
     def test_indirect_call(self):
         @jit.dont_look_inside
         def f1(x):
@@ -81,3 +81,6 @@ class TestCall(LLJitMixin):
 
         assert self.meta_interp(main, [10]) == 42
         self.check_resops(guard_no_exception=0)
+
+class TestCall(LLJitMixin, CallTest):
+    pass

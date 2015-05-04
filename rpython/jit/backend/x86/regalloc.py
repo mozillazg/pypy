@@ -869,7 +869,33 @@ class RegAlloc(BaseRegalloc):
         arglocs = [self.loc(args[i]) for i in range(2, len(args))]
         gcmap = self.get_gcmap()
         self.rm.possibly_free_var(args[0])
-        self.assembler.cond_call(op, gcmap, loc_cond, imm_func, arglocs)
+        self.assembler.cond_call(op, gcmap, loc_cond, None, imm_func, arglocs)
+
+    def consider_cond_call_value(self, op):
+        # A 32-bit-only, asmgcc-only issue: 'cond_call_register_arguments'
+        # contains edi and esi, which are also in asmgcroot.py:ASM_FRAMEDATA.
+        # We must make sure that edi and esi do not contain GC pointers.
+        if IS_X86_32 and self.assembler._is_asmgcc():
+            for box, loc in self.rm.reg_bindings.items():
+                if (loc == edi or loc == esi) and box.type == REF:
+                    self.rm.force_spill_var(box)
+                    assert box not in self.rm.reg_bindings
+        #
+        assert op.result is not None
+        args = op.getarglist()
+        assert 3 <= len(args) <= 4 + 3     # maximum 4 arguments
+        self.rm.force_allocate_reg(op.result, selected_reg=eax)
+        loc_cond = self.make_sure_var_in_reg(args[0], args + [op.result])
+        loc_def = self.loc(args[1])
+        v = args[2]
+        assert isinstance(v, Const)
+        imm_func = self.rm.convert_to_imm(v)
+        arglocs = [self.loc(args[i]) for i in range(3, len(args))]
+        gcmap = self.get_gcmap()
+        self.rm.possibly_free_var(args[0])
+        self.rm.possibly_free_var(args[1])
+        self.assembler.cond_call(op, gcmap, loc_cond, loc_def, imm_func,
+                                 arglocs)
 
     def consider_call_malloc_nursery(self, op):
         size_box = op.getarg(0)
