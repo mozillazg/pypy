@@ -1152,16 +1152,12 @@ class ConditionalCallValueEntry(ExtRegistryEntry):
     _about_ = _jit_conditional_call_value
 
     def compute_result_annotation(self, *args_s):
-        import pdb
-        pdb.set_trace()
         s_result = self.bookkeeper.emulate_pbc_call(
             self.bookkeeper.position_key, args_s[1], args_s[3:],
             callback = self.bookkeeper.position_key)
         return s_result
 
     def specialize_call(self, hop):
-        import pdb
-        pdb.set_trace()
         from rpython.rtyper.lltypesystem import lltype
 
         args_v = hop.inputargs(lltype.Bool, lltype.Void, *hop.args_r[2:])

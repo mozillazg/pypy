@@ -83,6 +83,14 @@ def do_cond_call(cpu, metainterp, argboxes, descr):
     if condbox.getint():
         do_call(cpu, metainterp, argboxes[1:], descr)
 
+def do_cond_call_value(cpu, metainterp, argboxes, descr):
+    condbox = argboxes[0]
+    defbox = argboxes[1]
+    if condbox.getint():
+        return do_call(cpu, metainterp, argboxes[2:], descr)
+    else:
+        return defbox.nonconstbox()
+
 def do_getarrayitem_gc(cpu, _, arraybox, indexbox, arraydescr):
     array = arraybox.getref_base()
     index = indexbox.getint()

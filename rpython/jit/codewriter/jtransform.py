@@ -1500,8 +1500,6 @@ class Transformer(object):
                 break
         if len(op.args) > 4 + 2 or have_floats:
             raise Exception("Conditional call does not support floats or more than 4 arguments")
-        import pdb
-        pdb.set_trace()
         if op.opname == 'jit_conditional_call':
             callop = SpaceOperation('direct_call', op.args[1:], op.result)
             cutoff = 2

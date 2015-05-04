@@ -950,6 +950,12 @@ class MIFrame(object):
                                     pc):
         self.do_conditional_call(condbox, funcbox, argboxes, calldescr, pc)
 
+    @arguments("box", "box", "box", "boxes2", "descr", "orgpc")
+    def opimpl_conditional_call_ir_i(self, condbox, funcbox, defbox, argboxes,
+                                     calldescr, pc):
+        return self.do_conditional_call_value(condbox, funcbox, defbox,
+                                              argboxes, calldescr, pc)
+
     opimpl_conditional_call_r_v = opimpl_conditional_call_i_v
 
     @arguments("box", "box", "boxes2", "descr", "orgpc")
@@ -1531,6 +1537,19 @@ class MIFrame(object):
         pure = effectinfo.check_is_elidable()
         return self.execute_varargs(rop.COND_CALL, [condbox] + allboxes, descr,
                                     exc, pure)
+
+    def do_conditional_call_value(self, condbox, funcbox, defbox, argboxes,
+                                  descr, pc):
+        if isinstance(condbox, ConstInt) and condbox.value == 0:
+            return defbox   # so that the heapcache can keep argboxes virtual
+        allboxes = self._build_allboxes(funcbox, argboxes, descr)
+        effectinfo = descr.get_extra_info()
+        assert not effectinfo.check_forces_virtual_or_virtualizable()
+        exc = effectinfo.check_can_raise()
+        pure = effectinfo.check_is_elidable()
+        return self.execute_varargs(rop.COND_CALL_VALUE, [condbox, defbox] +
+                                    allboxes,
+                                    descr, exc, pure)
 
     def _do_jit_force_virtual(self, allboxes, descr, pc):
         assert len(allboxes) == 2

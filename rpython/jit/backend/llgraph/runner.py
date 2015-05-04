@@ -910,6 +910,11 @@ class LLFrame(object):
         # cond_call can't have a return value
         self.execute_call(calldescr, func, *args)
 
+    def execute_cond_call_value(self, calldescr, cond, defval, func, *args):
+        if not cond:
+            return defval
+        return self.execute_call(calldescr, func, *args)
+
     def execute_call(self, calldescr, func, *args):
         effectinfo = calldescr.get_extra_info()
         if effectinfo is not None and hasattr(effectinfo, 'oopspecindex'):

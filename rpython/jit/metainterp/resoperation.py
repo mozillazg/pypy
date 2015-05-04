@@ -536,6 +536,8 @@ _oplist = [
     '_CALL_FIRST',
     'CALL/*d',
     'COND_CALL/*d', # a conditional call, with first argument as a condition
+    'COND_CALL_VALUE/*d', # a conditional call that returns a value,
+    # with first argument as a condition and second as default
     'CALL_ASSEMBLER/*d',  # call already compiled assembler
     'CALL_MAY_FORCE/*d',
     'CALL_LOOPINVARIANT/*d',

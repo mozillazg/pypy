@@ -1102,11 +1102,15 @@ class BlackholeInterpreter(object):
     def bhimpl_residual_call_irf_v(cpu, func, args_i,args_r,args_f,calldescr):
         return cpu.bh_call_v(func, args_i, args_r, args_f, calldescr)
 
-    # conditional calls - note that they cannot return stuff
     @arguments("cpu", "i", "i", "I", "d")
     def bhimpl_conditional_call_i_v(cpu, condition, func, args_i, calldescr):
         if condition:
             cpu.bh_call_v(func, args_i, None, None, calldescr)
+
+    @arguments("cpu", "i", "i", "i", "I", "d")
+    def bhimpl_conditional_call_ir_i(cpu, condition, func, default_v, args_i,
+                                     calldescr):
+        xxx
 
     @arguments("cpu", "i", "i", "R", "d")
     def bhimpl_conditional_call_r_v(cpu, condition, func, args_r, calldescr):
