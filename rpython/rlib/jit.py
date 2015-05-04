@@ -1155,8 +1155,7 @@ class ConditionalCallValueEntry(ExtRegistryEntry):
         import pdb
         pdb.set_trace()
         s_result = self.bookkeeper.emulate_pbc_call(
-            self.bookkeeper.position_key, args_s[1], args_s[3:],
-            callback=args_s[1])
+            self.bookkeeper.position_key, args_s[1], args_s[3:])
         return s_result
 
     def specialize_call(self, hop):
