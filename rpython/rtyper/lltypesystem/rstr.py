@@ -358,7 +358,14 @@ class LLHelpers(AbstractLLHelpers):
         return b
 
     @staticmethod
-    @jit.elidable
+    def _ll_strhash(s):
+        x = _hash_string(s.chars)
+        if x == 0:
+            x = 29872897
+        s.hash = x
+        return x
+
+    @staticmethod
     def ll_strhash(s):
         # unlike CPython, there is no reason to avoid to return -1
         # but our malloc initializes the memory to zero, so we use zero as the
@@ -366,12 +373,7 @@ class LLHelpers(AbstractLLHelpers):
         if not s:
             return 0
         x = s.hash
-        if x == 0:
-            x = _hash_string(s.chars)
-            if x == 0:
-                x = 29872897
-            s.hash = x
-        return x
+        return jit.conditional_call_value(x == 0, LLHelpers._ll_strhash, x, s)
 
     @staticmethod
     def ll_length(s):
