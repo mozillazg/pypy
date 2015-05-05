@@ -8534,6 +8534,31 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         self.optimize_loop(ops, expected)
 
+    def test_cond_call_value_with_a_constant(self):
+        ops = """
+        [p1]
+        i0 = cond_call_value(1, 14, 123, p1, descr=plaincalldescr)
+        jump(i0)
+        """
+        expected = """
+        [p1]
+        i0 = call(123, p1, descr=plaincalldescr)
+        jump(i0)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_cond_call_value_with_a_constant_2(self):
+        ops = """
+        [p1]
+        i0 = cond_call_value(0, 14, 123, p1, descr=plaincalldescr)
+        jump(i0)
+        """
+        expected = """
+        [p1]
+        jump(14)
+        """
+        self.optimize_loop(ops, expected)
+
     def test_hippyvm_unroll_bug(self):
         ops = """
         [p0, i1, i2]
