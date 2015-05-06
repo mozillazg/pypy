@@ -943,3 +943,7 @@ class TestLLtypeUnicode(TestLLtype):
         self.meta_interp(f, [222, 3333])
         self.check_simple_loop({'guard_true': 1, 'int_add': 1,
                                 'int_lt': 1, 'jump': 1})
+
+    def test_string_hash(self):
+        jitdriver = JitDriver(greens = [], reds = [])
+        pass

@@ -1538,6 +1538,8 @@ class MIFrame(object):
             return   # so that the heapcache can keep argboxes virtual
         allboxes = self._build_allboxes(funcbox, argboxes, descr)
         effectinfo = descr.get_extra_info()
+        assert not effectinfo.check_is_elidable()
+        # XXX if the above assert fails, improve support for elidable COND_CALL
         assert not effectinfo.check_forces_virtual_or_virtualizable()
         exc = effectinfo.check_can_raise()
         pure = effectinfo.check_is_elidable()
@@ -1551,10 +1553,14 @@ class MIFrame(object):
         allboxes = self._build_allboxes(funcbox, argboxes, descr)
         effectinfo = descr.get_extra_info()
         assert not effectinfo.check_forces_virtual_or_virtualizable()
+        elidable = effectinfo.check_is_elidable()
         exc = effectinfo.check_can_raise()
         pure = effectinfo.check_is_elidable()
-        return self.execute_varargs(rop.COND_CALL_VALUE, [condbox, defbox] +
-                                    allboxes,
+        if elidable:
+            opnum = rop.COND_CALL_VALUE_PURE
+        else:
+            opnum = rop.COND_CALL_VALUE
+        return self.execute_varargs(opnum, [condbox, defbox] + allboxes,
                                     descr, exc, pure)
 
     def _do_jit_force_virtual(self, allboxes, descr, pc):

@@ -358,6 +358,7 @@ class LLHelpers(AbstractLLHelpers):
         return b
 
     @staticmethod
+    @jit.elidable
     def _ll_strhash(s):
         x = _hash_string(s.chars)
         if x == 0:
@@ -367,7 +368,6 @@ class LLHelpers(AbstractLLHelpers):
 
     @staticmethod
     def ll_strhash(s):
-        # XXX bring back elidable
         # unlike CPython, there is no reason to avoid to return -1
         # but our malloc initializes the memory to zero, so we use zero as the
         # special non-computed-yet value.

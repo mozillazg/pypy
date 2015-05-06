@@ -543,6 +543,7 @@ _oplist = [
     'CALL_LOOPINVARIANT/*d',
     'CALL_RELEASE_GIL/*d',  # release the GIL and "close the stack" for asmgcc
     'CALL_PURE/*d',             # removed before it's passed to the backend
+    'COND_CALL_VALUE_PURE/*d',
     'CALL_MALLOC_GC/*d',      # like CALL, but NULL => propagate MemoryError
     'CALL_MALLOC_NURSERY/1',  # nursery malloc, const number of bytes, zeroed
     'CALL_MALLOC_NURSERY_VARSIZE/3d',
