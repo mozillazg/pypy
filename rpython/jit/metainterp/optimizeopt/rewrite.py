@@ -417,6 +417,17 @@ class OptRewrite(Optimization):
             op = op.copy_and_change(rop.CALL, args=op.getarglist()[1:])
         self.emit_operation(op)
 
+    def optimize_COND_CALL_VALUE(self, op):
+        arg = op.getarg(0)
+        val = self.getvalue(arg)
+        if val.is_constant():
+            if val.box.same_constant(CONST_0):
+                self.last_emitted_operation = REMOVED
+                self.make_equal_to(op.result, self.getvalue(op.getarg(1)))
+                return
+            op = op.copy_and_change(rop.CALL, args=op.getarglist()[2:])
+        self.emit_operation(op)
+
     def _optimize_nullness(self, op, box, expect_nonnull):
         value = self.getvalue(box)
         if value.is_nonnull():
