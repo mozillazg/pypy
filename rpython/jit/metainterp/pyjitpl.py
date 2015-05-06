@@ -1557,10 +1557,11 @@ class MIFrame(object):
         exc = effectinfo.check_can_raise()
         pure = effectinfo.check_is_elidable()
         if elidable:
-            opnum = rop.COND_CALL_VALUE_PURE
-        else:
-            opnum = rop.COND_CALL_VALUE
-        return self.execute_varargs(opnum, [condbox, defbox] + allboxes,
+            return self.execute_varargs(rop.COND_CALL_VALUE_PURE,
+                                        [condbox, defbox] + allboxes,
+                                        descr, exc, pure)
+        return self.execute_varargs(rop.COND_CALL_VALUE,
+                                    [condbox, defbox] + allboxes,
                                     descr, exc, pure)
 
     def _do_jit_force_virtual(self, allboxes, descr, pc):
