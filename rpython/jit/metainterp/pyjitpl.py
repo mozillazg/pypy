@@ -1553,13 +1553,8 @@ class MIFrame(object):
         allboxes = self._build_allboxes(funcbox, argboxes, descr)
         effectinfo = descr.get_extra_info()
         assert not effectinfo.check_forces_virtual_or_virtualizable()
-        elidable = effectinfo.check_is_elidable()
         exc = effectinfo.check_can_raise()
         pure = effectinfo.check_is_elidable()
-        if elidable:
-            return self.execute_varargs(rop.COND_CALL_VALUE_PURE,
-                                        [condbox, defbox] + allboxes,
-                                        descr, exc, pure)
         return self.execute_varargs(rop.COND_CALL_VALUE,
                                     [condbox, defbox] + allboxes,
                                     descr, exc, pure)
@@ -2825,12 +2820,19 @@ class MetaInterp(object):
         return max_key
 
     def record_result_of_call_pure(self, resbox):
-        """ Patch a CALL into a CALL_PURE.
+        """ Patch a CALL into a CALL_PURE or
+        COND_CALL_VALUE into COND_CALL_VALUE_PURE
         """
         op = self.history.operations[-1]
-        assert op.getopnum() == rop.CALL
+        if op.getopnum() == rop.CALL:
+            newopnum = rop.CALL_PURE
+            first_op = 0
+        else:
+            newopnum = rop.COND_CALL_VALUE_PURE
+            assert op.getopnum() == rop.COND_CALL_VALUE
+            first_op = 3
         resbox_as_const = resbox.constbox()
-        for i in range(op.numargs()):
+        for i in range(first_op, op.numargs()):
             if not isinstance(op.getarg(i), Const):
                 break
         else:
@@ -2842,7 +2844,7 @@ class MetaInterp(object):
         # be either removed later by optimizeopt or turned back into CALL.
         arg_consts = [a.constbox() for a in op.getarglist()]
         self.call_pure_results[arg_consts] = resbox_as_const
-        newop = op.copy_and_change(rop.CALL_PURE, args=op.getarglist())
+        newop = op.copy_and_change(newopnum, args=op.getarglist())
         self.history.operations[-1] = newop
         return resbox
 

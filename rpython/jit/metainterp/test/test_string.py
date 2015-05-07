@@ -945,5 +945,16 @@ class TestLLtypeUnicode(TestLLtype):
                                 'int_lt': 1, 'jump': 1})
 
     def test_string_hash(self):
-        jitdriver = JitDriver(greens = [], reds = [])
-        pass
+        from rpython.rlib.objectmodel import compute_hash
+        
+        jitdriver = JitDriver(greens = [], reds = ['s'])
+        def f():
+            s = 0
+            while s < 100:
+                jitdriver.jit_merge_point(s=s)
+                s += compute_hash('foo') & 0xf
+            return s
+
+        self.meta_interp(f, [])
+        self.check_simple_loop({"int_add": 1, "int_lt": 1, "guard_true": 1,
+                                'jump': 1})
