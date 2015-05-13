@@ -55,6 +55,13 @@ translation_optiondescription = OptionDescription(
     BoolOption("shared", "Build as a shared library",
                default=False, cmdline="--shared"),
 
+    ChoiceOption("subsystem", "Target subsystem ('nowindow' and 'console_and_nowindow' avaiable only on Windows)",
+                 ["console", "nowindow", "console_and_nowindow"],
+                 default="console",
+                 requires={"nowindow": [("translation.platform", "win32")],
+                       "console_and_nowindow":[("translation.platform", "win32")]},
+                 cmdline="--subsystem"),
+
     BoolOption("log", "Include debug prints in the translation (PYPYLOG=...)",
                default=True, cmdline="--log"),
 
