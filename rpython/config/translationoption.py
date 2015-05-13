@@ -33,10 +33,10 @@ CACHE_DIR = os.path.realpath(os.path.join(MAINDIR, '_cache'))
 
 PLATFORMS = [
     'maemo',
-    'host',
     'distutils',
     'arm',
 ]
+host_platform = sys.platform
 
 translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
@@ -276,7 +276,7 @@ translation_optiondescription = OptionDescription(
     ]),
 
     ChoiceOption("platform",
-                 "target platform", ['host'] + PLATFORMS, default='host',
+                 "target platform", [host_platform] + PLATFORMS, default=host_platform,
                  cmdline='--platform',
                  suggests={"arm": [("translation.gcrootfinder", "shadowstack"),
                                    ("translation.jit_backend", "arm")]}),
@@ -385,8 +385,9 @@ def set_opt_level(config, level):
 
     # disallow asmgcc on OS/X and on Win32
     if config.translation.gcrootfinder == "asmgcc":
-        if sys.platform == "darwin" or sys.platform =="win32":
-            raise ConfigError("'asmgcc' not supported on this platform")
+        if config.translation.platform == "darwin" or \
+           config.translation.platform =="win32":
+            raise ConfigError("'asmgcc' not supported on platform '%s'" % config.translation.platform)
 
 # ----------------------------------------------------------------
 

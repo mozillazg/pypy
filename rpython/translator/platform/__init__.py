@@ -324,7 +324,7 @@ else:
 platform = host = host_factory()
 
 def pick_platform(new_platform, cc):
-    if new_platform == 'host':
+    if new_platform == sys.platform:
         return host_factory(cc)
     elif new_platform == 'maemo':
         from rpython.translator.platform.maemo import Maemo
