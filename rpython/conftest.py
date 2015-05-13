@@ -1,3 +1,4 @@
+import sys
 import py, pytest
 from rpython.tool import leakfinder
 
@@ -34,7 +35,7 @@ def pytest_addoption(parser):
     group.addoption('--view', action="store_true", dest="view", default=False,
            help="view translation tests' flow graphs with Pygame")
     group.addoption('-P', '--platform', action="store", dest="platform",
-                    type="string", default="host",
+                    type="string", default=sys.platform,
            help="set up tests to use specified platform as compile/run target")
     group = parser.getgroup("JIT options")
     group.addoption('--viewloops', action="store_true",

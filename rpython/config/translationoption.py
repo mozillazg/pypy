@@ -31,12 +31,13 @@ SUPPORT__THREAD = (    # whether the particular C compiler supports __thread
 MAINDIR = os.path.dirname(os.path.dirname(__file__))
 CACHE_DIR = os.path.realpath(os.path.join(MAINDIR, '_cache'))
 
+host_platform = sys.platform
 PLATFORMS = [
     'maemo',
     'distutils',
     'arm',
+    host_platform
 ]
-host_platform = sys.platform
 
 translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
@@ -54,13 +55,6 @@ translation_optiondescription = OptionDescription(
 
     BoolOption("shared", "Build as a shared library",
                default=False, cmdline="--shared"),
-
-    ChoiceOption("subsystem", "Target subsystem ('nowindow' and 'console_and_nowindow' avaiable only on Windows)",
-                 ["console", "nowindow", "console_and_nowindow"],
-                 default="console",
-                 requires={"nowindow": [("translation.platform", "win32")],
-                       "console_and_nowindow":[("translation.platform", "win32")]},
-                 cmdline="--subsystem"),
 
     BoolOption("log", "Include debug prints in the translation (PYPYLOG=...)",
                default=True, cmdline="--log"),
@@ -276,11 +270,22 @@ translation_optiondescription = OptionDescription(
     ]),
 
     ChoiceOption("platform",
-                 "target platform", [host_platform] + PLATFORMS, default=host_platform,
+                 "target platform", PLATFORMS, default=host_platform,
                  cmdline='--platform',
                  suggests={"arm": [("translation.gcrootfinder", "shadowstack"),
                                    ("translation.jit_backend", "arm")]}),
 
+    ChoiceOption("subsystem", "Target subsystem ('nowindow' and 'console_and_nowindow' avaiable only on Windows)",
+                 ["console", "nowindow", "console_and_nowindow"],
+                 default="console",
+                 requires={"nowindow": [("translation.platform", "win32")],
+                       "console_and_nowindow":[("translation.platform", "win32")]},
+                 cmdline="--subsystem"),
+
+    BoolOption("largeaddressaware",
+                   "rewrite the windows 32-bit exe to support more than 2GB of memory on 64-bit windows",
+                 requires=[("translation.platform", "win32")],
+                 default=False, cmdline="--largeaddressaware"),
 ])
 
 def get_combined_translation_config(other_optdescr=None,

@@ -98,7 +98,7 @@ class Config(object):
             raise AttributeError("can't option subgroup")
         self._cfgimpl_values[name] = getattr(opt, 'default', None)
 
-    def setoption(self, name, value, who):
+    def setoption(self, name, value, who, requirer='nobody'):
         if name not in self._cfgimpl_values:
             raise AttributeError('unknown option %s' % (name,))
         child = getattr(self._cfgimpl_descr, name)
@@ -108,8 +108,10 @@ class Config(object):
             if oldvalue == value or who in ("default", "suggested"):
                 return
             raise ConflictConfigError('cannot override value to %s for '
-                                      'option %s' % (value, name))
-        child.setoption(self, value, who)
+                                      'option %s because it violates a '
+                                      'requirement of %r option(s)' % (
+                                value, name, child._requirer))
+        child.setoption(self, value, who, requirer)
         self._cfgimpl_value_owners[name] = who
 
     def suggest(self, **kwargs):
@@ -215,6 +217,7 @@ class Option(object):
         self._name = name
         self.doc = doc
         self.cmdline = cmdline
+        self._requirer = []
 
     def validate(self, value):
         raise NotImplementedError('abstract base class')
@@ -222,12 +225,13 @@ class Option(object):
     def getdefault(self):
         return self.default
 
-    def setoption(self, config, value, who):
+    def setoption(self, config, value, who, requirer='nobody'):
         name = self._name
         if who == "default" and value is None:
             pass
         elif not self.validate(value):
-            raise ConfigError('invalid value %s for option %s' % (value, name))
+            raise ConfigError('invalid value %s for option %s, required by %r' % (value, name, requirer))
+        self._requirer.append(requirer)
         config._cfgimpl_values[name] = value
 
     def getkey(self, value):
@@ -259,7 +263,7 @@ class ChoiceOption(Option):
             suggests = {}
         self._suggests = suggests
 
-    def setoption(self, config, value, who):
+    def setoption(self, config, value, who, requirer='nobody'):
         name = self._name
         for path, reqvalue in self._requires.get(value, []):
             toplevel = config._cfgimpl_get_toplevel()
@@ -268,12 +272,12 @@ class ChoiceOption(Option):
                 who2 = 'default'
             else:
                 who2 = 'required'
-            homeconfig.setoption(name, reqvalue, who2)
+            homeconfig.setoption(name, reqvalue, who2, self._name)
         for path, reqvalue in self._suggests.get(value, []):
             toplevel = config._cfgimpl_get_toplevel()
             homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
             homeconfig.suggestoption(name, reqvalue)
-        super(ChoiceOption, self).setoption(config, value, who)
+        super(ChoiceOption, self).setoption(config, value, who, requirer)
 
     def validate(self, value):
         return value is None or value in self.values
@@ -303,7 +307,7 @@ class BoolOption(Option):
     def validate(self, value):
         return isinstance(value, bool)
 
-    def setoption(self, config, value, who):
+    def setoption(self, config, value, who, requirer='nobody'):
         name = self._name
         if value and self._validator is not None:
             toplevel = config._cfgimpl_get_toplevel()
@@ -316,14 +320,14 @@ class BoolOption(Option):
                     who2 = 'default'
                 else:
                     who2 = 'required'
-                homeconfig.setoption(name, reqvalue, who2)
+                homeconfig.setoption(name, reqvalue, who2, self._name)
         if value and self._suggests is not None:
             for path, reqvalue in self._suggests:
                 toplevel = config._cfgimpl_get_toplevel()
                 homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
                 homeconfig.suggestoption(name, reqvalue)
 
-        super(BoolOption, self).setoption(config, value, who)
+        super(BoolOption, self).setoption(config, value, who, requirer)
 
     def add_optparse_option(self, argnames, parser, config):
         callback = BoolConfigUpdate(config, self, True)
@@ -358,9 +362,9 @@ class IntOption(Option):
             return False
         return True
 
-    def setoption(self, config, value, who):
+    def setoption(self, config, value, who, requirer='nobody'):
         try:
-            super(IntOption, self).setoption(config, int(value), who)
+            super(IntOption, self).setoption(config, int(value), who, requirer)
         except TypeError as e:
             raise ConfigError(*e.args)
 
@@ -379,9 +383,9 @@ class FloatOption(Option):
             return False
         return True
 
-    def setoption(self, config, value, who):
+    def setoption(self, config, value, who, requirer='nobody'):
         try:
-            super(FloatOption, self).setoption(config, float(value), who)
+            super(FloatOption, self).setoption(config, float(value), who, requirer)
         except TypeError as e:
             raise ConfigError(*e.args)
 
@@ -396,9 +400,9 @@ class StrOption(Option):
     def validate(self, value):
         return isinstance(value, str)
 
-    def setoption(self, config, value, who):
+    def setoption(self, config, value, who, requirer='nobody'):
         try:
-            super(StrOption, self).setoption(config, value, who)
+            super(StrOption, self).setoption(config, value, who, requirer)
         except TypeError as e:
             raise ConfigError(*e.args)
 
