@@ -387,7 +387,24 @@ class ResumeDataVirtualAdder(VirtualVisitor):
         self._add_pending_fields(pending_setfields)
 
         storage.rd_consts = self.memo.consts
+        self.dump(storage)
         return liveboxes[:]
+
+    def dump(self, storage):
+        debug_start("jit-resume")
+        f = storage.rd_frame_info_list
+        while f:
+            debug_print("frame:", f.jitcode.name, f.pc)
+            f = f.prev
+        debug_print("no of consts:", len(storage.rd_consts))
+        n = storage.rd_numb
+        while n:
+            debug_print("nums:", " ".join([str(i) for i in n.nums]))
+            n = n.prev
+        if storage.rd_virtuals:
+            for v in storage.rd_virtuals:
+                v.dump()
+        debug_stop('jit-resume')
 
     def _number_virtuals(self, liveboxes, optimizer, num_env_virtuals):
         # !! 'liveboxes' is a list that is extend()ed in-place !!
@@ -496,6 +513,9 @@ class AbstractVirtualInfo(object):
     def debug_prints(self):
         raise NotImplementedError
 
+    def dump(self):
+        pass
+
 
 class AbstractVirtualStructInfo(AbstractVirtualInfo):
     def __init__(self, fielddescrs):
@@ -516,6 +536,12 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
                         str(self.fielddescrs[i]),
                         str(untag(self.fieldnums[i])))
 
+    def dump(self):
+        for i in range(len(self.fielddescrs)):
+            debug_print("\t\t",
+                        self.fielddescrs[i].repr_of_descr(),
+                        self.fieldnums[i])
+
 class VirtualInfo(AbstractVirtualStructInfo):
     def __init__(self, known_class, fielddescrs):
         AbstractVirtualStructInfo.__init__(self, fielddescrs)
@@ -530,6 +556,10 @@ class VirtualInfo(AbstractVirtualStructInfo):
     def debug_prints(self):
         debug_print("\tvirtualinfo", self.known_class.repr_rpython(), " at ",  compute_unique_id(self))
         AbstractVirtualStructInfo.debug_prints(self)
+
+    def dump(self):
+        debug_print("\tvirtualinfo")
+        AbstractVirtualStructInfo.dump(self)
 
 
 class VStructInfo(AbstractVirtualStructInfo):
@@ -546,6 +576,10 @@ class VStructInfo(AbstractVirtualStructInfo):
     def debug_prints(self):
         debug_print("\tvstructinfo", self.typedescr.repr_rpython(), " at ",  compute_unique_id(self))
         AbstractVirtualStructInfo.debug_prints(self)
+
+    def dump(self):
+        debug_print("\tvstructinfo")
+        AbstractVirtualStructInfo.dump(self)
 
 class AbstractVArrayInfo(AbstractVirtualInfo):
     def __init__(self, arraydescr):
@@ -581,6 +615,12 @@ class AbstractVArrayInfo(AbstractVirtualInfo):
                     compute_unique_id(self), " clear=", self.clear)
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
+
+    def dump(self):
+        debug_print("\tvarrayinfo", self.arraydescr.repr_of_descr(),
+                    " clear=", self.clear)
+        for i in self.fieldnums:
+            debug_print("\t\t", i)
 
 
 class VArrayInfoClear(AbstractVArrayInfo):
@@ -618,6 +658,11 @@ class VRawBufferInfo(VAbstractRawInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
+    def dump(self):
+        debug_print("\tvrawbufferinfo")
+        for i in self.fieldnums:
+            debug_print("\t\t", i)
+
 
 class VRawSliceInfo(VAbstractRawInfo):
 
@@ -637,6 +682,11 @@ class VRawSliceInfo(VAbstractRawInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
+    def dump(self):
+        debug_print("\tvrawsliceinfo", self.offset)
+        for i in self.fieldnums:
+            debug_print("\t\t", i)
+
 
 class VArrayStructInfo(AbstractVirtualInfo):
     def __init__(self, arraydescr, fielddescrs):
@@ -647,6 +697,11 @@ class VArrayStructInfo(AbstractVirtualInfo):
         debug_print("\tvarraystructinfo", self.arraydescr, " at ",  compute_unique_id(self))
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
+
+    def dump(self):
+        debug_print("\tvarraystructinfo", self.arraydescr.repr_of_descr())
+        for i in self.fieldnums:
+            debug_print("\t\t", i)
 
     @specialize.argtype(1)
     def allocate(self, decoder, index):
@@ -679,6 +734,9 @@ class VStrPlainInfo(AbstractVirtualInfo):
     def debug_prints(self):
         debug_print("\tvstrplaininfo length", len(self.fieldnums), " at ",  compute_unique_id(self))
 
+    def dump(self):
+        debug_print("\tvstrplaininfo length", len(self.fieldnums))
+
 
 class VStrConcatInfo(AbstractVirtualInfo):
     """Stands for the string made out of the concatenation of two
@@ -699,6 +757,9 @@ class VStrConcatInfo(AbstractVirtualInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
+    def dump(self):
+        debug_print("\tvstrconcatinfo")        
+
 
 class VStrSliceInfo(AbstractVirtualInfo):
     """Stands for the string made out of slicing another string."""
@@ -714,6 +775,9 @@ class VStrSliceInfo(AbstractVirtualInfo):
         debug_print("\tvstrsliceinfo at ",  compute_unique_id(self))
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
+
+    def dump(self):
+        debug_print("\tvstrsliceinfo")
 
 
 class VUniPlainInfo(AbstractVirtualInfo):
@@ -733,6 +797,9 @@ class VUniPlainInfo(AbstractVirtualInfo):
 
     def debug_prints(self):
         debug_print("\tvuniplaininfo length", len(self.fieldnums), " at ",  compute_unique_id(self))
+
+    def dump(self):
+        debug_print("\tvuniplaininfo length", len(self.fieldnums))
 
 
 class VUniConcatInfo(AbstractVirtualInfo):
@@ -754,6 +821,9 @@ class VUniConcatInfo(AbstractVirtualInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
+    def dump(self):
+        debug_print("\tvuniconcatinfo")
+
 
 class VUniSliceInfo(AbstractVirtualInfo):
     """Stands for the unicode string made out of slicing another
@@ -770,6 +840,9 @@ class VUniSliceInfo(AbstractVirtualInfo):
         debug_print("\tvunisliceinfo at ",  compute_unique_id(self))
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
+
+    def dump(self):
+        debug_print("\tvunisliceinfo")
 
 # ____________________________________________________________
 
