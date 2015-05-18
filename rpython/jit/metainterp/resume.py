@@ -399,7 +399,7 @@ class ResumeDataVirtualAdder(VirtualVisitor):
         debug_print("no of consts:", len(storage.rd_consts))
         n = storage.rd_numb
         while n:
-            debug_print("nums:", " ".join([str(n.nums[i]) for i in len(n.nums)]))
+            debug_print("nums:", " ".join([str(n.nums[i]) for i in range(len(n.nums))]))
             n = n.prev
         if storage.rd_virtuals:
             for v in storage.rd_virtuals:
