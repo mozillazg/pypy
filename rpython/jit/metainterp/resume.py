@@ -12,6 +12,7 @@ from rpython.rtyper import annlowlevel
 from rpython.rtyper.lltypesystem import lltype, llmemory, rffi, rstr
 from rpython.rtyper.rclass import OBJECTPTR
 from rpython.jit.metainterp.walkvirtual import VirtualVisitor
+from rpython.rlib.rarithmetic import intmask
 
 
 # Logic to encode the chain of frames and the state of the boxes at a
@@ -399,7 +400,7 @@ class ResumeDataVirtualAdder(VirtualVisitor):
         debug_print("no of consts:", len(storage.rd_consts))
         n = storage.rd_numb
         while n:
-            debug_print("nums:", " ".join([str(n.nums[i]) for i in range(len(n.nums))]))
+            debug_print("nums:", " ".join([str(intmask(n.nums[i])) for i in range(len(n.nums))]))
             n = n.prev
         if storage.rd_virtuals:
             for v in storage.rd_virtuals:
