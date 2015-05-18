@@ -395,7 +395,8 @@ class ResumeDataVirtualAdder(VirtualVisitor):
         debug_start("jit-resume")
         f = storage.rd_frame_info_list
         while f:
-            debug_print("frame:", f.jitcode.name, f.pc)
+            if not isinstance(f.jitcode, str):
+                debug_print("frame:", f.jitcode.name, f.pc)
             f = f.prev
         debug_print("no of consts:", len(storage.rd_consts))
         n = storage.rd_numb
@@ -404,7 +405,10 @@ class ResumeDataVirtualAdder(VirtualVisitor):
             n = n.prev
         if storage.rd_virtuals:
             for v in storage.rd_virtuals:
-                v.dump()
+                if v:
+                    v.dump()
+                else:
+                    debug_print("void")
         if storage.rd_pendingfields:
             for i in range(len(storage.rd_pendingfields)):
                 pf = storage.rd_pendingfields[i]
