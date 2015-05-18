@@ -405,6 +405,11 @@ class ResumeDataVirtualAdder(VirtualVisitor):
         if storage.rd_virtuals:
             for v in storage.rd_virtuals:
                 v.dump()
+        if storage.rd_pendingfields:
+            for i in range(len(storage.rd_pendingfields)):
+                pf = storage.rd_pendingfields[i]
+                debug_print("pf:", intmask(pf.num), intmask(pf.fieldnum),
+                            intmask(pf.itemindex))
         debug_stop('jit-resume')
 
     def _number_virtuals(self, liveboxes, optimizer, num_env_virtuals):
@@ -541,7 +546,7 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
         for i in range(len(self.fielddescrs)):
             debug_print("\t\t",
                         self.fielddescrs[i].repr_of_descr(),
-                        self.fieldnums[i])
+                        intmask(self.fieldnums[i]))
 
 class VirtualInfo(AbstractVirtualStructInfo):
     def __init__(self, known_class, fielddescrs):
@@ -621,7 +626,7 @@ class AbstractVArrayInfo(AbstractVirtualInfo):
         debug_print("\tvarrayinfo", self.arraydescr.repr_of_descr(),
                     " clear=", self.clear)
         for i in self.fieldnums:
-            debug_print("\t\t", i)
+            debug_print("\t\t", intmask(i))
 
 
 class VArrayInfoClear(AbstractVArrayInfo):
@@ -662,7 +667,7 @@ class VRawBufferInfo(VAbstractRawInfo):
     def dump(self):
         debug_print("\tvrawbufferinfo")
         for i in self.fieldnums:
-            debug_print("\t\t", i)
+            debug_print("\t\t", intmask(i))
 
 
 class VRawSliceInfo(VAbstractRawInfo):
@@ -686,7 +691,7 @@ class VRawSliceInfo(VAbstractRawInfo):
     def dump(self):
         debug_print("\tvrawsliceinfo", self.offset)
         for i in self.fieldnums:
-            debug_print("\t\t", i)
+            debug_print("\t\t", intmask(i))
 
 
 class VArrayStructInfo(AbstractVirtualInfo):
@@ -702,7 +707,7 @@ class VArrayStructInfo(AbstractVirtualInfo):
     def dump(self):
         debug_print("\tvarraystructinfo", self.arraydescr.repr_of_descr())
         for i in self.fieldnums:
-            debug_print("\t\t", i)
+            debug_print("\t\t", intmask(i))
 
     @specialize.argtype(1)
     def allocate(self, decoder, index):
