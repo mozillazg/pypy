@@ -1,7 +1,9 @@
 import py
-from rpython.jit.metainterp.history import BoxInt, ConstInt, BoxFloat, INT, FLOAT,\
-     BoxPtr
-from rpython.jit.backend.llsupport.regalloc import FrameManager, LinkedList
+from rpython.jit.metainterp.history import (BoxInt, ConstInt, BoxFloat,
+    INT, FLOAT, BoxPtr)
+from rpython.jit.metainterp.resoperation import rop, ResOperation
+from rpython.jit.backend.llsupport.regalloc import (FrameManager,
+        LinkedList, compute_vars_longevity)
 from rpython.jit.backend.llsupport.regalloc import RegisterManager as BaseRegMan
 
 def newboxes(*values):
@@ -567,3 +569,21 @@ class TestRegalloc(object):
         assert fm.get_loc_index(floc) == 0
         for box in fm.bindings.keys():
             fm.mark_as_free(box)
+
+    def test_compute_vars_longevity(self):
+        a = BoxInt()
+        b = BoxInt()
+        c = BoxInt()
+        inputargs = [a, b]
+
+        operations = [
+            ResOperation(rop.LABEL, [a,b], None),
+            ResOperation(rop.INT_ADD, [a,b], c),
+            ResOperation(rop.INT_ADD, [c,a], BoxInt()),
+            ResOperation(rop.INT_ADD, [c,b], BoxInt()),
+            ResOperation(rop.JUMP, [a,c], None),
+        ]
+        longevity, lru = compute_vars_longevity(inputargs, operations)
+        assert lru[c] == 3
+        assert longevity[c][0] == 0
+        assert longevity[a][1] == 1
