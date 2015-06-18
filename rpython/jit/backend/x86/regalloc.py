@@ -9,7 +9,7 @@ from rpython.jit.backend.llsupport.descr import (ArrayDescr, CallDescr,
 from rpython.jit.backend.llsupport.gcmap import allocate_gcmap
 from rpython.jit.backend.llsupport.regalloc import (FrameManager, BaseRegalloc,
      RegisterManager, TempBox, compute_vars_longevity, is_comparison_or_ovf_op,
-     valid_addressing_size)
+     valid_addressing_size, next_var_usage)
 from rpython.jit.backend.x86 import rx86
 from rpython.jit.backend.x86.arch import (WORD, JITFRAME_FIXED_SIZE, IS_X86_32,
     IS_X86_64, DEFAULT_FRAME_BYTES)
@@ -27,6 +27,7 @@ from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.rlib import rgc
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.rarithmetic import r_longlong, r_uint
+from rpython.rlib.rbisect import bisect_right
 from rpython.rtyper.annlowlevel import cast_instance_to_gcref
 from rpython.rtyper.lltypesystem import lltype, rffi, rstr
 from rpython.rtyper.lltypesystem.lloperation import llop
@@ -1342,6 +1343,11 @@ class RegAlloc(BaseRegalloc):
         #self.rm.force_allocate_frame_reg(op.result)
         self.assembler.force_token(self.rm.force_allocate_reg(op.result))
 
+    def freecount(self, type):
+        if type == FLOAT:
+            return len(self.xrm.free_regs)
+        return len(self.rm.free_regs)
+
     def consider_label(self, op):
         descr = op.getdescr()
         assert isinstance(descr, TargetToken)
@@ -1365,6 +1371,8 @@ class RegAlloc(BaseRegalloc):
                 self.assembler.mc.MOV(loc2, ebp)
         self.rm.bindings_to_frame_reg.clear()
         #
+        relocate_index = []
+        relocate = []
         for i in range(len(inputargs)):
             arg = inputargs[i]
             assert isinstance(arg, Box)
@@ -1373,6 +1381,41 @@ class RegAlloc(BaseRegalloc):
             arglocs[i] = loc
             if isinstance(loc, RegLoc):
                 self.fm.mark_as_free(arg)
+            else:
+                # on first enter, try to put as many locations into registers
+                # as possible. They are sorted by the next variable use.
+                # Descending and are poped in reverse order later
+                pos = next_var_usage(self.longevity[arg], self.rm.position)
+                i = bisect_right(relocate_index, pos, len(relocate_index))
+                if i >= position:
+                    relocate_index.insert(i, pos)
+                    relocate.insert(i, (arg, argidx))
+        #
+        forbidden = {}
+        relocate_exit = []
+        while len(relocate) > 0:
+            arg, argidx = relocate.pop()
+            if self.freecount(arg.type) <= 0:
+                continue
+
+            if self.last_real_usage.get(arg, -1) >= position:
+                loc = self.make_sure_var_in_reg(arg, forbidden)
+                forbidden[arg] = None
+                arglocs[argidx] = loc
+                self.fm.mark_as_free(arg)
+            else:
+                relocate_exit.insert(0, arg)
+
+        # there might be still registers available
+        while len(relocate_exit) > 0:
+            arg, argidx = relocate_exit.pop()
+            if self.freecount(arg.type) <= 0:
+                continue
+
+            loc = self.make_sure_var_in_reg(arg, forbidden)
+            forbidden[arg] = None
+            arglocs[argidx] = loc
+            self.fm.mark_as_free(arg)
         #
         # if we are too close to the start of the loop, the label's target may
         # get overridden by redirect_call_assembler().  (rare case)
