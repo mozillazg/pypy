@@ -574,16 +574,27 @@ class TestRegalloc(object):
         a = BoxInt()
         b = BoxInt()
         c = BoxInt()
-        inputargs = [a, b]
+        d = BoxInt()
+        e = BoxInt()
+        f = BoxInt()
+        a0 = BoxInt()
+        a1 = BoxInt()
+        a2 = BoxInt()
+        inputargs = [a, b,e,a0]
 
         operations = [
-            ResOperation(rop.LABEL, [a,b], None),
+            ResOperation(rop.LABEL, [a,b,e,a0], None),
             ResOperation(rop.INT_ADD, [a,b], c),
-            ResOperation(rop.INT_ADD, [c,a], BoxInt()),
-            ResOperation(rop.INT_ADD, [c,b], BoxInt()),
-            ResOperation(rop.JUMP, [a,c], None),
+            ResOperation(rop.INT_ADD, [e,a], f),
+            ResOperation(rop.INT_ADD, [a0,a], a1),
+            ResOperation(rop.INT_ADD, [c,b], d),
+            ResOperation(rop.JUMP, [c,d,f,a1], None),
         ]
         longevity, lru = compute_vars_longevity(inputargs, operations)
-        assert lru[c] == 3
-        assert longevity[c][0] == 0
-        assert longevity[a][1] == 1
+        assert lru[c] == 4
+        assert longevity[a] == (0,3, [0,1,2,3])
+        assert longevity[b] == (0,4, [0,1,4])
+        assert longevity[c] == (1,5, [1,4,5])
+        assert longevity[d] == (4,5, None)
+        assert longevity[e] == (0,2, None)
+        assert longevity[f] == (2,5, None)

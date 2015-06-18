@@ -673,7 +673,6 @@ class BaseRegalloc(object):
         else:
             return [self.loc(op.getarg(0))]
 
-
 def compute_vars_longevity(inputargs, operations):
     # compute a dictionary that maps variables to index in
     # operations that is a "last-time-seen"
@@ -685,6 +684,7 @@ def compute_vars_longevity(inputargs, operations):
     produced = {}
     last_used = {}
     last_real_usage = {}
+    usage_positions = {}
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]
         if op.result:
@@ -692,11 +692,13 @@ def compute_vars_longevity(inputargs, operations):
                 continue
             assert op.result not in produced
             produced[op.result] = i
+            usage_positions.setdefault(op.result, []).insert(0, i)
         opnum = op.getopnum()
         for j in range(op.numargs()):
             arg = op.getarg(j)
             if not isinstance(arg, Box):
                 continue
+            usage_positions.setdefault(arg, []).insert(0, i)
             if arg not in last_used:
                 last_used[arg] = i
             if opnum != rop.JUMP and opnum != rop.LABEL:
@@ -707,6 +709,7 @@ def compute_vars_longevity(inputargs, operations):
                 if arg is None: # hole
                     continue
                 assert isinstance(arg, Box)
+                usage_positions.setdefault(arg, []).insert(0, i)
                 if arg not in last_used:
                     last_used[arg] = i
     #
@@ -715,14 +718,20 @@ def compute_vars_longevity(inputargs, operations):
         if arg in last_used:
             assert isinstance(arg, Box)
             assert produced[arg] < last_used[arg]
-            longevity[arg] = (produced[arg], last_used[arg])
+            upos = usage_positions[arg]
+            if len(upos) == 2:
+                upos = None
+            longevity[arg] = (produced[arg], last_used[arg], upos)
             del last_used[arg]
     for arg in inputargs:
         assert isinstance(arg, Box)
         if arg not in last_used:
-            longevity[arg] = (-1, -1)
+            longevity[arg] = (-1, -1, None)
         else:
-            longevity[arg] = (0, last_used[arg])
+            upos = usage_positions[arg]
+            if len(upos) == 2:
+                upos = None
+            longevity[arg] = (0, last_used[arg], upos)
             del last_used[arg]
     assert len(last_used) == 0
     return longevity, last_real_usage
