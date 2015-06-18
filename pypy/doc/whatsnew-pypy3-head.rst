@@ -1,10 +1,6 @@
 ========================
-What's new in PyPy3 2.4+
+What's new in PyPy3 2.6+
 ========================
 
-.. this is the revision after pypy3-release-2.4.x was branched
-.. startrev: 3f967c2be00e
-
-.. branch: py3k-memoryview
-
-Implement new memoryview features.
+.. this is the revision after pypy3-release-2.6.x was branched
+.. startrev: b21321b70e1c
