@@ -3,7 +3,7 @@ from rpython.jit.metainterp.history import (BoxInt, ConstInt, BoxFloat,
     INT, FLOAT, BoxPtr)
 from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.jit.backend.llsupport.regalloc import (FrameManager,
-        LinkedList, compute_vars_longevity)
+        LinkedList, compute_vars_longevity, next_var_usage)
 from rpython.jit.backend.llsupport.regalloc import RegisterManager as BaseRegMan
 
 def newboxes(*values):
@@ -32,6 +32,13 @@ regs = [r0, r1, r2, r3]
 
 class RegisterManager(BaseRegMan):
     all_regs = regs
+
+    def __init__(self, longevity, frame_manager=None, assembler=None):
+        for k,v in longevity.items():
+            if len(v) == 2:
+                longevity[k] = (v[0], v[1], None)
+        BaseRegMan.__init__(self, longevity, frame_manager, assembler)
+
     def convert_to_imm(self, v):
         return v
 
@@ -598,3 +605,40 @@ class TestRegalloc(object):
         assert longevity[d] == (4,5, None)
         assert longevity[e] == (0,2, None)
         assert longevity[f] == (2,5, None)
+
+
+    def test_next_var_usage(self):
+        assert next_var_usage( (0,9,None), 10 ) == -1
+        assert next_var_usage( (4,9,None), 2 ) == 4
+        assert next_var_usage( (0,9,None), -1 ) == 0
+        assert next_var_usage( (0,5,[0,1,2,3,4,5]), 3 ) == 3
+        assert next_var_usage( (1,10,[1,5,8,10]), 4 ) == 5
+        assert next_var_usage( (1,10,[1,5,8,10]), 1 ) == 1
+        assert next_var_usage( (1,10,[1,5,8,10]), 2 ) == 5
+        assert next_var_usage( (1,10,[1,5,8,10]), 9 ) == 10
+
+    def test_pick_to_spill(self):
+        b = [BoxInt() for i in range(0,10)]
+        longevity = {
+            b[0] : (1, 10, [1,2,8,10]),
+            b[1] : (3,  4, None),
+            b[2] : (0,  7, None),
+        }
+        rm = RegisterManager(longevity)
+
+        rm.reg_bindings[b[2]] = None
+        rm.position = 0
+        assert rm._pick_variable_to_spill(None, []) is b[2]
+
+        rm.reg_bindings[b[0]] = None
+        rm.position = 1
+        assert rm._pick_variable_to_spill(None, []) in (b[2],)
+
+        rm.reg_bindings[b[1]] = None
+        rm.position = 3
+        assert rm._pick_variable_to_spill(None, []) in (b[0],)
+
+        del rm.reg_bindings[b[1]]
+        rm.position = 5
+        assert rm._pick_variable_to_spill(None, []) in (b[0],)
+

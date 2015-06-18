@@ -1,6 +1,7 @@
 import os
 from rpython.jit.metainterp.history import Const, Box, REF, JitCellToken
 from rpython.rlib.objectmodel import we_are_translated, specialize
+from rpython.rlib.rbisect import bisect_left
 from rpython.jit.metainterp.resoperation import rop
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
@@ -409,9 +410,12 @@ class RegisterManager(object):
 
     def _pick_variable_to_spill(self, v, forbidden_vars, selected_reg=None,
                                 need_lower_byte=False):
-        """ Slightly less silly algorithm.
+        """ Heuristic: take the variable which has it's next use
+            the furthest in the future.
+            The original heuristic proposed by Poletto & Sarkar takes
+            the live range that ends the last.
         """
-        cur_max_age = -1
+        furthest_pos = -1
         candidate = None
         for next in self.reg_bindings:
             reg = self.reg_bindings[next]
@@ -424,9 +428,9 @@ class RegisterManager(object):
                     continue
             if need_lower_byte and reg in self.no_lower_byte_regs:
                 continue
-            max_age = self.longevity[next][1]
-            if cur_max_age < max_age:
-                cur_max_age = max_age
+            pos = next_var_usage(self.longevity[next], self.position)
+            if furthest_pos < pos:
+                furthest_pos = pos
                 candidate = next
         if candidate is None:
             raise NoVariableToSpill
@@ -672,6 +676,19 @@ class BaseRegalloc(object):
             return [self.loc(op.getarg(0)), self.fm.loc(op.getarg(1))]
         else:
             return [self.loc(op.getarg(0))]
+
+def next_var_usage(longevity, pos):
+    start, end, uses = longevity
+    if pos > end:
+        # there is no next usage, has already been passed
+        return -1
+    if pos < start:
+        return start
+    if uses is None:
+        # a live range with just a definition and one use
+        return end
+    i = bisect_left(uses, pos, len(uses))
+    return uses[i]
 
 def compute_vars_longevity(inputargs, operations):
     # compute a dictionary that maps variables to index in
