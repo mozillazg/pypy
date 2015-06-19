@@ -1385,11 +1385,11 @@ class RegAlloc(BaseRegalloc):
                 # on first enter, try to put as many locations into registers
                 # as possible. They are sorted by the next variable use.
                 # Descending and are poped in reverse order later
-                pos = next_var_usage(self.longevity[arg], self.rm.position)
-                i = bisect_right(relocate_index, pos, len(relocate_index))
-                if i >= position:
-                    relocate_index.insert(i, pos)
-                    relocate.insert(i, (arg, argidx))
+                pos = next_var_usage(self.longevity[arg], position)
+                ins = bisect_right(relocate_index, pos, len(relocate_index))
+                if ins >= position:
+                    relocate_index.insert(ins, pos)
+                    relocate.insert(ins, (arg, i))
         #
         forbidden = {}
         relocate_exit = []
@@ -1404,7 +1404,7 @@ class RegAlloc(BaseRegalloc):
                 arglocs[argidx] = loc
                 self.fm.mark_as_free(arg)
             else:
-                relocate_exit.insert(0, arg)
+                relocate_exit.insert(0, (arg, argidx))
 
         # there might be still registers available
         while len(relocate_exit) > 0:
