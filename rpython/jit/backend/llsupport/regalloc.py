@@ -447,7 +447,7 @@ class RegisterManager(object):
         """
         self._check_type(v)
         if isinstance(v, TempBox):
-            self.longevity[v] = (self.position, self.position)
+            self.longevity[v] = (self.position, self.position, None)
         loc = self.try_allocate_reg(v, selected_reg,
                                     need_lower_byte=need_lower_byte)
         if loc:
