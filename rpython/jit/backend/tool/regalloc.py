@@ -1,6 +1,9 @@
 #! /usr/bin/env python
 """
-    ./regalloc.py log
+    Prints information about the live range of a trace recorded in the specified logfiles.
+    It aggregates the information over all traces in the logfiles.
+
+    ./regalloc.py [--histogram] logfile1 [logfile2 ...]
 """
 
 import new
@@ -93,7 +96,7 @@ class LoopLiveRanges(object):
         if not isinstance(typedescr,str):
             typename = typedescr[0]
         lrt = self.entries.setdefault(typename,[])
-        lrt.append((arg, lr))
+        lrt.append((self.operations, lr))
 
     def active_live_ranges(self, position):
         active = []
@@ -120,8 +123,6 @@ class LoopLiveRanges(object):
             if start == loop_start and end == loop_end:
                 self.found_live_range(LR.WHOLE, arg, lr)
                 self.find_fail_type(LR.WHOLE, arg, lr)
-                if len(uses) == 2:
-                    self.found_live_range(LR.DUMMY, arg, lr)
             elif start == loop_start and end != loop_end:
                 self.found_live_range(LR.ENTER, arg, lr)
                 self.find_fail_type(LR.ENTER, arg, lr)
@@ -150,6 +151,8 @@ class LoopLiveRanges(object):
             op = self.operations[uses[-1]]
             if op.getfailargs() is not None and arg in op.getfailargs():
                 self.found_live_range('-'.join((typename, LR.FAIL[0], LR.END_FAIL[0])), arg, lr)
+            if len(uses) - 1 == used_in_guard:
+                self.found_live_range('-'.join((typename, LR.FAIL[0], LR.ONLY_FAIL[0])), arg, lr)
 
     def count(self, typedescr):
         return len(self.entries.get(typedescr[0],[]))
@@ -162,34 +165,33 @@ class LoopLiveRanges(object):
 class LR(object):
 
     WHOLE = ('whole', """
-    a live range that spans over the whole trace, use x times. (x > 0)
+    a live range that spans over the whole trace, used x times. (x > 0)
     """)
     ENTER = ('enter', """
-    a live range that spans from the label to an operation (not jump/label)
+    a live range that spans from the label to an operation (but not jump/label)
     """)
     EXIT = ('exit', """
-    a live range that starts at operation X (not at a label) and exits the trace in a jump or guard
+    a live range that starts at operation X (not at a label) and exits the trace in a jump
     """)
     VOLATILE = ('volatile', """
     a live range that starts at operation X (not a label) and ends at operation Y (not a jump/label)
     """)
     ALL_TYPES = [WHOLE, ENTER, EXIT, VOLATILE]
 
+    ONLY_FAIL = ('only failarg', """
+    a live range that is used only as fail arguments
+    """)
     FAIL = ('used as failargs', """
-    a live range that spans from the label to a guard exit may be used several times in between
+    a live range that is used in a guard exit as fail argument
     """)
     END_FAIL = ('end in failargs',"""
-    a live range that spans from the label to a guard exit (can be used only in guard fail args)
+    a live range that ends in a guard exit
     """)
     NO_FAIL = ('not in any failargs', """
-    same as enter, but is not used in guard exit
+    a live range that is not used as a fail argument
     """)
 
     FAIL_TYPES = [FAIL, NO_FAIL]
-
-    DUMMY = ('dummy', """
-    a live range that spans over the whole trace, but is never used
-    """)
 
     def __init__(self):
         self.loops = []
@@ -207,53 +209,107 @@ class LR(object):
     def header(self, name):
         print name
 
-    def print_stats(self):
+    def print_stats(self, histogram=False):
         print
         self.header("STATS")
         normal = [l for l in self.loops if l.type == 'normal']
         loop_count = len(normal)
         peeled = [l for l in self.loops if l.type == 'peeled']
+        bridges = [l for l in self.loops if l.type == 'bridge']
         peeled_count = len(peeled)
         self.show("loop count", loop_count)
         self.show("peeled count", peeled_count)
+        self.show("bridge count", len(bridges))
+
+        self.header("")
+        self.header("BRIDGES")
+        self.print_for_loops(bridges, hist=histogram)
 
         self.header("")
         self.header("SHELL LOOPS (loop that are not unrolled or enter a peeled loop)")
-        self.print_for_loops(normal)
+        self.print_for_loops(normal, hist=histogram)
 
         self.header("")
         self.header("PEELED LOOPS")
-        self.print_for_loops(peeled)
+        self.print_for_loops(peeled, hist=histogram)
 
 
-    def print_for_loops(self, loops):
+    def show_help(self, help, descr, indent):
+        if help:
+            print " " * (indent * 2), "%s: %s" % (descr[0], descr[1].lstrip().rstrip())
+
+    def print_for_loops(self, loops, help=True, hist=True):
         lr_counts = []
         for loop in loops:
             lr_counts.append(len(loop.longevity))
-        self.show_cmv('lr count', lr_counts)
-        self.show_cmv('lr (overlap) max', map(lambda x: getattr(x, 'lr_active_max'), loops))
-        self.show_cmv('lr (overlap) min', map(lambda x: getattr(x, 'lr_active_min'), loops))
+        self.show_help(True, ('lr (overlap) max', 'the max number of live ranges that overlap in a trace'), 0)
+        self.show_cmv('lr (overlap) max', map(lambda x: getattr(x, 'lr_active_max'), loops), histogram=hist, integer=True)
+        self.show_help(True, ('lr (overlap) min', 'the min number of live ranges that overlap in a trace'), 0)
+        self.show_cmv('lr (overlap) min', map(lambda x: getattr(x, 'lr_active_min'), loops), histogram=False, integer=True)
+        self.show_help(True, ('lr count', 'the live range count'), 0)
+        self.show_cmv('lr count', lr_counts, histogram=hist, integer=True)
         for typedescr in LR.ALL_TYPES:
             typename = typedescr[0]
             lrs = self.all_entries(loops, typename)
-            counts = map(lambda e: len(e), lrs)
-            self.show_cmv(typename, counts, 0)
+            self.show_help(help, typedescr, 0)
+            self.show_cmv(typename, lrs, 0, histogram=hist)
             #
             for failtypedescr in LR.FAIL_TYPES:
                 failtypename = typename + '-' + failtypedescr[0]
                 lrs = self.all_entries(loops, failtypename)
-                counts = map(lambda e: len(e), lrs)
-                self.show_cmv(failtypename, counts, 1)
+                self.show_help(help, failtypedescr, 1)
+                self.show_cmv(failtypename, lrs, 1, histogram=hist)
 
                 if failtypedescr == LR.FAIL:
+                    self.show_help(help, LR.END_FAIL, 2)
                     failtypename = failtypename + '-' + LR.END_FAIL[0]
                     lrs = self.all_entries(loops, failtypename)
-                    counts = map(lambda e: len(e), lrs)
-                    self.show_cmv(failtypename, counts, 2)
+                    self.show_cmv(failtypename, lrs, 2, histogram=hist)
 
-    def show_cmv(self, name, counts, indent=0):
-        total = sum(counts)
-        self.show(name, "mean %.2f\tvar %.2f\tcount %d" % (self.mean(counts), self.var(counts), total), indent=indent)
+                    self.show_help(help, LR.ONLY_FAIL, 2)
+                    failtypename = failtypename + '-' + LR.ONLY_FAIL[0]
+                    lrs = self.all_entries(loops, failtypename)
+                    self.show_cmv(failtypename, lrs, 2, histogram=hist)
+
+    def show_cmv(self, name, loop_lrs, indent=0, histogram=True, integer=False):
+        indent = " " * (indent * 2)
+        if integer:
+            counts = loop_lrs
+        else:
+            counts = map(lambda e: len(e), loop_lrs)
+            use_count = []
+            use_guard_count = []
+            for lrs in loop_lrs:
+                for ops, lr in lrs:
+                    count = 0
+                    gcount = 0
+                    for use in lr[2][1:]:
+                        op = ops[use]
+                        if op.is_guard():
+                            gcount += 1
+                        count += 1
+                    use_count.append(count)
+                    use_guard_count.append(gcount)
+
+            if len(use_count) > 0:
+                print indent, " #use: mean %.2f std %.2f" % (self.mean(use_count), self.var(use_count))
+            if len(use_guard_count) > 0:
+                print indent, " guard #use: mean %.2f std %.2f" % (self.mean(use_guard_count), self.var(use_guard_count))
+
+        total = len(counts)
+        total_sum = sum(counts)
+        min_counts = min(counts)
+        max_counts = max(counts)
+        print indent," mean %.2f std %.2f" % (self.mean(counts),self.var(counts))
+        print indent," min %d max %d" % (min_counts,max_counts)
+        if histogram:
+            import numpy
+            hist, bins = numpy.histogram(counts,bins=5)
+            for i in range(5):
+                l = bins[i]
+                u = bins[i+1]
+                v = hist[i]
+                print indent, " [%.1f-%.1f): %d (%.1f%%)" % (l, u, int(v), (100*float(v)/len(counts)))
 
     def mean(self, values):
         if len(values) == 0:
@@ -270,74 +326,97 @@ class LR(object):
             type = type[0]
         entries = []
         for loop in loops:
-            e = loop.entries.get(type, [])
-            entries.append(e)
+            lrs = loop.entries.get(type, [])
+            entries.append(lrs)
         return entries
 
 
-    def examine(self, inputargs, operations, peeled=False):
+    def examine(self, inputargs, operations, peeled=False, bridge=False):
         llr = LoopLiveRanges(inputargs, operations)
         llr.type = 'normal'
         if peeled:
             llr.type = 'peeled'
+        if bridge:
+            llr.type = 'bridge'
         self.loops.append(llr)
 
 # ____________________________________________________________
 
 if __name__ == '__main__':
     from rpython.tool import logparser
-    log1 = logparser.parse_log_file(sys.argv[1])
-    loops = logparser.extract_category(log1, catprefix='jit-log-compiling-loop')
+    histogram = False
+    if '--histogram' in sys.argv:
+        histogram = True
+        sys.argv.remove('--histogram')
     lr = LR()
-    ns = {}
-    loop_count = len(loops)
-    print
     skipped = []
     skipped_not_loop = []
-    for j,text in enumerate(loops):
-        parser = RegallocParser(text)
-        loop = parser.parse()
-        unrolled_label = -1
-        first_label = -1
-        for i,op in enumerate(loop.operations):
-            if op.getopnum() == rop.LABEL:
-                if first_label == -1:
-                    first_label = i
+    total_trace_count = 0
+    for logfile in sys.argv[1:]:
+        print "reading",logfile,"..."
+        log1 = logparser.parse_log_file(logfile)
+        loops = logparser.extract_category(log1, catprefix='jit-log-opt-loop')
+        ns = {}
+        loop_count = len(loops)
+        total_trace_count += loop_count
+        for j,text in enumerate(loops):
+            parser = RegallocParser(text)
+            loop = parser.parse()
+            unrolled_label = -1
+            first_label = -1
+            for i,op in enumerate(loop.operations):
+                if op.getopnum() == rop.LABEL:
+                    if first_label == -1:
+                        first_label = i
+                    else:
+                        unrolled_label = i
+
+            if loop.operations[-1].getopnum() != rop.JUMP:
+                assert loop.operations[-1].getopnum() == rop.FINISH
+                skipped_not_loop.append(loop)
+                continue
+
+            if first_label != 0:
+                if first_label == -1 and loop.operations[-1].getopnum() == rop.JUMP:
+                    assert unrolled_label == -1
+                    # add an artificial instruction to support the live range computation
+                    #loop.operations.insert(0, ResOperation(rop.LABEL, [inputargs], None, None))
                 else:
-                    unrolled_label = i
+                    first_label = 0
+                    #skipped.append(loop)
+                    #continue
 
-        if loop.operations[-1].getopnum() != rop.JUMP:
-            skipped_not_loop.append(loop)
-            continue
-        
-        if first_label != 0:
-            skipped.append(loop)
-            continue
-
-        if unrolled_label > 0:
-            ops = loop.operations[first_label:unrolled_label+1]
-            #    for op in ops:
-            #        print op
-            #    print '=' * 80
-            inputargs = loop.inputargs
-            lr.examine(inputargs, ops, peeled=False)
-            # peeled loop
-            ops = loop.operations[unrolled_label:]
-            #for op in ops:
-            #    print op
-            label = ops[0]
-            inputargs = label.getarglist()
-            lr.examine(inputargs, ops, peeled=True)
-            #print '-' * 80
-        else:
-            ops = loop.operations[first_label:]
-            #for op in ops:
-            #    print op
-            #print '-' * 80
-            inputargs = loop.inputargs
-            lr.examine(inputargs, ops, peeled=False)
-        print "\rloop %d/%d (%d%%)" % (j, loop_count, int(100.0 * j / loop_count)),
-        sys.stdout.flush()
+            if unrolled_label > 0:
+                ops = loop.operations[first_label:unrolled_label+1]
+                #    for op in ops:
+                #        print op
+                #    print '=' * 80
+                inputargs = loop.inputargs
+                lr.examine(inputargs, ops, peeled=False)
+                # peeled loop
+                ops = loop.operations[unrolled_label:]
+                #for op in ops:
+                #    print op
+                label = ops[0]
+                inputargs = label.getarglist()
+                lr.examine(inputargs, ops, peeled=True)
+                #print '-' * 80
+            else:
+                if first_label == -1:
+                    ops = loop.operations
+                    bridge = True
+                else:
+                    ops = loop.operations[first_label:]
+                    bridge = False
+                #for op in ops:
+                #    print op
+                #print '-' * 80
+                inputargs = loop.inputargs
+                lr.examine(inputargs, ops, peeled=False, bridge=bridge)
+            print "\rloop %d/%d (%d%%)" % (j, loop_count, int(100.0 * j / loop_count)),
+            sys.stdout.flush()
+        print
+    print "total trace count:", total_trace_count
     
     if len(skipped) > 0:
         print
@@ -347,4 +426,4 @@ if __name__ == '__main__':
         print
         print "skipped %d traces (not loops but traces)" % len(skipped_not_loop)
 
-    lr.print_stats()
+    lr.print_stats(histogram)
