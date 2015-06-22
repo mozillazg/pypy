@@ -32,6 +32,7 @@ class RegallocParser(SimpleParser):
         if res[0] in ('i','p','f'):
             arg = OpParser.box_for_var(self, res)
             assert isinstance(arg, Box), "is box" + str(arg)
+            assert arg._str == res
             return arg
         try:
             return ConstInt(int(res))
@@ -64,6 +65,45 @@ class LiveRange(object):
         self.start = lr[0]
         self.end = lr[1]
         self.uses = lr[2]
+        self.type = None
+
+    def __str__(self):
+        return "LiveRange[%d-%d]" % (self.start, self.end)
+
+def compute_liveranges(inputargs, operations):
+    live_ranges = {}
+    for i in range(len(operations)-1, -1, -1):
+        op = operations[i]
+        if op.result:
+            if op.result not in live_ranges:
+                live_ranges[arg] = (i, i, [i])
+            else:
+                start, end, uses = live_ranges[op.result]
+                uses.insert(0, i)
+                live_ranges[op.result] = (i, end, uses)
+        opnum = op.getopnum()
+        for j in range(op.numargs()):
+            arg = op.getarg(j)
+            if not isinstance(arg, Box):
+                continue
+            if arg not in live_ranges:
+                live_ranges[arg] = (-1, i, [i])
+            else:
+                start, end, uses = live_ranges[arg]
+                uses.insert(0, i)
+                live_ranges[arg] = (i, end, uses)
+        if op.is_guard():
+            for arg in op.getfailargs():
+                if arg is None: # hole
+                    continue
+                assert isinstance(arg, Box)
+                if arg not in live_ranges:
+                    live_ranges[arg] = (-1, i, [i])
+                else:
+                    start, end, uses = live_ranges[arg]
+                    uses.insert(0, i)
+                    live_ranges[arg] = (i, end, uses)
+    return live_ranges
 
 class LoopLiveRanges(object):
 
@@ -72,9 +112,9 @@ class LoopLiveRanges(object):
         self.inputargs = inputargs
         self.operations = operations
         self.longevity = None
-        longevity, last_real_use = compute_vars_longevity(inputargs, operations)
+        longevity, _ = compute_vars_longevity(inputargs, operations)
         self._check_longevity(operations, longevity)
-        self.consider(longevity, last_real_use)
+        self.consider(longevity, {})
 
     def _check_longevity(self, operations, longevity):
         return
@@ -96,25 +136,34 @@ class LoopLiveRanges(object):
         if not isinstance(typedescr,str):
             typename = typedescr[0]
         lrt = self.entries.setdefault(typename,[])
-        lrt.append((self.operations, lr))
+        lrt.append((arg, self.operations, lr))
 
-    def active_live_ranges(self, position):
+    def active_live_ranges(self, position, loop_start, loop_end):
         active = []
         for arg, lr in self.longevity.items():
             (start, end, uses) = lr = normalize_lr(lr)
             if start <= position <= end:
-                active.append(LiveRange(arg,lr))
-        return sorted(active, key=lambda x: x.name)
+                r = LiveRange(arg,lr)
+                active.append(r)
+                if start == loop_start and end == loop_end:
+                    r.type = LR.WHOLE[0]
+                elif start == loop_start and end < loop_end:
+                    r.type = LR.ENTER[0]
+                elif end == loop_end and start > loop_start:
+                    r.type = LR.EXIT[0]
+                else:
+                    r.type = LR.VOLATILE[0]
+        return active
 
     def consider(self, longevity, last_real_use):
         self.longevity = longevity
         loop_start = 0
         loop_end = len(self.operations)-1
-        self.lr_active = [0] * loop_end
-        self.lr_active_max = -1
+        self.lr_active = [None] * (loop_end+1)
+        self.lr_active_max = 0
         self.lr_active_min = sys.maxint
-        for i in range(loop_end):
-            self.lr_active[i] = lra = self.active_live_ranges(i)
+        for i in range(loop_end+1):
+            self.lr_active[i] = lra = self.active_live_ranges(i, loop_start, loop_end)
             self.lr_active_max = max(self.lr_active_max, len(lra))
             self.lr_active_min = min(self.lr_active_min, len(lra))
 
@@ -129,7 +178,7 @@ class LoopLiveRanges(object):
             elif end == loop_end and start != loop_start:
                 self.found_live_range(LR.EXIT, arg, lr)
                 self.find_fail_type(LR.EXIT, arg, lr)
-            elif end != loop_end and start != loop_start:
+            elif end < loop_end and start > loop_start:
                 self.found_live_range(LR.VOLATILE, arg, lr)
                 self.find_fail_type(LR.VOLATILE, arg, lr)
         self._check()
@@ -159,8 +208,8 @@ class LoopLiveRanges(object):
 
     def _check(self):
         total_ranges = len(self.longevity)
-        assert self.count(LR.WHOLE) + self.count(LR.ENTER) + \
-               self.count(LR.EXIT) + self.count(LR.VOLATILE) == total_ranges
+        #assert self.count(LR.WHOLE) + self.count(LR.ENTER) + \
+        #       self.count(LR.EXIT) + self.count(LR.VOLATILE) == total_ranges
 
 class LR(object):
 
@@ -222,10 +271,6 @@ class LR(object):
         self.show("bridge count", len(bridges))
 
         self.header("")
-        self.header("BRIDGES")
-        self.print_for_loops(bridges, hist=histogram)
-
-        self.header("")
         self.header("SHELL LOOPS (loop that are not unrolled or enter a peeled loop)")
         self.print_for_loops(normal, hist=histogram)
 
@@ -233,6 +278,9 @@ class LR(object):
         self.header("PEELED LOOPS")
         self.print_for_loops(peeled, hist=histogram)
 
+        self.header("")
+        self.header("BRIDGES")
+        self.print_for_loops(bridges, hist=histogram)
 
     def show_help(self, help, descr, indent):
         if help:
@@ -240,14 +288,22 @@ class LR(object):
 
     def print_for_loops(self, loops, help=True, hist=True):
         lr_counts = []
+        arg_count = []
         for loop in loops:
             lr_counts.append(len(loop.longevity))
+            if loop.operations[0].getopnum() == rop.LABEL:
+                arg_count.append(loop.operations[0].numargs())
+            else:
+                arg_count.append(len(loop.inputargs))
         self.show_help(True, ('lr (overlap) max', 'the max number of live ranges that overlap in a trace'), 0)
         self.show_cmv('lr (overlap) max', map(lambda x: getattr(x, 'lr_active_max'), loops), histogram=hist, integer=True)
-        self.show_help(True, ('lr (overlap) min', 'the min number of live ranges that overlap in a trace'), 0)
-        self.show_cmv('lr (overlap) min', map(lambda x: getattr(x, 'lr_active_min'), loops), histogram=False, integer=True)
-        self.show_help(True, ('lr count', 'the live range count'), 0)
-        self.show_cmv('lr count', lr_counts, histogram=hist, integer=True)
+        self.show_help(True, ('label args', 'number of arguments of the loop'), 0)
+        if len(arg_count) > 0:
+            self.show_cmv('label args', arg_count, histogram=hist, integer=True)
+        #self.show_help(True, ('lr (overlap) min', 'the min number of live ranges that overlap in a trace'), 0)
+        #self.show_cmv('lr (overlap) min', map(lambda x: getattr(x, 'lr_active_min'), loops), histogram=False, integer=True)
+        #self.show_help(True, ('lr count', 'the live range count'), 0)
+        #self.show_cmv('lr count', lr_counts, histogram=hist, integer=True)
         for typedescr in LR.ALL_TYPES:
             typename = typedescr[0]
             lrs = self.all_entries(loops, typename)
@@ -273,35 +329,41 @@ class LR(object):
 
     def show_cmv(self, name, loop_lrs, indent=0, histogram=True, integer=False):
         indent = " " * (indent * 2)
+        use_count = []
+        use_guard_count = []
         if integer:
             counts = loop_lrs
         else:
             counts = map(lambda e: len(e), loop_lrs)
-            use_count = []
-            use_guard_count = []
             for lrs in loop_lrs:
-                for ops, lr in lrs:
+                for arg, ops, lr in lrs:
                     count = 0
                     gcount = 0
                     for use in lr[2][1:]:
                         op = ops[use]
                         if op.is_guard():
-                            gcount += 1
-                        count += 1
+                            if arg in op.getfailargs():
+                                gcount += 1
+                            else:
+                                count += 1
+                        else:
+                            count += 1
                     use_count.append(count)
                     use_guard_count.append(gcount)
-
-            if len(use_count) > 0:
-                print indent, " #use: mean %.2f std %.2f" % (self.mean(use_count), self.var(use_count))
-            if len(use_guard_count) > 0:
-                print indent, " guard #use: mean %.2f std %.2f" % (self.mean(use_guard_count), self.var(use_guard_count))
 
         total = len(counts)
         total_sum = sum(counts)
         min_counts = min(counts)
         max_counts = max(counts)
+        if min_counts == 0 and max_counts == 0:
+            print indent, "ZERO"
+            return
         print indent," mean %.2f std %.2f" % (self.mean(counts),self.var(counts))
         print indent," min %d max %d" % (min_counts,max_counts)
+        if len(use_count) > 0:
+            print indent, " #use: mean %.2f std %.2f" % (self.mean(use_count), self.var(use_count))
+        if len(use_guard_count) > 0:
+            print indent, " failarg #use: mean %.2f std %.2f" % (self.mean(use_guard_count), self.var(use_guard_count))
         if histogram:
             import numpy
             hist, bins = numpy.histogram(counts,bins=5)
@@ -379,12 +441,13 @@ if __name__ == '__main__':
             if first_label != 0:
                 if first_label == -1 and loop.operations[-1].getopnum() == rop.JUMP:
                     assert unrolled_label == -1
-                    # add an artificial instruction to support the live range computation
-                    #loop.operations.insert(0, ResOperation(rop.LABEL, [inputargs], None, None))
                 else:
-                    first_label = 0
-                    #skipped.append(loop)
-                    #continue
+                    skipped.append(loop)
+                    continue
+            if first_label == 0:
+                assert loop.operations[0].getopnum() == rop.LABEL
+            assert loop.operations[-1].getopnum() == rop.JUMP or \
+                   loop.operations[-1].getopnum() == rop.LABEL
 
             if unrolled_label > 0:
                 ops = loop.operations[first_label:unrolled_label+1]
