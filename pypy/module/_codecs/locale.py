@@ -10,6 +10,7 @@ from rpython.rlib.rstring import UnicodeBuilder, assert_str0
 from rpython.rlib.runicode import (code_to_unichr,
     default_unicode_error_decode, default_unicode_error_encode)
 from rpython.rtyper.lltypesystem import lltype, rffi
+from rpython.rlib.rarithmetic import widen
 from rpython.translator import cdir
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
@@ -144,8 +145,11 @@ _unicode2rawwcharp_loop._annenforceargs_ = [unicode, None]
 def rawwcharp2unicoden(wcp, maxlen):
     b = UnicodeBuilder(maxlen)
     i = 0
-    while i < maxlen and rffi.cast(lltype.Signed, wcp[i]) != 0:
-        b.append(code_to_unichr(wcp[i]))
+    while i < maxlen:
+        wcp_i = widen(wcp[i])
+        if wcp_i == 0:
+            break
+        b.append(code_to_unichr(wcp_i))
         i += 1
     return assert_str0(b.build())
 rawwcharp2unicoden._annenforceargs_ = [None, int]
