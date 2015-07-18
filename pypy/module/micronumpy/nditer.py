@@ -108,9 +108,6 @@ def parse_func_flags(space, nditer, w_flags):
         if item == 'external_loop':
             nditer.external_loop = True
         elif item == 'buffered':
-            raise oefmt(space.w_NotImplementedError,
-                'nditer buffered not implemented yet')
-            # For numpy compatability
             nditer.buffered = True
         elif item == 'c_index':
             nditer.tracked_index = 'C'

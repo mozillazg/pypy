@@ -152,9 +152,6 @@ class AppTestNDIter(BaseNumpyAppTest):
         from numpy import arange, nditer, array
         a = arange(6).reshape(2,3)
         import sys
-        if '__pypy__' in sys.builtin_module_names:
-            raises(NotImplementedError, nditer, a, flags=['buffered'])
-            skip('nditer buffered not implmented')
         r = []
         for x in nditer(a, flags=['external_loop', 'buffered'], order='F'):
             r.append(x)
@@ -188,9 +185,6 @@ class AppTestNDIter(BaseNumpyAppTest):
         from numpy import arange, nditer
         import sys
         a = arange(6.)
-        if '__pypy__' in sys.builtin_module_names:
-            raises(NotImplementedError, nditer, a, flags=['buffered'], op_dtypes=['float32'])
-            skip('nditer casting not implemented yet')
         exc = raises(TypeError, nditer, a, flags=['buffered'], op_dtypes=['float32'])
         assert str(exc.value).startswith("Iterator operand 0 dtype could not be cast")
         r = []
@@ -232,9 +226,6 @@ class AppTestNDIter(BaseNumpyAppTest):
             return it.operands[1]
         assert (square1([1, 2, 3]) == [1, 4, 9]).all()
 
-        if '__pypy__' in sys.builtin_module_names:
-            raises(NotImplementedError, nditer, [1, 2], flags=['buffered'])
-            skip('nditer buffered not implmented')
         def square2(a, out=None):
             it = nditer([a, out], flags=['external_loop', 'buffered'],
                         op_flags=[['readonly'],
