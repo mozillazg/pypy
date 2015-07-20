@@ -219,8 +219,8 @@ def get_iter(space, order, arr, shape, dtype, op_flags, base):
             if imp.strides[i] < min_stride:
                 min_dim = i
                 min_stride = imp.strides[i]
-        return ConcreteIter(imp, imp.get_size(), shape, [imp.strides[i]],
-                           [imp.backstrides[i]], op_flags, base)
+        return ConcreteIter(imp, imp.get_size(), shape, [imp.strides[min_dim]],
+                           [imp.backstrides[min_dim]], op_flags, base)
     if arr.is_scalar():
         return ConcreteIter(imp, 1, [], [], [], op_flags, base)
     if (abs(imp.strides[0]) < abs(imp.strides[-1]) and not backward) or \
@@ -238,9 +238,9 @@ def get_iter(space, order, arr, shape, dtype, op_flags, base):
         _shape = imp.shape
     r = strideops.calculate_broadcast_strides(strides, backstrides, _shape,
                                     shape, backward)
-    if len(shape) != len(r[0]):
+    if len(_shape) != len(r[0]):
         # shape can be shorter when using an external loop, just return a view
-        return ConcreteIter(imp, imp.get_size(), _shape, r[0], r[1], op_flags, base)
+        return ConcreteIter(imp, imp.get_size(), shape, r[0], r[1], op_flags, base)
     return ConcreteIter(imp, imp.get_size(), _shape, r[0], r[1], op_flags, base)
 
 def calculate_ndim(op_in, oa_ndim):
