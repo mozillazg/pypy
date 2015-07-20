@@ -11,7 +11,6 @@ def issequence_w(space, w_obj):
            space.isinstance_w(w_obj, space.w_buffer) or
            isinstance(w_obj, W_NDimArray))
 
-
 def index_w(space, w_obj):
     try:
         return space.int_w(space.index(w_obj))
@@ -23,14 +22,12 @@ def index_w(space, w_obj):
                 "ellipsis (`...`), numpy.newaxis (`None`) and integer or "
                 "boolean arrays are valid indices")
 
-
 @jit.unroll_safe
 def product(s):
     i = 1
     for x in s:
         i = ovfcheck(i * x)
     return i
-
 
 def check_and_adjust_index(space, index, size, axis):
     if index < -size or index >= size:

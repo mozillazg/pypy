@@ -149,16 +149,26 @@ class AppTestNDIter(BaseNumpyAppTest):
         # assert str(exc.value).startswith("Iterator flag EXTERNAL_LOOP cannot")
 
     def test_buffered(self):
-        from numpy import arange, nditer, array
-        a = arange(6).reshape(2,3)
-        import sys
+        from numpy import arange, nditer, array, shape
+        a = arange(6).reshape(2, 3)
         r = []
-        for x in nditer(a, flags=['external_loop', 'buffered'], order='F'):
-            r.append(x)
-        array_r = array(r)
-        assert len(array_r.shape) == 2
-        assert array_r.shape == (1, 6)
-        assert (array_r == [0, 3, 1, 4, 2, 5]).all()
+        x = nditer(a, flags=['buffered'], order='F')
+        assert x.shape == a.shape # maybe a numpy bug, but be compatible
+        for i in x:
+            r.append(i)
+            assert x.shape == a.shape
+        assert r[0].shape == ()
+        raises(ValueError, shape, x)
+        assert len(r) == 6 # buffered flattens the iterator
+        r = []
+        assert a.shape == (2, 3)
+        x = nditer(a, flags=['external_loop', 'buffered'], order='F')
+        assert x.shape == a.shape # maybe a numpy bug, but be compatible
+        for i in x:
+            r.append(i)
+        assert len(r) == 1 # external_loop coalesces the flattened iterator
+        assert r[0].shape == (6,) 
+        assert (r[0] == [0, 3, 1, 4, 2, 5]).all() #respect the order
 
     def test_op_dtype(self):
         from numpy import arange, nditer, sqrt, array
@@ -186,7 +196,8 @@ class AppTestNDIter(BaseNumpyAppTest):
         import sys
         a = arange(6.)
         exc = raises(TypeError, nditer, a, flags=['buffered'], op_dtypes=['float32'])
-        assert str(exc.value).startswith("Iterator operand 0 dtype could not be cast")
+        errstr = str(exc.value)
+        assert errstr.startswith("Iterator operand 0 dtype could not be cast")
         r = []
         for x in nditer(a, flags=['buffered'], op_dtypes=['float32'],
                                 casting='same_kind'):

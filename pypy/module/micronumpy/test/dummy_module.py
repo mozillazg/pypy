@@ -38,3 +38,12 @@ def ones(*args, **kwargs):
     a = zeros(*args, **kwargs)
     a.fill(1)
     return a
+
+def shape(a):
+    try:
+        result = a.shape
+    except AttributeError:
+        result = asarray(a).shape
+    return result
+
+

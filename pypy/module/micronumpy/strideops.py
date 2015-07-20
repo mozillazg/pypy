@@ -3,7 +3,6 @@ from rpython.rlib import jit
 from pypy.module.micronumpy import support, constants as NPY
 from pypy.module.micronumpy.base import W_NDimArray
 
-
 # structures to describe slicing
 
 class BaseChunk(object):

@@ -18,7 +18,7 @@ from pypy.module.micronumpy.concrete import BaseConcreteArray
 from pypy.module.micronumpy.converters import multi_axis_converter, \
     order_converter, shape_converter, searchside_converter
 from pypy.module.micronumpy.flagsobj import W_FlagsObject
-from pypy.module.micronumpy.strides import get_shape_from_iterable, \
+from pypy.module.micronumpy.strideops import get_shape_from_iterable, \
     shape_agreement, shape_agreement_multiple, is_c_contiguous, is_f_contiguous
 from pypy.module.micronumpy.casting import can_cast_array
 

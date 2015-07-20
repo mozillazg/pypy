@@ -7,8 +7,7 @@ from pypy.module.micronumpy import support, concrete
 from pypy.module.micronumpy.base import W_NDimArray, convert_to_array, W_NumpyObject
 from pypy.module.micronumpy.descriptor import decode_w_dtype
 from pypy.module.micronumpy.iterators import ArrayIter
-from pypy.module.micronumpy.strides import (calculate_broadcast_strides,
-                                            shape_agreement, shape_agreement_multiple)
+from pypy.module.micronumpy import strideops
 from pypy.module.micronumpy.casting import find_binop_result_dtype
 
 
@@ -213,6 +212,15 @@ class SliceIter(OperandIter):
 def get_iter(space, order, arr, shape, dtype, op_flags, base):
     imp = arr.implementation
     backward = is_backward(imp, order)
+    if len(shape) == 1:
+        min_dim = 0
+        min_stride = 0xefffffff
+        for i in range(len(imp.shape)):
+            if imp.strides[i] < min_stride:
+                min_dim = i
+                min_stride = imp.strides[i]
+        return ConcreteIter(imp, imp.get_size(), shape, [imp.strides[i]],
+                           [imp.backstrides[i]], op_flags, base)
     if arr.is_scalar():
         return ConcreteIter(imp, 1, [], [], [], op_flags, base)
     if (abs(imp.strides[0]) < abs(imp.strides[-1]) and not backward) or \
@@ -220,19 +228,20 @@ def get_iter(space, order, arr, shape, dtype, op_flags, base):
         # flip the strides. Is this always true for multidimension?
         strides = imp.strides[:]
         backstrides = imp.backstrides[:]
-        shape = imp.shape[:]
         strides.reverse()
         backstrides.reverse()
-        shape.reverse()
+        _shape = imp.shape[:]
+        _shape.reverse()
     else:
         strides = imp.strides
         backstrides = imp.backstrides
-    r = calculate_broadcast_strides(strides, backstrides, imp.shape,
+        _shape = imp.shape
+    r = strideops.calculate_broadcast_strides(strides, backstrides, _shape,
                                     shape, backward)
     if len(shape) != len(r[0]):
         # shape can be shorter when using an external loop, just return a view
-        return ConcreteIter(imp, imp.get_size(), imp.shape, r[0], r[1], op_flags, base)
-    return ConcreteIter(imp, imp.get_size(), shape, r[0], r[1], op_flags, base)
+        return ConcreteIter(imp, imp.get_size(), _shape, r[0], r[1], op_flags, base)
+    return ConcreteIter(imp, imp.get_size(), _shape, r[0], r[1], op_flags, base)
 
 def calculate_ndim(op_in, oa_ndim):
     if oa_ndim >=0:
@@ -413,15 +422,15 @@ class W_NDIter(W_NumpyObject):
         outargs = [i for i in range(len(self.seq))
                    if self.seq[i] is None or self.op_flags[i].rw == 'w']
         if len(outargs) > 0:
-            out_shape = shape_agreement_multiple(space, [self.seq[i] for i in outargs])
+            out_shape = strideops.shape_agreement_multiple(space, [self.seq[i] for i in outargs])
         else:
             out_shape = None
         if space.isinstance_w(w_itershape, space.w_tuple) or \
            space.isinstance_w(w_itershape, space.w_list):
             self.shape = [space.int_w(i) for i in space.listview(w_itershape)]
         else:
-            self.shape = shape_agreement_multiple(space, self.seq,
-                                                           shape=out_shape)
+            self.shape = strideops.shape_agreement_multiple(space, self.seq,
+                                                     shape=out_shape)
         if len(outargs) > 0:
             # Make None operands writeonly and flagged for allocation
             if len(self.dtypes) > 0:
@@ -443,7 +452,7 @@ class W_NDIter(W_NumpyObject):
                 else:
                     if not self.op_flags[i].broadcast:
                         # Raises if ooutput cannot be broadcast
-                        shape_agreement(space, self.shape, self.seq[i], False)
+                        strideops.shape_agreement(space, self.shape, self.seq[i], False)
 
         if self.tracked_index != "":
             if self.order == "K":
@@ -453,7 +462,6 @@ class W_NDIter(W_NumpyObject):
             else:
                 backward = self.order != self.tracked_index
             self.index_iter = IndexIterator(self.shape, backward=backward)
-
         # handle w_op_dtypes part 2: copy where needed if possible
         if len(self.dtypes) > 0:
             for i in range(len(self.seq)):
@@ -553,7 +561,7 @@ class W_NDIter(W_NumpyObject):
             res.append(self.getitem(it, st))
             self.iters[i] = (it, it.next(st))
         if len(res) < 2:
-            return res[0]
+            return res[0] 
         return space.newtuple(res)
 
     def iternext(self):
@@ -648,7 +656,9 @@ class W_NDIter(W_NumpyObject):
         raise oefmt(space.w_NotImplementedError, "not implemented yet")
 
     def descr_get_shape(self, space):
-        raise oefmt(space.w_NotImplementedError, "not implemented yet")
+        if self.done:
+            raise oefmt(space.w_ValueError, "Iterator is past the end")
+        return space.newtuple([space.wrap(i) for i in self.shape])
 
     def descr_get_value(self, space):
         raise oefmt(space.w_NotImplementedError, "not implemented yet")
