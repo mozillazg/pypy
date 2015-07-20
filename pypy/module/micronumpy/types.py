@@ -22,7 +22,7 @@ from rpython.rtyper.lltypesystem import lltype, rffi, llmemory
 from rpython.tool.sourcetools import func_with_new_name
 from pypy.module.micronumpy import boxes, support
 from pypy.module.micronumpy.concrete import SliceArray, VoidBoxStorage, V_OBJECTSTORE
-from pypy.module.micronumpy.strides import calc_strides
+from pypy.module.micronumpy.strideops import calc_strides
 from . import constants as NPY
 
 degToRad = math.pi / 180.0

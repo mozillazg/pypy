@@ -82,7 +82,7 @@ def array(space, w_object, w_dtype=None, copy=True, w_order=None, subok=False,
     return w_res
 
 def _array(space, w_object, w_dtype=None, copy=True, w_order=None, subok=False):
-    from pypy.module.micronumpy import strides
+    from pypy.module.micronumpy import strideops
 
     # for anything that isn't already an array, try __array__ method first
     if not isinstance(w_object, W_NDimArray):
@@ -141,7 +141,7 @@ def _array(space, w_object, w_dtype=None, copy=True, w_order=None, subok=False):
                     w_base=w_base, start=imp.start)
     else:
         # not an array
-        shape, elems_w = strides.find_shape_and_elems(space, w_object, dtype)
+        shape, elems_w = strideops.find_shape_and_elems(space, w_object, dtype)
     if dtype is None and space.isinstance_w(w_object, space.w_buffer):
         dtype = descriptor.get_dtype_cache(space).w_uint8dtype
     if dtype is None or (dtype.is_str_or_unicode() and dtype.elsize < 1):
@@ -163,7 +163,7 @@ def _array(space, w_object, w_dtype=None, copy=True, w_order=None, subok=False):
 def numpify(space, w_object):
     """Convert the object to a W_NumpyObject"""
     # XXX: code duplication with _array()
-    from pypy.module.micronumpy import strides
+    from pypy.module.micronumpy import strideops
     if isinstance(w_object, W_NumpyObject):
         return w_object
     # for anything that isn't already an array, try __array__ method first
@@ -171,7 +171,7 @@ def numpify(space, w_object):
     if w_array is not None:
         return w_array
 
-    shape, elems_w = strides.find_shape_and_elems(space, w_object, None)
+    shape, elems_w = strideops.find_shape_and_elems(space, w_object, None)
     dtype = find_dtype_for_seq(space, elems_w, None)
     if dtype is None:
         dtype = descriptor.get_dtype_cache(space).w_float64dtype

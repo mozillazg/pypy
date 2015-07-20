@@ -38,7 +38,7 @@ class W_NDimArray(W_NumpyObject):
     @staticmethod
     def from_shape(space, shape, dtype, order='C', w_instance=None, zero=True):
         from pypy.module.micronumpy import concrete, descriptor, boxes
-        from pypy.module.micronumpy.strides import calc_strides
+        from pypy.module.micronumpy.strideops import calc_strides
         strides, backstrides = calc_strides(shape, dtype.base, order)
         impl = concrete.ConcreteArray(shape, dtype.base, order, strides,
                                       backstrides, zero=zero)
@@ -53,7 +53,7 @@ class W_NDimArray(W_NumpyObject):
                                order='C', owning=False, w_subtype=None,
                                w_base=None, writable=True, strides=None, start=0):
         from pypy.module.micronumpy import concrete
-        from pypy.module.micronumpy.strides import (calc_strides,
+        from pypy.module.micronumpy.strideops import (calc_strides,
                                                     calc_backstrides)
         isize = dtype.elsize
         if storage_bytes > 0 :

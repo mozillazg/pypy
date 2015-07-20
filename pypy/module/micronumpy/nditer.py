@@ -212,7 +212,7 @@ class SliceIter(OperandIter):
 def get_iter(space, order, arr, shape, dtype, op_flags, base):
     imp = arr.implementation
     backward = is_backward(imp, order)
-    if len(shape) == 1:
+    if len(shape) == 1 and len(imp.shape) > 0:
         min_dim = 0
         min_stride = 0xefffffff
         for i in range(len(imp.shape)):
@@ -316,6 +316,7 @@ def coalesce_iter(old_iter, op_flags, it, order, flat=True):
     shape = [s+1 for s in old_iter.shape_m1]
     strides = old_iter.strides
     backstrides = old_iter.backstrides
+    print shape, strides, backstrides
     if order == 'F':
         new_shape = shape[1:]
         new_strides = strides[1:]

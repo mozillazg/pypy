@@ -4,7 +4,7 @@ from pypy.module.micronumpy import loop, descriptor, support
 from pypy.module.micronumpy import constants as NPY
 from pypy.module.micronumpy.base import convert_to_array, W_NDimArray
 from pypy.module.micronumpy.converters import clipmode_converter
-from pypy.module.micronumpy.strides import (
+from pypy.module.micronumpy.strideops import (
     Chunk, Chunks, shape_agreement, shape_agreement_multiple)
 from .casting import find_binop_result_dtype, find_result_type
 

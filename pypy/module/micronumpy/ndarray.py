@@ -18,8 +18,9 @@ from pypy.module.micronumpy.concrete import BaseConcreteArray
 from pypy.module.micronumpy.converters import multi_axis_converter, \
     order_converter, shape_converter, searchside_converter
 from pypy.module.micronumpy.flagsobj import W_FlagsObject
-from pypy.module.micronumpy.strideops import get_shape_from_iterable, \
-    shape_agreement, shape_agreement_multiple, is_c_contiguous, is_f_contiguous
+from pypy.module.micronumpy.strideops import (get_shape_from_iterable,
+    shape_agreement, shape_agreement_multiple, is_c_contiguous,
+    is_f_contiguous, calc_strides)
 from pypy.module.micronumpy.casting import can_cast_array
 
 
@@ -1298,7 +1299,6 @@ class __extend__(W_NDimArray):
 def descr_new_array(space, w_subtype, w_shape, w_dtype=None, w_buffer=None,
                     offset=0, w_strides=None, w_order=None):
     from pypy.module.micronumpy.concrete import ConcreteArray
-    from pypy.module.micronumpy.strides import calc_strides
     dtype = space.interp_w(descriptor.W_Dtype, space.call_function(
         space.gettypefor(descriptor.W_Dtype), w_dtype))
     shape = shape_converter(space, w_shape, dtype)

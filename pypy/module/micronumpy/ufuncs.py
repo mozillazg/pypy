@@ -17,7 +17,7 @@ from pypy.module.micronumpy.descriptor import (
 from pypy.module.micronumpy.base import convert_to_array, W_NDimArray
 from pypy.module.micronumpy.ctors import numpify
 from pypy.module.micronumpy.nditer import W_NDIter, coalesce_iter
-from pypy.module.micronumpy.strides import shape_agreement
+from pypy.module.micronumpy.strideops import shape_agreement
 from pypy.module.micronumpy.support import (_parse_signature, product,
         get_storage_as_int, is_rhs_priority_higher)
 from .casting import (
@@ -861,6 +861,7 @@ class W_UfuncGeneric(W_Ufunc):
                       w_itershape)
         # coalesce each iterators, according to inner_dimensions
         for i in range(len(inargs) + len(outargs)):
+            print 'ndim', self.core_num_dims[i]
             for j in range(self.core_num_dims[i]):
                 new_iter = coalesce_iter(nd_it.iters[i][0], nd_it.op_flags[i],
                                 nd_it, nd_it.order, flat=False)

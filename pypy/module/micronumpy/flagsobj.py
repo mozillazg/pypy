@@ -6,7 +6,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.micronumpy import constants as NPY
-from pypy.module.micronumpy.strides import is_c_contiguous, is_f_contiguous
+from pypy.module.micronumpy.strideops import is_c_contiguous, is_f_contiguous
 
 def enable_flags(arr, flags):
     arr.flags |= flags

@@ -9,7 +9,7 @@ from pypy.module.micronumpy import support, loop, constants as NPY
 from pypy.module.micronumpy.base import convert_to_array, W_NDimArray, \
     ArrayArgumentException, W_NumpyObject
 from pypy.module.micronumpy.iterators import ArrayIter
-from pypy.module.micronumpy.strides import (Chunk, Chunks, NewAxisChunk,
+from pypy.module.micronumpy.strideops import (Chunk, Chunks, NewAxisChunk,
     RecordChunk, calc_strides, calc_new_strides, shape_agreement,
     calculate_broadcast_strides, calc_backstrides, calc_start, is_c_contiguous,
     is_f_contiguous)
