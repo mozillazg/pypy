@@ -655,10 +655,6 @@ class PassThroughOp(OpToVectorOp):
     def get_input_type_given(self, output_type, op):
         raise AssertionError("cannot infer input type from output type")
 
-    # OLD
-    def determine_output_type(self, op):
-        return None
-
 GUARD_TF = PassThroughOp((PT_INT_GENERIC,))
 INT_OP_TO_VOP = OpToVectorOp((PT_INT_GENERIC, PT_INT_GENERIC), INT_RES)
 FLOAT_OP_TO_VOP = OpToVectorOp((PT_FLOAT_GENERIC, PT_FLOAT_GENERIC), FLOAT_RES)
@@ -666,7 +662,7 @@ FLOAT_SINGLE_ARG_OP_TO_VOP = OpToVectorOp((PT_FLOAT_GENERIC,), FLOAT_RES)
 LOAD_TRANS = LoadToVectorLoad()
 STORE_TRANS = StoreToVectorStore()
 
-# note that the following definition is x86 arch specific
+# note that the following definition is x86 arch specific (e.g. look at signext)
 ROP_ARG_RES_VECTOR = {
     rop.VEC_INT_ADD:     INT_OP_TO_VOP,
     rop.VEC_INT_SUB:     INT_OP_TO_VOP,
@@ -755,7 +751,7 @@ class VecScheduleData(SchedulerData):
         renamer = scheduler.renamer
         if candidate.pack:
             for node in candidate.pack.operations:
-                self.unpack_from_vector(candidate.getoperation(), renamer)
+                #self.unpack_from_vector(candidate.getoperation(), renamer)
                 scheduler.scheduled(node)
                 #renamer.rename(node.getoperation())
             self.as_vector_operation(scheduler, candidate.pack)
