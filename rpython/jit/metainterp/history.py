@@ -759,14 +759,32 @@ class LoopVersion(object):
 
     def __init__(self, operations):
         self.faildescrs = []
-        self.operations = operations
-
-    def setup_once(self):
+        self.operations = self.copy_operations(operations)
         idx = index_of_first(rop.LABEL, self.operations)
         assert idx >= 0
         label = self.operations[idx]
         self.inputargs = label.getarglist()
         self.renamed_inputargs = label.getarglist()
+
+    def setup_once(self):
+        pass
+
+    def copy_operations(self, operations):
+        ignore = (rop.DEBUG_MERGE_POINT,)
+        oplist = []
+        for op in operations:
+            if op.getopnum() in ignore:
+                continue
+            cloned = op.clone()
+            oplist.append(cloned)
+            if cloned.is_guard():
+                olddescr = cloned.getdescr()
+                if not olddescr:
+                    continue
+                descr = olddescr.clone()
+                cloned.setdescr(descr)
+        return oplist
+
 
     def compiled(self):
         if self.operations is None:
@@ -884,8 +902,8 @@ class TreeLoop(object):
         return None
 
     def snapshot(self):
-        oplist = self.copy_operations(self.operations)
-        version = LoopVersion(oplist)
+        #oplist = self.copy_operations(self.operations)
+        version = LoopVersion(self.operations)
         version.setup_once()
         self.versions.append(version)
         return version
