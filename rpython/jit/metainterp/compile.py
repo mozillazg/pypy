@@ -211,6 +211,7 @@ def generate_pending_loop_versions(loop, jitdriver_sd, metainterp, jitcell_token
         # stitch the rest of the traces
         for version in loop.versions:
             for faildescr in version.faildescrs[1:]:
+                assert isinstance(faildescr, CompileLoopVersionDescr)
                 if faildescr.version.compiled:
                     cpu.stitch_bridge(faildescr, version.compiled)
     loop.versions = None
