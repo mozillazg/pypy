@@ -747,10 +747,18 @@ def index_of_first(opnum, operations, pass_by=0):
     return -1
 
 class LoopVersion(object):
+    _attrs_ = ('faildescrs', 'compile_data',
+               'operations', 'inputargs',
+               'renamed_inputargs')
+
+    faildescrs = []
+    compile_data = None
+    operations = None
+    inputargs = None
+    renamed_inputargs = None
 
     def __init__(self, loop):
         self.faildescrs = []
-        self._compiled = None
         if loop:
             self.operations = self.copy_operations(loop.operations) 
             idx = index_of_first(rop.LABEL, self.operations)
@@ -758,17 +766,13 @@ class LoopVersion(object):
             label = self.operations[idx]
             self.inputargs = label.getarglist()
             self.renamed_inputargs = label.getarglist()
-        else:
-            self.operations = None
-            self.inputargs = None
-            self.renamed_inputargs = None
 
     def compiled(self):
         if self.operations is None:
             # root version must always be compiled
             return True
 
-        return self._compiled is not None
+        return self.compile_data is not None
 
     def copy_operations(self, operations):
         from rpython.jit.metainterp.compile import ResumeGuardDescr, CompileLoopVersionDescr 

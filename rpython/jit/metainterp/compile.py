@@ -208,7 +208,7 @@ def generate_pending_loop_versions(loop, jitdriver_sd, metainterp, jitcell_token
                                    version.operations, jitcell_token)
             record_loop_or_bridge(metainterp_sd, vl)
             assert asminfo is not None
-            version._compiled = asminfo
+            version.compile_data = asminfo
             faildescr.version = None
         # stitch the rest of the traces
         for lv in loop.versions:
@@ -219,7 +219,7 @@ def generate_pending_loop_versions(loop, jitdriver_sd, metainterp, jitcell_token
             for faildescr in lv.faildescrs:
                 version = faildescr.version
                 if version and version.compiled():
-                    cpu.stitch_bridge(faildescr, version._compiled)
+                    cpu.stitch_bridge(faildescr, version.compile_data)
                 faildescr.version = None
     loop.versions = None
 
