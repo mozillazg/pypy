@@ -536,7 +536,7 @@ class Assembler386(BaseAssembler, VectorAssemblerMixin):
             self.cpu.profile_agent.native_code_written(name,
                                                        rawstart, full_size)
         return AsmInfo(ops_offset, rawstart + looppos,
-                       size_excluding_failure_stuff - looppos, rawstart)
+                       size_excluding_failure_stuff - looppos)
 
     @rgc.no_release_gil
     def assemble_bridge(self, faildescr, inputargs, operations,
@@ -589,11 +589,12 @@ class Assembler386(BaseAssembler, VectorAssemblerMixin):
             name = "Bridge # %s" % (descr_number,)
             self.cpu.profile_agent.native_code_written(name,
                                                        rawstart, fullsize)
-        return AsmInfo(ops_offset, startpos + rawstart, codeendpos - startpos, rawstart)
+        return AsmInfo(ops_offset, startpos + rawstart, codeendpos - startpos)
 
     def stitch_bridge(self, faildescr, target):
-        assert target.rawstart != 0
-        self.patch_jump_for_descr(faildescr, target.rawstart)
+        if target is not None:
+            assert target.rawstart != 0
+            self.patch_jump_for_descr(faildescr, target.rawstart)
 
     def write_pending_failure_recoveries(self, regalloc):
         # for each pending guard, generate the code of the recovery stub

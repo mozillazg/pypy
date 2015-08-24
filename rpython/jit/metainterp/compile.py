@@ -204,26 +204,27 @@ def generate_pending_loop_versions(loop, jitdriver_sd, metainterp, jitcell_token
             vl.inputargs = version.inputargs
             vl.operations = version.operations
             vl.original_jitcell_token = jitcell_token
-            asminfo = send_bridge_to_backend(jitdriver_sd, metainterp_sd,
+            send_bridge_to_backend(jitdriver_sd, metainterp_sd,
                                    faildescr, version.inputargs,
                                    version.operations, jitcell_token)
             record_loop_or_bridge(metainterp_sd, vl)
-            assert asminfo is not None
-            version._compiled = asminfo
-            faildescr.version = None
+            #assert asminfo is not None
+            #version._compiled = asminfo
+            #faildescr.version = None
+        loop.versions = None
         # stitch the rest of the traces
-        for lv in loop.versions:
-            if not lv.compiled():
-                # the version was never compiled, do not bother
-                # to assign it's fail descr
-                continue
-            for faildescr in lv.faildescrs:
-                assert isinstance(faildescr, CompileLoopVersionDescr)
-                version = faildescr.version
-                if version and version.compiled():
-                    cpu.stitch_bridge(faildescr, version._compiled)
-                faildescr.version = None
-    loop.versions = None
+        #for lv in loop.versions:
+        #    if not lv.compiled():
+        #        # the version was never compiled, do not bother
+        #        # to assign it's fail descr
+        #        continue
+        #    for faildescr in lv.faildescrs:
+        #        assert isinstance(faildescr, CompileLoopVersionDescr)
+        #        version = faildescr.version
+        #        if version and version.compiled():
+        #            cpu.stitch_bridge(faildescr, version._compiled)
+        #        faildescr.version = None
+    #loop.versions = None
 
 def compile_retrace(metainterp, greenkey, start,
                     inputargs, jumpargs,
@@ -454,7 +455,7 @@ def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
     #if metainterp_sd.warmrunnerdesc is not None:    # for tests
     #    metainterp_sd.warmrunnerdesc.memory_manager.keep_loop_alive(
     #        original_loop_token)
-    return asminfo
+    #return asminfo
 
 # ____________________________________________________________
 

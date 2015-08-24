@@ -809,6 +809,8 @@ class LoopVersion(object):
         assert version.renamed_inputargs is not None
 
     def update_token(self, jitcell_token, all_target_tokens):
+        if self.compiled():
+            return
         # this is only invoked for versioned loops!
         label_index = index_of_first(rop.LABEL, self.operations, 0)
         label = self.operations[label_index]
