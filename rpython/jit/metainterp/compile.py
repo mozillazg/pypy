@@ -532,7 +532,7 @@ class ResumeDescr(AbstractFailDescr):
 class ResumeGuardDescr(ResumeDescr):
     _attrs_ = ('rd_numb', 'rd_count', 'rd_consts', 'rd_virtuals',
                'rd_frame_info_list', 'rd_pendingfields', 'rd_accum_list',
-               'status')
+               'status', 'version')
     
     rd_numb = lltype.nullptr(NUMBERING)
     rd_count = 0
@@ -543,6 +543,7 @@ class ResumeGuardDescr(ResumeDescr):
     rd_accum_list = None
 
     status = r_uint(0)
+    version = None
 
     def copy_all_attributes_from(self, other):
         assert isinstance(other, ResumeGuardDescr)
@@ -746,11 +747,6 @@ class ResumeAtLoopHeaderDescr(ResumeGuardDescr):
 
 class CompileLoopVersionDescr(ResumeGuardDescr):
     guard_opnum = rop.GUARD_EARLY_EXIT
-
-    operations = None
-    inputargs = None
-    faillocs = None
-    version = None
 
     def handle_fail(self, deadframe, metainterp_sd, jitdriver_sd):
         assert 0, "this guard must never fail"

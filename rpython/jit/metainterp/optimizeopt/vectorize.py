@@ -42,7 +42,9 @@ def optimize_vector(metainterp_sd, jitdriver_sd, loop, optimizations,
     if user_code and user_loop_bail_fast_path(loop, warmstate):
         return
     # the original loop (output of optimize_unroll)
+    loop.versions.append(LoopVersion(None))
     version = loop.snapshot()
+    old_loop_len = len(loop.operations)
     try:
         debug_start("vec-opt-loop")
         metainterp_sd.logger_noopt.log_loop(loop.inputargs, loop.operations, -2, None, None, "pre vectorize")
@@ -65,7 +67,7 @@ def optimize_vector(metainterp_sd, jitdriver_sd, loop, optimizations,
         #
         nano = int((end-start)*10.0**9)
         debug_print("# vecopt factor: %d opcount: (%d -> %d) took %dns" % \
-                      (opt.unroll_count+1, len(version.operations), len(loop.operations), nano))
+                      (opt.unroll_count+1, old_loop_len, len(loop.operations), nano))
         debug_stop("vec-opt-loop")
         #
     except NotAVectorizeableLoop:
@@ -87,8 +89,7 @@ def optimize_vector(metainterp_sd, jitdriver_sd, loop, optimizations,
             from rpython.rtyper.lltypesystem import lltype
             from rpython.rtyper.lltypesystem.lloperation import llop
             llop.debug_print_traceback(lltype.Void)
-        else:
-            raise
+        raise e
 
 def user_loop_bail_fast_path(loop, warmstate):
     """ In a fast path over the trace loop: try to prevent vecopt
@@ -628,7 +629,8 @@ class VectorizingOptimizer(Optimizer):
         descr = None
         guard_true_false = tgt_op.getopnum() in (rop.GUARD_TRUE, rop.GUARD_FALSE)
         if guard_true_false:
-            descr = CompileLoopVersionDescr()
+            #descr = CompileLoopVersionDescr()
+            descr = ResumeAtLoopHeaderDescr()
         else:
             descr = ResumeAtLoopHeaderDescr()
         if olddescr:

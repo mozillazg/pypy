@@ -893,6 +893,7 @@ class TreeLoop(object):
         #
         self.operations = self.operations[:-1] + loop.operations
         self.versions = loop.versions
+        loop.versions = None
         if loop.quasi_immutable_deps:
             self.quasi_immutable_deps.update(loop.quasi_immutable_deps)
 
@@ -910,10 +911,6 @@ class TreeLoop(object):
         return None
 
     def snapshot(self):
-        if len(self.versions) == 0:
-            # create a root version, simplyfies the code in compile.py
-            self.versions.append(LoopVersion(None))
-        root_version = self.versions[0]
         version = LoopVersion(self)
         self.versions.append(version)
         return version
