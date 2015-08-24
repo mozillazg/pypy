@@ -194,30 +194,32 @@ def generate_pending_loop_versions(loop, jitdriver_sd, metainterp, jitcell_token
     if loop.versions is not None:
         # compile each version once for the first fail descr!
         # this assumes that the root trace (= loop) is already compiled
-        root = loop.versions[0]
-        for faildescr in root.faildescrs:
-            version = faildescr.version
-            if not version or version.compiled():
-                continue
-            vl = create_empty_loop(metainterp)
-            vl.inputargs = version.inputargs
-            vl.operations = version.operations
-            vl.original_jitcell_token = jitcell_token
-            asminfo = send_bridge_to_backend(jitdriver_sd, metainterp_sd,
-                                   faildescr, version.inputargs,
-                                   version.operations, jitcell_token)
-            record_loop_or_bridge(metainterp_sd, vl)
-            version.compile_data = asminfo
+        for version in loop.versions:
+            if not version.compiled():
+                faildescr = version.faildescrs[0]
+                vl = create_empty_loop(metainterp)
+                vl.inputargs = version.inputargs
+                vl.operations = version.operations
+                vl.original_jitcell_token = jitcell_token
+                asminfo = send_bridge_to_backend(jitdriver_sd, metainterp_sd,
+                                       faildescr, version.inputargs,
+                                       version.operations, jitcell_token)
+                record_loop_or_bridge(metainterp_sd, vl)
+                version.compile_data = asminfo
+                version.operations = None
+                version.inputargs = None
         # stitch the rest of the traces
         for lv in loop.versions:
             if not lv.compiled():
                 # the version was never compiled, do not bother
                 # to assign it's fail descr
                 continue
-            for faildescr in lv.faildescrs:
-                version = faildescr.version
+            for faildescr in lv.faildescrs[1:]:
                 if version and version.compiled():
                     cpu.stitch_bridge(faildescr, version.compile_data)
+        for lv in loop.versions:
+            lv.compile_data = None
+            lv.faildescrs = []
 
 def compile_retrace(metainterp, greenkey, start,
                     inputargs, jumpargs,
@@ -525,7 +527,7 @@ class ResumeDescr(AbstractFailDescr):
 class ResumeGuardDescr(ResumeDescr):
     _attrs_ = ('rd_numb', 'rd_count', 'rd_consts', 'rd_virtuals',
                'rd_frame_info_list', 'rd_pendingfields', 'rd_accum_list',
-               'status', 'version')
+               'status')
     
     rd_numb = lltype.nullptr(NUMBERING)
     rd_count = 0
@@ -536,7 +538,6 @@ class ResumeGuardDescr(ResumeDescr):
     rd_accum_list = None
 
     status = r_uint(0)
-    version = None
 
     def copy_all_attributes_from(self, other):
         assert isinstance(other, ResumeGuardDescr)

@@ -759,13 +759,12 @@ class LoopVersion(object):
 
     def __init__(self, loop):
         self.faildescrs = []
-        if loop:
-            self.operations = self.copy_operations(loop.operations) 
-            idx = index_of_first(rop.LABEL, self.operations)
-            assert idx >= 0
-            label = self.operations[idx]
-            self.inputargs = label.getarglist()
-            self.renamed_inputargs = label.getarglist()
+        self.operations = self.copy_operations(loop.operations) 
+        idx = index_of_first(rop.LABEL, self.operations)
+        assert idx >= 0
+        label = self.operations[idx]
+        self.inputargs = label.getarglist()
+        self.renamed_inputargs = label.getarglist()
 
     def compiled(self):
         if self.operations is None:
@@ -804,7 +803,6 @@ class LoopVersion(object):
         if not descr.loop_version():
             assert 0, "cannot register a guard that is not a CompileLoopVersionDescr"
         assert isinstance(descr, CompileLoopVersionDescr)
-        descr.version = version
         self.faildescrs.append(descr)
         # note: stitching a guard must resemble the order of the label
         # otherwise a wrong mapping is handed to the register allocator
@@ -844,6 +842,7 @@ class TreeLoop(object):
     call_pure_results = None
     logops = None
     quasi_immutable_deps = None
+    versions = []
 
     def _token(*args):
         raise Exception("TreeLoop.token is killed")
@@ -856,7 +855,6 @@ class TreeLoop(object):
 
     def __init__(self, name):
         self.name = name
-        self.versions = []
         # self.operations = list of ResOperations
         #   ops of the kind 'guard_xxx' contain a further list of operations,
         #   which may itself contain 'guard_xxx' and so on, making a tree.
@@ -911,15 +909,7 @@ class TreeLoop(object):
         return None
 
     def snapshot(self):
-        if len(self.versions) == 0:
-            # create a root version, simplyfies the code in compile.py
-            self.versions.append(LoopVersion(None))
-        root_version = self.versions[0]
         version = LoopVersion(self)
-        if not we_are_translated():
-            print "LOOP SNAPSHOT"
-            for op in version.operations:
-                print "", op
         self.versions.append(version)
         return version
 
