@@ -592,9 +592,8 @@ class Assembler386(BaseAssembler, VectorAssemblerMixin):
         return AsmInfo(ops_offset, startpos + rawstart, codeendpos - startpos, rawstart)
 
     def stitch_bridge(self, faildescr, target):
-        pass
-        #assert target != 0
-        #self.patch_jump_for_descr(faildescr, target.rawstart)
+        assert target.rawstart != 0
+        self.patch_jump_for_descr(faildescr, target.rawstart)
 
     def write_pending_failure_recoveries(self, regalloc):
         # for each pending guard, generate the code of the recovery stub

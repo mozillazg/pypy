@@ -162,7 +162,7 @@ def compile_loop(metainterp, greenkey, start,
 
     if loop.versions is not None:
         # every different loop version must update their target tokens
-        for version in loop.versions[1:]:
+        for version in loop.versions:
             version.update_token(jitcell_token, all_target_tokens)
 
     if not loop.quasi_immutable_deps:
@@ -195,7 +195,7 @@ def generate_pending_loop_versions(loop, jitdriver_sd, metainterp, jitcell_token
         # compile each version once for the first fail descr!
         # this assumes that the root trace (= loop) is already compiled
         for version in loop.versions:
-            if not version.compiled():
+            if not version.compiled() and version.faildescrs:
                 faildescr = version.faildescrs[0]
                 vl = create_empty_loop(metainterp)
                 vl.inputargs = version.inputargs
@@ -214,9 +214,11 @@ def generate_pending_loop_versions(loop, jitdriver_sd, metainterp, jitcell_token
                 # the version was never compiled, do not bother
                 # to assign it's fail descr
                 continue
-            for faildescr in lv.faildescrs[1:]:
-                if version and version.compiled():
-                    cpu.stitch_bridge(faildescr, version.compile_data)
+            for i,faildescr in enumerate(lv.faildescrs):
+                if i == 0:
+                    continue
+                assert isinstance(faildescr, AbstractFailDescr)
+                cpu.stitch_bridge(faildescr, lv.compile_data)
         for lv in loop.versions:
             lv.compile_data = None
             lv.faildescrs = []

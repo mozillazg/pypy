@@ -152,10 +152,10 @@ class Guard(object):
         assert operations[self.index] is self.op
         operations[self.index] = None
         descr = self.op.getdescr()
-        if descr and descr.loop_version():
-            from rpython.jit.metainterp.compile import CompileLoopVersionDescr
-            assert isinstance(descr, CompileLoopVersionDescr)
-            descr.version = None
+        #if descr and descr.loop_version():
+        #    from rpython.jit.metainterp.compile import CompileLoopVersionDescr
+        #    assert isinstance(descr, CompileLoopVersionDescr)
+        #    descr.version = None
         if operations[self.index-1] is self.cmp_op:
             operations[self.index-1] = None
 
@@ -266,20 +266,18 @@ class GuardStrengthenOpt(object):
         self.collect_guard_information(loop)
         self.eliminate_guards(loop)
         #
-        assert len(loop.versions) == 2, "need one orignal loop version (before trans) and the current one"
-        root_version = loop.versions[0]
-        version = loop.versions[1]
-
+        assert len(loop.versions) == 1
+        version = loop.versions[0]
         for op in loop.operations:
             if not op.is_guard():
                 continue
             descr = op.getdescr()
             if descr.loop_version():
-                root_version.register_guard(op, version)
+                version.register_guard(op, version)
 
-        if user_code:
-            version = loop.snapshot()
-            self.eliminate_array_bound_checks(loop, root_version, version)
+        #if user_code:
+        #    version = loop.snapshot()
+        #    self.eliminate_array_bound_checks(loop, root_version, version)
 
     def emit_operation(self, op):
         self.renamer.rename(op)

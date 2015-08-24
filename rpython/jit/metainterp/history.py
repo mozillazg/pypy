@@ -757,9 +757,11 @@ class LoopVersion(object):
     inputargs = None
     renamed_inputargs = None
 
-    def __init__(self, loop):
+    def __init__(self, operations):
         self.faildescrs = []
-        self.operations = self.copy_operations(loop.operations) 
+        self.operations = operations
+
+    def setup_once(self):
         idx = index_of_first(rop.LABEL, self.operations)
         assert idx >= 0
         label = self.operations[idx]
@@ -773,36 +775,9 @@ class LoopVersion(object):
 
         return self.compile_data is not None
 
-    def copy_operations(self, operations):
-        from rpython.jit.metainterp.compile import ResumeGuardDescr, CompileLoopVersionDescr 
-        ignore = (rop.DEBUG_MERGE_POINT,)
-        oplist = []
-        for op in operations:
-            if op.getopnum() in ignore:
-                continue
-            cloned = op.clone()
-            oplist.append(cloned)
-            if cloned.is_guard():
-                olddescr = cloned.getdescr()
-                if not olddescr:
-                    continue
-                descr = olddescr.clone()
-                cloned.setdescr(descr)
-                if olddescr.loop_version():
-                    # copy the version
-                    assert isinstance(descr, CompileLoopVersionDescr)
-                    assert isinstance(olddescr, CompileLoopVersionDescr)
-                    descr.version = olddescr.version
-                    self.faildescrs.append(descr)
-        return oplist
-
     def register_guard(self, op, version):
-        from rpython.jit.metainterp.compile import CompileLoopVersionDescr
         assert isinstance(op, GuardResOp)
         descr = op.getdescr()
-        if not descr.loop_version():
-            assert 0, "cannot register a guard that is not a CompileLoopVersionDescr"
-        assert isinstance(descr, CompileLoopVersionDescr)
         self.faildescrs.append(descr)
         # note: stitching a guard must resemble the order of the label
         # otherwise a wrong mapping is handed to the register allocator
@@ -909,9 +884,28 @@ class TreeLoop(object):
         return None
 
     def snapshot(self):
-        version = LoopVersion(self)
+        oplist = self.copy_operations(self.operations)
+        version = LoopVersion(oplist)
+        version.setup_once()
         self.versions.append(version)
         return version
+
+    def copy_operations(self, operations):
+        ignore = (rop.DEBUG_MERGE_POINT,)
+        oplist = []
+        for op in operations:
+            if op.getopnum() in ignore:
+                continue
+            cloned = op.clone()
+            oplist.append(cloned)
+            if cloned.is_guard():
+                olddescr = cloned.getdescr()
+                if not olddescr:
+                    continue
+                descr = olddescr.clone()
+                cloned.setdescr(descr)
+        return oplist
+
 
     def get_display_text(self):    # for graphpage.py
         return self.name + '\n' + repr(self.inputargs)
