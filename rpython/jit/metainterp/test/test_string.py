@@ -958,3 +958,18 @@ class TestLLtypeUnicode(TestLLtype):
         self.meta_interp(f, [])
         self.check_simple_loop({"int_add": 1, "int_lt": 1, "guard_true": 1,
                                 'jump': 1})
+
+    def test_string_hash_2(self):
+        from rpython.rlib.objectmodel import compute_hash
+
+        jitdriver = JitDriver(greens=[], reds=['x', 'z', 'u'])
+        def f(x):
+            z = 0
+            u = 0
+            while z < 10:
+                jitdriver.jit_merge_point(x=x, z=z, u=u)
+                s = "abcdefghij"[:z]
+                u = compute_hash(s)
+                z += 1
+            return u
+        self.meta_interp(f, [42])

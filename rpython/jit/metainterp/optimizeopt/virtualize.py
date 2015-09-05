@@ -669,15 +669,20 @@ class OptVirtualize(optimizer.Optimization):
 
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.getarg(0))
+        # The only interesting cases are if 'value' is an instance of
+        # AbstractVirtualStructValue.  It might not be virtual even then,
+        # but we need to check first---otherwise we can crash on
+        # getfield_gc(some_string, 'hash').
+        maybe_virtual = isinstance(value, AbstractVirtualStructValue)
         # If this is an immutable field (as indicated by op.is_always_pure())
         # then it's safe to reuse the virtual's field, even if it has been
         # forced, because it should never be written to again.
-        if value.is_forced_virtual() and op.is_always_pure():
+        if maybe_virtual and value.is_forced_virtual() and op.is_always_pure():
             fieldvalue = value.getfield(op.getdescr(), None)
             if fieldvalue is not None:
                 self.make_equal_to(op.result, fieldvalue)
                 return
-        if value.is_virtual():
+        if maybe_virtual and value.is_virtual():
             assert isinstance(value, AbstractVirtualValue)
             fieldvalue = value.getfield(op.getdescr(), None)
             if fieldvalue is None:
