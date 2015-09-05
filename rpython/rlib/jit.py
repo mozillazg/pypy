@@ -1106,67 +1106,64 @@ class Entry(ExtRegistryEntry):
         return hop.genop('jit_record_known_class', [v_inst, v_cls],
                          resulttype=lltype.Void)
 
-def _jit_conditional_call(condition, function, *args):
-    pass
 
-@specialize.call_location()
-def conditional_call(condition, function, *args):
+def conditional_call(condition, function, *args, **kwds):
+    default = kwds.pop('default', None)
+    assert not kwds
+    if condition:
+        return function(*args)
+    return default
+
+def _ll_cond_call(condition, ll_default, ll_function, *ll_args):
     if we_are_jitted():
-        _jit_conditional_call(condition, function, *args)
+        from rpython.rtyper.lltypesystem import lltype
+        from rpython.rtyper.lltypesystem.lloperation import llop
+        RESTYPE = lltype.typeOf(ll_default)
+        return llop.jit_conditional_call(RESTYPE, condition, ll_default,
+                                         ll_function, *ll_args)
     else:
         if condition:
-            return function(*args)
-conditional_call._always_inline_ = True
+            return ll_function(*ll_args)
+        return ll_default
+_ll_cond_call._always_inline_ = True
 
 class ConditionalCallEntry(ExtRegistryEntry):
-    _about_ = _jit_conditional_call
+    _about_ = conditional_call
 
-    def compute_result_annotation(self, *args_s):
-        self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
-                                         args_s[1], args_s[2:])
+    def compute_result_annotation(self, *args_s, **kwds_s):
+        from rpython.annotator import model as annmodel
 
-    def specialize_call(self, hop):
+        s_res = self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
+                                                 args_s[1], args_s[2:])
+        if 's_default' in kwds_s:
+            assert kwds_s.keys() == ['s_default']
+            return annmodel.unionof(s_res, kwds_s['s_default'])
+        else:
+            assert not kwds_s
+            return None
+
+    def specialize_call(self, hop, i_default=None):
         from rpython.rtyper.lltypesystem import lltype
 
-        args_v = hop.inputargs(lltype.Bool, lltype.Void, *hop.args_r[2:])
+        end = len(hop.args_r) - (i_default is not None)
+        inputargs = [lltype.Bool, lltype.Void] + hop.args_r[2:end]
+        if i_default is not None:
+            assert i_default == end
+            inputargs.append(hop.r_result)
+
+        args_v = hop.inputargs(*inputargs)
         args_v[1] = hop.args_r[1].get_concrete_llfn(hop.args_s[1],
-                                                    hop.args_s[2:], hop.spaceop)
+                                                    hop.args_s[2:end],
+                                                    hop.spaceop)
+        if i_default is not None:
+            v_default = args_v.pop()
+        else:
+            v_default = hop.inputconst(lltype.Void, None)
+        args_v.insert(1, v_default)
+
         hop.exception_is_here()
-        return hop.genop('jit_conditional_call', args_v)
+        return hop.gendirectcall(_ll_cond_call, *args_v)
 
-def _jit_conditional_call_value(condition, function, default_value, *args):
-    return default_value
-
-@specialize.call_location()
-def conditional_call_value(condition, function, default_value, *args):
-    if we_are_jitted():
-        return _jit_conditional_call_value(condition, function, default_value,
-                                           *args)
-    else:
-        if condition:
-            return function(*args)
-        return default_value
-conditional_call._always_inline_ = True
-
-class ConditionalCallValueEntry(ExtRegistryEntry):
-    _about_ = _jit_conditional_call_value
-
-    def compute_result_annotation(self, *args_s):
-        s_result = self.bookkeeper.emulate_pbc_call(
-            self.bookkeeper.position_key, args_s[1], args_s[3:],
-            callback = self.bookkeeper.position_key)
-        return s_result
-
-    def specialize_call(self, hop):
-        from rpython.rtyper.lltypesystem import lltype
-
-        args_v = hop.inputargs(lltype.Bool, lltype.Void, *hop.args_r[2:])
-        args_v[1] = hop.args_r[1].get_concrete_llfn(hop.args_s[1],
-                                                    hop.args_s[3:], hop.spaceop)
-        hop.exception_is_here()
-        resulttype = hop.r_result
-        return hop.genop('jit_conditional_call_value', args_v,
-                         resulttype=resulttype)
 
 class Counters(object):
     counters="""

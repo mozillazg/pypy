@@ -548,9 +548,6 @@ class LLFrame(object):
     def op_jit_conditional_call(self, *args):
         raise NotImplementedError("should not be called while not jitted")
 
-    def op_jit_conditional_call_value(self, *args):
-        raise NotImplementedError("should not be called while not jitted")
-
     def op_get_exception_addr(self, *args):
         raise NotImplementedError
 

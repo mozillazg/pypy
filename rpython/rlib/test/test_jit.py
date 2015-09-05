@@ -300,3 +300,38 @@ class TestJIT(BaseRtypingTest):
         mix = MixLevelHelperAnnotator(t.rtyper)
         mix.getgraph(later, [annmodel.s_Bool], annmodel.s_None)
         mix.finish()
+
+    def test_conditional_call_value(self):
+        def g(m):
+            return m + 42
+        def f(n, m):
+            return conditional_call(n >= 0, g, m, default=678)
+
+        res = self.interpret(f, [10, 20])
+        assert res == 20 + 42
+        res = self.interpret(f, [-10, 20])
+        assert res == 678
+
+    def test_conditional_call_void(self):
+        class X:
+            pass
+        glob = X()
+        #
+        def g(m):
+            glob.x += m
+        #
+        def h():
+            glob.x += 2
+        #
+        def f(n, m):
+            glob.x = 0
+            conditional_call(n >= 0, g, m)
+            conditional_call(n >= 5, h)
+            return glob.x
+
+        res = self.interpret(f, [10, 20])
+        assert res == 22
+        res = self.interpret(f, [2, 20])
+        assert res == 20
+        res = self.interpret(f, [-2, 20])
+        assert res == 0

@@ -374,7 +374,8 @@ class LLHelpers(AbstractLLHelpers):
         if not s:
             return 0
         x = s.hash
-        return jit.conditional_call_value(x == 0, LLHelpers._ll_strhash, x, s)
+        return jit.conditional_call(x == 0, LLHelpers._ll_strhash, s,
+                                    default=x)
 
     @staticmethod
     def ll_length(s):
