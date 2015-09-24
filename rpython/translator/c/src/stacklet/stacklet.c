@@ -34,15 +34,19 @@
 /************************************************************/
 
 struct stacklet_s {
-    /* The portion of the real stack claimed by this paused tealet. */
+    /* The portion of the real stack claimed by this paused stacklet. */
     char *stack_start;                /* the "near" end of the stack */
     char *stack_stop;                 /* the "far" end of the stack */
+
+    char *shadow_stack_start;         /* the "near" end of the shadow stack */
+    char *shadow_stack_stop;          /* the "far" end of the shadow stack */
 
     /* The amount that has been saved away so far, just after this struct.
      * There is enough allocated space for 'stack_stop - stack_start'
      * bytes.
      */
     ptrdiff_t stack_saved;            /* the amount saved */
+    ptrdiff_t shadow_stack_saved;
 
     /* Internally, some stacklets are arranged in a list, to handle lazy
      * saving of stacks: if the stacklet has a partially unsaved stack,
@@ -65,13 +69,16 @@ struct stacklet_thread_s {
     struct stacklet_s *g_stack_chain_head;  /* NULL <=> running main */
     char *g_current_stack_stop;
     char *g_current_stack_marker;
+    char *g_current_shadow_stack_stop;      /* oldest, i.e. smallest address */
+    char *g_current_shadow_stack_marker;
     struct stacklet_s *g_source;
     struct stacklet_s *g_target;
+    char **g_shadow_stack_ref;
 };
 
 /***************************************************************/
 
-static void g_save(struct stacklet_s* g, char* stop
+static void g_save(struct stacklet_s* g, char* stop, char *shadow_stop
 #ifdef DEBUG_DUMP
                    , int overwrite_stack_for_debug
 #endif
@@ -93,10 +100,12 @@ static void g_save(struct stacklet_s* g, char* stop
                      |        |         |xxxxxxx|
       g->stack_start |        |         |_______| g+1
 
+       ("g+1" because it is immediately after the struct "*g" in memory)
      */
     ptrdiff_t sz1 = g->stack_saved;
     ptrdiff_t sz2 = stop - g->stack_start;
     assert(stop <= g->stack_stop);
+    /* i.e. sz2 <= g->stack_stop - g->stack_start */
 
     if (sz2 > sz1) {
         char *c = (char *)(g + 1);
@@ -111,6 +120,31 @@ static void g_save(struct stacklet_s* g, char* stop
 #endif
         g->stack_saved = sz2;
     }
+
+    /* Shadow stack: very similar code, but in the opposite order.
+       The shadow stack grows towards higher addresses.
+
+       g->shadow_stack_start                    _______  end
+                            |        |         |xxxxxxx|
+                            |        |         |xxxxxxx|
+                            |________|         |_______|
+                            |xxxxxxxx|    ==>  :       :
+                            |xxx __ stop       .........
+                            |xxxxxxxx|
+       g->shadow_stack_stop |________|
+    */
+    sz1 = g->shadow_stack_saved;
+    sz2 = g->shadow_stack_start - shadow_stop;
+    assert(shadow_stop >= g->shadow_stack_stop);
+    /* i.e. sz2 <= g->shadow_stack_start - g->shadow_stack_stop */
+
+    if (sz2 > sz1) {
+        char *end = ((char *)(g + 1)) +
+                    (g->stack_stop - g->stack_start) +
+                    (g->shadow_stack_start - g->shadow_stack_stop);
+        memcpy(end - sz2, shadow_stop, sz2 - sz1);
+        g->shadow_stack_saved = sz2;
+    }
 }
 
 /* Allocate and store in 'g_source' a new stacklet, which has the C
@@ -124,6 +158,10 @@ static int g_allocate_source_stacklet(void *old_stack_pointer,
     struct stacklet_s *stacklet;
     ptrdiff_t stack_size = (thrd->g_current_stack_stop -
                             (char *)old_stack_pointer);
+    if (thrd->g_shadow_stack_ref != NULL) {
+        stack_size += (*thrd->g_shadow_stack_ref -
+                       thrd->g_current_shadow_stack_stop);
+    }
 
     thrd->g_source = malloc(sizeof(struct stacklet_s) + stack_size);
     if (thrd->g_source == NULL)
@@ -133,6 +171,15 @@ static int g_allocate_source_stacklet(void *old_stack_pointer,
     stacklet->stack_start = old_stack_pointer;
     stacklet->stack_stop  = thrd->g_current_stack_stop;
     stacklet->stack_saved = 0;
+    if (thrd->g_shadow_stack_ref != NULL) {
+        stacklet->shadow_stack_start = *thrd->g_shadow_stack_ref;
+        stacklet->shadow_stack_stop  = thrd->g_current_shadow_stack_stop;
+    }
+    else {
+        stacklet->shadow_stack_start = NULL;
+        stacklet->shadow_stack_stop  = NULL;
+    }
+    stacklet->shadow_stack_saved = 0;
     stacklet->stack_prev  = thrd->g_stack_chain_head;
     stacklet->stack_thrd  = thrd;
     thrd->g_stack_chain_head = stacklet;
@@ -140,14 +187,18 @@ static int g_allocate_source_stacklet(void *old_stack_pointer,
 }
 
 /* Save more of the C stack away, up to 'target_stop'.
+
+   Note that this is driven by the C stack; it is assumed that the
+   shadowstack cannot grow without the C stack also growing.
  */
 static void g_clear_stack(struct stacklet_s *g_target,
                           struct stacklet_thread_s *thrd)
 {
     struct stacklet_s *current = thrd->g_stack_chain_head;
     char *target_stop = g_target->stack_stop;
+    char *shadow_target_stop = g_target->shadow_stack_stop;
 
-    /* save and unlink tealets that are completely within
+    /* save and unlink stacklets that are completely within
        the area to clear. */
     while (current != NULL && current->stack_stop <= target_stop) {
         struct stacklet_s *prev = current->stack_prev;
@@ -155,7 +206,7 @@ static void g_clear_stack(struct stacklet_s *g_target,
         if (current != g_target) {
             /* don't bother saving away g_target, because
                it would be immediately restored */
-            g_save(current, current->stack_stop
+            g_save(current, current->stack_stop, current->shadow_stack_stop
 #ifdef DEBUG_DUMP
                    , 1
 #endif
@@ -166,7 +217,7 @@ static void g_clear_stack(struct stacklet_s *g_target,
 
     /* save a partial stack */
     if (current != NULL && current->stack_start < target_stop)
-        g_save(current, target_stop
+        g_save(current, target_stop, shadow_target_stop
 #ifdef DEBUG_DUMP
                , 1
 #endif
@@ -185,6 +236,8 @@ static void *g_save_state(void *old_stack_pointer, void *rawthrd)
     if (g_allocate_source_stacklet(old_stack_pointer, thrd) < 0)
         return NULL;
     g_clear_stack(thrd->g_target, thrd);
+    if (thrd->g_shadow_stack_ref != NULL)
+        *thrd->g_shadow_stack_ref = thrd->g_target->shadow_stack_start;
     return thrd->g_target->stack_start;
 }
 
@@ -195,7 +248,8 @@ static void *g_initial_save_state(void *old_stack_pointer, void *rawthrd)
 {
     struct stacklet_thread_s *thrd = (struct stacklet_thread_s *)rawthrd;
     if (g_allocate_source_stacklet(old_stack_pointer, thrd) == 0)
-        g_save(thrd->g_source, thrd->g_current_stack_marker
+        g_save(thrd->g_source, thrd->g_current_stack_marker,
+               thrd->g_current_shadow_stack_marker
 #ifdef DEBUG_DUMP
                , 0
 #endif
@@ -210,6 +264,8 @@ static void *g_destroy_state(void *old_stack_pointer, void *rawthrd)
     struct stacklet_thread_s *thrd = (struct stacklet_thread_s *)rawthrd;
     thrd->g_source = EMPTY_STACKLET_HANDLE;
     g_clear_stack(thrd->g_target, thrd);
+    if (thrd->g_shadow_stack_ref != NULL)
+        *thrd->g_shadow_stack_ref = thrd->g_target->shadow_stack_start;
     return thrd->g_target->stack_start;
 }
 
@@ -222,6 +278,7 @@ static void *g_restore_state(void *new_stack_pointer, void *rawthrd)
     struct stacklet_thread_s *thrd = (struct stacklet_thread_s *)rawthrd;
     struct stacklet_s *g = thrd->g_target;
     ptrdiff_t stack_saved = g->stack_saved;
+    ptrdiff_t shadow_stack_saved;
 
     assert(new_stack_pointer == g->stack_start);
 #if STACK_DIRECTION == 0
@@ -229,7 +286,20 @@ static void *g_restore_state(void *new_stack_pointer, void *rawthrd)
 #else
     memcpy(g->stack_start - stack_saved, g+1, stack_saved);
 #endif
+
+    shadow_stack_saved = g->shadow_stack_saved;
+    if (shadow_stack_saved > 0) {
+        char *end = ((char *)(g + 1)) +
+                    (g->stack_stop - g->stack_start) +
+                    (g->shadow_stack_start - g->shadow_stack_stop);
+        memcpy(g->shadow_stack_start - shadow_stack_saved,
+               end - shadow_stack_saved,
+               shadow_stack_saved);
+    }
+
     thrd->g_current_stack_stop = g->stack_stop;
+    thrd->g_current_shadow_stack_stop = g->shadow_stack_stop;
+
     free(g);
     return EMPTY_STACKLET_HANDLE;
 }
@@ -247,6 +317,7 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
         /* First time it returns.  Only g_initial_save_state() has run
            and has created 'g_source'.  Call run(). */
         thrd->g_current_stack_stop = thrd->g_current_stack_marker;
+        thrd->g_current_shadow_stack_stop = thrd->g_current_shadow_stack_marker;
         result = run(thrd->g_source, run_arg);
 
         /* Then switch to 'result'. */
@@ -261,7 +332,7 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
 
 /************************************************************/
 
-stacklet_thread_handle stacklet_newthread(void)
+stacklet_thread_handle stacklet_newthread_shadowstack(void **shadow_stack_ref)
 {
     struct stacklet_thread_s *thrd;
 
@@ -273,9 +344,16 @@ stacklet_thread_handle stacklet_newthread(void)
     }
 
     thrd = malloc(sizeof(struct stacklet_thread_s));
-    if (thrd != NULL)
+    if (thrd != NULL) {
         memset(thrd, 0, sizeof(struct stacklet_thread_s));
+        thrd->g_shadow_stack_ref = (char **)shadow_stack_ref;
+    }
     return thrd;
+}
+
+stacklet_thread_handle stacklet_newthread(void)
+{
+    return stacklet_newthread_shadowstack(NULL);
 }
 
 void stacklet_deletethread(stacklet_thread_handle thrd)
@@ -292,6 +370,16 @@ stacklet_handle stacklet_new(stacklet_thread_handle thrd,
         thrd->g_current_stack_stop = ((char *)&stackmarker) + 1;
 
     thrd->g_current_stack_marker = (char *)&stackmarker;
+
+    if (thrd->g_shadow_stack_ref != NULL) {
+        char *shadowstackmarker = *thrd->g_shadow_stack_ref;
+        assert(shadowstackmarker != NULL);
+        if (thrd->g_current_shadow_stack_stop == NULL ||
+                thrd->g_current_shadow_stack_stop > shadowstackmarker)
+            thrd->g_current_shadow_stack_stop = shadowstackmarker;
+        thrd->g_current_shadow_stack_marker = shadowstackmarker;
+    }
+
     _stacklet_initialstub(thrd, run, run_arg);
     return thrd->g_source;
 }
@@ -302,6 +390,14 @@ stacklet_handle stacklet_switch(stacklet_handle target)
     stacklet_thread_handle thrd = target->stack_thrd;
     if (thrd->g_current_stack_stop <= (char *)&stackmarker)
         thrd->g_current_stack_stop = ((char *)&stackmarker) + 1;
+
+    if (thrd->g_shadow_stack_ref != NULL) {
+        char *shadowstackmarker = *thrd->g_shadow_stack_ref;
+        assert(shadowstackmarker != NULL);
+        assert(thrd->g_current_shadow_stack_stop != NULL);
+        if (thrd->g_current_shadow_stack_stop > shadowstackmarker)
+            thrd->g_current_shadow_stack_stop = shadowstackmarker;
+    }
 
     thrd->g_target = target;
     _stacklet_switchstack(g_save_state, g_restore_state, thrd);
@@ -342,6 +438,32 @@ char **_stacklet_translate_pointer(stacklet_handle context, char **ptr)
   }
   if (((unsigned long)delta) >=
       (unsigned long)(context->stack_stop - context->stack_start)) {
+      /* out-of-stack pointer!  it's only ok if we are the main stacklet
+         and we are reading past the end, because the main stacklet's
+         stack stop is not exactly known. */
+      assert(delta >= 0);
+      assert(((long)context->stack_stop) & 1);
+  }
+  return ptr;
+}
+
+char **_stacklet_translate_shadow_pointer(stacklet_handle context, char **ptr)
+{
+  char *p = (char *)ptr;
+  long delta;
+  if (context == NULL)
+    return ptr;
+  delta = context->shadow_stack_start - p;
+  if (((unsigned long)(delta - 1)) <
+                         ((unsigned long)context->shadow_stack_saved)) {
+      /* a pointer to a saved away word */
+      char *end = ((char *)(context + 1)) +
+                  (context->stack_stop - context->stack_start) +
+                  (context->shadow_stack_start - context->shadow_stack_stop);
+      return (char **)(end - delta);
+  }
+  if (((unsigned long)delta) > (unsigned long)(context->shadow_stack_start -
+                                               context->shadow_stack_stop)) {
       /* out-of-stack pointer!  it's only ok if we are the main stacklet
          and we are reading past the end, because the main stacklet's
          stack stop is not exactly known. */

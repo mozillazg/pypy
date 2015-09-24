@@ -625,6 +625,126 @@ void test_two_mains(void)
   tealet_delete(g_sub2);
 }
 #endif
+
+static long my_shadowstack[10];
+static long *shadowstack_top = my_shadowstack;
+
+static void trash_more_shadowstack(void)
+{
+    *shadowstack_top++ = 42;
+    *shadowstack_top++ = 43;
+    *shadowstack_top++ = 44;
+    shadowstack_top -= 3;
+}
+
+stacklet_handle switchbackonce_callback_shadow_1(stacklet_handle h, void *arg)
+{
+    assert(arg == (void *)123);
+    assert(status == 0);
+    status = 1;
+    assert(h != EMPTY_STACKLET_HANDLE);
+
+    assert(shadowstack_top == my_shadowstack + 1);
+    *shadowstack_top++ = 1001;
+    *shadowstack_top++ = 1002;
+    trash_more_shadowstack();
+
+    h = stacklet_switch(h);
+    assert(status == 4);
+    assert(h != EMPTY_STACKLET_HANDLE);
+    status = 5;
+
+    assert(shadowstack_top == my_shadowstack + 3);
+    assert(my_shadowstack[1] == 1001);
+    assert(my_shadowstack[2] == 1002);
+    trash_more_shadowstack();
+    shadowstack_top -= 2;
+
+    return h;
+}
+
+stacklet_handle switchbackonce_callback_shadow_2(stacklet_handle h, void *arg)
+{
+    assert(arg == (void *)456);
+    assert(status == 2);
+    status = 3;
+    assert(h != EMPTY_STACKLET_HANDLE);
+
+    assert(shadowstack_top == my_shadowstack + 2);
+    *shadowstack_top++ = 2002;
+    *shadowstack_top++ = 2003;
+    trash_more_shadowstack();
+
+    h = stacklet_switch(h);
+    assert(status == 5);
+    assert(h != EMPTY_STACKLET_HANDLE);
+    status = 6;
+
+    assert(shadowstack_top == my_shadowstack + 4);
+    assert(my_shadowstack[2] == 2002);
+    assert(my_shadowstack[3] == 2003);
+    trash_more_shadowstack();
+    shadowstack_top -= 2;
+
+    return h;
+}
+
+void test_shadowstack(void)
+{
+    status = 0;
+    shadowstack_top = my_shadowstack;
+    *shadowstack_top++ = 500;
+    trash_more_shadowstack();
+
+    stacklet_handle h = stacklet_new(thrd, switchbackonce_callback_shadow_1,
+                                     (void *)123);
+    assert(h != EMPTY_STACKLET_HANDLE);
+    assert(status == 1);
+    status = 2;
+
+    assert(shadowstack_top == my_shadowstack + 1);
+    assert(my_shadowstack[0] == 500);
+    *shadowstack_top++ = 501;
+    trash_more_shadowstack();
+
+    stacklet_handle h2 = stacklet_new(thrd, switchbackonce_callback_shadow_2,
+                                      (void *)456);
+    assert(h2 != EMPTY_STACKLET_HANDLE);
+    assert(status == 3);
+    status = 4;
+
+    assert(shadowstack_top == my_shadowstack + 2);
+    assert(my_shadowstack[0] == 500);
+    assert(my_shadowstack[1] == 501);
+    *shadowstack_top++ = 502;
+    *shadowstack_top++ = 503;
+    trash_more_shadowstack();
+
+    h = stacklet_switch(h);
+    assert(status == 5);
+    assert(h == EMPTY_STACKLET_HANDLE);
+
+    assert(shadowstack_top == my_shadowstack + 4);
+    assert(my_shadowstack[0] == 500);
+    assert(my_shadowstack[1] == 501);
+    assert(my_shadowstack[2] == 502);
+    assert(my_shadowstack[3] == 503);
+    *shadowstack_top++ = 504;
+    trash_more_shadowstack();
+
+    h2 = stacklet_switch(h2);
+    assert(status == 6);
+    assert(h2 == EMPTY_STACKLET_HANDLE);
+
+    assert(shadowstack_top == my_shadowstack + 5);
+    assert(my_shadowstack[0] == 500);
+    assert(my_shadowstack[1] == 501);
+    assert(my_shadowstack[2] == 502);
+    assert(my_shadowstack[3] == 503);
+    assert(my_shadowstack[4] == 504);
+    shadowstack_top -= 5;
+}
+
 /************************************************************/
 
 #define TEST(name)   { name, #name }
@@ -649,6 +769,7 @@ static test_t test_list[] = {
   TEST(test_double),
   TEST(test_random),
 #endif
+  TEST(test_shadowstack),
   { NULL, NULL }
 };
 
@@ -659,7 +780,7 @@ int main(int argc, char **argv)
   if (argc > 1)
     srand(atoi(argv[1]));
 
-  thrd = stacklet_newthread();
+  thrd = stacklet_newthread_shadowstack((void **)&shadowstack_top);
   for (tst=test_list; tst->runtest; tst++)
     {
       printf("+++ Running %s... +++\n", tst->name);

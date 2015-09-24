@@ -19,10 +19,20 @@ typedef struct stacklet_s *stacklet_handle;
 
 
 /* Multithread support.
+
+   Shadowstack support: if the rest of the program manages some
+   "shadowstack" data, which grows and shrinks in parallel with the C
+   stack, then it needs support here to save and restore parts of it
+   in parallel to the real stack.  To do that, pass in the arguments
+   called "shadow_stack_ref" a pointer to the current shadowstack
+   pointer.  It is assumed to grow towards higher addresses.  Pass NULL
+   if you don't need this.
  */
 typedef struct stacklet_thread_s *stacklet_thread_handle;
 
 RPY_EXTERN stacklet_thread_handle stacklet_newthread(void);
+RPY_EXTERN stacklet_thread_handle stacklet_newthread_shadowstack(
+                                                     void **shadow_stack_ref);
 RPY_EXTERN void stacklet_deletethread(stacklet_thread_handle thrd);
 
 
@@ -59,5 +69,7 @@ RPY_EXTERN void stacklet_destroy(stacklet_handle target);
  */
 RPY_EXTERN
 char **_stacklet_translate_pointer(stacklet_handle context, char **ptr);
+RPY_EXTERN
+char **_stacklet_translate_shadow_pointer(stacklet_handle context, char **ptr);
 
 #endif /* _STACKLET_H_ */
