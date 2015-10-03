@@ -2046,7 +2046,9 @@ class MetaInterp(object):
         else:
             guard_op = self.history.record(opnum, moreargs, None)            
         assert isinstance(guard_op, GuardResOp)
-        self.capture_resumedata(guard_op, resumepc)
+        if not self.history.last_guard_valid:
+            self.capture_resumedata(guard_op, resumepc)
+            self.history.last_guard_valid = True
         self.staticdata.profiler.count_ops(opnum, Counters.GUARDS)
         # count
         self.attach_debug_info(guard_op)

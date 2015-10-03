@@ -322,6 +322,21 @@ class AbstractResOp(AbstractResOpOrInputArg):
     def forget_value(self):
         pass
 
+    def can_invalidate_guard_operation(self):
+        if ((self.has_no_side_effect() or self.is_guard() or self.is_jit_debug() or
+             self.is_ovf()) and not self.is_call_pure_pure_canraise()):
+            return False
+        return True
+
+    def is_call_pure_pure_canraise(self):
+        if not self.is_call_pure():
+            return False
+        effectinfo = self.getdescr().get_extra_info()
+        if effectinfo.check_can_raise(ignore_memoryerror=True):
+            return True
+        return False
+        
+
 
 # ===================
 # Top of the hierachy

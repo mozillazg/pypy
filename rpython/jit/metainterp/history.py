@@ -615,10 +615,13 @@ class History(object):
     def __init__(self):
         self.inputargs = None
         self.operations = []
+        self.last_guard_valid = False
 
     @specialize.argtype(3)
     def record(self, opnum, argboxes, value, descr=None):
         op = ResOperation(opnum, argboxes, descr)
+        if op.can_invalidate_guard_operation():
+            self.last_guard_valid = False
         if value is None:
             assert op.type == 'v'
         elif isinstance(value, bool):

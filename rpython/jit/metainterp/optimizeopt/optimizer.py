@@ -581,8 +581,7 @@ class Optimizer(Optimization):
                 op = self.emit_guard_operation(op, pendingfields)
         elif op.can_raise():
             self.exception_might_have_happened = True
-        if ((op.has_no_side_effect() or op.is_guard() or op.is_jit_debug() or
-             op.is_ovf()) and not self.is_call_pure_pure_canraise(op)):
+        if not op.can_invalidate_guard_operation():
             pass
         else:
             self._last_guard_op = None
@@ -648,14 +647,6 @@ class Optimizer(Optimization):
 
     def getlastop(self):
         return self._really_emitted_operation
-
-    def is_call_pure_pure_canraise(self, op):
-        if not op.is_call_pure():
-            return False
-        effectinfo = op.getdescr().get_extra_info()
-        if effectinfo.check_can_raise(ignore_memoryerror=True):
-            return True
-        return False
 
     def replace_guard_op(self, old_op_pos, new_op):
         old_op = self._newoperations[old_op_pos]
