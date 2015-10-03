@@ -417,8 +417,9 @@ class ResumeDataVirtualAdder(VirtualVisitor):
             self.register_box(box)
             self.register_box(fieldbox)
             info = optimizer.getptrinfo(fieldbox)
-            assert info is not None and info.is_virtual()
-            info.visitor_walk_recursive(fieldbox, self, optimizer)
+            #assert info is not None and info.is_virtual()
+            if info and info.is_virtual():
+                info.visitor_walk_recursive(fieldbox, self, optimizer)
 
         self._number_virtuals(liveboxes, optimizer, v)
         self._add_pending_fields(optimizer, pending_setfields)

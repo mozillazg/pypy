@@ -469,10 +469,10 @@ class OptHeap(Optimization):
             if op is None:
                 continue
             val = op.getarg(1)
-            if self.optimizer.is_virtual(val):
-                pendingfields.append(op)
-                continue
-            cf.force_lazy_setfield(self, descr)
+            #if self.optimizer.is_virtual(val):
+            pendingfields.append(op)
+            #    continue
+            #cf.force_lazy_setfield(self, descr)
         for descr, submap in self.cached_arrayitems.iteritems():
             for index, cf in submap.iteritems():
                 op = cf._lazy_setfield
