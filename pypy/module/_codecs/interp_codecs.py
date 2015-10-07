@@ -163,6 +163,11 @@ def _lookup_codec_loop(space, encoding, normalized_encoding):
     state = space.fromcache(CodecState)
     if state.codec_need_encodings:
         # registers new codecs.
+        # First, a check that we're not called very early---if we are,
+        # then after translation the code in app_main doesn't have a
+        # chance to set up the path to the stdlib.
+        if not we_are_translated():
+            assert space._basic_startup_done
         # This import uses the "builtin" import method, and is needed
         # to bootstrap the full importlib module.
         w_import = space.getattr(space.builtin, space.wrap("__import__"))

@@ -420,6 +420,7 @@ class ObjSpace(object):
                 raise
             if isinstance(w_mod, Module) and not w_mod.startup_called:
                 w_mod.init(self)
+        self._basic_startup_done = True
 
     def finish(self):
         self.wait_for_thread_shutdown()
