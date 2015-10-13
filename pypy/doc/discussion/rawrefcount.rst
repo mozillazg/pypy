@@ -22,7 +22,7 @@ rawrefcount_create_link_to_pypy(p, ob)
 
     Makes a link from an existing PyObject structure 'ob' to a newly
     allocated W_CPyExtPlaceHolderObject 'p'.  The 'p' should have a
-    back reference field pointing to 'ob'.  This also adds
+    back-reference field pointing to 'ob'.  This also adds
     REFCNT_FROM_PYPY_OBJECT to ob->ob_refcnt.
 
 rawrefcount_from_obj(p)
@@ -96,3 +96,18 @@ new entry when the object moves.  As a result it can contain some
 extra garbage entries after some minor collections.  It is cleaned up
 by being rebuilt at the next major collection.  We never walk all
 items of that dict; we only walk the two explicit P lists.
+
+
+Further notes
+-------------
+
+For small immutable types like <int> and <float>, we can actually
+create a PyIntObject as a complete copy of the W_IntObject whenever
+asked, and not record any link.  Is it cheaper?  Unclear.
+
+A few special types need to be reflected both as PyPy objects and
+PyObjects.  For now we assume that these are large and mostly
+immutable, like <type> objects.  They should be linked in the O list,
+and we'll ignore the issues of deallocation ordering for them.  (Also,
+W_TypeObject can have a back-reference field like
+W_CPyExtPlaceHolderObject.)
