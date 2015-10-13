@@ -39,7 +39,7 @@ rawrefcount_to_obj(ob)
 Collection logic
 ----------------
 
-Objects exising purely on the C side have ob->ob_from_pypy == NULL;
+Objects existing purely on the C side have ob->ob_from_pypy == NULL;
 these are purely reference counted.  On the other hand, if
 ob->ob_from_pypy != NULL, then ob->ob_refcnt is at least
 REFCNT_FROM_PYPY_OBJECT and the object is part of a "link".
@@ -79,3 +79,20 @@ Afterwards, the O links are handled like this:
             ob->ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
             if ob->ob_refcnt == 0:
                 invoke _Py_Dealloc(ob) later, outside the GC
+
+
+GC Implementation
+-----------------
+
+We need two P lists and two O lists, for young or old objects.  All
+four lists can actually be linked lists of 'ob', using yet another
+field 'ob_pypy_next'; or they can be regular AddressLists (unsure
+about the overhead of this extra field for all PyObjects -- even ones
+not linked to PyPy objects).
+
+We also need an AddressDict mapping 'p' to 'ob' for all links in the P
+list.  This dict contains both young and old 'p'; we simply write a
+new entry when the object moves.  As a result it can contain some
+extra garbage entries after some minor collections.  It is cleaned up
+by being rebuilt at the next major collection.  We never walk all
+items of that dict; we only walk the two explicit P lists.
