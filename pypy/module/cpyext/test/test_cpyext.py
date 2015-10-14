@@ -92,6 +92,7 @@ def compile_extension_module(space, modname, **kwds):
     return str(pydname)
 
 def freeze_refcnts(self):
+    ZZZ
     state = self.space.fromcache(RefcountState)
     self.frozen_refcounts = {}
     for w_obj, obj in state.py_objects_w2r.iteritems():

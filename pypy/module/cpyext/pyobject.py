@@ -1,16 +1,16 @@
 import sys
 
 from pypy.interpreter.baseobjspace import W_Root, SpaceCache
-from rpython.rtyper.lltypesystem import rffi, lltype
+from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from pypy.module.cpyext.api import (
     cpython_api, bootstrap_function, PyObject, PyObjectP, ADDR,
-    CANNOT_FAIL, Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr)
+    CANNOT_FAIL, Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr, is_PyObject)
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.objspace.std.objectobject import W_ObjectObject
 from rpython.rlib.objectmodel import specialize, we_are_translated
-from rpython.rlib.rweakref import RWeakKeyDictionary
 from rpython.rtyper.annlowlevel import llhelper
+from rpython.rlib import rawrefcount
 
 #________________________________________________________
 # type description
@@ -136,6 +136,7 @@ def get_typedescr(typedef):
 
 class RefcountState:
     def __init__(self, space):
+        ZZZ
         self.space = space
         self.py_objects_w2r = {} # { w_obj -> raw PyObject }
         self.py_objects_r2w = {} # { addr of raw PyObject -> w_obj }
@@ -251,6 +252,7 @@ def create_ref(space, w_obj, itemcount=0):
     Allocates a PyObject, and fills its fields with info from the given
     intepreter object.
     """
+    ZZZ
     state = space.fromcache(RefcountState)
     w_type = space.type(w_obj)
     if w_type.is_cpytype():
@@ -270,6 +272,7 @@ def track_reference(space, py_obj, w_obj, replace=False):
     """
     Ties together a PyObject and an interpreter object.
     """
+    ZZZ
     # XXX looks like a PyObject_GC_TRACK
     ptr = rffi.cast(ADDR, py_obj)
     state = space.fromcache(RefcountState)
@@ -282,12 +285,62 @@ def track_reference(space, py_obj, w_obj, replace=False):
     if ptr: # init_typeobject() bootstraps with NULL references
         state.py_objects_r2w[ptr] = w_obj
 
-def make_ref(space, w_obj):
+
+NULL_GCREF = lltype.nullptr(llmemory.GCREF.TO)
+
+def _create_pyobj_from_w_obj(w_obj):
+    # XXX temp, needs cases
+    ob = lltype.malloc(PyObject, flavor='raw', track_allocation=False)
+    ob.ob_refcnt = 0
+    ob.ob_pypy_link = NULL_GCREF
+    rawrefcount.create_link_pypy(w_obj, ob)
+    return ob
+
+
+def as_pyobj(w_obj):
     """
-    Returns a new reference to an intepreter object.
+    Returns a 'PyObject *' representing the given intepreter object.
+    'None' is returned as a NULL.  This doesn't give a new reference, but
+    the returned 'PyObject *' is valid at least as long as 'w_obj' is.
     """
+    assert is_wrapped(w_obj)
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
+    #if isinstance(w_obj, W_CPyExtPlaceHolderObject):
+    #    xxx
+    ob = rawrefcount.from_obj(PyObject.TO, w_obj)
+    if not ob:
+        ob = _create_pyobj_from_w_obj(w_obj)
+    return ob
+as_pyobj._always_inline_ = True
+
+
+@specialize.ll()
+def from_ref(pyobj):
+    assert not is_wrapped(pyobj)
+    if not pyobj:
+        return None
+    pyobj = rffi.cast(PyObject, pyobj)
+    w_obj = rawrefcount.to_obj(W_Root, pyobj)
+    if w_obj is None:
+        w_obj = _create_w_obj_from_pyobj(pyobj)
+    return w_obj
+from_ref._always_inline_ = True
+
+
+def is_pyobj(x):
+    "NOT_RPYTHON"
+    if x is None or isinstance(x, W_Root):
+        return False
+    else:
+        assert is_PyObject(lltype.typeOf(x))
+        return True
+
+# ZZZ: use an ExtRegistryEntry to constant-fold is_pyobj()
+
+
+def make_ref(space, w_obj):
+    ZZZ
     assert isinstance(w_obj, W_Root)
     state = space.fromcache(RefcountState)
     try:
@@ -300,7 +353,7 @@ def make_ref(space, w_obj):
     return py_obj
 
 
-def from_ref(space, ref):
+def ZZZ_from_ref(space, ref):
     """
     Finds the interpreter object corresponding to the given reference.  If the
     object is not yet realized (see stringobject.py), creates it.
@@ -390,6 +443,7 @@ def _Py_Dealloc(space, obj):
 
 class PyOLifeline(object):
     def __init__(self, space, pyo):
+        ZZZ
         self.pyo = pyo
         self.space = space
 
@@ -408,6 +462,7 @@ def make_borrowed_ref(space, w_container, w_borrowed):
     Create a borrowed reference, which will live as long as the container
     has a living reference (as a PyObject!)
     """
+    ZZZ
     if w_borrowed is None:
         return lltype.nullptr(PyObject.TO)
 
@@ -416,6 +471,7 @@ def make_borrowed_ref(space, w_container, w_borrowed):
 
 class Reference:
     def __init__(self, pyobj):
+        ZZZ
         assert not isinstance(pyobj, W_Root)
         self.pyobj = pyobj
 
@@ -430,6 +486,7 @@ class BorrowPair(Reference):
     Delays the creation of a borrowed reference.
     """
     def __init__(self, w_container, w_borrowed):
+        ZZZ
         self.w_container = w_container
         self.w_borrowed = w_borrowed
 

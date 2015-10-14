@@ -286,75 +286,67 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
             @specialize.ll()
             def unwrapper(space, *args):
                 from pypy.module.cpyext.pyobject import Py_DecRef
-                from pypy.module.cpyext.pyobject import make_ref, from_ref
+                from pypy.module.cpyext.pyobject import as_pyobj, is_pyobj
                 from pypy.module.cpyext.pyobject import Reference
                 newargs = ()
-                to_decref = []
                 assert len(args) == len(api_function.argtypes)
                 for i, (ARG, is_wrapped) in types_names_enum_ui:
                     input_arg = args[i]
                     if is_PyObject(ARG) and not is_wrapped:
-                        # build a reference
-                        if input_arg is None:
-                            arg = lltype.nullptr(PyObject.TO)
-                        elif isinstance(input_arg, W_Root):
-                            ref = make_ref(space, input_arg)
-                            to_decref.append(ref)
-                            arg = rffi.cast(ARG, ref)
-                        else:
-                            arg = input_arg
+                        # build a 'PyObject *' (not holding a reference)
+                        if not is_pyobj(input_arg):
+                            input_arg = as_pyobj(input_arg)
+                        arg = rffi.cast(ARG, input_arg)
                     elif is_PyObject(ARG) and is_wrapped:
                         # convert to a wrapped object
-                        if input_arg is None:
-                            arg = input_arg
-                        elif isinstance(input_arg, W_Root):
-                            arg = input_arg
+                        if is_pyobj(input_arg):
+                            arg = from_ref(input_arg)
                         else:
-                            try:
-                                arg = from_ref(space,
-                                           rffi.cast(PyObject, input_arg))
-                            except TypeError, e:
-                                err = OperationError(space.w_TypeError,
-                                         space.wrap(
-                                        "could not cast arg to PyObject"))
-                                if not catch_exception:
-                                    raise err
-                                state = space.fromcache(State)
-                                state.set_exception(err)
-                                if is_PyObject(restype):
-                                    return None
-                                else:
-                                    return api_function.error_value
+                            arg = input_arg
+
+                            ## ZZZ: for is_pyobj:
+                            ## try:
+                            ##     arg = from_ref(space,
+                            ##                rffi.cast(PyObject, input_arg))
+                            ## except TypeError, e:
+                            ##     err = OperationError(space.w_TypeError,
+                            ##              space.wrap(
+                            ##             "could not cast arg to PyObject"))
+                            ##     if not catch_exception:
+                            ##         raise err
+                            ##     state = space.fromcache(State)
+                            ##     state.set_exception(err)
+                            ##     if is_PyObject(restype):
+                            ##         return None
+                            ##     else:
+                            ##         return api_function.error_value
                     else:
-                        # convert to a wrapped object
+                        # arg is not declared as PyObject, no magic
                         arg = input_arg
                     newargs += (arg, )
                 try:
-                    try:
-                        res = func(space, *newargs)
-                    except OperationError, e:
-                        if not catch_exception:
-                            raise
-                        if not hasattr(api_function, "error_value"):
-                            raise
-                        state = space.fromcache(State)
-                        state.set_exception(e)
-                        if is_PyObject(restype):
-                            return None
-                        else:
-                            return api_function.error_value
-                    if not we_are_translated():
-                        got_integer = isinstance(res, (int, long, float))
-                        assert got_integer == expect_integer,'got %r not integer' % res
-                    if res is None:
+                    res = func(space, *newargs)
+                except OperationError, e:
+                    if not catch_exception:
+                        raise
+                    if not hasattr(api_function, "error_value"):
+                        raise
+                    state = space.fromcache(State)
+                    state.set_exception(e)
+                    if is_PyObject(restype):
                         return None
-                    elif isinstance(res, Reference):
-                        return res.get_wrapped(space)
                     else:
-                        return res
-                finally:
-                    for arg in to_decref:
-                        Py_DecRef(space, arg)
+                        return api_function.error_value
+                if not we_are_translated():
+                    got_integer = isinstance(res, (int, long, float))
+                    assert got_integer == expect_integer,'got %r not integer' % res
+                ZZZ   # where is the logic to return PyObject??
+                if res is None:
+                    return None
+                elif isinstance(res, Reference):
+                    return res.get_wrapped(space)
+                else:
+                    return res
             unwrapper.func = func
             unwrapper.api_func = api_function
             unwrapper._always_inline_ = 'try'
@@ -730,9 +722,9 @@ def setup_init_functions(eci, translating):
                                        compilation_info=eci, _nowrapper=True)
     def init_types(space):
         from pypy.module.cpyext.typeobject import py_type_ready
-        py_type_ready(space, get_buffer_type())
-        py_type_ready(space, get_cobject_type())
-        py_type_ready(space, get_capsule_type())
+        #py_type_ready(space, get_buffer_type()) ZZZ
+        #py_type_ready(space, get_cobject_type()) ZZZ
+        #py_type_ready(space, get_capsule_type()) ZZZ
     INIT_FUNCTIONS.append(init_types)
     from pypy.module.posix.interp_posix import add_fork_hook
     reinit_tls = rffi.llexternal('%sThread_ReInitTLS' % prefix, [], lltype.Void,
@@ -831,7 +823,8 @@ def build_bridge(space):
     space.fromcache(State).install_dll(eci)
 
     # populate static data
-    for name, (typ, expr) in GLOBALS.iteritems():
+    if 0:   # ZZZ
+      for name, (typ, expr) in GLOBALS.iteritems():
         from pypy.module import cpyext
         w_obj = eval(expr)
         if name.endswith('#'):
