@@ -74,6 +74,7 @@ def PyImport_AddModule(space, name):
     w_mod = check_sys_modules_w(space, modulename)
     if not w_mod or space.is_w(w_mod, space.w_None):
         w_mod = Module(space, space.wrap(modulename))
+        XXX - "insert it into sys.modules!"
     return borrow_from(None, w_mod)
 
 @cpython_api([], PyObject)

@@ -107,7 +107,6 @@ asked, and not record any link.  Is it cheaper?  Unclear.
 
 A few special types need to be reflected both as PyPy objects and
 PyObjects.  For now we assume that these are large and mostly
-immutable, like <type> objects.  They should be linked in the O list,
-and we'll ignore the issues of deallocation ordering for them.  (Also,
-W_TypeObject can have a back-reference field like
-W_CPyExtPlaceHolderObject.)
+immutable, like <type> objects.  They should be linked in some mixture
+of the P list and the O list.  Likely, the P list with an extra flag
+that says "_Py_Dealloc must be invoked".
