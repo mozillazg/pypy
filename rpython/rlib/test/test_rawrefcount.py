@@ -8,45 +8,43 @@ class W_Root(object):
 
 PyObjectS = lltype.Struct('PyObjectS',
                           ('c_ob_refcnt', lltype.Signed),
-                          ('c_ob_pypy_link', llmemory.GCREF))
+                          ('c_ob_pypy_link', lltype.Signed))
 PyObject = lltype.Ptr(PyObjectS)
 
 
 class TestRawRefCount:
 
     def setup_method(self, meth):
-        del rawrefcount._p_list[:]
-        del rawrefcount._o_list[:]
-        del rawrefcount._s_list[:]
+        rawrefcount._reset_state()
 
     def test_create_link_pypy(self):
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True,
                            track_allocation=False)
-        assert rawrefcount.from_obj(PyObjectS, p) == lltype.nullptr(PyObjectS)
+        assert rawrefcount.from_obj(PyObject, p) == lltype.nullptr(PyObjectS)
         assert rawrefcount.to_obj(W_Root, ob) == None
         rawrefcount.create_link_pypy(p, ob)
-        assert rawrefcount.from_obj(PyObjectS, p) == ob
+        assert rawrefcount.from_obj(PyObject, p) == ob
         assert rawrefcount.to_obj(W_Root, ob) == p
 
     def test_create_link_pyobj(self):
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True,
                            track_allocation=False)
-        assert rawrefcount.from_obj(PyObjectS, p) == lltype.nullptr(PyObjectS)
+        assert rawrefcount.from_obj(PyObject, p) == lltype.nullptr(PyObjectS)
         assert rawrefcount.to_obj(W_Root, ob) == None
         rawrefcount.create_link_pyobj(p, ob)
-        assert rawrefcount.from_obj(PyObjectS, p) == lltype.nullptr(PyObjectS)
+        assert rawrefcount.from_obj(PyObject, p) == lltype.nullptr(PyObjectS)
         assert rawrefcount.to_obj(W_Root, ob) == p
 
     def test_create_link_shared(self):
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True,
                            track_allocation=False)
-        assert rawrefcount.from_obj(PyObjectS, p) == lltype.nullptr(PyObjectS)
+        assert rawrefcount.from_obj(PyObject, p) == lltype.nullptr(PyObjectS)
         assert rawrefcount.to_obj(W_Root, ob) == None
         rawrefcount.create_link_shared(p, ob)
-        assert rawrefcount.from_obj(PyObjectS, p) == lltype.nullptr(PyObjectS)
+        assert rawrefcount.from_obj(PyObject, p) == lltype.nullptr(PyObjectS)
         assert rawrefcount.to_obj(W_Root, ob) == p
 
     def test_collect_p_dies(self):
@@ -79,7 +77,7 @@ class TestRawRefCount:
         assert ob is not None and p is not None
         assert rawrefcount._p_list == [ob]
         assert rawrefcount.to_obj(W_Root, ob) == p
-        assert rawrefcount.from_obj(PyObjectS, p) == ob
+        assert rawrefcount.from_obj(PyObject, p) == ob
 
     def test_collect_p_keepalive_w_root(self):
         p = W_Root(42)
@@ -94,7 +92,7 @@ class TestRawRefCount:
         assert ob is not None
         assert rawrefcount._p_list == [ob]
         assert rawrefcount.to_obj(W_Root, ob) == p
-        assert rawrefcount.from_obj(PyObjectS, p) == ob
+        assert rawrefcount.from_obj(PyObject, p) == ob
 
     def test_collect_o_dies(self):
         p = W_Root(42)

@@ -512,7 +512,7 @@ PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
 PyObjectStruct = lltype.ForwardReference()
 PyObject = lltype.Ptr(PyObjectStruct)
 PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyTypeObjectPtr),
-                  ("ob_pypy_link", llmemory.GCREF))
+                  ("ob_pypy_link", lltype.Signed))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('PyObject', PyObjectFields, PyObjectStruct)
 PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)

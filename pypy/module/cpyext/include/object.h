@@ -17,9 +17,9 @@ we have it for compatibility with CPython.
 #define staticforward static
 
 #define PyObject_HEAD  \
-    long ob_refcnt;       \
-    struct _typeobject *ob_type; \
-    void *ob_pypy_link;
+    Py_ssize_t ob_refcnt;        \
+    Py_ssize_t ob_pypy_link;     \
+    struct _typeobject *ob_type;
 
 #define PyObject_VAR_HEAD		\
 	PyObject_HEAD			\

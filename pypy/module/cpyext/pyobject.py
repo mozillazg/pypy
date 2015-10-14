@@ -286,13 +286,11 @@ def track_reference(space, py_obj, w_obj, replace=False):
         state.py_objects_r2w[ptr] = w_obj
 
 
-NULL_GCREF = lltype.nullptr(llmemory.GCREF.TO)
-
 def _create_pyobj_from_w_obj(w_obj):
     # XXX temp, needs cases
     ob = lltype.malloc(PyObject.TO, flavor='raw', track_allocation=False)
     ob.c_ob_refcnt = 0
-    ob.c_ob_pypy_link = NULL_GCREF
+    ob.c_ob_pypy_link = 0
     # ob.c_ob_type = ...
     rawrefcount.create_link_pypy(w_obj, ob)
     return ob
@@ -309,7 +307,7 @@ def as_pyobj(w_obj):
         return lltype.nullptr(PyObject.TO)
     #if isinstance(w_obj, W_CPyExtPlaceHolderObject):
     #    xxx
-    ob = rawrefcount.from_obj(PyObject.TO, w_obj)
+    ob = rawrefcount.from_obj(PyObject, w_obj)
     if not ob:
         ob = _create_pyobj_from_w_obj(w_obj)
     return ob
