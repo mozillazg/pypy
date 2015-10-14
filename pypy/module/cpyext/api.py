@@ -9,7 +9,7 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from rpython.rtyper.tool import rffi_platform
 from rpython.rtyper.lltypesystem import ll2ctypes
 from rpython.rtyper.annlowlevel import llhelper
-from rpython.rlib.objectmodel import we_are_translated
+from rpython.rlib.objectmodel import we_are_translated, keepalive_until_here
 from rpython.translator import cdir
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 from rpython.translator.gensupp import NameManager
@@ -293,16 +293,18 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                 from pypy.module.cpyext.pyobject import as_pyobj, is_pyobj
                 from pypy.module.cpyext.pyobject import Reference
                 newargs = ()
+                keepalives = ()
                 assert len(args) == len(api_function.argtypes)
                 for i, (ARG, is_wrapped) in types_names_enum_ui:
                     input_arg = args[i]
                     if is_PyObject(ARG) and not is_wrapped:
                         # build a 'PyObject *' (not holding a reference)
                         if not is_pyobj(input_arg):
+                            keepalives += (input_arg,)
                             input_arg = as_pyobj(input_arg)
                         arg = rffi.cast(ARG, input_arg)
                     elif is_PyObject(ARG) and is_wrapped:
-                        # convert to a wrapped object
+                        # build a W_Root, possibly from a 'PyObject *'
                         if is_pyobj(input_arg):
                             arg = from_ref(input_arg)
                         else:
@@ -329,7 +331,10 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                         arg = input_arg
                     newargs += (arg, )
                 try:
-                    res = func(space, *newargs)
+                    try:
+                        res = func(space, *newargs)
+                    finally:
+                        keepalive_until_here(*keepalives)
                 except OperationError, e:
                     if not catch_exception:
                         raise
