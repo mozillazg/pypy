@@ -52,23 +52,55 @@ def to_obj(Class, ob):
         return p
 
 def _collect():
-    "NOT_RPYTHON: for tests only"
-    global _p_list
-    wrlist = []
-    newlist = []
+    """NOT_RPYTHON: for tests only.  Emulates a GC collection.
+    Returns the list of ob's whose _Py_Dealloc() should be called,
+    from the O list.
+    """
+    global _p_list, _o_list
+    wr_p_list = []
+    new_p_list = []
     for ob in _p_list:
         assert ob.ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
         if ob.ob_refcnt == REFCNT_FROM_PYPY_OBJECT:
-            wrlist.append(weakref.ref(ob))
+            wr_p_list.append(weakref.ref(ob))
         else:
-            newlist.append(ob)
-    _p_list = newlist
-    del ob
+            new_p_list.append(ob)
+        ob = None
+    _p_list = Ellipsis
+    #
+    wr_o_list = []
+    for ob in _o_list:
+        assert ob.ob_pypy_link
+        p = rgc.try_cast_gcref_to_instance(object, ob.ob_pypy_link)
+        assert p is not None
+        ob.ob_pypy_link = lltype.nullptr(llmemory.GCREF.TO)
+        wr_o_list.append((ob, weakref.ref(p)))
+        p = None
+    _o_list = Ellipsis
+    #
     rgc.collect()  # forces the cycles to be resolved and the weakrefs to die
-    for wr in wrlist:
+    rgc.collect()
+    rgc.collect()
+    #
+    _p_list = new_p_list
+    for wr in wr_p_list:
         ob = wr()
         if ob is not None:
-            newlist.append(ob)
+            _p_list.append(ob)
+    #
+    dealloc = []
+    _o_list = []
+    for ob, wr in wr_o_list:
+        p = wr()
+        if p is not None:
+            ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
+            _o_list.append(ob)
+        else:
+            assert ob.ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
+            ob.ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
+            if ob.ob_refcnt == 0:
+                dealloc.append(ob)
+    return dealloc
 
 # ____________________________________________________________
 
