@@ -18,7 +18,8 @@ we have it for compatibility with CPython.
 
 #define PyObject_HEAD  \
     long ob_refcnt;       \
-    struct _typeobject *ob_type;
+    struct _typeobject *ob_type; \
+    void *ob_pypy_link;
 
 #define PyObject_VAR_HEAD		\
 	PyObject_HEAD			\

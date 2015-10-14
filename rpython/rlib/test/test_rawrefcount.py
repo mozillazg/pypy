@@ -7,8 +7,8 @@ class W_Root(object):
         self.intval = intval
 
 PyObjectS = lltype.Struct('PyObjectS',
-                          ('ob_refcnt', lltype.Signed),
-                          ('ob_pypy_link', llmemory.GCREF))
+                          ('c_ob_refcnt', lltype.Signed),
+                          ('c_ob_pypy_link', llmemory.GCREF))
 PyObject = lltype.Ptr(PyObjectS)
 
 
@@ -71,7 +71,7 @@ class TestRawRefCount:
         assert rawrefcount._p_list == [ob]
         wr_ob = weakref.ref(ob)
         wr_p = weakref.ref(p)
-        ob.ob_refcnt += 1      # <=
+        ob.c_ob_refcnt += 1      # <=
         del ob, p
         rawrefcount._collect()
         ob = wr_ob()
@@ -121,13 +121,13 @@ class TestRawRefCount:
         assert rawrefcount._o_list == [ob]
         wr_ob = weakref.ref(ob)
         wr_p = weakref.ref(p)
-        ob.ob_refcnt += 1      # <=
+        ob.c_ob_refcnt += 1      # <=
         del p
         dealloc = rawrefcount._collect()
         assert dealloc == []
         p = wr_p()
         assert p is None            # was unlinked
-        assert ob.ob_refcnt == 1    # != REFCNT_FROM_PYPY_OBJECT + 1
+        assert ob.c_ob_refcnt == 1    # != REFCNT_FROM_PYPY_OBJECT + 1
         assert rawrefcount._o_list == []
         assert rawrefcount.to_obj(W_Root, ob) == None
 
@@ -173,7 +173,7 @@ class TestRawRefCount:
         assert rawrefcount._s_list == [ob]
         wr_ob = weakref.ref(ob)
         wr_p = weakref.ref(p)
-        ob.ob_refcnt += 1      # <=
+        ob.c_ob_refcnt += 1      # <=
         del ob, p
         rawrefcount._collect()
         ob = wr_ob()

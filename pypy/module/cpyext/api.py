@@ -5,7 +5,7 @@ import atexit
 import py
 
 from pypy.conftest import pypydir
-from rpython.rtyper.lltypesystem import rffi, lltype
+from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from rpython.rtyper.tool import rffi_platform
 from rpython.rtyper.lltypesystem import ll2ctypes
 from rpython.rtyper.annlowlevel import llhelper
@@ -278,6 +278,10 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
             raise ValueError("function %s has no return value for exceptions"
                              % func)
         def make_unwrapper(catch_exception):
+            # ZZZ is this whole logic really needed???  It seems to be only
+            # for RPython code calling PyXxx() functions directly.  I would
+            # think that usually directly calling the function is clean
+            # enough now
             names = api_function.argnames
             types_names_enum_ui = unrolling_iterable(enumerate(
                 zip(api_function.argtypes,
@@ -340,13 +344,7 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                 if not we_are_translated():
                     got_integer = isinstance(res, (int, long, float))
                     assert got_integer == expect_integer,'got %r not integer' % res
-                ZZZ   # where is the logic to return PyObject??
-                if res is None:
-                    return None
-                elif isinstance(res, Reference):
-                    return res.get_wrapped(space)
-                else:
-                    return res
+                return res
             unwrapper.func = func
             unwrapper.api_func = api_function
             unwrapper._always_inline_ = 'try'
@@ -508,7 +506,8 @@ PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
 # So we need a forward and backward mapping in our State instance
 PyObjectStruct = lltype.ForwardReference()
 PyObject = lltype.Ptr(PyObjectStruct)
-PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyTypeObjectPtr))
+PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyTypeObjectPtr),
+                  ("ob_pypy_link", llmemory.GCREF))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('PyObject', PyObjectFields, PyObjectStruct)
 PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)

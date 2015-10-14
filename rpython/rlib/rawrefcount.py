@@ -20,9 +20,9 @@ _s_list = []     # not rpython
 def create_link_pypy(p, ob):
     "NOT_RPYTHON: a link where the PyPy object contains all the data"
     assert not hasattr(p, '__rawrefcount')
-    assert not ob.ob_pypy_link
-    ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
-    ob.ob_refcnt += REFCNT_FROM_PYPY_OBJECT
+    assert not ob.c_ob_pypy_link
+    ob.c_ob_pypy_link = rgc.cast_instance_to_gcref(p)
+    ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
     p.__rawrefcount = ob
     _p_list.append(ob)
 
@@ -30,9 +30,9 @@ def create_link_pyobj(p, ob):
     """NOT_RPYTHON: a link where the PyObject contains all the data.
        from_obj() will not work on this 'p'."""
     assert not hasattr(p, '__rawrefcount')
-    assert not ob.ob_pypy_link
-    ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
-    ob.ob_refcnt += REFCNT_FROM_PYPY_OBJECT
+    assert not ob.c_ob_pypy_link
+    ob.c_ob_pypy_link = rgc.cast_instance_to_gcref(p)
+    ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
     p.__rawrefcount = lltype.nullptr(lltype.typeOf(ob).TO)
     _o_list.append(ob)
 
@@ -40,9 +40,9 @@ def create_link_shared(p, ob):
     """NOT_RPYTHON: a link where both p and ob contain some data.
        from_obj() will not work on this 'p'."""
     assert not hasattr(p, '__rawrefcount')
-    assert not ob.ob_pypy_link
-    ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
-    ob.ob_refcnt += REFCNT_FROM_PYPY_OBJECT
+    assert not ob.c_ob_pypy_link
+    ob.c_ob_pypy_link = rgc.cast_instance_to_gcref(p)
+    ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
     p.__rawrefcount = lltype.nullptr(lltype.typeOf(ob).TO)
     _s_list.append(ob)
 
@@ -55,7 +55,7 @@ def from_obj(OBTYPE, p):
 
 @specialize.arg(0)
 def to_obj(Class, ob):
-    pypy_gcref = ob.ob_pypy_link
+    pypy_gcref = ob.c_ob_pypy_link
     if we_are_translated():
         return annlowlevel.cast_gcref_to_instance(Class, pypy_gcref)
     else:
@@ -71,18 +71,18 @@ def _collect():
     from the O list.
     """
     def detach(ob, wr_list):
-        assert ob.ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
-        assert ob.ob_pypy_link
-        p = rgc.try_cast_gcref_to_instance(object, ob.ob_pypy_link)
+        assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
+        assert ob.c_ob_pypy_link
+        p = rgc.try_cast_gcref_to_instance(object, ob.c_ob_pypy_link)
         assert p is not None
-        ob.ob_pypy_link = lltype.nullptr(llmemory.GCREF.TO)
+        ob.c_ob_pypy_link = lltype.nullptr(llmemory.GCREF.TO)
         wr_list.append((ob, weakref.ref(p)))
 
     global _p_list, _o_list, _s_list
     wr_p_list = []
     new_p_list = []
     for ob in _p_list:
-        if ob.ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
+        if ob.c_ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
             new_p_list.append(ob)
         else:
             wr_p_list.append(weakref.ref(ob))
@@ -92,7 +92,7 @@ def _collect():
     wr_s_list = []
     new_s_list = []
     for ob in _s_list:
-        if ob.ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
+        if ob.c_ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
             new_s_list.append(ob)
         else:
             detach(ob, wr_s_list)
@@ -109,14 +109,14 @@ def _collect():
     rgc.collect()
 
     def attach(ob, wr, final_list):
-        assert ob.ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
+        assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
         p = wr()
         if p is not None:
-            ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
+            ob.c_ob_pypy_link = rgc.cast_instance_to_gcref(p)
             final_list.append(ob)
         else:
-            ob.ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
-            if ob.ob_refcnt == 0:
+            ob.c_ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
+            if ob.c_ob_refcnt == 0:
                 dealloc.append(ob)
 
     _p_list = new_p_list

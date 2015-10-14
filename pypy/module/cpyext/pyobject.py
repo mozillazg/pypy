@@ -290,9 +290,10 @@ NULL_GCREF = lltype.nullptr(llmemory.GCREF.TO)
 
 def _create_pyobj_from_w_obj(w_obj):
     # XXX temp, needs cases
-    ob = lltype.malloc(PyObject, flavor='raw', track_allocation=False)
-    ob.ob_refcnt = 0
-    ob.ob_pypy_link = NULL_GCREF
+    ob = lltype.malloc(PyObject.TO, flavor='raw', track_allocation=False)
+    ob.c_ob_refcnt = 0
+    ob.c_ob_pypy_link = NULL_GCREF
+    # ob.c_ob_type = ...
     rawrefcount.create_link_pypy(w_obj, ob)
     return ob
 
@@ -303,7 +304,7 @@ def as_pyobj(w_obj):
     'None' is returned as a NULL.  This doesn't give a new reference, but
     the returned 'PyObject *' is valid at least as long as 'w_obj' is.
     """
-    assert is_wrapped(w_obj)
+    assert not is_pyobj(w_obj)
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     #if isinstance(w_obj, W_CPyExtPlaceHolderObject):
@@ -317,7 +318,7 @@ as_pyobj._always_inline_ = True
 
 @specialize.ll()
 def from_ref(pyobj):
-    assert not is_wrapped(pyobj)
+    assert is_pyobj(pyobj)
     if not pyobj:
         return None
     pyobj = rffi.cast(PyObject, pyobj)
