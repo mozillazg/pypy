@@ -13,11 +13,12 @@ REFCNT_FROM_PYPY_OBJECT = 80   # == 0x50
 
 
 def _reset_state():
-    global _p_list, _o_list, _s_list, _adr2pypy
+    global _p_list, _o_list, _s_list, _adr2pypy, _pypy2ob
     _p_list = []     # not rpython
     _o_list = []     # not rpython
     _s_list = []     # not rpython
     _adr2pypy = [None]  # not rpython
+    _pypy2ob = {}       # not rpython
 _reset_state()
 
 def _build_pypy_link(p):
@@ -28,37 +29,36 @@ def _build_pypy_link(p):
 
 def create_link_pypy(p, ob):
     "NOT_RPYTHON: a link where the PyPy object contains all the data"
-    assert not hasattr(p, '__rawrefcount')
+    assert p not in _pypy2ob
     assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
     ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
-    p.__rawrefcount = ob
+    _pypy2ob[p] = ob
     _p_list.append(ob)
 
 def create_link_pyobj(p, ob):
     """NOT_RPYTHON: a link where the PyObject contains all the data.
        from_obj() will not work on this 'p'."""
-    assert not hasattr(p, '__rawrefcount')
+    assert p not in _pypy2ob
     assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
     ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
-    p.__rawrefcount = lltype.nullptr(lltype.typeOf(ob).TO)
     _o_list.append(ob)
 
 def create_link_shared(p, ob):
     """NOT_RPYTHON: a link where both p and ob contain some data.
        from_obj() will not work on this 'p'."""
-    assert not hasattr(p, '__rawrefcount')
+    assert p not in _pypy2ob
     assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
     ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
-    p.__rawrefcount = lltype.nullptr(lltype.typeOf(ob).TO)
     _s_list.append(ob)
 
 def from_obj(OB_PTR_TYPE, p):
     "NOT_RPYTHON"
-    null = lltype.nullptr(OB_PTR_TYPE.TO)
-    ob = getattr(p, '__rawrefcount', null)
+    ob = _pypy2ob.get(p)
+    if ob is None:
+        return lltype.nullptr(OB_PTR_TYPE.TO)
     assert lltype.typeOf(ob) == OB_PTR_TYPE
     return ob
 
@@ -87,6 +87,7 @@ def _collect():
         assert p is not None
         _adr2pypy[ob.c_ob_pypy_link] = None
         wr_list.append((ob, weakref.ref(p)))
+        return p
 
     global _p_list, _o_list, _s_list
     wr_p_list = []
@@ -95,7 +96,9 @@ def _collect():
         if ob.c_ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
             new_p_list.append(ob)
         else:
-            detach(ob, wr_p_list)
+            p = detach(ob, wr_p_list)
+            del _pypy2ob[p]
+            del p
         ob = None
     _p_list = Ellipsis
 
@@ -125,16 +128,20 @@ def _collect():
             assert ob.c_ob_pypy_link
             _adr2pypy[ob.c_ob_pypy_link] = p
             final_list.append(ob)
+            return p
         else:
             ob.c_ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
             ob.c_ob_pypy_link = 0
             if ob.c_ob_refcnt == 0 and dealloc is not None:
                 dealloc.append(ob)
+            return None
 
     _p_list = new_p_list
     dealloc = None
     for ob, wr in wr_p_list:
-        attach(ob, wr, _p_list)
+        p = attach(ob, wr, _p_list)
+        if p:
+            _pypy2ob[p] = ob
     #
     dealloc = []
     _s_list = new_s_list
