@@ -14,10 +14,11 @@ REFCNT_FROM_PYPY_OBJECT = 80   # == 0x50
 
 _p_list = []     # not rpython
 _o_list = []     # not rpython
+_s_list = []     # not rpython
 
 
-def create_link_from_pypy(p, ob):
-    "NOT_RPYTHON"
+def create_link_pypy(p, ob):
+    "NOT_RPYTHON: a link where the PyPy object contains all the data"
     assert not hasattr(p, '__rawrefcount')
     assert not ob.ob_pypy_link
     ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
@@ -25,12 +26,25 @@ def create_link_from_pypy(p, ob):
     p.__rawrefcount = ob
     _p_list.append(ob)
 
-def create_link_to_pypy(p, ob):
-    "NOT_RPYTHON"
+def create_link_pyobj(p, ob):
+    """NOT_RPYTHON: a link where the PyObject contains all the data.
+       from_obj() will not work on this 'p'."""
+    assert not hasattr(p, '__rawrefcount')
     assert not ob.ob_pypy_link
     ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
     ob.ob_refcnt += REFCNT_FROM_PYPY_OBJECT
+    p.__rawrefcount = lltype.nullptr(lltype.typeOf(ob).TO)
     _o_list.append(ob)
+
+def create_link_shared(p, ob):
+    """NOT_RPYTHON: a link where both p and ob contain some data.
+       from_obj() will not work on this 'p'."""
+    assert not hasattr(p, '__rawrefcount')
+    assert not ob.ob_pypy_link
+    ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
+    ob.ob_refcnt += REFCNT_FROM_PYPY_OBJECT
+    p.__rawrefcount = lltype.nullptr(lltype.typeOf(ob).TO)
+    _s_list.append(ob)
 
 def from_obj(OBTYPE, p):
     "NOT_RPYTHON"
@@ -56,32 +70,55 @@ def _collect():
     Returns the list of ob's whose _Py_Dealloc() should be called,
     from the O list.
     """
-    global _p_list, _o_list
-    wr_p_list = []
-    new_p_list = []
-    for ob in _p_list:
+    def detach(ob, wr_list):
         assert ob.ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
-        if ob.ob_refcnt == REFCNT_FROM_PYPY_OBJECT:
-            wr_p_list.append(weakref.ref(ob))
-        else:
-            new_p_list.append(ob)
-        ob = None
-    _p_list = Ellipsis
-    #
-    wr_o_list = []
-    for ob in _o_list:
         assert ob.ob_pypy_link
         p = rgc.try_cast_gcref_to_instance(object, ob.ob_pypy_link)
         assert p is not None
         ob.ob_pypy_link = lltype.nullptr(llmemory.GCREF.TO)
-        wr_o_list.append((ob, weakref.ref(p)))
-        p = None
+        wr_list.append((ob, weakref.ref(p)))
+
+    global _p_list, _o_list, _s_list
+    wr_p_list = []
+    new_p_list = []
+    for ob in _p_list:
+        if ob.ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
+            new_p_list.append(ob)
+        else:
+            wr_p_list.append(weakref.ref(ob))
+        ob = None
+    _p_list = Ellipsis
+
+    wr_s_list = []
+    new_s_list = []
+    for ob in _s_list:
+        if ob.ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
+            new_s_list.append(ob)
+        else:
+            detach(ob, wr_s_list)
+        ob = None
+    _s_list = Ellipsis
+
+    wr_o_list = []
+    for ob in _o_list:
+        detach(ob, wr_o_list)
     _o_list = Ellipsis
-    #
+
     rgc.collect()  # forces the cycles to be resolved and the weakrefs to die
     rgc.collect()
     rgc.collect()
-    #
+
+    def attach(ob, wr, final_list):
+        assert ob.ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
+        p = wr()
+        if p is not None:
+            ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
+            final_list.append(ob)
+        else:
+            ob.ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
+            if ob.ob_refcnt == 0:
+                dealloc.append(ob)
+
     _p_list = new_p_list
     for wr in wr_p_list:
         ob = wr()
@@ -89,17 +126,12 @@ def _collect():
             _p_list.append(ob)
     #
     dealloc = []
+    _s_list = new_s_list
+    for ob, wr in wr_s_list:
+        attach(ob, wr, _s_list)
     _o_list = []
     for ob, wr in wr_o_list:
-        p = wr()
-        if p is not None:
-            ob.ob_pypy_link = rgc.cast_instance_to_gcref(p)
-            _o_list.append(ob)
-        else:
-            assert ob.ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
-            ob.ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
-            if ob.ob_refcnt == 0:
-                dealloc.append(ob)
+        attach(ob, wr, _o_list)
     return dealloc
 
 # ____________________________________________________________
