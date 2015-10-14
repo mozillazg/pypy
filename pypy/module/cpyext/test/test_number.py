@@ -43,23 +43,23 @@ class TestIterator(BaseApiTest):
         w_obj1 = space.wrap(123)
         w_obj2 = space.wrap(456.789)
         pp1 = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        pp1[0] = make_ref(space, w_obj1)
+        pp1[0] = make_ref(w_obj1)
         pp2 = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        pp2[0] = make_ref(space, w_obj2)
+        pp2[0] = make_ref(w_obj2)
         assert api.PyNumber_Coerce(pp1, pp2) == 0
-        assert space.str_w(space.repr(from_ref(space, pp1[0]))) == '123.0'
-        assert space.str_w(space.repr(from_ref(space, pp2[0]))) == '456.789'
-        Py_DecRef(space, pp1[0])
+        assert space.str_w(space.repr(from_ref(pp1[0]))) == '123.0'
+        assert space.str_w(space.repr(from_ref(pp2[0]))) == '456.789'
+        Py_DecRef(space, pp1[0])     # for the refs returned by PyNumber_Coerce
         Py_DecRef(space, pp2[0])
         lltype.free(pp1, flavor='raw')
         # Yes, decrement twice since we decoupled between w_obj* and pp*[0].
-        Py_DecRef(space, w_obj1)
+        Py_DecRef(space, w_obj1)     # for the make_ref() above
         Py_DecRef(space, w_obj2)
         lltype.free(pp2, flavor='raw')
 
     def test_number_coerce_ex(self, space, api):
-        pl = make_ref(space, space.wrap(123))
-        pf = make_ref(space, space.wrap(42.))
+        pl = make_ref(space.wrap(123))
+        pf = make_ref(space.wrap(42.))
         ppl = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
         ppf = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
         ppl[0] = pl
@@ -68,7 +68,7 @@ class TestIterator(BaseApiTest):
         ret = api.PyNumber_CoerceEx(ppl, ppf)
         assert ret == 0
 
-        w_res = from_ref(space, ppl[0])
+        w_res = from_ref(ppl[0])
 
         assert api.PyFloat_Check(w_res)
         assert space.unwrap(w_res) == 123.

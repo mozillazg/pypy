@@ -338,18 +338,10 @@ def is_pyobj(x):
 # ZZZ: use an ExtRegistryEntry to constant-fold is_pyobj()
 
 
-def make_ref(space, w_obj):
-    ZZZ
-    assert isinstance(w_obj, W_Root)
-    state = space.fromcache(RefcountState)
-    try:
-        py_obj = state.py_objects_w2r[w_obj]
-    except KeyError:
-        py_obj = create_ref(space, w_obj)
-        track_reference(space, py_obj, w_obj)
-    else:
-        Py_IncRef(space, py_obj)
-    return py_obj
+def make_ref(w_obj):
+    pyobj = as_pyobj(w_obj)
+    pyobj.c_ob_refcnt += 1
+    return pyobj
 
 
 def ZZZ_from_ref(space, ref):
