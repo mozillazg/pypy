@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include "vmprof_getpc.h"
 #ifdef __APPLE__
+#define UNW_LOCAL_ONLY
 #include "libunwind.h"
 #else
 #include "vmprof_unwind.h"
@@ -188,16 +189,21 @@ static int vmprof_unw_step(unw_cursor_t *cp, int first_run)
     if (sp_offset == -1) {
         // it means that the ip is NOT in JITted code, so we can use the
         // stardard unw_step
-        return unw_step(cp);
+        int res = unw_step(cp);
+        if (res <= 0) {
+            printf("unw_step returned %d\n", res);
+        }
+        return res;
     }
     else {
-        // this is a horrible hack to manually walk the stack frame, by
+        // manually walk the stack frame, by
         // setting the IP and SP in the cursor
-        vmprof_hacked_unw_cursor_t *cp2 = (vmprof_hacked_unw_cursor_t*)cp;
-        void* bp = (void*)sp + sp_offset;
-        cp2->sp = bp;
+        char* bp = (char*)sp + sp_offset;
         bp -= sizeof(void*);
-        cp2->ip = ((void**)bp)[0];
+        printf("AAA: %ld\n", (unw_word_t)((void**)bp)[0]);
+        printf("setting_ip: %d\n", unw_set_reg(cp, UNW_REG_IP, (unw_word_t)((void**)bp)[0]));
+        bp += sizeof(void*);
+        printf("setting_sp: %d\n", unw_set_reg(cp, UNW_REG_SP, (unw_word_t)bp));
         // the ret is on the top of the stack minus WORD
         return 1;
     }
@@ -209,7 +215,8 @@ static int vmprof_unw_step(unw_cursor_t *cp, int first_run)
  * *************************************************************
  */
 
-static int get_stack_trace(void** result, int max_depth, ucontext_t *ucontext)
+static int get_stack_trace(void** result, int max_depth, ucontext_t *ucontext,
+                           void *ip_from_ucontext, void* sp_from_ucontext)
 {
     void *ip;
     int n = 0;
@@ -222,6 +229,10 @@ static int get_stack_trace(void** result, int max_depth, ucontext_t *ucontext)
 #endif
 
     int ret = unw_init_local(&cursor, &uc);
+    unw_get_reg(&cursor, UNW_REG_IP, (unw_word_t *) &ip);
+    printf("XXX: %ld %ld\n", ip_from_ucontext, ip);
+    unw_set_reg(&cursor, UNW_REG_IP, (unw_word_t)ip_from_ucontext);
+    unw_set_reg(&cursor, UNW_REG_SP, (unw_word_t)sp_from_ucontext);
     assert(ret >= 0);
     (void)ret;
 
@@ -248,9 +259,12 @@ static int get_stack_trace(void** result, int max_depth, ucontext_t *ucontext)
 
         int first_run = (n == 0);
         result[n++] = ip;
+        printf("IP2: %ld\n", ip);
         n = vmprof_write_header_for_jit_addr(result, n, ip, max_depth);
-        if (vmprof_unw_step(&cursor, first_run) <= 0)
+        if (vmprof_unw_step(&cursor, first_run) <= 0) {
+            printf("done\n");
             break;
+        }
     }
     return n;
 }
@@ -297,7 +311,9 @@ static void sigprof_handler(int sig_nr, siginfo_t* info, void *ucontext)
             st->marker = MARKER_STACKTRACE;
             st->count = 1;
             st->stack[0] = GetPC((ucontext_t*)ucontext);
-            depth = get_stack_trace(st->stack+1, MAX_STACK_DEPTH-2, ucontext);
+            depth = get_stack_trace(st->stack+1, MAX_STACK_DEPTH-2, ucontext,
+                                    vmprof_ip_from_ucontext(ucontext),
+                                    vmprof_sp_from_ucontext(ucontext));
             depth++;  // To account for pc value in stack[0];
             st->depth = depth;
             st->stack[depth++] = get_current_thread_id();

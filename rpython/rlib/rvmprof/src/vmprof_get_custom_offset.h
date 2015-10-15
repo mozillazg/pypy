@@ -18,7 +18,7 @@ static ptrdiff_t vmprof_unw_get_custom_offset(void* ip, void *cp) {
 
     intptr_t ip_l = (intptr_t)ip;
     return pypy_jit_stack_depth_at_loc(ip_l);
-
+    
 #elif defined(CPYTHON_GET_CUSTOM_OFFSET)
 
     if (ip >= tramp_start && ip <= tramp_end) {

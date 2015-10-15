@@ -190,4 +190,24 @@ void* GetPC(ucontext_t *signal_ucontext) {
 
 #endif
 
+#ifdef __APPLE__
+void *vmprof_ip_from_ucontext(ucontext_t *signal_ucontext)
+{
+  return (void*)(signal_ucontext->uc_mcontext->__ss.__rip);
+}
+void *vmprof_sp_from_ucontext(ucontext_t *signal_ucontext)
+{
+  return (void*)(signal_ucontext->uc_mcontext->__ss.__rsp);  
+}
+#else
+void *vmprof_ip_from_ucontext(ucontext_t *signal_ucontext)
+{
+  return (void*)signal_ucontext->uc_mcontext.gregs[REG_EIP];
+}
+void *vmprof_sp_from_ucontext(ucontext_t *signal_ucontext)
+{
+  return (void*)signal_ucontext->uc_mcontext.gregs[REG_ESP];
+}
+#endif
+
 #endif  // BASE_GETPC_H_
