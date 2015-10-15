@@ -10,103 +10,139 @@ GC Interface
 ob_pypy_link.  The ob_refcnt is the reference counter as used on
 CPython.  If the PyObject structure is linked to a live PyPy object,
 its current address is stored in ob_pypy_link and ob_refcnt is bumped
-by the constant REFCNT_FROM_PYPY_OBJECT.
+by either the constant REFCNT_FROM_PYPY, or the constant
+REFCNT_FROM_PYPY_DIRECT (== REFCNT_FROM_PYPY + SOME_HUGE_VALUE).
 
-rawrefcount_create_link_from_pypy(p, ob)
+Most PyPy objects exist outside cpyext, and conversely in cpyext it is
+possible that a lot of PyObjects exist without being seen by the rest
+of PyPy.  At the interface, however, we can "link" a PyPy object and a
+PyObject.  There are two kinds of link:
+
+rawrefcount.create_link_pypy(p, ob)
 
     Makes a link between an exising object gcref 'p' and a newly
-    allocated PyObject structure 'ob'.  Both must not be linked so far.
-    This adds REFCNT_FROM_PYPY_OBJECT to ob->ob_refcnt.
+    allocated PyObject structure 'ob'.  ob->ob_refcnt must be
+    initialized to either REFCNT_FROM_PYPY, or
+    REFCNT_FROM_PYPY_DIRECT.  (The second case is an optimization:
+    when the GC finds the PyPy object and PyObject no longer
+    referenced, it can just free() the PyObject.)
 
-rawrefcount_create_link_to_pypy(p, ob)
+rawrefcount.create_link_pyobj(p, ob)
 
     Makes a link from an existing PyObject structure 'ob' to a newly
-    allocated W_CPyExtPlaceHolderObject 'p'.  The 'p' should have a
-    back-reference field pointing to 'ob'.  This also adds
-    REFCNT_FROM_PYPY_OBJECT to ob->ob_refcnt.
+    allocated W_CPyExtPlaceHolderObject 'p'.  You must also add
+    REFCNT_FROM_PYPY to ob->ob_refcnt.  For cases where the PyObject
+    contains all the data, and the PyPy object is just a proxy.  The
+    W_CPyExtPlaceHolderObject should have only a field that contains
+    the address of the PyObject, but that's outside the scope of the
+    GC.
 
-rawrefcount_from_obj(p)
+rawrefcount.from_obj(p)
 
     If there is a link from object 'p', and 'p' is not a
     W_CPyExtPlaceHolderObject, returns the corresponding 'ob'.
     Otherwise, returns NULL.
 
-rawrefcount_to_obj(ob)
+rawrefcount.to_obj(Class, ob)
 
-    Returns ob->ob_pypy_link, cast to a GCREF.
+    Returns ob->ob_pypy_link, cast to an instance of 'Class'.
 
 
 Collection logic
 ----------------
 
-Objects existing purely on the C side have ob->ob_from_pypy == NULL;
+Objects existing purely on the C side have ob->ob_pypy_link == 0;
 these are purely reference counted.  On the other hand, if
-ob->ob_from_pypy != NULL, then ob->ob_refcnt is at least
-REFCNT_FROM_PYPY_OBJECT and the object is part of a "link".
+ob->ob_pypy_link != 0, then ob->ob_refcnt is at least REFCNT_FROM_PYPY
+and the object is part of a "link".
 
 The idea is that links whose 'p' is not reachable from other PyPy
-objects *and* whose 'ob->ob_refcnt' is REFCNT_FROM_PYPY_OBJECT are the
-ones who die.  But it is more messy because links created with
-rawrefcount_create_link_to_pypy() need to have a deallocator called,
+objects *and* whose 'ob->ob_refcnt' is REFCNT_FROM_PYPY or
+REFCNT_FROM_PYPY_DIRECT are the ones who die.  But it is more messy
+because PyObjects still (usually) need to have a tp_dealloc called,
 and this cannot occur immediately (and can do random things like
 accessing other references this object points to, or resurrecting the
 object).
 
-Let P = list of links created with rawrefcount_create_link_from_pypy()
-and O = list of links created with rawrefcount_create_link_to_pypy().
+Let P = list of links created with rawrefcount.create_link_pypy()
+and O = list of links created with rawrefcount.create_link_pyobj().
 The PyPy objects in the list O are all W_CPyExtPlaceHolderObject: all
-the data is in the PyObjects, and all references are regular
-CPython-like reference counts.  It is the opposite with the P links:
-all references are regular PyPy references from the 'p' object, and
-the 'ob' is trivial.
+the data is in the PyObjects, and all references (if any) are regular
+CPython-like reference counts.
 
-So, after the collection we do this about P links:
+So, during the collection we do this about P links:
 
     for (p, ob) in P:
-        if ob->ob_refcnt != REFCNT_FROM_PYPY_OBJECT:
+        if ob->ob_refcnt != REFCNT_FROM_PYPY
+               and ob->ob_refcnt != REFCNT_FROM_PYPY_DIRECT:
             mark 'p' as surviving, as well as all its dependencies
 
-    for (p, ob) in P:
-        if p is not surviving:
-            unlink p and ob, free ob
+At the end of the collection, the P and O links are both handled like
+this:
 
-Afterwards, the O links are handled like this:
-
-    for (p, ob) in O:
-        # p is trivial: it cannot point to other PyPy objects
+    for (p, ob) in P + O:
         if p is not surviving:
             unlink p and ob
-            ob->ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
-            if ob->ob_refcnt == 0:
-                invoke _Py_Dealloc(ob) later, outside the GC
+            if ob->ob_refcnt == REFCNT_FROM_PYPY_DIRECT:
+                free(ob)
+            else:
+                ob->ob_refcnt -= REFCNT_FROM_PYPY
+                if ob->ob_refcnt == 0:
+                    invoke _Py_Dealloc(ob) later, outside the GC
 
 
 GC Implementation
 -----------------
 
-We need two P lists and two O lists, for young or old objects.  All
-four lists can actually be linked lists of 'ob', using yet another
-field 'ob_pypy_next'; or they can be regular AddressLists (unsure
-about the overhead of this extra field for all PyObjects -- even ones
-not linked to PyPy objects).
+We need two copies of both the P list and O list, for young or old
+objects.  All four lists can be regular AddressLists of 'ob' objects.
 
 We also need an AddressDict mapping 'p' to 'ob' for all links in the P
-list.  This dict contains both young and old 'p'; we simply write a
-new entry when the object moves.  As a result it can contain some
-extra garbage entries after some minor collections.  It is cleaned up
-by being rebuilt at the next major collection.  We never walk all
-items of that dict; we only walk the two explicit P lists.
+list, and update it when PyPy objects move.
 
 
 Further notes
 -------------
 
-For small immutable types like <int> and <float>, we can actually
-create a PyIntObject as a complete copy of the W_IntObject whenever
-asked, and not record any link.  Is it cheaper?  Unclear.
+For objects that are opaque in CPython, like <dict>, we always create
+a PyPy object, and then when needed we make an empty PyObject and
+attach it with create_link_pypy()/REFCNT_FROM_PYPY_DIRECT.
 
-A few special types need to be reflected both as PyPy objects and
-PyObjects.  For now we assume that these are large and mostly
-immutable, like <type> objects.  They should be linked in some mixture
-of the P list and the O list.  Likely, the P list with an extra flag
-that says "_Py_Dealloc must be invoked".
+For <int> and <float> objects, the corresponding PyObjects contain a
+"long" or "double" field too.  We link them with create_link_pypy()
+and we can use REFCNT_FROM_PYPY_DIRECT too: 'tp_dealloc' doesn't
+need to be called, and instead just calling free() is fine.
+
+For <type> objects, we need both a PyPy and a PyObject side.  These
+are made with create_link_pypy()/REFCNT_FROM_PYPY.
+
+For custom PyXxxObjects allocated from the C extension module, we
+need create_link_pyobj().
+
+For <str> or <unicode> objects coming from PyPy, we use
+create_link_pypy()/REFCNT_FROM_PYPY_DIRECT with a PyObject
+preallocated with the size of the string.  We copy the string
+lazily into that area if PyString_AS_STRING() is called.
+
+For <str>, <unicode>, <tuple> or <list> objects in the C extension
+module, we first allocate it as only a PyObject, which supports
+mutation of the data from C, like CPython.  When it is exported to
+PyPy we could make a W_CPyExtPlaceHolderObject with
+create_link_pyobj().
+
+For <tuple> objects coming from PyPy, if they are not specialized,
+then the PyPy side holds a regular reference to the items.  Then we
+can allocate a PyTupleObject and store in it borrowed PyObject
+pointers to the items.  Such a case is created with
+create_link_pypy()/REFCNT_FROM_PYPY_DIRECT.  If it is specialized,
+then it doesn't work because the items are created just-in-time on the
+PyPy side.  In this case, the PyTupleObject needs to hold real
+references to the PyObject items, and we use create_link_pypy()/
+REFCNT_FROM_PYPY.  In all cases, we have a C array of PyObjects
+that we can return from PySequence_Fast_ITEMS.
+
+For <list> objects coming from PyPy, we can use a cpyext list
+strategy.  The list turns into a PyListObject, as if it had been
+allocated from C in the first place.  The special strategy can hold
+(only) a direct reference to the PyListObject, and we can use
+create_link_pyobj().  PySequence_Fast_ITEMS then works for lists too.
