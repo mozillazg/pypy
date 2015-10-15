@@ -85,6 +85,8 @@ this:
             unlink p and ob
             if ob->ob_refcnt == REFCNT_FROM_PYPY_DIRECT:
                 free(ob)
+            elif ob->ob_refcnt > REFCNT_FROM_PYPY_DIRECT:
+                ob->ob_refcnt -= REFCNT_FROM_PYPY_DIRECT
             else:
                 ob->ob_refcnt -= REFCNT_FROM_PYPY
                 if ob->ob_refcnt == 0:
