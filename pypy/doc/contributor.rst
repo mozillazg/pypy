@@ -18,23 +18,23 @@ appropriate measure but it's something)::
   Michael Hudson
   David Schneider
   Holger Krekel
+  Ronan Lamy
+  Manuel Jacob
   Christian Tismer
   Hakan Ardo
-  Manuel Jacob
-  Ronan Lamy
   Benjamin Peterson
   Anders Chrigstrom
   Eric van Riet Paap
   Wim Lavrijsen
   Richard Emslie
+  Richard Plangger
   Alexander Schremmer
   Dan Villiom Podlaski Christiansen
   Lukas Diekmann
   Sven Hager
   Anders Lehmann
-  Richard Plangger
-  Aurelien Campeas
   Remi Meier
+  Aurelien Campeas
   Niklaus Haldimann
   Camillo Bruni
   Laura Creighton
@@ -89,10 +89,12 @@ appropriate measure but it's something)::
   Mark Pearse
   Simon Cross
   Andreas Stührk
+  Edd Barrett
   Stefano Rivera
   Jean-Philippe St. Pierre
   Guido van Rossum
   Pavel Vinogradov
+  Jeremy Thurgood
   Paweł Piotr Przeradowski
   Paul deGrandis
   Ilya Osadchiy
@@ -104,14 +106,12 @@ appropriate measure but it's something)::
   Georg Brandl
   Bert Freudenberg
   Stian Andreassen
-  Edd Barrett
   Wanja Saatkamp
   Gerald Klix
   Mike Blume
   Tobias Pape
   Oscar Nierstrasz
   Stefan H. Muller
-  Jeremy Thurgood
   Rami Chowdhury
   Eugene Oden
   Henry Mason
@@ -123,6 +123,7 @@ appropriate measure but it's something)::
   Lukas Renggli
   Guenter Jantzen
   Ned Batchelder
+  Anton Gulenko
   Amit Regmi
   Ben Young
   Nicolas Chauvat
@@ -170,9 +171,11 @@ appropriate measure but it's something)::
   Alex Perry
   Vincent Legoll
   Alan McIntyre
+  William Leslie
   Alexander Sedov
   Attila Gobi
   Christopher Pope
+  Devin Jeanpierre
   Christian Tismer 
   Marc Abramowitz
   Dan Stromberg
@@ -184,7 +187,6 @@ appropriate measure but it's something)::
   Carl Meyer
   Karl Ramm
   Pieter Zieschang
-  Anton Gulenko
   Gabriel
   Lukas Vacek
   Andrew Dalke
@@ -196,6 +198,7 @@ appropriate measure but it's something)::
   Alejandro J. Cura
   Jacob Oscarson
   Travis Francis Athougies
+  Vaibhav Sood
   Ryan Gonzalez
   Ian Foote
   Kristjan Valur Jonsson
@@ -203,8 +206,11 @@ appropriate measure but it's something)::
   Neil Blakey-Milner
   Lutz Paelike
   Lucio Torre
+  Spenser Bauman
   Lars Wassermann
+  Philipp Rustemeuer
   Henrik Vendelbo
+  Richard Lancaster
   Dan Buch
   Miguel de Val Borro
   Artur Lisiecki
@@ -221,7 +227,6 @@ appropriate measure but it's something)::
   roberto@goyle
   Yury V. Zaytsev
   Anna Katrina Dominguez
-  William Leslie
   Bobby Impollonia
   timo@eistee.fritz.box
   Andrew Thompson

@@ -48,22 +48,23 @@ copyrighted by one or more of the following people and organizations:
   Michael Hudson
   David Schneider
   Holger Krekel
+  Ronan Lamy
+  Manuel Jacob
   Christian Tismer
   Hakan Ardo
-  Manuel Jacob
-  Ronan Lamy
   Benjamin Peterson
   Anders Chrigstrom
   Eric van Riet Paap
   Wim Lavrijsen
   Richard Emslie
+  Richard Plangger
   Alexander Schremmer
   Dan Villiom Podlaski Christiansen
   Lukas Diekmann
   Sven Hager
   Anders Lehmann
-  Aurelien Campeas
   Remi Meier
+  Aurelien Campeas
   Niklaus Haldimann
   Camillo Bruni
   Laura Creighton
@@ -87,7 +88,6 @@ copyrighted by one or more of the following people and organizations:
   Ludovic Aubry
   Jacob Hallen
   Jason Creighton
-  Richard Plangger
   Alex Martelli
   Michal Bendowski
   stian
@@ -119,10 +119,12 @@ copyrighted by one or more of the following people and organizations:
   Mark Pearse
   Simon Cross
   Andreas Stührk
+  Edd Barrett
   Stefano Rivera
   Jean-Philippe St. Pierre
   Guido van Rossum
   Pavel Vinogradov
+  Jeremy Thurgood
   Paweł Piotr Przeradowski
   Paul deGrandis
   Ilya Osadchiy
@@ -134,14 +136,12 @@ copyrighted by one or more of the following people and organizations:
   Georg Brandl
   Bert Freudenberg
   Stian Andreassen
-  Edd Barrett
   Wanja Saatkamp
   Gerald Klix
   Mike Blume
   Tobias Pape
   Oscar Nierstrasz
   Stefan H. Muller
-  Jeremy Thurgood
   Rami Chowdhury
   Eugene Oden
   Henry Mason
@@ -153,6 +153,7 @@ copyrighted by one or more of the following people and organizations:
   Lukas Renggli
   Guenter Jantzen
   Ned Batchelder
+  Anton Gulenko
   Amit Regmi
   Ben Young
   Nicolas Chauvat
@@ -200,9 +201,11 @@ copyrighted by one or more of the following people and organizations:
   Alex Perry
   Vincent Legoll
   Alan McIntyre
+  William Leslie
   Alexander Sedov
   Attila Gobi
   Christopher Pope
+  Devin Jeanpierre
   Christian Tismer 
   Marc Abramowitz
   Dan Stromberg
@@ -214,7 +217,6 @@ copyrighted by one or more of the following people and organizations:
   Carl Meyer
   Karl Ramm
   Pieter Zieschang
-  Anton Gulenko
   Gabriel
   Lukas Vacek
   Andrew Dalke
@@ -226,6 +228,7 @@ copyrighted by one or more of the following people and organizations:
   Alejandro J. Cura
   Jacob Oscarson
   Travis Francis Athougies
+  Vaibhav Sood
   Ryan Gonzalez
   Ian Foote
   Kristjan Valur Jonsson
@@ -233,8 +236,11 @@ copyrighted by one or more of the following people and organizations:
   Neil Blakey-Milner
   Lutz Paelike
   Lucio Torre
+  Spenser Bauman
   Lars Wassermann
+  Philipp Rustemeuer
   Henrik Vendelbo
+  Richard Lancaster
   Dan Buch
   Miguel de Val Borro
   Artur Lisiecki
@@ -251,7 +257,6 @@ copyrighted by one or more of the following people and organizations:
   roberto@goyle
   Yury V. Zaytsev
   Anna Katrina Dominguez
-  William Leslie
   Bobby Impollonia
   timo@eistee.fritz.box
   Andrew Thompson
@@ -283,6 +288,7 @@ copyrighted by one or more of the following people and organizations:
   shoma hosaka
   Daniel Neuhäuser
   Ben Mather
+  Niclas Olofsson
   halgari
   Boglarka Vezer
   Chris Pressey
