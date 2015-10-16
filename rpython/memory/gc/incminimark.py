@@ -2761,7 +2761,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
     def _pyobj(self, pyobjaddr):
         return llmemory.cast_adr_to_ptr(pyobjaddr, self.PYOBJ_HDR_PTR)
 
-    def rawrefcount_init(self):
+    def rawrefcount_init(self, dealloc_callback):
         # see pypy/doc/discussion/rawrefcount.rst
         if not self.rrc_enabled:
             self.rrc_p_list_young = self.AddressStack()
@@ -2772,6 +2772,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             p = lltype.malloc(self._ADDRARRAY, 1, flavor='raw',
                               track_allocation=False)
             self.rrc_singleaddr = llmemory.cast_ptr_to_adr(p)
+            self.rrc_dealloc_callback = dealloc_callback
             self.rrc_enabled = True
 
     def check_no_more_rawrefcount_state(self):
@@ -2854,19 +2855,19 @@ class IncrementalMiniMarkGC(MovingGCBase):
         from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
         #
         rc = self._pyobj(pyobject).ob_refcnt
-        if rc == REFCNT_FROM_PYPY_DIRECT:
+        if rc >= REFCNT_FROM_PYPY_DIRECT:
+            ll_assert(rc == REFCNT_FROM_PYPY_DIRECT,
+                    "cpyext: rrc_trace() should have marked the pypy obj alive")
             lltype.free(self._pyobj(pyobject), flavor='raw')
         else:
+            ll_assert(rc >= REFCNT_FROM_PYPY, "refcount underflow?")
             ll_assert(rc < int(REFCNT_FROM_PYPY_DIRECT * 0.99),
                       "refcount underflow from REFCNT_FROM_PYPY_DIRECT?")
-            if rc > REFCNT_FROM_PYPY_DIRECT:
-                rc -= REFCNT_FROM_PYPY_DIRECT
-            else:
-                ll_assert(rc >= REFCNT_FROM_PYPY, "refcount underflow?")
-                rc -= REFCNT_FROM_PYPY
-                if rc == 0:
-                    xxx  # _Py_Dealloc(pyobject)
+            rc -= REFCNT_FROM_PYPY
             self._pyobj(pyobject).ob_refcnt = rc
+            self._pyobj(pyobject).ob_pypy_link = 0
+            if rc == 0:
+                self.rrc_dealloc_callback(pyobject)
     _rrc_free._always_inline_ = True
 
     def rrc_major_collection_trace(self):
