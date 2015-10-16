@@ -18,13 +18,14 @@ def _build_pypy_link(p):
     return res
 
 
-def init():
+def init(dealloc_callback=None):
     "NOT_RPYTHON: set up rawrefcount with the GC"
-    global _p_list, _o_list, _adr2pypy, _pypy2ob
+    global _p_list, _o_list, _adr2pypy, _pypy2ob, _dealloc_callback
     _p_list = []
     _o_list = []
     _adr2pypy = [None]
     _pypy2ob = {}
+    _dealloc_callback = dealloc_callback
 
 def create_link_pypy(p, ob):
     "NOT_RPYTHON: a link where the PyPy object contains some or all the data"
@@ -61,8 +62,8 @@ def to_obj(Class, ob):
 
 def _collect():
     """NOT_RPYTHON: for tests only.  Emulates a GC collection.
-    Returns the list of ob's whose _Py_Dealloc() should be called,
-    from the O list.
+    Will invoke dealloc_callback() for all objects whose _Py_Dealloc()
+    should be called.
     """
     def detach(ob, wr_list):
         assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
@@ -105,17 +106,18 @@ def _collect():
             return p
         else:
             ob.c_ob_pypy_link = 0
-            if ob.c_ob_refcnt == REFCNT_FROM_PYPY_DIRECT:
-                pass    # freed
-            elif ob.c_ob_refcnt > REFCNT_FROM_PYPY_DIRECT:
-                ob.c_ob_refcnt -= REFCNT_FROM_PYPY_DIRECT
+            if ob.c_ob_refcnt >= REFCNT_FROM_PYPY_DIRECT:
+                assert ob.c_ob_refcnt == REFCNT_FROM_PYPY_DIRECT
+                lltype.free(ob, flavor='raw')
             else:
+                assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
+                assert ob.c_ob_refcnt < int(REFCNT_FROM_PYPY_DIRECT * 0.99)
                 ob.c_ob_refcnt -= REFCNT_FROM_PYPY
+                ob.c_ob_pypy_link = 0
                 if ob.c_ob_refcnt == 0:
-                    dealloc.append(ob)
+                    _dealloc_callback(ob)
             return None
 
-    dealloc = []
     _p_list = new_p_list
     for ob, wr in wr_p_list:
         p = attach(ob, wr, _p_list)
@@ -124,19 +126,20 @@ def _collect():
     _o_list = []
     for ob, wr in wr_o_list:
         attach(ob, wr, _o_list)
-    return dealloc
 
 # ____________________________________________________________
 
 class Entry(ExtRegistryEntry):
     _about_ = init
 
-    def compute_result_annotation(self):
-        pass
+    def compute_result_annotation(self, s_dealloc_callback):
+        from rpython.rtyper.llannotation import SomePtr
+        assert isinstance(s_dealloc_callback, SomePtr)   # ll-ptr-to-function
 
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
-        hop.genop('gc_rawrefcount_init', [])
+        [v_dealloc_callback] = hop.inputargs(hop.args_r[0].lowleveltype)
+        hop.genop('gc_rawrefcount_init', [v_dealloc_callback])
 
 class Entry(ExtRegistryEntry):
     _about_ = (create_link_pypy, create_link_pyobj)
