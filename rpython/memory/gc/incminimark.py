@@ -2774,6 +2774,13 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.rrc_singleaddr = llmemory.cast_ptr_to_adr(p)
             self.rrc_enabled = True
 
+    def check_no_more_rawrefcount_state(self):
+        "NOT_RPYTHON: for tests"
+        assert self.rrc_p_list_young.length() == 0
+        assert self.rrc_p_list_old  .length() == 0
+        assert self.rrc_o_list_young.length() == 0
+        assert self.rrc_o_list_old  .length() == 0
+
     def rawrefcount_create_link_pypy(self, gcobj, pyobject):
         ll_assert(self.rrc_enabled, "rawrefcount.init not called")
         obj = llmemory.cast_ptr_to_adr(gcobj)

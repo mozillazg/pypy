@@ -69,7 +69,7 @@ class TestRawRefCount(BaseDirectGCTest):
             assert lltype.cast_opaque_ptr(lltype.Ptr(S), p1ref).x == 42
             assert self.gc.rawrefcount_from_obj(p1ref) == r1addr
         p1, p1ref, r1, r1addr = self._rawrefcount_pair(42, is_direct=True)
-        assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT
+        check_alive(0)
         r1.ob_refcnt += 1
         self.gc.minor_collection()
         check_alive(+1)
@@ -80,42 +80,25 @@ class TestRawRefCount(BaseDirectGCTest):
         check_alive(0)
         self.gc.collect()
         py.test.raises(RuntimeError, "r1.ob_refcnt")    # dead
+        self.gc.check_no_more_rawrefcount_state()
 
     def test_rawrefcount_objects_collection_survives_from_obj(self):
-        for do_collect in [self.gc.minor_collection, self.gc.collect] * 2:
-            p1, p1ref, r1, r1addr = self._rawrefcount_pair(42)
-            assert r1.ob_refcnt == REFCNT_FROM_PYPY_OBJECT
-            self.stackroots.append(p1)
-            do_collect()
-            assert r1.ob_refcnt == REFCNT_FROM_PYPY_OBJECT
-            assert r1.ob_pypy_link != llmemory.NULL
+        def check_alive(extra_refcount):
+            assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT + extra_refcount
+            assert r1.ob_pypy_link != 0
             p1ref = self.gc.rawrefcount_to_obj(r1addr)
             assert lltype.cast_opaque_ptr(lltype.Ptr(S), p1ref).x == 42
             assert self.gc.rawrefcount_from_obj(p1ref) == r1addr
-
-    def test_rawrefcount_objects_collection_dies(self):
-        p1, p1ref, r1, r1addr = self._rawrefcount_pair(43)
-        seen = []
-        self.gc.rawrefcount_set_callback(seen.append)
+        p1, p1ref, r1, r1addr = self._rawrefcount_pair(42, is_direct=True)
+        check_alive(0)
+        self.stackroots.append(p1)
         self.gc.minor_collection()
-        assert r1.ob_refcnt == REFCNT_FROM_PYPY_OBJECT
-        assert r1.ob_pypy_link != llmemory.NULL
-        p1ref = self.gc.rawrefcount_to_obj(r1addr)
-        assert seen == [p1ref]
-        assert lltype.cast_opaque_ptr(lltype.Ptr(S), p1ref).x == 43
-        assert self.gc.rawrefcount_from_obj(p1ref) == r1addr
-        #
-        del seen[:]
-        self.gc.minor_collection()
-        assert seen == []
+        check_alive(0)
         self.gc.collect()
-        assert seen == [p1ref]
-        assert r1.ob_pypy_link == llmemory.cast_ptr_to_adr(p1ref)
-
-    def test_rawrefcount_objects_detach(self):
-        p1, p1ref, r1, r1addr = self._rawrefcount_pair(43)
-        self.gc.rawrefcount_detach(r1addr)
-        assert r1.ob_pypy_link == llmemory.NULL
-        assert self.gc.rawrefcount_from_obj(p1ref) == llmemory.NULL
-        assert self.gc.rawrefcount_to_obj(r1addr) == lltype.nullptr(
-            llmemory.GCREF.TO)
+        check_alive(0)
+        self.stackroots.pop()
+        self.gc.minor_collection()
+        check_alive(0)
+        self.gc.collect()
+        py.test.raises(RuntimeError, "r1.ob_refcnt")    # dead
+        self.gc.check_no_more_rawrefcount_state()
