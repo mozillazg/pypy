@@ -39,9 +39,8 @@ rawrefcount.create_link_pyobj(p, ob)
 
 rawrefcount.from_obj(p)
 
-    If there is a link from object 'p', and 'p' is not a
-    W_CPyExtPlaceHolderObject, returns the corresponding 'ob'.
-    Otherwise, returns NULL.
+    If there is a link from object 'p' made with create_link_pypy(),
+    returns the corresponding 'ob'.  Otherwise, returns NULL.
 
 rawrefcount.to_obj(Class, ob)
 
@@ -141,10 +140,13 @@ then it doesn't work because the items are created just-in-time on the
 PyPy side.  In this case, the PyTupleObject needs to hold real
 references to the PyObject items, and we use create_link_pypy()/
 REFCNT_FROM_PYPY.  In all cases, we have a C array of PyObjects
-that we can return from PySequence_Fast_ITEMS.
+that we can directly return from PySequence_Fast_ITEMS, PyTuple_ITEMS,
+PyTuple_GetItem, and so on.
 
 For <list> objects coming from PyPy, we can use a cpyext list
 strategy.  The list turns into a PyListObject, as if it had been
 allocated from C in the first place.  The special strategy can hold
-(only) a direct reference to the PyListObject, and we can use
-create_link_pyobj().  PySequence_Fast_ITEMS then works for lists too.
+(only) a direct reference to the PyListObject, and we can use either
+create_link_pyobj() or create_link_pypy() (to be decided).
+PySequence_Fast_ITEMS then works for lists too, and PyList_GetItem
+can return a borrowed reference, and so on.
