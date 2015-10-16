@@ -2850,9 +2850,12 @@ class IncrementalMiniMarkGC(MovingGCBase):
         if rc == REFCNT_FROM_PYPY_DIRECT:
             lltype.free(self._pyobj(pyobject), flavor='raw')
         else:
+            ll_assert(rc < int(REFCNT_FROM_PYPY_DIRECT * 0.99),
+                      "refcount underflow from REFCNT_FROM_PYPY_DIRECT?")
             if rc > REFCNT_FROM_PYPY_DIRECT:
                 rc -= REFCNT_FROM_PYPY_DIRECT
             else:
+                ll_assert(rc >= REFCNT_FROM_PYPY, "refcount underflow?")
                 rc -= REFCNT_FROM_PYPY
                 if rc == 0:
                     xxx  # _Py_Dealloc(pyobject)
