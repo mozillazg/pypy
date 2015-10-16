@@ -2781,6 +2781,9 @@ class IncrementalMiniMarkGC(MovingGCBase):
         assert self.rrc_p_list_old  .length() == 0
         assert self.rrc_o_list_young.length() == 0
         assert self.rrc_o_list_old  .length() == 0
+        def check_value_is_null(key, value, ignore):
+            assert value == llmemory.NULL
+        self.rrc_p_dict.foreach(check_value_is_null, None)
 
     def rawrefcount_create_link_pypy(self, gcobj, pyobject):
         ll_assert(self.rrc_enabled, "rawrefcount.init not called")
@@ -2844,14 +2847,14 @@ class IncrementalMiniMarkGC(MovingGCBase):
     def _rrc_minor_free(self, pyobject, surviving_list, surviving_dict):
         intobj = self._pyobj(pyobject).ob_pypy_link
         obj = llmemory.cast_int_to_adr(intobj)
+        if surviving_dict:
+            surviving_dict.setitem(obj, llmemory.NULL)
         if self.is_in_nursery(obj):
             if self.is_forwarded(obj):
                 # Common case: survives and moves
                 obj = self.get_forwarding_address(obj)
                 intobj = llmemory.cast_adr_to_int(obj, mode="symbolic")
                 self._pyobj(pyobject).ob_pypy_link = intobj
-                if surviving_dict:
-                    surviving_dict.setitem(obj, pyobject)
                 surviving = True
             else:
                 surviving = False
@@ -2859,13 +2862,14 @@ class IncrementalMiniMarkGC(MovingGCBase):
               self.young_rawmalloced_objects.contains(pointing_to)):
             # young weakref to a young raw-malloced object
             if self.header(pointing_to).tid & GCFLAG_VISITED_RMY:
-                # surviving_dict is already up-to-date: the key doesn't move
                 surviving = True    # survives, but does not move
             else:
                 surviving = False
         #
         if surviving:
             surviving_list.append(pyobject)
+            if surviving_dict:
+                surviving_dict.setitem(obj, pyobject)
         else:
             self._rrc_free(pyobject)
 
@@ -2907,19 +2911,15 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.visit_all_objects()
 
     def rrc_major_collection_free(self):
+        length_estimate = self.rrc_p_dict.length()
+        self.rrc_p_dict.delete()
+        self.rrc_p_dict = new_p_dict = self.AddressDict(length_estimate)
         new_p_list = self.AddressStack()
-        if self.rrc_p_dict.length() > self.rrc_p_list_old.length() * 2 + 30:
-            new_p_dict = self.AddressDict()
-        else:
-            new_p_dict = self.null_address_dict()
         while self.rrc_p_list_old.non_empty():
             self._rrc_major_free(self.rrc_p_list_old.pop(), new_p_list,
                                                             new_p_dict)
         self.rrc_p_list_old.delete()
         self.rrc_p_list_old = new_p_list
-        if new_p_dict:
-            self.rrc_p_dict.delete()
-            self.rrc_p_dict = new_p_dict
         #
         new_o_list = self.AddressStack()
         no_o_dict = self.null_address_dict()
@@ -2935,6 +2935,6 @@ class IncrementalMiniMarkGC(MovingGCBase):
         if self.header(obj).tid & GCFLAG_VISITED:
             surviving_list.append(pyobject)
             if surviving_dict:
-                surviving_dict.setitem(obj, pyobject)
+                surviving_dict.insertclean(obj, pyobject)
         else:
             self._rrc_free(pyobject)

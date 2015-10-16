@@ -55,10 +55,6 @@ class TestRawRefCount(BaseDirectGCTest):
             if not is_pyobj:
                 assert self.gc.rawrefcount_from_obj(p1ref) == r1addr
             else:
-                # NB. this is not strictly always the case, because of
-                # dead entries remaining behind; but for these simple
-                # tests it is useful to detect unexpected rrc_p_dict
-                # entries
                 assert self.gc.rawrefcount_from_obj(p1ref) == llmemory.NULL
             return p1
         return p1, p1ref, r1, r1addr, check_alive
