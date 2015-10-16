@@ -2170,8 +2170,12 @@ class IncrementalMiniMarkGC(MovingGCBase):
             # finalizers/weak references are rare and short which means that
             # they do not need a separate state and do not need to be
             # made incremental.
+            # For now, the same applies to rawrefcount'ed objects.
             if (not self.objects_to_trace.non_empty() and
                 not self.more_objects_to_trace.non_empty()):
+                #
+                if self.rrc_enabled:
+                    self.rrc_major_collection_trace()
                 #
                 if self.objects_with_finalizers.non_empty():
                     self.deal_with_objects_with_finalizers()
@@ -2207,6 +2211,10 @@ class IncrementalMiniMarkGC(MovingGCBase):
                     self.old_objects_pointing_to_pinned = \
                             new_old_objects_pointing_to_pinned
                     self.updated_old_objects_pointing_to_pinned = True
+                #
+                if self.rrc_enabled:
+                    self.rrc_major_collection_free()
+                #
                 self.gc_state = STATE_SWEEPING
             #END MARKING
         elif self.gc_state == STATE_SWEEPING:
@@ -2760,7 +2768,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.rrc_p_list_old   = self.AddressStack()
             self.rrc_o_list_young = self.AddressStack()
             self.rrc_o_list_old   = self.AddressStack()
-            self.rrc_dict         = self.AddressDict()
+            self.rrc_p_dict       = self.AddressDict()
             p = lltype.malloc(self._ADDRARRAY, 1, flavor='raw',
                               track_allocation=False)
             self.rrc_singleaddr = llmemory.cast_ptr_to_adr(p)
@@ -2775,11 +2783,11 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.rrc_p_list_old.append(pyobject)
         objint = llmemory.cast_adr_to_int(obj, mode="symbolic")
         self._pyobj(pyobject).ob_pypy_link = objint
-        self.rrc_dict.setitem(obj, pyobject)
+        self.rrc_p_dict.setitem(obj, pyobject)
 
     def rawrefcount_from_obj(self, gcobj):
         obj = llmemory.cast_ptr_to_adr(gcobj)
-        return self.rrc_dict.get(obj)
+        return self.rrc_p_dict.get(obj)
 
     def rawrefcount_to_obj(self, pyobject):
         obj = llmemory.cast_int_to_adr(self._pyobj(pyobject).ob_pypy_link)
@@ -2808,10 +2816,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
         while lst.non_empty():
             self._rrc_minor_free(lst.pop(), self.rrc_p_list_old)
 
-    def _rrc_minor_free(self, pyobject, add_into_list):
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
-        #
+    def _rrc_minor_free(self, pyobject, surviving_list):
         intobj = self._pyobj(pyobject).ob_pypy_link
         obj = llmemory.cast_int_to_adr(intobj)
         if self.is_in_nursery(obj):
@@ -2820,7 +2825,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 obj = self.get_forwarding_address(obj)
                 intobj = llmemory.cast_adr_to_int(obj, mode="symbolic")
                 self._pyobj(pyobject).ob_pypy_link = intobj
-                self.rrc_dict.setitem(obj, pyobject)
+                self.rrc_p_dict.setitem(obj, pyobject)
                 surviving = True
             else:
                 surviving = False
@@ -2833,16 +2838,65 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 surviving = False
         #
         if surviving:
-            add_into_list.append(obj)
+            surviving_list.append(pyobject)
         else:
-            rc = self._pyobj(pyobject).ob_refcnt
-            if rc == self.REFCNT_FROM_PYPY_DIRECT:
-                llmemory.raw_free(pyobject)
+            self._rrc_free(pyobject)
+
+    def _rrc_free(self, pyobject):
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
+        #
+        rc = self._pyobj(pyobject).ob_refcnt
+        if rc == REFCNT_FROM_PYPY_DIRECT:
+            lltype.free(self._pyobj(pyobject), flavor='raw')
+        else:
+            if rc > REFCNT_FROM_PYPY_DIRECT:
+                rc -= REFCNT_FROM_PYPY_DIRECT
             else:
-                if rc > self.REFCNT_FROM_PYPY_DIRECT:
-                    rc -= self.REFCNT_FROM_PYPY_DIRECT
-                else:
-                    rc -= self.REFCNT_FROM_PYPY
-                    if rc == 0:
-                        xxx  # _Py_Dealloc(pyobject)
-                self._pyobj(pyobject).ob_refcnt = rc
+                rc -= REFCNT_FROM_PYPY
+                if rc == 0:
+                    xxx  # _Py_Dealloc(pyobject)
+            self._pyobj(pyobject).ob_refcnt = rc
+    _rrc_free._always_inline_ = True
+
+    def rrc_major_collection_trace(self):
+        self.rrc_p_list_old.foreach(self._rrc_major_trace, None)
+
+    def _rrc_major_trace(self, pyobject, ignore):
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
+        #
+        rc = self._pyobj(pyobject).ob_refcnt
+        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_DIRECT:
+            pass     # the corresponding object may die
+        else:
+            # force the corresponding object to be alive
+            intobj = self._pyobj(pyobject).ob_pypy_link
+            obj = llmemory.cast_int_to_adr(intobj)
+            self.objects_to_trace.append(obj)
+            self.visit_all_objects()
+
+    def rrc_major_collection_free(self):
+        new_p_list = self.AddressStack()
+        if self.rrc_p_dict.length() > self.rrc_p_list_old.length() * 2 + 30:
+            new_p_dict = self.AddressDict()
+        else:
+            new_p_dict = self.null_address_dict()
+        while self.rrc_p_list_old.non_empty():
+            self._rrc_major_free(self.rrc_p_list_old.pop(), new_p_list,
+                                                            new_p_dict)
+        self.rrc_p_list_old.delete()
+        self.rrc_p_list_old = new_p_list
+        if new_p_dict:
+            self.rrc_p_dict.delete()
+            self.rrc_p_dict = new_p_dict
+
+    def _rrc_major_free(self, pyobject, surviving_list, surviving_dict):
+        intobj = self._pyobj(pyobject).ob_pypy_link
+        obj = llmemory.cast_int_to_adr(intobj)
+        if self.header(obj).tid & GCFLAG_VISITED:
+            surviving_list.append(pyobject)
+            if surviving_dict:
+                surviving_dict.setitem(obj, pyobject)
+        else:
+            self._rrc_free(pyobject)

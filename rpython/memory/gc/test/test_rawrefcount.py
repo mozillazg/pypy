@@ -1,3 +1,4 @@
+import py
 from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.memory.gc.incminimark import IncrementalMiniMarkGC
 from rpython.memory.gc.test.test_direct import BaseDirectGCTest
@@ -61,16 +62,24 @@ class TestRawRefCount(BaseDirectGCTest):
         lltype.free(r2, flavor='raw')
 
     def test_rawrefcount_objects_collection_survives_from_raw(self):
-        for do_collect in [self.gc.minor_collection, self.gc.collect] * 2:
-            p1, p1ref, r1, r1addr = self._rawrefcount_pair(42, is_direct=True)
-            assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT
-            r1.ob_refcnt += 1
-            do_collect()
-            assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT + 1
+        def check_alive(extra_refcount):
+            assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT + extra_refcount
             assert r1.ob_pypy_link != 0
             p1ref = self.gc.rawrefcount_to_obj(r1addr)
             assert lltype.cast_opaque_ptr(lltype.Ptr(S), p1ref).x == 42
             assert self.gc.rawrefcount_from_obj(p1ref) == r1addr
+        p1, p1ref, r1, r1addr = self._rawrefcount_pair(42, is_direct=True)
+        assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT
+        r1.ob_refcnt += 1
+        self.gc.minor_collection()
+        check_alive(+1)
+        self.gc.collect()
+        check_alive(+1)
+        r1.ob_refcnt -= 1
+        self.gc.minor_collection()
+        check_alive(0)
+        self.gc.collect()
+        py.test.raises(RuntimeError, "r1.ob_refcnt")    # dead
 
     def test_rawrefcount_objects_collection_survives_from_obj(self):
         for do_collect in [self.gc.minor_collection, self.gc.collect] * 2:
