@@ -2859,6 +2859,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
               self.young_rawmalloced_objects.contains(pointing_to)):
             # young weakref to a young raw-malloced object
             if self.header(pointing_to).tid & GCFLAG_VISITED_RMY:
+                # surviving_dict is already up-to-date: the key doesn't move
                 surviving = True    # survives, but does not move
             else:
                 surviving = False
