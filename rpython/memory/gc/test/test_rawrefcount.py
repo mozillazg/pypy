@@ -4,11 +4,8 @@ from rpython.memory.gc.test.test_direct import BaseDirectGCTest
 from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
 from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
 
-PYOBJ_HDR = lltype.Array(lltype.Signed, hints={'nolength': True})
-PYOBJ_HDR_PTR = lltype.Ptr(PYOBJ_HDR)
-
-OB_REFCNT = IncrementalMiniMarkGC.OB_REFCNT
-OB_PYPY_LINK = IncrementalMiniMarkGC.OB_PYPY_LINK
+PYOBJ_HDR = IncrementalMiniMarkGC.PYOBJ_HDR
+PYOBJ_HDR_PTR = IncrementalMiniMarkGC.PYOBJ_HDR_PTR
 
 S = lltype.GcForwardReference()
 S.become(lltype.GcStruct('S',
@@ -29,9 +26,9 @@ class TestRawRefCount(BaseDirectGCTest):
         p1 = self.malloc(S)
         p1.x = intval
         p1ref = lltype.cast_opaque_ptr(llmemory.GCREF, p1)
-        r1 = lltype.malloc(PYOBJ_HDR, 3, flavor='raw')
-        r1[OB_REFCNT] = rc
-        r1[OB_PYPY_LINK] = 0
+        r1 = lltype.malloc(PYOBJ_HDR, flavor='raw')
+        r1.ob_refcnt = rc
+        r1.ob_pypy_link = 0
         r1addr = llmemory.cast_ptr_to_adr(r1)
         self.gc.rawrefcount_init()
         if is_pyobj:
@@ -39,8 +36,8 @@ class TestRawRefCount(BaseDirectGCTest):
             self.gc.rawrefcount_create_link_pyobj(p1ref, r1addr)
         else:
             self.gc.rawrefcount_create_link_pypy(p1ref, r1addr)
-        assert r1[OB_REFCNT] == rc
-        assert r1[OB_PYPY_LINK] != 0
+        assert r1.ob_refcnt == rc
+        assert r1.ob_pypy_link != 0
         return p1, p1ref, r1, r1addr
 
     def test_rawrefcount_objects_basic(self):
@@ -48,13 +45,13 @@ class TestRawRefCount(BaseDirectGCTest):
         p2 = self.malloc(S)
         p2.x = 84
         p2ref = lltype.cast_opaque_ptr(llmemory.GCREF, p2)
-        r2 = lltype.malloc(PYOBJ_HDR, 3, flavor='raw')
-        r2[0] = 1
-        r2[1] = 0
+        r2 = lltype.malloc(PYOBJ_HDR, flavor='raw')
+        r2.ob_refcnt = 1
+        r2.ob_pypy_link = 0
         r2addr = llmemory.cast_ptr_to_adr(r2)
         # p2 and r2 are not linked
-        assert r1[1] != 0
-        assert r2[1] == 0
+        assert r1.ob_pypy_link != 0
+        assert r2.ob_pypy_link == 0
         assert self.gc.rawrefcount_from_obj(p1ref) == r1addr
         assert self.gc.rawrefcount_from_obj(p2ref) == llmemory.NULL
         assert self.gc.rawrefcount_to_obj(r1addr) == p1ref
@@ -66,11 +63,11 @@ class TestRawRefCount(BaseDirectGCTest):
     def test_rawrefcount_objects_collection_survives_from_raw(self):
         for do_collect in [self.gc.minor_collection, self.gc.collect] * 2:
             p1, p1ref, r1, r1addr = self._rawrefcount_pair(42, is_direct=True)
-            assert r1.c_ob_refcnt == REFCNT_FROM_PYPY_DIRECT
+            assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT
             r1.ob_refcnt += 1
             do_collect()
-            assert r1.ob_refcnt == REFCNT_FROM_PYPY_OBJECT + 1
-            assert r1.ob_pypy_link != llmemory.NULL
+            assert r1.ob_refcnt == REFCNT_FROM_PYPY_DIRECT + 1
+            assert r1.ob_pypy_link != 0
             p1ref = self.gc.rawrefcount_to_obj(r1addr)
             assert lltype.cast_opaque_ptr(lltype.Ptr(S), p1ref).x == 42
             assert self.gc.rawrefcount_from_obj(p1ref) == r1addr

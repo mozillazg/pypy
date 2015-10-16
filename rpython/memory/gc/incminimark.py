@@ -1602,6 +1602,10 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 self._visit_old_objects_pointing_to_pinned, None)
             current_old_objects_pointing_to_pinned.delete()
         #
+        # visit the P list from rawrefcount, if enabled.
+        if self.rrc_enabled:
+            self.rrc_minor_collection_trace()
+        #
         while True:
             # If we are using card marking, do a partial trace of the arrays
             # that are flagged with GCFLAG_CARDS_SET.
@@ -1649,6 +1653,10 @@ class IncrementalMiniMarkGC(MovingGCBase):
         # them or make them old.
         if self.young_rawmalloced_objects:
             self.free_young_rawmalloced_objects()
+        #
+        # visit the P and O lists from rawrefcount, if enabled.
+        if self.rrc_enabled:
+            self.rrc_minor_collection_free()
         #
         # All live nursery objects are out of the nursery or pinned inside
         # the nursery.  Create nursery barriers to protect the pinned objects,
@@ -2734,10 +2742,16 @@ class IncrementalMiniMarkGC(MovingGCBase):
     # ----------
     # RawRefCount
 
-    OB_REFCNT    = 0
-    OB_PYPY_LINK = 1
-
     rrc_enabled = False
+
+    _ADDRARRAY = lltype.Array(llmemory.Address, hints={'nolength': True})
+    PYOBJ_HDR = lltype.Struct('GCHdr_PyObject',
+                              ('ob_refcnt', lltype.Signed),
+                              ('ob_pypy_link', lltype.Signed))
+    PYOBJ_HDR_PTR = lltype.Ptr(PYOBJ_HDR)
+
+    def _pyobj(self, pyobjaddr):
+        return llmemory.cast_adr_to_ptr(pyobjaddr, self.PYOBJ_HDR_PTR)
 
     def rawrefcount_init(self):
         # see pypy/doc/discussion/rawrefcount.rst
@@ -2747,17 +2761,20 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.rrc_o_list_young = self.AddressStack()
             self.rrc_o_list_old   = self.AddressStack()
             self.rrc_dict         = self.AddressDict()
+            p = lltype.malloc(self._ADDRARRAY, 1, flavor='raw',
+                              track_allocation=False)
+            self.rrc_singleaddr = llmemory.cast_ptr_to_adr(p)
             self.rrc_enabled = True
 
     def rawrefcount_create_link_pypy(self, gcobj, pyobject):
         ll_assert(self.rrc_enabled, "rawrefcount.init not called")
         obj = llmemory.cast_ptr_to_adr(gcobj)
         if self.is_young_object(obj):
-            self.rrc_p_list_young.append(obj)
+            self.rrc_p_list_young.append(pyobject)
         else:
-            self.rrc_p_list_old.append(obj)
+            self.rrc_p_list_old.append(pyobject)
         objint = llmemory.cast_adr_to_int(obj, mode="symbolic")
-        pyobject.signed[self.OB_PYPY_LINK] = objint
+        self._pyobj(pyobject).ob_pypy_link = objint
         self.rrc_dict.setitem(obj, pyobject)
 
     def rawrefcount_from_obj(self, gcobj):
@@ -2765,5 +2782,67 @@ class IncrementalMiniMarkGC(MovingGCBase):
         return self.rrc_dict.get(obj)
 
     def rawrefcount_to_obj(self, pyobject):
-        obj = llmemory.cast_int_to_adr(pyobject.signed[self.OB_PYPY_LINK])
+        obj = llmemory.cast_int_to_adr(self._pyobj(pyobject).ob_pypy_link)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+
+
+    def rrc_minor_collection_trace(self):
+        self.rrc_p_list_young.foreach(self._rrc_minor_trace,
+                                      self.rrc_singleaddr)
+
+    def _rrc_minor_trace(self, pyobject, singleaddr):
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
+        #
+        rc = self._pyobj(pyobject).ob_refcnt
+        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_DIRECT:
+            pass     # the corresponding object may die
+        else:
+            # force the corresponding object to be alive
+            intobj = self._pyobj(pyobject).ob_pypy_link
+            singleaddr.address[0] = llmemory.cast_int_to_adr(intobj)
+            self._trace_drag_out(singleaddr, llmemory.NULL)
+
+    def rrc_minor_collection_free(self):
+        lst = self.rrc_p_list_young
+        while lst.non_empty():
+            self._rrc_minor_free(lst.pop(), self.rrc_p_list_old)
+
+    def _rrc_minor_free(self, pyobject, add_into_list):
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
+        #
+        intobj = self._pyobj(pyobject).ob_pypy_link
+        obj = llmemory.cast_int_to_adr(intobj)
+        if self.is_in_nursery(obj):
+            if self.is_forwarded(obj):
+                # Common case: survives and moves
+                obj = self.get_forwarding_address(obj)
+                intobj = llmemory.cast_adr_to_int(obj, mode="symbolic")
+                self._pyobj(pyobject).ob_pypy_link = intobj
+                self.rrc_dict.setitem(obj, pyobject)
+                surviving = True
+            else:
+                surviving = False
+        elif (bool(self.young_rawmalloced_objects) and
+              self.young_rawmalloced_objects.contains(pointing_to)):
+            # young weakref to a young raw-malloced object
+            if self.header(pointing_to).tid & GCFLAG_VISITED_RMY:
+                surviving = True    # survives, but does not move
+            else:
+                surviving = False
+        #
+        if surviving:
+            add_into_list.append(obj)
+        else:
+            rc = self._pyobj(pyobject).ob_refcnt
+            if rc == self.REFCNT_FROM_PYPY_DIRECT:
+                llmemory.raw_free(pyobject)
+            else:
+                if rc > self.REFCNT_FROM_PYPY_DIRECT:
+                    rc -= self.REFCNT_FROM_PYPY_DIRECT
+                else:
+                    rc -= self.REFCNT_FROM_PYPY
+                    if rc == 0:
+                        xxx  # _Py_Dealloc(pyobject)
+                self._pyobj(pyobject).ob_refcnt = rc
