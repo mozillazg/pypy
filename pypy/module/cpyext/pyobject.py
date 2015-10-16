@@ -381,6 +381,7 @@ def Py_DecRef(space, obj):
     if DEBUG_REFCOUNT:
         debug_refcount("DECREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
     if obj.c_ob_refcnt == 0:
+        return #ZZZ
         state = space.fromcache(RefcountState)
         ptr = rffi.cast(ADDR, obj)
         if ptr not in state.py_objects_r2w:

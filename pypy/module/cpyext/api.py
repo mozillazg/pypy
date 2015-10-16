@@ -541,6 +541,12 @@ def is_PyObject(TYPE):
         return False
     return hasattr(TYPE.TO, 'c_ob_refcnt') and hasattr(TYPE.TO, 'c_ob_type')
 
+class BORROWED: pass
+
+@specialize.memo()
+def is_BORROWED(TYPE):
+    return TYPE is BORROWED
+
 # a pointer to PyObject
 PyObjectP = rffi.CArrayPtr(PyObject)
 
@@ -1230,68 +1236,53 @@ def make_generic_cpy_call(FT, decref_args, expect_null):
     # don't inline, as a hack to guarantee that no GC pointer is alive
     # anywhere in call_external_function
 
+    assert decref_args  #ZZZ
+
     @specialize.ll()
     def generic_cpy_call(space, func, *args):
         boxed_args = ()
-        to_decref = []
+        keepalives = ()
         assert len(args) == len(FT.ARGS)
         for i, ARG in unrolling_arg_types:
             arg = args[i]
             if is_PyObject(ARG):
-                if arg is None:
-                    boxed_args += (lltype.nullptr(PyObject.TO),)
-                elif isinstance(arg, W_Root):
-                    ref = make_ref(space, arg)
-                    boxed_args += (ref,)
-                    if decref_args:
-                        to_decref.append(ref)
-                else:
-                    boxed_args += (arg,)
-            else:
-                boxed_args += (arg,)
+                if not is_pyobj(arg):
+                    keepalives += (arg,)
+                    arg = as_pyobj(arg)
+            boxed_args += (arg,)
 
         try:
-            # create a new container for borrowed references
-            state = space.fromcache(RefcountState)
-            old_container = state.swap_borrow_container(None)
-            try:
-                # Call the function
-                result = call_external_function(func, *boxed_args)
-            finally:
-                state.swap_borrow_container(old_container)
-
-            if is_PyObject(RESULT_TYPE):
-                if result is None:
-                    ret = result
-                elif isinstance(result, W_Root):
-                    ret = result
-                else:
-                    ret = from_ref(space, result)
-                    # The object reference returned from a C function
-                    # that is called from Python must be an owned reference
-                    # - ownership is transferred from the function to its caller.
-                    if result:
-                        Py_DecRef(space, result)
-
-                # Check for exception consistency
-                has_error = PyErr_Occurred(space) is not None
-                has_result = ret is not None
-                if has_error and has_result:
-                    raise OperationError(space.w_SystemError, space.wrap(
-                        "An exception was set, but function returned a value"))
-                elif not expect_null and not has_error and not has_result:
-                    raise OperationError(space.w_SystemError, space.wrap(
-                        "Function returned a NULL result without setting an exception"))
-
-                if has_error:
-                    state = space.fromcache(State)
-                    state.check_and_raise_exception()
-
-                return ret
-            return result
+            # Call the function
+            result = call_external_function(func, *boxed_args)
         finally:
-            if decref_args:
-                for ref in to_decref:
-                    Py_DecRef(space, ref)
-    return generic_cpy_call
+            keepalive_until_here(*keepalives)
 
+        if is_PyObject(RESULT_TYPE):
+            if not is_pyobj(result):
+                ret = result
+            else:
+                ret = from_ref(space, result)
+                # The object reference returned from a C function
+                # that is called from Python must be an owned reference
+                # - ownership is transferred from the function to its caller.
+                if result:
+                    result.c_ob_refcnt -= 1
+
+            # Check for exception consistency
+            has_error = PyErr_Occurred(space) is not None
+            has_result = ret is not None
+            if has_error and has_result:
+                raise OperationError(space.w_SystemError, space.wrap(
+                    "An exception was set, but function returned a value"))
+            elif not expect_null and not has_error and not has_result:
+                raise OperationError(space.w_SystemError, space.wrap(
+                    "Function returned a NULL result without setting an exception"))
+
+            if has_error:
+                state = space.fromcache(State)
+                state.check_and_raise_exception()
+
+            return ret
+        return result
+
+    return generic_cpy_call

@@ -3,6 +3,7 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rlib.rdynload import DLLHANDLE
+from rpython.rlib import rawrefcount
 import sys
 
 class State:
@@ -82,6 +83,7 @@ class State:
             refcountstate = space.fromcache(RefcountState)
             refcountstate.init_r2w_from_w2r()
 
+        rawrefcount.init(lambda ob: ZZZ)
         for func in INIT_FUNCTIONS:
             func(space)
             self.check_and_raise_exception()
