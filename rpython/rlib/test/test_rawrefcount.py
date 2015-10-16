@@ -220,7 +220,7 @@ class TestTranslated(StandaloneTests):
         def make_p():
             p = W_Root(42)
             ob = lltype.malloc(PyObjectS, flavor='raw', zero=True)
-            rawrefcount.create_link_pyobj(p, ob)
+            rawrefcount.create_link_pypy(p, ob)
             ob.c_ob_refcnt += REFCNT_FROM_PYPY
             assert rawrefcount.from_obj(PyObject, p) == ob
             assert rawrefcount.to_obj(W_Root, ob) == p
