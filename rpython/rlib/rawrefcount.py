@@ -1,7 +1,7 @@
 #
 #  See documentation in pypy/doc/discussion/rawrefcount.rst
 #
-import weakref
+import sys, weakref
 from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.rlib.objectmodel import we_are_translated, specialize
 from rpython.rtyper.extregistry import ExtRegistryEntry
@@ -9,14 +9,14 @@ from rpython.rtyper import annlowlevel
 from rpython.rlib import rgc
 
 
-REFCNT_FROM_PYPY_OBJECT = 80   # == 0x50
+REFCNT_FROM_PYPY        = 80
+REFCNT_FROM_PYPY_DIRECT = REFCNT_FROM_PYPY + (sys.maxint//2+1)
 
 
 def _reset_state():
-    global _p_list, _o_list, _s_list, _adr2pypy, _pypy2ob
+    global _p_list, _o_list, _adr2pypy, _pypy2ob
     _p_list = []     # not rpython
     _o_list = []     # not rpython
-    _s_list = []     # not rpython
     _adr2pypy = [None]  # not rpython
     _pypy2ob = {}       # not rpython
 _reset_state()
@@ -32,7 +32,6 @@ def create_link_pypy(p, ob):
     assert p not in _pypy2ob
     assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
-    ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
     _pypy2ob[p] = ob
     _p_list.append(ob)
 
@@ -42,17 +41,7 @@ def create_link_pyobj(p, ob):
     assert p not in _pypy2ob
     assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
-    ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
     _o_list.append(ob)
-
-def create_link_shared(p, ob):
-    """NOT_RPYTHON: a link where both p and ob contain some data.
-       from_obj() will not work on this 'p'."""
-    assert p not in _pypy2ob
-    assert not ob.c_ob_pypy_link
-    ob.c_ob_pypy_link = _build_pypy_link(p)
-    ob.c_ob_refcnt += REFCNT_FROM_PYPY_OBJECT
-    _s_list.append(ob)
 
 def from_obj(OB_PTR_TYPE, p):
     "NOT_RPYTHON"
@@ -81,7 +70,7 @@ def _collect():
     from the O list.
     """
     def detach(ob, wr_list):
-        assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
+        assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
         assert ob.c_ob_pypy_link
         p = _adr2pypy[ob.c_ob_pypy_link]
         assert p is not None
@@ -93,7 +82,7 @@ def _collect():
     wr_p_list = []
     new_p_list = []
     for ob in _p_list:
-        if ob.c_ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
+        if ob.c_ob_refcnt not in (REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_DIRECT):
             new_p_list.append(ob)
         else:
             p = detach(ob, wr_p_list)
@@ -101,16 +90,6 @@ def _collect():
             del p
         ob = None
     _p_list = Ellipsis
-
-    wr_s_list = []
-    new_s_list = []
-    for ob in _s_list:
-        if ob.c_ob_refcnt > REFCNT_FROM_PYPY_OBJECT:
-            new_s_list.append(ob)
-        else:
-            detach(ob, wr_s_list)
-        ob = None
-    _s_list = Ellipsis
 
     wr_o_list = []
     for ob in _o_list:
@@ -122,7 +101,7 @@ def _collect():
     rgc.collect()
 
     def attach(ob, wr, final_list):
-        assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY_OBJECT
+        assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
         p = wr()
         if p is not None:
             assert ob.c_ob_pypy_link
@@ -130,23 +109,23 @@ def _collect():
             final_list.append(ob)
             return p
         else:
-            ob.c_ob_refcnt -= REFCNT_FROM_PYPY_OBJECT
             ob.c_ob_pypy_link = 0
-            if ob.c_ob_refcnt == 0 and dealloc is not None:
-                dealloc.append(ob)
+            if ob.c_ob_refcnt == REFCNT_FROM_PYPY_DIRECT:
+                pass    # freed
+            elif ob.c_ob_refcnt > REFCNT_FROM_PYPY_DIRECT:
+                ob.c_ob_refcnt -= REFCNT_FROM_PYPY_DIRECT
+            else:
+                ob.c_ob_refcnt -= REFCNT_FROM_PYPY
+                if ob.c_ob_refcnt == 0:
+                    dealloc.append(ob)
             return None
 
+    dealloc = []
     _p_list = new_p_list
-    dealloc = None
     for ob, wr in wr_p_list:
         p = attach(ob, wr, _p_list)
         if p:
             _pypy2ob[p] = ob
-    #
-    dealloc = []
-    _s_list = new_s_list
-    for ob, wr in wr_s_list:
-        attach(ob, wr, _s_list)
     _o_list = []
     for ob, wr in wr_o_list:
         attach(ob, wr, _o_list)
