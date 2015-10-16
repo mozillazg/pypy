@@ -11,6 +11,9 @@ from rpython.rlib import rgc
 REFCNT_FROM_PYPY        = 80
 REFCNT_FROM_PYPY_DIRECT = REFCNT_FROM_PYPY + (sys.maxint//2+1)
 
+RAWREFCOUNT_DEALLOC = lltype.Ptr(lltype.FuncType([llmemory.Address],
+                                                 lltype.Void))
+
 
 def _build_pypy_link(p):
     res = len(_adr2pypy)
@@ -129,6 +132,28 @@ def _collect():
 
 # ____________________________________________________________
 
+
+def _unspec_p(hop, v_p):
+    assert isinstance(v_p.concretetype, lltype.Ptr)
+    assert v_p.concretetype.TO._gckind == 'gc'
+    return hop.genop('cast_opaque_ptr', [v_p], resulttype=llmemory.GCREF)
+
+def _unspec_ob(hop, v_ob):
+    assert isinstance(v_ob.concretetype, lltype.Ptr)
+    assert v_ob.concretetype.TO._gckind == 'raw'
+    return hop.genop('cast_ptr_to_adr', [v_ob], resulttype=llmemory.Address)
+
+def _spec_p(hop, v_p):
+    assert v_p.concretetype == llmemory.GCREF
+    return hop.genop('cast_opaque_ptr', [v_p],
+                     resulttype=hop.r_result.lowleveltype)
+
+def _spec_ob(hop, v_ob):
+    assert v_ob.concretetype == llmemory.Address
+    return hop.genop('cast_adr_to_ptr', [v_ob],
+                     resulttype=hop.r_result.lowleveltype)
+
+
 class Entry(ExtRegistryEntry):
     _about_ = init
 
@@ -138,8 +163,9 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
-        [v_dealloc_callback] = hop.inputargs(hop.args_r[0].lowleveltype)
+        [v_dealloc_callback] = hop.inputargs(hop.args_r[0])
         hop.genop('gc_rawrefcount_init', [v_dealloc_callback])
+
 
 class Entry(ExtRegistryEntry):
     _about_ = (create_link_pypy, create_link_pyobj)
@@ -152,8 +178,10 @@ class Entry(ExtRegistryEntry):
             name = 'gc_rawrefcount_create_link_pypy'
         elif self.instance is create_link_pyobj:
             name = 'gc_rawrefcount_create_link_pyobj'
+        v_p, v_ob = hop.inputargs(*hop.args_r)
         hop.exception_cannot_occur()
-        hop.genop(name, hop.args_v)
+        hop.genop(name, [_unspec_p(hop, v_p), _unspec_ob(hop, v_ob)])
+
 
 class Entry(ExtRegistryEntry):
     _about_ = from_obj
@@ -168,9 +196,10 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
-        [v_p] = hop.inputargs(hop.args_r[1].lowleveltype)
-        return hop.genop('gc_rawrefcount_from_obj', [v_p],
-                         resulttype = hop.r_result.lowleveltype)
+        v_p = hop.inputarg(hop.args_r[1], arg=1)
+        v_ob = hop.genop('gc_rawrefcount_from_obj', [_unspec_p(hop, v_p)],
+                         resulttype = llmemory.Address)
+        return _spec_ob(hop, v_ob)
 
 class Entry(ExtRegistryEntry):
     _about_ = to_obj
@@ -185,6 +214,7 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
-        v_ob = hop.inputargs(hop.args_r[1].lowleveltype)
-        return hop.genop('gc_rawrefcount_to_obj', [v_ob],
-                         resulttype = hop.r_result.lowleveltype)
+        v_ob = hop.inputarg(hop.args_r[1], arg=1)
+        v_p = hop.genop('gc_rawrefcount_to_obj', [_unspec_ob(hop, v_ob)],
+                        resulttype = llmemory.GCREF)
+        return _spec_p(hop, v_p)

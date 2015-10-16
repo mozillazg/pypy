@@ -1,7 +1,11 @@
 import weakref
-from rpython.rlib import rawrefcount
+from rpython.rlib import rawrefcount, objectmodel, rgc
 from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_DIRECT
 from rpython.rtyper.lltypesystem import lltype, llmemory
+from rpython.rtyper.annlowlevel import llhelper
+from rpython.translator.c.test.test_standalone import StandaloneTests
+from rpython.config.translationoption import get_combined_translation_config
+
 
 class W_Root(object):
     def __init__(self, intval=0):
@@ -201,3 +205,53 @@ class TestRawRefCount:
         assert rawrefcount._p_list == [ob]
         assert rawrefcount.to_obj(W_Root, ob) == p
         lltype.free(ob, flavor='raw')
+
+
+class TestTranslated(StandaloneTests):
+
+    def test_full_translation(self):
+        class State:
+            pass
+        state = State()
+        state.seen = []
+        def dealloc_callback(ob):
+            state.seen.append(ob)
+
+        def make_p():
+            p = W_Root(42)
+            ob = lltype.malloc(PyObjectS, flavor='raw', zero=True)
+            rawrefcount.create_link_pyobj(p, ob)
+            ob.c_ob_refcnt += REFCNT_FROM_PYPY
+            assert rawrefcount.from_obj(PyObject, p) == ob
+            assert rawrefcount.to_obj(W_Root, ob) == p
+            return ob, p
+
+        FTYPE = rawrefcount.RAWREFCOUNT_DEALLOC
+
+        def entry_point(argv):
+            ll_dealloc_callback = llhelper(FTYPE, dealloc_callback)
+            rawrefcount.init(ll_dealloc_callback)
+            ob, p = make_p()
+            if state.seen != []:
+                print "OB COLLECTED REALLY TOO SOON"
+                return 1
+            rgc.collect()
+            if state.seen != []:
+                print "OB COLLECTED TOO SOON"
+                return 1
+            objectmodel.keepalive_until_here(p)
+            p = None
+            rgc.collect()
+            if state.seen == [llmemory.cast_ptr_to_adr(ob)]:
+                print "OK!"
+                lltype.free(ob, flavor='raw')
+                return 0
+            else:
+                print "OB NOT COLLECTED"
+                return 1
+
+        self.config = get_combined_translation_config(translating=True)
+        self.config.translation.gc = "incminimark"
+        t, cbuilder = self.compile(entry_point)
+        data = cbuilder.cmdexec('hi there')
+        assert data.startswith('OK!\n')

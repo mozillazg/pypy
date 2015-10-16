@@ -2757,6 +2757,8 @@ class IncrementalMiniMarkGC(MovingGCBase):
                               ('ob_refcnt', lltype.Signed),
                               ('ob_pypy_link', lltype.Signed))
     PYOBJ_HDR_PTR = lltype.Ptr(PYOBJ_HDR)
+    RAWREFCOUNT_DEALLOC = lltype.Ptr(lltype.FuncType([llmemory.Address],
+                                                     lltype.Void))
 
     def _pyobj(self, pyobjaddr):
         return llmemory.cast_adr_to_ptr(pyobjaddr, self.PYOBJ_HDR_PTR)
@@ -2792,7 +2794,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.rrc_p_list_young.append(pyobject)
         else:
             self.rrc_p_list_old.append(pyobject)
-        objint = llmemory.cast_adr_to_int(obj, mode="symbolic")
+        objint = llmemory.cast_adr_to_int(obj, "symbolic")
         self._pyobj(pyobject).ob_pypy_link = objint
         self.rrc_p_dict.setitem(obj, pyobject)
 
@@ -2803,7 +2805,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.rrc_o_list_young.append(pyobject)
         else:
             self.rrc_o_list_old.append(pyobject)
-        objint = llmemory.cast_adr_to_int(obj, mode="symbolic")
+        objint = llmemory.cast_adr_to_int(obj, "symbolic")
         self._pyobj(pyobject).ob_pypy_link = objint
         # there is no rrc_o_dict
 
@@ -2853,18 +2855,21 @@ class IncrementalMiniMarkGC(MovingGCBase):
             if self.is_forwarded(obj):
                 # Common case: survives and moves
                 obj = self.get_forwarding_address(obj)
-                intobj = llmemory.cast_adr_to_int(obj, mode="symbolic")
+                intobj = llmemory.cast_adr_to_int(obj, "symbolic")
                 self._pyobj(pyobject).ob_pypy_link = intobj
                 surviving = True
             else:
                 surviving = False
         elif (bool(self.young_rawmalloced_objects) and
-              self.young_rawmalloced_objects.contains(pointing_to)):
+              self.young_rawmalloced_objects.contains(obj)):
             # young weakref to a young raw-malloced object
-            if self.header(pointing_to).tid & GCFLAG_VISITED_RMY:
+            if self.header(obj).tid & GCFLAG_VISITED_RMY:
                 surviving = True    # survives, but does not move
             else:
                 surviving = False
+        else:
+            ll_assert(False, "rrc_X_list_young contains non-young obj")
+            return
         #
         if surviving:
             surviving_list.append(pyobject)
