@@ -192,7 +192,7 @@ cpyext_namespace = NameManager('cpyext_')
 
 class ApiFunction:
     def __init__(self, argtypes, restype, callable, error=_NOT_SPECIFIED,
-                 c_name=None, gil=None):
+                 c_name=None, gil=None, return_borrowed=False):
         self.argtypes = argtypes
         self.restype = restype
         self.functype = lltype.Ptr(lltype.FuncType(argtypes, restype))
@@ -209,6 +209,7 @@ class ApiFunction:
         self.argnames = argnames[1:]
         assert len(self.argnames) == len(self.argtypes)
         self.gil = gil
+        self.return_borrowed = return_borrowed
 
     def _freeze_(self):
         return True
@@ -245,6 +246,10 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
     - set `gil` to "acquire", "release" or "around" to acquire the GIL,
       release the GIL, or both
     """
+    return_borrowed = restype is BORROW
+    if return_borrowed:
+        restype = PyObject
+
     if isinstance(restype, lltype.Typedef):
         real_restype = restype.OF
     else:
@@ -267,7 +272,8 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
         else:
             c_name = func_name
         api_function = ApiFunction(argtypes, restype, func, error,
-                                   c_name=c_name, gil=gil)
+                                   c_name=c_name, gil=gil,
+                                   return_borrowed=return_borrowed)
         func.api_func = api_function
 
         if external:
@@ -541,7 +547,7 @@ def is_PyObject(TYPE):
         return False
     return hasattr(TYPE.TO, 'c_ob_refcnt') and hasattr(TYPE.TO, 'c_ob_type')
 
-class BORROWED: pass
+class BORROW: pass
 
 @specialize.memo()
 def is_BORROWED(TYPE):
@@ -611,11 +617,12 @@ def make_wrapper(space, callable, gil=None):
     gil_acquire = (gil == "acquire" or gil == "around")
     gil_release = (gil == "release" or gil == "around")
     assert gil is None or gil_acquire or gil_release
+    return_borrowed = callable.api_func.return_borrowed
 
     @specialize.ll()
     def wrapper(*args):
         from pypy.module.cpyext.pyobject import make_ref, from_ref
-        from pypy.module.cpyext.pyobject import Reference
+        from pypy.module.cpyext.pyobject import Reference, as_pyobj, is_pyobj
         # we hope that malloc removal removes the newtuple() that is
         # inserted exactly here by the varargs specializer
         if gil_acquire:
@@ -669,16 +676,12 @@ def make_wrapper(space, callable, gil=None):
                 retval = error_value
 
             elif is_PyObject(callable.api_func.restype):
-                if result is None:
-                    retval = rffi.cast(callable.api_func.restype,
-                                       make_ref(space, None))
-                elif isinstance(result, Reference):
-                    retval = result.get_ref(space)
-                elif not rffi._isllptr(result):
-                    retval = rffi.cast(callable.api_func.restype,
-                                       make_ref(space, result))
-                else:
+                if is_pyobj(result):
                     retval = result
+                else:
+                    retval = as_pyobj(result)
+                    if not return_borrowed and retval:
+                        retval.c_ob_refcnt += 1
             elif callable.api_func.restype is not lltype.Void:
                 retval = rffi.cast(callable.api_func.restype, result)
         except Exception, e:
@@ -1211,7 +1214,7 @@ def generic_cpy_call_expect_null(space, func, *args):
 @specialize.memo()
 def make_generic_cpy_call(FT, decref_args, expect_null):
     from pypy.module.cpyext.pyobject import make_ref, from_ref, Py_DecRef
-    from pypy.module.cpyext.pyobject import RefcountState
+    from pypy.module.cpyext.pyobject import RefcountState, is_pyobj, as_pyobj
     from pypy.module.cpyext.pyerrors import PyErr_Occurred
     unrolling_arg_types = unrolling_iterable(enumerate(FT.ARGS))
     RESULT_TYPE = FT.RESULT
@@ -1261,7 +1264,7 @@ def make_generic_cpy_call(FT, decref_args, expect_null):
             if not is_pyobj(result):
                 ret = result
             else:
-                ret = from_ref(space, result)
+                ret = from_ref(result)
                 # The object reference returned from a C function
                 # that is called from Python must be an owned reference
                 # - ownership is transferred from the function to its caller.

@@ -3,7 +3,7 @@ import sys
 from pypy.interpreter.baseobjspace import W_Root, SpaceCache
 from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from pypy.module.cpyext.api import (
-    cpython_api, bootstrap_function, PyObject, PyObjectP, ADDR,
+    cpython_api, bootstrap_function, PyObject, PyObjectP, ADDR, BORROW,
     CANNOT_FAIL, Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr, is_PyObject)
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.typeobject import W_TypeObject
