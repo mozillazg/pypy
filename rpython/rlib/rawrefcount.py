@@ -5,7 +5,6 @@ import sys, weakref
 from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.rlib.objectmodel import we_are_translated, specialize
 from rpython.rtyper.extregistry import ExtRegistryEntry
-from rpython.rtyper import annlowlevel
 from rpython.rlib import rgc
 
 
@@ -13,22 +12,22 @@ REFCNT_FROM_PYPY        = 80
 REFCNT_FROM_PYPY_DIRECT = REFCNT_FROM_PYPY + (sys.maxint//2+1)
 
 
-def _reset_state():
-    global _p_list, _o_list, _adr2pypy, _pypy2ob
-    _p_list = []     # not rpython
-    _o_list = []     # not rpython
-    _adr2pypy = [None]  # not rpython
-    _pypy2ob = {}       # not rpython
-_reset_state()
-
 def _build_pypy_link(p):
     res = len(_adr2pypy)
     _adr2pypy.append(p)
     return res
 
 
+def init():
+    "NOT_RPYTHON: set up rawrefcount with the GC"
+    global _p_list, _o_list, _adr2pypy, _pypy2ob
+    _p_list = []
+    _o_list = []
+    _adr2pypy = [None]
+    _pypy2ob = {}
+
 def create_link_pypy(p, ob):
-    "NOT_RPYTHON: a link where the PyPy object contains all the data"
+    "NOT_RPYTHON: a link where the PyPy object contains some or all the data"
     assert p not in _pypy2ob
     assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
@@ -51,18 +50,14 @@ def from_obj(OB_PTR_TYPE, p):
     assert lltype.typeOf(ob) == OB_PTR_TYPE
     return ob
 
-@specialize.arg(0)
 def to_obj(Class, ob):
+    "NOT_RPYTHON"
     link = ob.c_ob_pypy_link
-    if we_are_translated():
-        pypy_gcref = lltype.cast_int_to_ptr(llmemory.GCREF, link)
-        return annlowlevel.cast_gcref_to_instance(Class, pypy_gcref)
-    else:
-        if link == 0:
-            return None
-        p = _adr2pypy[link]
-        assert isinstance(p, Class)
-        return p
+    if link == 0:
+        return None
+    p = _adr2pypy[link]
+    assert isinstance(p, Class)
+    return p
 
 def _collect():
     """NOT_RPYTHON: for tests only.  Emulates a GC collection.
@@ -78,7 +73,7 @@ def _collect():
         wr_list.append((ob, weakref.ref(p)))
         return p
 
-    global _p_list, _o_list, _s_list
+    global _p_list, _o_list
     wr_p_list = []
     new_p_list = []
     for ob in _p_list:
@@ -133,5 +128,60 @@ def _collect():
 
 # ____________________________________________________________
 
-## class Entry(ExtRegistryEntry):
-##     _about_ = create_link_from_pypy
+class Entry(ExtRegistryEntry):
+    _about_ = init
+
+    def compute_result_annotation(self):
+        pass
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        hop.genop('gc_rawrefcount_init', [])
+
+class Entry(ExtRegistryEntry):
+    _about_ = (create_link_pypy, create_link_pyobj)
+
+    def compute_result_annotation(self, s_p, s_ob):
+        pass
+
+    def specialize_call(self, hop):
+        if self.instance is create_link_pypy:
+            name = 'gc_rawrefcount_create_link_pypy'
+        elif self.instance is create_link_pyobj:
+            name = 'gc_rawrefcount_create_link_pyobj'
+        hop.exception_cannot_occur()
+        hop.genop(name, hop.args_v)
+
+class Entry(ExtRegistryEntry):
+    _about_ = from_obj
+
+    def compute_result_annotation(self, s_OB_PTR_TYPE, s_p):
+        from rpython.annotator import model as annmodel
+        from rpython.rtyper.llannotation import lltype_to_annotation
+        assert (isinstance(s_p, annmodel.SomeInstance) or
+                    annmodel.s_None.contains(s_p))
+        assert s_OB_PTR_TYPE.is_constant()
+        return lltype_to_annotation(s_OB_PTR_TYPE.const)
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        [v_p] = hop.inputargs(hop.args_r[1].lowleveltype)
+        return hop.genop('gc_rawrefcount_from_obj', [v_p],
+                         resulttype = hop.r_result.lowleveltype)
+
+class Entry(ExtRegistryEntry):
+    _about_ = to_obj
+
+    def compute_result_annotation(self, s_Class, s_ob):
+        from rpython.annotator import model as annmodel
+        from rpython.rtyper.llannotation import SomePtr
+        assert isinstance(s_ob, SomePtr)
+        assert s_Class.is_constant()
+        classdef = self.bookkeeper.getuniqueclassdef(s_Class.const)
+        return annmodel.SomeInstance(classdef, can_be_None=True)
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        v_ob = hop.inputargs(hop.args_r[1].lowleveltype)
+        return hop.genop('gc_rawrefcount_to_obj', [v_ob],
+                         resulttype = hop.r_result.lowleveltype)

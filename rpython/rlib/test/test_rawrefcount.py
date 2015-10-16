@@ -16,7 +16,7 @@ PyObject = lltype.Ptr(PyObjectS)
 class TestRawRefCount:
 
     def setup_method(self, meth):
-        rawrefcount._reset_state()
+        rawrefcount.init()
 
     def test_create_link_pypy(self):
         p = W_Root(42)

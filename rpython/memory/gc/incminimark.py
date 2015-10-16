@@ -1080,35 +1080,19 @@ class IncrementalMiniMarkGC(MovingGCBase):
                   "odd-valued (i.e. tagged) pointer unexpected here")
         return self.nursery <= addr < self.nursery + self.nursery_size
 
-    def appears_to_be_young(self, addr):
-        # "is a valid addr to a young object?"
-        # but it's ok to occasionally return True accidentally.
-        # Maybe the best implementation would be a bloom filter
-        # of some kind instead of the dictionary lookup that is
-        # sometimes done below.  But the expected common answer
-        # is "Yes" because addr points to the nursery, so it may
-        # not be useful to optimize the other case too much.
-        #
-        # First, if 'addr' appears to be a pointer to some place within
-        # the nursery, return True
-        if not self.translated_to_c:
-            # When non-translated, filter out tagged pointers explicitly.
-            # When translated, it may occasionally give a wrong answer
-            # of True if 'addr' is a tagged pointer with just the wrong value.
-            if not self.is_valid_gc_object(addr):
-                return False
-
+    def is_young_object(self, addr):
+        # Check if the object at 'addr' is young.
+        if not self.is_valid_gc_object(addr):
+            return False     # filter out tagged pointers explicitly.
         if self.nursery <= addr < self.nursery_top:
             return True      # addr is in the nursery
-        #
         # Else, it may be in the set 'young_rawmalloced_objects'
         return (bool(self.young_rawmalloced_objects) and
                 self.young_rawmalloced_objects.contains(addr))
-    appears_to_be_young._always_inline_ = True
 
     def debug_is_old_object(self, addr):
         return (self.is_valid_gc_object(addr)
-                and not self.appears_to_be_young(addr))
+                and not self.is_young_object(addr))
 
     def is_forwarded(self, obj):
         """Returns True if the nursery obj is marked as forwarded.
@@ -2745,3 +2729,41 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 (obj + offset).address[0] = llmemory.NULL
         self.old_objects_with_weakrefs.delete()
         self.old_objects_with_weakrefs = new_with_weakref
+
+
+    # ----------
+    # RawRefCount
+
+    OB_REFCNT    = 0
+    OB_PYPY_LINK = 1
+
+    rrc_enabled = False
+
+    def rawrefcount_init(self):
+        # see pypy/doc/discussion/rawrefcount.rst
+        if not self.rrc_enabled:
+            self.rrc_p_list_young = self.AddressStack()
+            self.rrc_p_list_old   = self.AddressStack()
+            self.rrc_o_list_young = self.AddressStack()
+            self.rrc_o_list_old   = self.AddressStack()
+            self.rrc_dict         = self.AddressDict()
+            self.rrc_enabled = True
+
+    def rawrefcount_create_link_pypy(self, gcobj, pyobject):
+        ll_assert(self.rrc_enabled, "rawrefcount.init not called")
+        obj = llmemory.cast_ptr_to_adr(gcobj)
+        if self.is_young_object(obj):
+            self.rrc_p_list_young.append(obj)
+        else:
+            self.rrc_p_list_old.append(obj)
+        objint = llmemory.cast_adr_to_int(obj, mode="symbolic")
+        pyobject.signed[self.OB_PYPY_LINK] = objint
+        self.rrc_dict.setitem(obj, pyobject)
+
+    def rawrefcount_from_obj(self, gcobj):
+        obj = llmemory.cast_ptr_to_adr(gcobj)
+        return self.rrc_dict.get(obj)
+
+    def rawrefcount_to_obj(self, pyobject):
+        obj = llmemory.cast_int_to_adr(pyobject.signed[self.OB_PYPY_LINK])
+        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
