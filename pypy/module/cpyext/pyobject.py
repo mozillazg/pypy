@@ -142,44 +142,71 @@ def setup_class_for_cpyext(W_Class, **kw):
 
     basestruct: The basic structure to allocate
     create_pyobj: Function called to make a PyObject from a PyPy object
-    attach    : default create_pyobj allocates a basestruct and then calls this
+    alloc_pyobj: default create_pyobj calls this to get the PyObject
+    fill_pyobj: default create_pyobj calls this after attaching is done
     realize   : Function called to create a pypy object from a raw struct
     dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
     """
 
     tp_basestruct = kw.pop('basestruct', PyObject.TO)
     tp_create_pyobj = kw.pop('create_pyobj', None)
-    tp_attach       = kw.pop('attach', None)
+    tp_alloc_pyobj  = kw.pop('alloc_pyobj', None)
+    tp_fill_pyobj   = kw.pop('fill_pyobj', None)
+    force_create_pyobj = kw.pop('force_create_pyobj', False)
     #tp_realize    = kw.pop('realize', None)
     #tp_dealloc    = kw.pop('dealloc', None)
     assert not kw, "Extra arguments to make_typedescr"
 
-    if tp_attach:
+    if tp_alloc_pyobj or tp_fill_pyobj or force_create_pyobj:
         assert not tp_create_pyobj
-        tp_attach._always_inline_ = True
+        #
+        if not tp_alloc_pyobj:
+            def tp_alloc_pyobj(space, w_obj):
+                ob = lltype.malloc(tp_basestruct, flavor='raw',
+                                   track_allocation=False)
+                return ob, True
+        tp_alloc_pyobj._always_inline_ = True
+        #
+        if not tp_fill_pyobj:
+            def tp_fill_pyobj(space, w_obj, py_obj):
+                pass
+        tp_fill_pyobj._always_inline_ = True
         #
         def tp_create_pyobj(self, space):
-            ob = lltype.malloc(tp_basestruct, flavor='raw',
-                               track_allocation=False)
-            init_link_pypy_direct(self, ob)
-            tp_attach(space, ob, self)
-            return rffi.cast(PyObject, ob)
+            py_obj, light = tp_alloc_pyobj(space, self)
+            ob = rffi.cast(PyObject, py_obj)
+            ob_type = get_c_ob_type(space, space.type(self))
+            init_link_pypy(self, ob, ob_type, light)
+            tp_fill_pyobj(space, self, py_obj)
+            return ob
 
     W_Class.cpyext_basestruct = tp_basestruct
     if tp_create_pyobj:
         W_Class.cpyext_create_pyobj = tp_create_pyobj
 
 
-def init_link_pypy_direct(w_obj, ob):
-    ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_DIRECT
+def init_link_pypy(w_obj, ob, ob_type, light):
+    if light:
+        ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_LIGHT
+    else:
+        ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY
     ob.c_ob_pypy_link = 0
-    # ob.c_ob_type = ...
+    ob.c_ob_type = ob_type
     rawrefcount.create_link_pypy(w_obj, ob)
+
+def get_c_ob_type(space, w_type):
+    pto = w_type.cpyext_c_type_object
+    if not pto:
+        ob = w_type.cpyext_create_pyobj(space)
+        pto = rffi.cast(PyTypeObjectPtr, ob)
+    return pto
+
+W_TypeObject.cpyext_c_type_object = lltype.nullptr(PyTypeObjectPtr.TO)
+
 
 @bootstrap_function
 def init_pyobject(space):
-    setup_class_for_cpyext(W_Root,
-        attach = lambda space, py_int, w_obj: None)
+    setup_class_for_cpyext(W_Root, force_create_pyobj=True)
 
 #________________________________________________________
 # refcounted object support
@@ -415,6 +442,13 @@ def get_pyobj_and_incref(space, obj):
     assert pyobj.c_ob_refcnt > 0
     pyobj.c_ob_refcnt += 1
     return pyobj
+
+@specialize.ll()
+def get_pyobj_and_xincref(space, obj):
+    if obj:
+        return get_pyobj_and_incref(space, obj)
+    else:
+        return lltype.nullptr(PyObject.TO)
 
 @specialize.ll()
 def get_w_obj_and_decref(space, obj):

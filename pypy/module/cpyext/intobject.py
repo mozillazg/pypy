@@ -22,15 +22,18 @@ def init_intobject(space):
     from pypy.objspace.std.intobject import W_AbstractIntObject
     setup_class_for_cpyext(W_AbstractIntObject,
                            basestruct=PyIntObject.TO,
-                           attach=int_attach)
+                           alloc_pyobj=int_alloc_pyobj)
                            #realize=int_realize)
 
-def int_attach(space, py_int, w_obj):
+def int_alloc_pyobj(w_obj, space):
     """
     Fills a newly allocated PyIntObject with the given int object. The
     value must not be modified.
     """
+    py_int = lltype.malloc(PyIntObjectStruct, flavor='raw',
+                           track_allocation=False)
     py_int.c_ob_ival = space.int_w(w_obj)
+    return py_int, True
 
 def int_realize(space, obj):
     intval = rffi.cast(lltype.Signed, rffi.cast(PyIntObject, obj).c_ob_ival)

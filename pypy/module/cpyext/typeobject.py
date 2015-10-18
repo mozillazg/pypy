@@ -20,7 +20,8 @@ from pypy.module.cpyext.methodobject import (
     PyDescr_NewWrapper, PyCFunction_NewEx, PyCFunction_typedef)
 from pypy.module.cpyext.modsupport import convert_method_defs
 from pypy.module.cpyext.pyobject import (
-    PyObject, make_ref, create_ref, from_ref, get_typedescr, make_typedescr,
+    PyObject, make_ref, create_ref, get_typedescr, from_pyobj, as_pyobj,
+    setup_class_for_cpyext, get_pyobj_and_incref, get_pyobj_and_xincref,
     track_reference, RefcountState, borrow_from, Py_DecRef)
 from pypy.module.cpyext.slotdefs import (
     slotdefs_for_tp_slots, slotdefs_for_wrappers, get_slot_tp_function)
@@ -155,7 +156,10 @@ def update_all_slots(space, w_type, pto):
                 else:
                     raise AssertionError(
                         "Structure not allocated: %s" % (slot_names[0],))
-                struct = lltype.malloc(STRUCT_TYPE, flavor='raw', zero=True)
+                # leak the PyXxxMethods, but only for types in PyPy that
+                # correspond to non-heap types in CPython
+                struct = lltype.malloc(STRUCT_TYPE, flavor='raw', zero=True,
+                                       track_allocation=False)
                 setattr(pto, slot_names[0], struct)
 
             setattr(struct, slot_names[1], slot_func_helper)
@@ -236,12 +240,8 @@ def add_tp_new_wrapper(space, dict_w, pto):
 def inherit_special(space, pto, base_pto):
     # XXX missing: copy basicsize and flags in a magical way
     flags = rffi.cast(lltype.Signed, pto.c_tp_flags)
-    base_object_pyo = make_ref(space, space.w_object)
-    base_object_pto = rffi.cast(PyTypeObjectPtr, base_object_pyo)
-    if base_pto != base_object_pto or flags & Py_TPFLAGS_HEAPTYPE:
-        if not pto.c_tp_new:
-            pto.c_tp_new = base_pto.c_tp_new
-    Py_DecRef(space, base_object_pyo)
+    if not pto.c_tp_new:
+        pto.c_tp_new = base_pto.c_tp_new
 
 def check_descr(space, w_self, w_type):
     if not space.isinstance_w(w_self, w_type):
@@ -303,12 +303,12 @@ class W_PyCTypeObject(W_TypeObject):
 
 @bootstrap_function
 def init_typeobject(space):
-    make_typedescr(space.w_type.instancetypedef,
-                   basestruct=PyTypeObject,
-                   alloc=type_alloc,
-                   attach=type_attach,
-                   realize=type_realize,
-                   dealloc=type_dealloc)
+    setup_class_for_cpyext(W_TypeObject,
+                           basestruct=PyTypeObject,
+                           alloc_pyobj=type_alloc_pyobj,
+                           fill_pyobj=type_fill_pyobj)
+                   #realize=type_realize,
+                   #dealloc=type_dealloc)
 
     # some types are difficult to create because of cycles.
     # - object.ob_type = type
@@ -479,20 +479,19 @@ def type_alloc(space, w_metatype):
 
     return rffi.cast(PyObject, heaptype)
 
-def type_attach(space, py_obj, w_type):
+def type_alloc_pyobj(space, w_type):
     """
-    Fills a newly allocated PyTypeObject from an existing type.
+    Allocates a PyTypeObject from an existing type.
     """
     from pypy.module.cpyext.object import PyObject_Del
 
     assert isinstance(w_type, W_TypeObject)
 
-    pto = rffi.cast(PyTypeObjectPtr, py_obj)
-
-    typedescr = get_typedescr(w_type.instancetypedef)
+    pto = lltype.malloc(PyTypeObject, flavor='raw', zero=True,
+                        track_allocation=False)
 
     # dealloc
-    pto.c_tp_dealloc = typedescr.get_dealloc(space)
+    #pto.c_tp_dealloc = typedescr.get_dealloc(space)   ZZZ
     # buffer protocol
     if space.is_w(w_type, space.w_str):
         setup_string_buffer_procs(space, pto)
@@ -510,31 +509,41 @@ def type_attach(space, py_obj, w_type):
         from pypy.module.cpyext.stringobject import PyString_AsString
         pto.c_tp_name = PyString_AsString(space, heaptype.c_ht_name)
     else:
-        pto.c_tp_name = rffi.str2charp(w_type.name)
+        # leak the name, but only for types in PyPy that correspond to
+        # non-heap types in CPython
+        pto.c_tp_name = rffi.str2charp(w_type.name, track_allocation=False)
     pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
     pto.c_tp_itemsize = 0
+    if space.is_w(w_type, space.w_object):
+        pto.c_tp_new = rffi.cast(newfunc, 1)   # XXX temp
+
+    # Basic initialization is done, we can now publish this type
+    # before finishing.  This should handle the cases of recursion.
+    w_type.cpyext_c_type_object = pto
+    return pto, False
+
+def type_fill_pyobj(space, w_type, pto):
+    """
+    Fills a newly allocated type.
+    """
     # uninitialized fields:
     # c_tp_print, c_tp_getattr, c_tp_setattr
     # XXX implement
     # c_tp_compare and the following fields (see http://docs.python.org/c-api/typeobj.html )
     w_base = best_base(space, w_type.bases_w)
-    pto.c_tp_base = rffi.cast(PyTypeObjectPtr, make_ref(space, w_base))
+    pto.c_tp_base = rffi.cast(PyTypeObjectPtr,
+                              get_pyobj_and_xincref(space, w_base))
 
-    finish_type_1(space, pto)
+    finish_type_1(space, pto, w_type)
     finish_type_2(space, pto, w_type)
 
-    pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)
+    #pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)   ZZZ
     if pto.c_tp_base:
         if pto.c_tp_base.c_tp_basicsize > pto.c_tp_basicsize:
             pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
 
-    # will be filled later on with the correct value
-    # may not be 0
-    if space.is_w(w_type, space.w_object):
-        pto.c_tp_new = rffi.cast(newfunc, 1)
     update_all_slots(space, w_type, pto)
     pto.c_tp_flags |= Py_TPFLAGS_READY
-    return pto
 
 def py_type_ready(space, pto):
     if pto.c_tp_flags & Py_TPFLAGS_READY:
@@ -547,6 +556,7 @@ def PyType_Ready(space, pto):
     return 0
 
 def type_realize(space, py_obj):
+    ZZZ
     pto = rffi.cast(PyTypeObjectPtr, py_obj)
     assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
     pto.c_tp_flags |= Py_TPFLAGS_READYING
@@ -568,22 +578,18 @@ def best_base(space, bases_w):
 
 def inherit_slots(space, pto, w_base):
     # XXX missing: nearly everything
-    base_pyo = make_ref(space, w_base)
-    try:
-        base = rffi.cast(PyTypeObjectPtr, base_pyo)
-        if not pto.c_tp_dealloc:
-            pto.c_tp_dealloc = base.c_tp_dealloc
-        if not pto.c_tp_init:
-            pto.c_tp_init = base.c_tp_init
-        if not pto.c_tp_alloc:
-            pto.c_tp_alloc = base.c_tp_alloc
-        # XXX check for correct GC flags!
-        if not pto.c_tp_free:
-            pto.c_tp_free = base.c_tp_free
-        if not pto.c_tp_setattro:
-            pto.c_tp_setattro = base.c_tp_setattro
-    finally:
-        Py_DecRef(space, base_pyo)
+    base = rffi.cast(PyTypeObjectPtr, as_pyobj(space, w_base))
+    if not pto.c_tp_dealloc:
+        pto.c_tp_dealloc = base.c_tp_dealloc
+    if not pto.c_tp_init:
+        pto.c_tp_init = base.c_tp_init
+    if not pto.c_tp_alloc:
+        pto.c_tp_alloc = base.c_tp_alloc
+    # XXX check for correct GC flags!
+    if not pto.c_tp_free:
+        pto.c_tp_free = base.c_tp_free
+    if not pto.c_tp_setattro:
+        pto.c_tp_setattro = base.c_tp_setattro
 
 def _type_realize(space, py_obj):
     """
@@ -596,9 +602,7 @@ def _type_realize(space, py_obj):
     py_type = rffi.cast(PyTypeObjectPtr, py_obj)
 
     if not py_type.c_tp_base:
-        # borrowed reference, but w_object is unlikely to disappear
-        base = make_ref(space, space.w_object)
-        Py_DecRef(space, base)
+        base = as_pyobj(space, space.w_object)
         py_type.c_tp_base = rffi.cast(PyTypeObjectPtr, base)
 
     finish_type_1(space, py_type)
@@ -617,32 +621,32 @@ def _type_realize(space, py_obj):
 
     return w_obj
 
-def finish_type_1(space, pto):
+def finish_type_1(space, pto, w_type):
     """
     Sets up tp_bases, necessary before creating the interpreter type.
     """
-    base = pto.c_tp_base
-    base_pyo = rffi.cast(PyObject, pto.c_tp_base)
-    if base and not base.c_tp_flags & Py_TPFLAGS_READY:
-        type_realize(space, rffi.cast(PyObject, base_pyo))
-    if base and not pto.c_ob_type: # will be filled later
-        pto.c_ob_type = base.c_ob_type
+    #ZZZ
+    #base = pto.c_tp_base
+    #base_pyo = rffi.cast(PyObject, pto.c_tp_base)
+    #if base and not base.c_tp_flags & Py_TPFLAGS_READY:
+    #    type_realize(space, base_pyo)
+    #if base and not pto.c_ob_type: # will be filled later
+    #    pto.c_ob_type = base.c_ob_type
+    assert pto.c_ob_type    # ZZZ
     if not pto.c_tp_bases:
-        if not base:
-            bases = space.newtuple([])
-        else:
-            bases = space.newtuple([from_ref(space, base_pyo)])
-        pto.c_tp_bases = make_ref(space, bases)
+        w_bases = space.newtuple(w_type.bases_w)
+        pto.c_tp_bases = get_pyobj_and_incref(space, w_bases)
 
 def finish_type_2(space, pto, w_obj):
     """
     Sets up other attributes, when the interpreter type has been created.
     """
-    pto.c_tp_mro = make_ref(space, space.newtuple(w_obj.mro_w))
+    if not pto.c_tp_mro:
+        pto.c_tp_mro = get_pyobj_and_incref(space, space.newtuple(w_obj.mro_w))
     base = pto.c_tp_base
     if base:
         inherit_special(space, pto, base)
-    for w_base in space.fixedview(from_ref(space, pto.c_tp_bases)):
+    for w_base in space.fixedview(from_pyobj(space, pto.c_tp_bases)):
         inherit_slots(space, pto, w_base)
 
     if not pto.c_tp_setattro:
@@ -652,6 +656,7 @@ def finish_type_2(space, pto, w_obj):
             PyObject_GenericSetAttr.api_func.get_wrapper(space))
 
     if w_obj.is_cpytype():
+        xxxxxxxx
         Py_DecRef(space, pto.c_tp_dict)
         w_dict = w_obj.getdict(space)
         pto.c_tp_dict = make_ref(space, w_dict)
