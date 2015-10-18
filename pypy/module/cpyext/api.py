@@ -192,7 +192,7 @@ cpyext_namespace = NameManager('cpyext_')
 
 class ApiFunction:
     def __init__(self, argtypes, restype, callable, error=_NOT_SPECIFIED,
-                 c_name=None, gil=None):
+                 c_name=None, gil=None, result_borrowed=False):
         self.argtypes = argtypes
         self.restype = restype
         self.functype = lltype.Ptr(lltype.FuncType(argtypes, restype))
@@ -209,6 +209,7 @@ class ApiFunction:
         self.argnames = argnames[1:]
         assert len(self.argnames) == len(self.argtypes)
         self.gil = gil
+        self.result_borrowed = result_borrowed
 
     def _freeze_(self):
         return True
@@ -232,7 +233,7 @@ class ApiFunction:
         return wrapper
 
 def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
-                gil=None):
+                gil=None, result_borrowed=False):
     """
     Declares a function to be exported.
     - `argtypes`, `restype` are lltypes and describe the function signature.
@@ -267,7 +268,8 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
         else:
             c_name = func_name
         api_function = ApiFunction(argtypes, restype, func, error,
-                                   c_name=c_name, gil=gil)
+                                   c_name=c_name, gil=gil,
+                                   result_borrowed=result_borrowed)
         func.api_func = api_function
 
         if external:
@@ -609,7 +611,7 @@ def make_wrapper(space, callable, gil=None):
 
     @specialize.ll()
     def wrapper(*args):
-        from pypy.module.cpyext.pyobject import from_xpyobj, is_pyobj
+        from pypy.module.cpyext.pyobject import from_xpyobj, is_pyobj, as_pyobj
         from pypy.module.cpyext.pyobject import get_pyobj_and_incref
         # we hope that malloc removal removes the newtuple() that is
         # inserted exactly here by the varargs specializer
@@ -666,7 +668,10 @@ def make_wrapper(space, callable, gil=None):
                     retval = result
                 else:
                     if result is not None:
-                        retval = get_pyobj_and_incref(result)
+                        if callable.api_func.result_borrowed:
+                            retval = as_pyobj(result)
+                        else:
+                            retval = get_pyobj_and_incref(result)
                     else:
                         retval = lltype.nullptr(PyObject.TO)
             elif callable.api_func.restype is not lltype.Void:
