@@ -2824,10 +2824,10 @@ class IncrementalMiniMarkGC(MovingGCBase):
 
     def _rrc_minor_trace(self, pyobject, singleaddr):
         from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
         #
         rc = self._pyobj(pyobject).ob_refcnt
-        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_DIRECT:
+        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_LIGHT:
             pass     # the corresponding object may die
         else:
             # force the corresponding object to be alive
@@ -2880,17 +2880,17 @@ class IncrementalMiniMarkGC(MovingGCBase):
 
     def _rrc_free(self, pyobject):
         from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
         #
         rc = self._pyobj(pyobject).ob_refcnt
-        if rc >= REFCNT_FROM_PYPY_DIRECT:
-            ll_assert(rc == REFCNT_FROM_PYPY_DIRECT,
+        if rc >= REFCNT_FROM_PYPY_LIGHT:
+            ll_assert(rc == REFCNT_FROM_PYPY_LIGHT,
                     "cpyext: rrc_trace() should have marked the pypy obj alive")
             lltype.free(self._pyobj(pyobject), flavor='raw')
         else:
             ll_assert(rc >= REFCNT_FROM_PYPY, "refcount underflow?")
-            ll_assert(rc < int(REFCNT_FROM_PYPY_DIRECT * 0.99),
-                      "refcount underflow from REFCNT_FROM_PYPY_DIRECT?")
+            ll_assert(rc < int(REFCNT_FROM_PYPY_LIGHT * 0.99),
+                      "refcount underflow from REFCNT_FROM_PYPY_LIGHT?")
             rc -= REFCNT_FROM_PYPY
             self._pyobj(pyobject).ob_refcnt = rc
             self._pyobj(pyobject).ob_pypy_link = 0
@@ -2903,10 +2903,10 @@ class IncrementalMiniMarkGC(MovingGCBase):
 
     def _rrc_major_trace(self, pyobject, ignore):
         from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_DIRECT
+        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
         #
         rc = self._pyobj(pyobject).ob_refcnt
-        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_DIRECT:
+        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_LIGHT:
             pass     # the corresponding object may die
         else:
             # force the corresponding object to be alive

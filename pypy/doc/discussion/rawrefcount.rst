@@ -11,7 +11,8 @@ ob_pypy_link.  The ob_refcnt is the reference counter as used on
 CPython.  If the PyObject structure is linked to a live PyPy object,
 its current address is stored in ob_pypy_link and ob_refcnt is bumped
 by either the constant REFCNT_FROM_PYPY, or the constant
-REFCNT_FROM_PYPY_DIRECT (== REFCNT_FROM_PYPY + SOME_HUGE_VALUE).
+REFCNT_FROM_PYPY_LIGHT (== REFCNT_FROM_PYPY + SOME_HUGE_VALUE)
+(to mean "light finalizer").
 
 Most PyPy objects exist outside cpyext, and conversely in cpyext it is
 possible that a lot of PyObjects exist without being seen by the rest
@@ -23,7 +24,7 @@ rawrefcount.create_link_pypy(p, ob)
     Makes a link between an exising object gcref 'p' and a newly
     allocated PyObject structure 'ob'.  ob->ob_refcnt must be
     initialized to either REFCNT_FROM_PYPY, or
-    REFCNT_FROM_PYPY_DIRECT.  (The second case is an optimization:
+    REFCNT_FROM_PYPY_LIGHT.  (The second case is an optimization:
     when the GC finds the PyPy object and PyObject no longer
     referenced, it can just free() the PyObject.)
 
@@ -57,7 +58,7 @@ and the object is part of a "link".
 
 The idea is that links whose 'p' is not reachable from other PyPy
 objects *and* whose 'ob->ob_refcnt' is REFCNT_FROM_PYPY or
-REFCNT_FROM_PYPY_DIRECT are the ones who die.  But it is more messy
+REFCNT_FROM_PYPY_LIGHT are the ones who die.  But it is more messy
 because PyObjects still (usually) need to have a tp_dealloc called,
 and this cannot occur immediately (and can do random things like
 accessing other references this object points to, or resurrecting the
@@ -73,7 +74,7 @@ So, during the collection we do this about P links:
 
     for (p, ob) in P:
         if ob->ob_refcnt != REFCNT_FROM_PYPY
-               and ob->ob_refcnt != REFCNT_FROM_PYPY_DIRECT:
+               and ob->ob_refcnt != REFCNT_FROM_PYPY_LIGHT:
             mark 'p' as surviving, as well as all its dependencies
 
 At the end of the collection, the P and O links are both handled like
@@ -82,10 +83,10 @@ this:
     for (p, ob) in P + O:
         if p is not surviving:
             unlink p and ob
-            if ob->ob_refcnt == REFCNT_FROM_PYPY_DIRECT:
+            if ob->ob_refcnt == REFCNT_FROM_PYPY_LIGHT:
                 free(ob)
-            elif ob->ob_refcnt > REFCNT_FROM_PYPY_DIRECT:
-                ob->ob_refcnt -= REFCNT_FROM_PYPY_DIRECT
+            elif ob->ob_refcnt > REFCNT_FROM_PYPY_LIGHT:
+                ob->ob_refcnt -= REFCNT_FROM_PYPY_LIGHT
             else:
                 ob->ob_refcnt -= REFCNT_FROM_PYPY
                 if ob->ob_refcnt == 0:
@@ -107,11 +108,11 @@ Further notes
 
 For objects that are opaque in CPython, like <dict>, we always create
 a PyPy object, and then when needed we make an empty PyObject and
-attach it with create_link_pypy()/REFCNT_FROM_PYPY_DIRECT.
+attach it with create_link_pypy()/REFCNT_FROM_PYPY_LIGHT.
 
 For <int> and <float> objects, the corresponding PyObjects contain a
 "long" or "double" field too.  We link them with create_link_pypy()
-and we can use REFCNT_FROM_PYPY_DIRECT too: 'tp_dealloc' doesn't
+and we can use REFCNT_FROM_PYPY_LIGHT too: 'tp_dealloc' doesn't
 need to be called, and instead just calling free() is fine.
 
 For <type> objects, we need both a PyPy and a PyObject side.  These
@@ -121,7 +122,7 @@ For custom PyXxxObjects allocated from the C extension module, we
 need create_link_pyobj().
 
 For <str> or <unicode> objects coming from PyPy, we use
-create_link_pypy()/REFCNT_FROM_PYPY_DIRECT with a PyObject
+create_link_pypy()/REFCNT_FROM_PYPY_LIGHT with a PyObject
 preallocated with the size of the string.  We copy the string
 lazily into that area if PyString_AS_STRING() is called.
 
@@ -135,7 +136,7 @@ For <tuple> objects coming from PyPy, if they are not specialized,
 then the PyPy side holds a regular reference to the items.  Then we
 can allocate a PyTupleObject and store in it borrowed PyObject
 pointers to the items.  Such a case is created with
-create_link_pypy()/REFCNT_FROM_PYPY_DIRECT.  If it is specialized,
+create_link_pypy()/REFCNT_FROM_PYPY_LIGHT.  If it is specialized,
 then it doesn't work because the items are created just-in-time on the
 PyPy side.  In this case, the PyTupleObject needs to hold real
 references to the PyObject items, and we use create_link_pypy()/

@@ -8,8 +8,8 @@ from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.rlib import rgc
 
 
-REFCNT_FROM_PYPY        = 80
-REFCNT_FROM_PYPY_DIRECT = REFCNT_FROM_PYPY + (sys.maxint//2+1)
+REFCNT_FROM_PYPY       = 80
+REFCNT_FROM_PYPY_LIGHT = REFCNT_FROM_PYPY + (sys.maxint//2+1)
 
 RAWREFCOUNT_DEALLOC = lltype.Ptr(lltype.FuncType([llmemory.Address],
                                                  lltype.Void))
@@ -81,7 +81,7 @@ def _collect(track_allocation=True):
     wr_p_list = []
     new_p_list = []
     for ob in _p_list:
-        if ob.c_ob_refcnt not in (REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_DIRECT):
+        if ob.c_ob_refcnt not in (REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_LIGHT):
             new_p_list.append(ob)
         else:
             p = detach(ob, wr_p_list)
@@ -109,12 +109,12 @@ def _collect(track_allocation=True):
             return p
         else:
             ob.c_ob_pypy_link = 0
-            if ob.c_ob_refcnt >= REFCNT_FROM_PYPY_DIRECT:
-                assert ob.c_ob_refcnt == REFCNT_FROM_PYPY_DIRECT
+            if ob.c_ob_refcnt >= REFCNT_FROM_PYPY_LIGHT:
+                assert ob.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
                 lltype.free(ob, flavor='raw', track_allocation=track_allocation)
             else:
                 assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
-                assert ob.c_ob_refcnt < int(REFCNT_FROM_PYPY_DIRECT * 0.99)
+                assert ob.c_ob_refcnt < int(REFCNT_FROM_PYPY_LIGHT * 0.99)
                 ob.c_ob_refcnt -= REFCNT_FROM_PYPY
                 ob.c_ob_pypy_link = 0
                 if ob.c_ob_refcnt == 0:

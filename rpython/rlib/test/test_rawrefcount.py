@@ -1,6 +1,6 @@
 import weakref
 from rpython.rlib import rawrefcount, objectmodel, rgc
-from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_DIRECT
+from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_LIGHT
 from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.rtyper.annlowlevel import llhelper
 from rpython.translator.c.test.test_standalone import StandaloneTests
@@ -29,7 +29,7 @@ class TestRawRefCount:
         assert rawrefcount.to_obj(W_Root, ob) == None
         rawrefcount.create_link_pypy(p, ob)
         assert ob.c_ob_refcnt == 0
-        ob.c_ob_refcnt += REFCNT_FROM_PYPY_DIRECT
+        ob.c_ob_refcnt += REFCNT_FROM_PYPY_LIGHT
         assert rawrefcount.from_obj(PyObject, p) == ob
         assert rawrefcount.to_obj(W_Root, ob) == p
         lltype.free(ob, flavor='raw')
@@ -50,7 +50,7 @@ class TestRawRefCount:
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True)
         rawrefcount.create_link_pypy(p, ob)
-        ob.c_ob_refcnt += REFCNT_FROM_PYPY_DIRECT
+        ob.c_ob_refcnt += REFCNT_FROM_PYPY_LIGHT
         assert rawrefcount._p_list == [ob]
         wr_ob = weakref.ref(ob)
         wr_p = weakref.ref(p)
@@ -64,7 +64,7 @@ class TestRawRefCount:
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True)
         rawrefcount.create_link_pypy(p, ob)
-        ob.c_ob_refcnt += REFCNT_FROM_PYPY_DIRECT
+        ob.c_ob_refcnt += REFCNT_FROM_PYPY_LIGHT
         assert rawrefcount._p_list == [ob]
         wr_ob = weakref.ref(ob)
         wr_p = weakref.ref(p)
@@ -83,7 +83,7 @@ class TestRawRefCount:
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True)
         rawrefcount.create_link_pypy(p, ob)
-        ob.c_ob_refcnt += REFCNT_FROM_PYPY_DIRECT
+        ob.c_ob_refcnt += REFCNT_FROM_PYPY_LIGHT
         assert rawrefcount._p_list == [ob]
         wr_ob = weakref.ref(ob)
         del ob       # p remains
