@@ -44,12 +44,12 @@ class TestIterator(BaseApiTest):
         w_obj1 = space.wrap(123)
         w_obj2 = space.wrap(456.789)
         pp1 = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        pp1[0] = as_pyobj(w_obj1)
+        pp1[0] = as_pyobj(space, w_obj1)
         pp2 = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        pp2[0] = as_pyobj(w_obj2)
+        pp2[0] = as_pyobj(space, w_obj2)
         assert api.PyNumber_Coerce(pp1, pp2) == 0
-        w_res1 = get_w_obj_and_decref(pp1[0])
-        w_res2 = get_w_obj_and_decref(pp2[0])
+        w_res1 = get_w_obj_and_decref(space, pp1[0])
+        w_res2 = get_w_obj_and_decref(space, pp2[0])
         lltype.free(pp1, flavor='raw')
         lltype.free(pp2, flavor='raw')
         assert space.str_w(space.repr(w_res1)) == '123.0'
@@ -60,14 +60,14 @@ class TestIterator(BaseApiTest):
         w_objf = space.wrap(42.5)
         ppl = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
         ppf = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        ppl[0] = as_pyobj(w_objl)
-        ppf[0] = as_pyobj(w_objf)
+        ppl[0] = as_pyobj(space, w_objl)
+        ppf[0] = as_pyobj(space, w_objf)
 
         ret = api.PyNumber_CoerceEx(ppl, ppf)
         assert ret == 0
 
-        w_resl = get_w_obj_and_decref(ppl[0])
-        w_resf = get_w_obj_and_decref(ppf[0])
+        w_resl = get_w_obj_and_decref(space, ppl[0])
+        w_resf = get_w_obj_and_decref(space, ppf[0])
         lltype.free(ppl, flavor='raw')
         lltype.free(ppf, flavor='raw')
 

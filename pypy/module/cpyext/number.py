@@ -78,8 +78,8 @@ def PyNumber_Coerce(space, pp1, pp2):
     some other error occurs, return -1 (failure) and don't increment the
     reference counts.  The call PyNumber_Coerce(&o1, &o2) is equivalent to the
     Python statement o1, o2 = coerce(o1, o2)."""
-    w_obj1 = from_pyobj(pp1[0])
-    w_obj2 = from_pyobj(pp2[0])
+    w_obj1 = from_pyobj(space, pp1[0])
+    w_obj2 = from_pyobj(space, pp2[0])
     try:
         w_res = space.coerce(w_obj1, w_obj2)
     except OperationError:
@@ -87,8 +87,8 @@ def PyNumber_Coerce(space, pp1, pp2):
         state.clear_exception()
         return -1
     w_res1, w_res2 = space.unpackiterable(w_res, 2)
-    pp1[0] = get_pyobj_and_incref(w_res1)
-    pp2[0] = get_pyobj_and_incref(w_res2)
+    pp1[0] = get_pyobj_and_incref(space, w_res1)
+    pp2[0] = get_pyobj_and_incref(space, w_res2)
     return 0
 
 def func_rename(newname):

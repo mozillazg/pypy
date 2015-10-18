@@ -303,13 +303,13 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                         # build a 'PyObject *' (not holding a reference)
                         if not is_pyobj(input_arg):
                             keepalives += (input_arg,)
-                            arg = rffi.cast(ARG, as_xpyobj(input_arg))
+                            arg = rffi.cast(ARG, as_xpyobj(space, input_arg))
                         else:
                             arg = rffi.cast(ARG, input_arg)
                     elif is_PyObject(ARG) and is_wrapped:
                         # build a W_Root, possibly from a 'PyObject *'
                         if is_pyobj(input_arg):
-                            arg = from_xpyobj(input_arg)
+                            arg = from_xpyobj(space, input_arg)
                         else:
                             arg = input_arg
 
@@ -514,8 +514,9 @@ PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
 # So we need a forward and backward mapping in our State instance
 PyObjectStruct = lltype.ForwardReference()
 PyObject = lltype.Ptr(PyObjectStruct)
-PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyTypeObjectPtr),
-                  ("ob_pypy_link", lltype.Signed))
+PyObjectFields = (("ob_refcnt", lltype.Signed),
+                  ("ob_pypy_link", lltype.Signed),
+                  ("ob_type", PyTypeObjectPtr))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('PyObject', PyObjectFields, PyObjectStruct)
 PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)
@@ -631,7 +632,7 @@ def make_wrapper(space, callable, gil=None):
                 arg = args[i]
                 if is_PyObject(typ) and is_wrapped:
                     assert is_pyobj(arg)
-                    arg_conv = from_xpyobj(arg)
+                    arg_conv = from_xpyobj(space, arg)
                 else:
                     arg_conv = arg
                 boxed_args += (arg_conv, )
@@ -669,9 +670,9 @@ def make_wrapper(space, callable, gil=None):
                 else:
                     if result is not None:
                         if callable.api_func.result_borrowed:
-                            retval = as_pyobj(result)
+                            retval = as_pyobj(space, result)
                         else:
-                            retval = get_pyobj_and_incref(result)
+                            retval = get_pyobj_and_incref(space, result)
                     else:
                         retval = lltype.nullptr(PyObject.TO)
             elif callable.api_func.restype is not lltype.Void:
@@ -1243,7 +1244,7 @@ def make_generic_cpy_call(FT, decref_args, expect_null):
             if is_PyObject(ARG):
                 if not is_pyobj(arg):
                     keepalives += (arg,)
-                    arg = as_xpyobj(arg)
+                    arg = as_xpyobj(space, arg)
             boxed_args += (arg,)
 
         try:
@@ -1260,7 +1261,7 @@ def make_generic_cpy_call(FT, decref_args, expect_null):
                 # that is called from Python must be an owned reference
                 # - ownership is transferred from the function to its caller.
                 if result:
-                    ret = get_w_obj_and_decref(result)
+                    ret = get_w_obj_and_decref(space, result)
                 else:
                     ret = None
 

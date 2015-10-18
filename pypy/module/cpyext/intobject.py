@@ -5,7 +5,7 @@ from pypy.module.cpyext.api import (
     cpython_api, cpython_struct, build_type_checkers, bootstrap_function,
     PyObject, PyObjectFields, CONST_STRING, CANNOT_FAIL, Py_ssize_t)
 from pypy.module.cpyext.pyobject import (
-    make_typedescr, track_reference, RefcountState, from_ref)
+    setup_class_for_cpyext, track_reference, RefcountState, from_ref)
 from rpython.rlib.rarithmetic import r_uint, intmask, LONG_TEST, r_ulonglong
 from pypy.objspace.std.intobject import W_IntObject
 import sys
@@ -19,17 +19,17 @@ cpython_struct("PyIntObject", PyIntObjectFields, PyIntObjectStruct)
 @bootstrap_function
 def init_intobject(space):
     "Type description of PyIntObject"
-    make_typedescr(space.w_int.instancetypedef,
-                   basestruct=PyIntObject.TO,
-                   attach=int_attach,
-                   realize=int_realize)
+    from pypy.objspace.std.intobject import W_AbstractIntObject
+    setup_class_for_cpyext(W_AbstractIntObject,
+                           basestruct=PyIntObject.TO,
+                           attach=int_attach)
+                           #realize=int_realize)
 
-def int_attach(space, py_obj, w_obj):
+def int_attach(space, py_int, w_obj):
     """
     Fills a newly allocated PyIntObject with the given int object. The
     value must not be modified.
     """
-    py_int = rffi.cast(PyIntObject, py_obj)
     py_int.c_ob_ival = space.int_w(w_obj)
 
 def int_realize(space, obj):

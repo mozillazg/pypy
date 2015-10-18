@@ -15,7 +15,7 @@ from rpython.rtyper.annlowlevel import llhelper
 from rpython.rlib import rawrefcount
 
 #________________________________________________________
-# type description
+# type description ZZZ SEE BELOW
 
 class BaseCpyTypedescr(object):
     basestruct = PyObject.TO
@@ -63,9 +63,8 @@ class BaseCpyTypedescr(object):
             state.set_lifeline(w_obj, obj)
         return w_obj
 
-typedescr_cache = {}
-
 def make_typedescr(typedef, **kw):
+    return #ZZZ
     """NOT_RPYTHON
 
     basestruct: The basic structure to allocate
@@ -109,7 +108,7 @@ def make_typedescr(typedef, **kw):
 
     typedescr_cache[typedef] = CpyTypedescr()
 
-@bootstrap_function
+#@bootstrap_function ZZZ
 def init_pyobject(space):
     from pypy.module.cpyext.object import PyObject_dealloc
     # typedescr for the 'object' type
@@ -120,6 +119,7 @@ def init_pyobject(space):
 
 @specialize.memo()
 def _get_typedescr_1(typedef):
+    ZZZ
     try:
         return typedescr_cache[typedef]
     except KeyError:
@@ -128,10 +128,58 @@ def _get_typedescr_1(typedef):
         return typedescr_cache[None]
 
 def get_typedescr(typedef):
+    ZZZ
     if typedef is None:
         return typedescr_cache[None]
     else:
         return _get_typedescr_1(typedef)
+
+#________________________________________________________
+# type description
+
+def setup_class_for_cpyext(W_Class, **kw):
+    """NOT_RPYTHON
+
+    basestruct: The basic structure to allocate
+    create_pyobj: Function called to make a PyObject from a PyPy object
+    attach    : default create_pyobj allocates a basestruct and then calls this
+    realize   : Function called to create a pypy object from a raw struct
+    dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
+    """
+
+    tp_basestruct = kw.pop('basestruct', PyObject.TO)
+    tp_create_pyobj = kw.pop('create_pyobj', None)
+    tp_attach       = kw.pop('attach', None)
+    #tp_realize    = kw.pop('realize', None)
+    #tp_dealloc    = kw.pop('dealloc', None)
+    assert not kw, "Extra arguments to make_typedescr"
+
+    if tp_attach:
+        assert not tp_create_pyobj
+        tp_attach._always_inline_ = True
+        #
+        def tp_create_pyobj(self, space):
+            ob = lltype.malloc(tp_basestruct, flavor='raw',
+                               track_allocation=False)
+            init_link_pypy_direct(self, ob)
+            tp_attach(space, ob, self)
+            return rffi.cast(PyObject, ob)
+
+    W_Class.cpyext_basestruct = tp_basestruct
+    if tp_create_pyobj:
+        W_Class.cpyext_create_pyobj = tp_create_pyobj
+
+
+def init_link_pypy_direct(w_obj, ob):
+    ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_DIRECT
+    ob.c_ob_pypy_link = 0
+    # ob.c_ob_type = ...
+    rawrefcount.create_link_pypy(w_obj, ob)
+
+@bootstrap_function
+def init_pyobject(space):
+    setup_class_for_cpyext(W_Root,
+        attach = lambda space, py_int, w_obj: None)
 
 #________________________________________________________
 # refcounted object support
@@ -288,25 +336,11 @@ def track_reference(space, py_obj, w_obj, replace=False):
         state.py_objects_r2w[ptr] = w_obj
 
 
-def _create_pyobj_from_w_obj(w_obj):
-    # XXX temp, needs cases
-    # We attach a PyObject to 'w_obj' here, without using track_allocation:
-    # some w_objs are kept alive for a long time and the PyObject attached
-    # to them has the same lifetime.  We can't easily check from here that
-    # rawrefcount is not leaking the PyObject afterwards, but we assume it
-    # is already tested independently.
-    ob = lltype.malloc(PyObject.TO, flavor='raw', track_allocation=False)
-    ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_DIRECT
-    ob.c_ob_pypy_link = 0
-    # ob.c_ob_type = ...
-    rawrefcount.create_link_pypy(w_obj, ob)
-    return ob
-
 def debug_collect():
     rawrefcount._collect(track_allocation=False)
 
 
-def as_pyobj(w_obj):
+def as_pyobj(space, w_obj):
     """
     Returns a 'PyObject *' representing the given intepreter object.
     This doesn't give a new reference, but the returned 'PyObject *'
@@ -318,19 +352,19 @@ def as_pyobj(w_obj):
     #    xxx
     ob = rawrefcount.from_obj(PyObject, w_obj)
     if not ob:
-        ob = _create_pyobj_from_w_obj(w_obj)
+        ob = w_obj.cpyext_create_pyobj(space)
     return ob
 as_pyobj._always_inline_ = True
 
-def as_xpyobj(w_obj):
+def as_xpyobj(space, w_obj):
     if w_obj is not None:
-        return as_pyobj(w_obj)
+        return as_pyobj(space, w_obj)
     else:
         return lltype.nullptr(PyObject.TO)
 
 
 @specialize.ll()
-def from_pyobj(pyobj):
+def from_pyobj(space, pyobj):
     assert is_pyobj(pyobj)
     assert pyobj
     pyobj = rffi.cast(PyObject, pyobj)
@@ -341,9 +375,9 @@ def from_pyobj(pyobj):
 from_pyobj._always_inline_ = True
 
 @specialize.ll()
-def from_xpyobj(pyobj):
+def from_xpyobj(space, pyobj):
     if pyobj:
-        return from_pyobj(pyobj)
+        return from_pyobj(space, pyobj)
     else:
         return None
 
@@ -370,20 +404,20 @@ class Entry(ExtRegistryEntry):
 
 
 @specialize.ll()
-def get_pyobj_and_incref(obj):
+def get_pyobj_and_incref(space, obj):
     """Increment the reference counter of the PyObject and return it.
     Can be called with either a PyObject or a W_Root.
     """
     if is_pyobj(obj):
         pyobj = rffi.cast(PyObject, obj)
     else:
-        pyobj = as_pyobj(obj)
+        pyobj = as_pyobj(space, obj)
     assert pyobj.c_ob_refcnt > 0
     pyobj.c_ob_refcnt += 1
     return pyobj
 
 @specialize.ll()
-def get_w_obj_and_decref(obj):
+def get_w_obj_and_decref(space, obj):
     """Decrement the reference counter of the PyObject and return the
     corresponding W_Root object (so the reference count is at least
     REFCNT_FROM_PYPY and cannot be zero).  Can be called with either
@@ -391,10 +425,10 @@ def get_w_obj_and_decref(obj):
     """
     if is_pyobj(obj):
         pyobj = rffi.cast(PyObject, obj)
-        w_obj = from_pyobj(pyobj)
+        w_obj = from_pyobj(space, pyobj)
     else:
         w_obj = obj
-        pyobj = as_pyobj(w_obj)
+        pyobj = as_pyobj(space, w_obj)
     pyobj.c_ob_refcnt -= 1
     assert pyobj.c_ob_refcnt >= rawrefcount.REFCNT_FROM_PYPY
     keepalive_until_here(w_obj)
