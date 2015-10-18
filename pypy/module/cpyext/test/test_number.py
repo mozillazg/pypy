@@ -1,6 +1,7 @@
 from rpython.rtyper.lltypesystem import lltype
 from pypy.module.cpyext.test.test_api import BaseApiTest
-from pypy.module.cpyext.pyobject import PyObjectP, from_ref, make_ref, Py_DecRef
+from pypy.module.cpyext.pyobject import PyObjectP, as_pyobj
+from pypy.module.cpyext.pyobject import get_w_obj_and_decref
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
 class TestIterator(BaseApiTest):
@@ -43,19 +44,16 @@ class TestIterator(BaseApiTest):
         w_obj1 = space.wrap(123)
         w_obj2 = space.wrap(456.789)
         pp1 = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        pp1[0] = make_ref(w_obj1)
+        pp1[0] = as_pyobj(w_obj1)
         pp2 = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        pp2[0] = make_ref(w_obj2)
+        pp2[0] = as_pyobj(w_obj2)
         assert api.PyNumber_Coerce(pp1, pp2) == 0
-        assert space.str_w(space.repr(from_ref(pp1[0]))) == '123.0'
-        assert space.str_w(space.repr(from_ref(pp2[0]))) == '456.789'
-        Py_DecRef(space, pp1[0])     # for the refs returned by PyNumber_Coerce
-        Py_DecRef(space, pp2[0])
+        w_res1 = get_w_obj_and_decref(pp1[0])
+        w_res2 = get_w_obj_and_decref(pp2[0])
         lltype.free(pp1, flavor='raw')
-        # Yes, decrement twice since we decoupled between w_obj* and pp*[0].
-        Py_DecRef(space, w_obj1)     # for the make_ref() above
-        Py_DecRef(space, w_obj2)
         lltype.free(pp2, flavor='raw')
+        assert space.str_w(space.repr(w_res1)) == '123.0'
+        assert space.str_w(space.repr(w_res2)) == '456.789'
 
     def test_number_coerce_ex(self, space, api):
         pl = make_ref(space.wrap(123))

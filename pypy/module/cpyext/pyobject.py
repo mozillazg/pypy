@@ -2,13 +2,15 @@ import sys
 
 from pypy.interpreter.baseobjspace import W_Root, SpaceCache
 from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
+from rpython.rtyper.extregistry import ExtRegistryEntry
 from pypy.module.cpyext.api import (
-    cpython_api, bootstrap_function, PyObject, PyObjectP, ADDR, BORROW,
+    cpython_api, bootstrap_function, PyObject, PyObjectP, ADDR,
     CANNOT_FAIL, Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr, is_PyObject)
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.objspace.std.objectobject import W_ObjectObject
 from rpython.rlib.objectmodel import specialize, we_are_translated
+from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rtyper.annlowlevel import llhelper
 from rpython.rlib import rawrefcount
 
@@ -289,7 +291,7 @@ def track_reference(space, py_obj, w_obj, replace=False):
 def _create_pyobj_from_w_obj(w_obj):
     # XXX temp, needs cases
     ob = lltype.malloc(PyObject.TO, flavor='raw', track_allocation=False)
-    ob.c_ob_refcnt = 0
+    ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_DIRECT
     ob.c_ob_pypy_link = 0
     # ob.c_ob_type = ...
     rawrefcount.create_link_pypy(w_obj, ob)
@@ -299,12 +301,11 @@ def _create_pyobj_from_w_obj(w_obj):
 def as_pyobj(w_obj):
     """
     Returns a 'PyObject *' representing the given intepreter object.
-    'None' is returned as a NULL.  This doesn't give a new reference, but
-    the returned 'PyObject *' is valid at least as long as 'w_obj' is.
+    This doesn't give a new reference, but the returned 'PyObject *'
+    is valid at least as long as 'w_obj' is.
     """
     assert not is_pyobj(w_obj)
-    if w_obj is None:
-        return lltype.nullptr(PyObject.TO)
+    assert w_obj is not None
     #if isinstance(w_obj, W_CPyExtPlaceHolderObject):
     #    xxx
     ob = rawrefcount.from_obj(PyObject, w_obj)
@@ -313,43 +314,95 @@ def as_pyobj(w_obj):
     return ob
 as_pyobj._always_inline_ = True
 
+def as_xpyobj(w_obj):
+    if w_obj is not None:
+        return as_pyobj(w_obj)
+    else:
+        return lltype.nullptr(PyObject.TO)
+
 
 @specialize.ll()
-def from_ref(pyobj):
+def from_pyobj(pyobj):
     assert is_pyobj(pyobj)
-    if not pyobj:
-        return None
+    assert pyobj
     pyobj = rffi.cast(PyObject, pyobj)
     w_obj = rawrefcount.to_obj(W_Root, pyobj)
     if w_obj is None:
         w_obj = _create_w_obj_from_pyobj(pyobj)
     return w_obj
-from_ref._always_inline_ = True
+from_pyobj._always_inline_ = True
+
+@specialize.ll()
+def from_xpyobj(pyobj):
+    if pyobj:
+        return from_pyobj(pyobj)
+    else:
+        return None
 
 
 def is_pyobj(x):
-    "NOT_RPYTHON"
     if x is None or isinstance(x, W_Root):
         return False
-    else:
-        assert is_PyObject(lltype.typeOf(x))
+    elif is_PyObject(lltype.typeOf(x)):
         return True
+    else:
+        raise TypeError(repr(type(x)))
 
-# ZZZ: use an ExtRegistryEntry to constant-fold is_pyobj()
+class Entry(ExtRegistryEntry):
+    _about_ = is_pyobj
+    def compute_result_annotation(self, s_x):
+        from rpython.rtyper.llannotation import SomePtr
+        if isinstance(s_x, SomePtr):
+            return self.bookkeeper.immutablevalue(True)
+        else:
+            return self.bookkeeper.immutablevalue(False)
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        return hop.inputconst(lltype.Bool, hop.s_result.const)
 
 
-def make_ref(w_obj):
-    pyobj = as_pyobj(w_obj)
+@specialize.ll()
+def get_pyobj_and_incref(obj):
+    """Increment the reference counter of the PyObject and return it.
+    Can be called with either a PyObject or a W_Root.
+    """
+    if is_pyobj(obj):
+        pyobj = rffi.cast(PyObject, obj)
+    else:
+        pyobj = as_pyobj(obj)
+    assert pyobj.c_ob_refcnt > 0
     pyobj.c_ob_refcnt += 1
     return pyobj
 
+@specialize.ll()
+def get_w_obj_and_decref(obj):
+    """Decrement the reference counter of the PyObject and return the
+    corresponding W_Root object (so the reference count is at least
+    REFCNT_FROM_PYPY and cannot be zero).  Can be called with either
+    a PyObject or a W_Root.
+    """
+    if is_pyobj(obj):
+        pyobj = rffi.cast(PyObject, obj)
+        w_obj = from_pyobj(pyobj)
+    else:
+        w_obj = obj
+        pyobj = as_pyobj(w_obj)
+    pyobj.c_ob_refcnt -= 1
+    assert pyobj.c_ob_refcnt >= rawrefcount.REFCNT_FROM_PYPY
+    keepalive_until_here(w_obj)
+    return w_obj
 
-def ZZZ_from_ref(space, ref):
+
+def make_ref(space, w_obj):
+    ZZZ
+
+def from_ref(space, ref):
     """
     Finds the interpreter object corresponding to the given reference.  If the
     object is not yet realized (see stringobject.py), creates it.
     """
     assert lltype.typeOf(ref) == PyObject
+    ZZZ
     if not ref:
         return None
     state = space.fromcache(RefcountState)

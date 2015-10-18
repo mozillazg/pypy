@@ -1,7 +1,7 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, cpython_struct, \
         METH_STATIC, METH_CLASS, METH_COEXIST, CANNOT_FAIL, CONST_STRING
-from pypy.module.cpyext.pyobject import PyObject, BORROW
+from pypy.module.cpyext.pyobject import PyObject, as_pyobj
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.methodobject import (
     W_PyCFunctionObject, PyCFunction_NewEx, PyDescr_NewMethod,
@@ -34,7 +34,7 @@ def PyImport_AddModule(space, name):
 # This is actually the Py_InitModule4 function,
 # renamed to refuse modules built against CPython headers.
 @cpython_api([CONST_STRING, lltype.Ptr(PyMethodDef), CONST_STRING,
-              PyObject, rffi.INT_real], BORROW)
+              PyObject, rffi.INT_real], PyObject)
 def _Py_InitPyPyModule(space, name, methods, doc, w_self, apiver):
     """
     Create a new module object based on a name and table of functions, returning
@@ -69,7 +69,7 @@ def _Py_InitPyPyModule(space, name, methods, doc, w_self, apiver):
     if doc:
         space.setattr(w_mod, space.wrap("__doc__"),
                       space.wrap(rffi.charp2str(doc)))
-    return w_mod
+    return as_pyobj(w_mod)  # borrowed result kept alive in PyImport_AddModule()
 
 
 def convert_method_defs(space, dict_w, methods, w_type, w_self=None, name=None):
