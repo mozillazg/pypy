@@ -310,7 +310,7 @@ def _make_ovf2long(opname, ovf2small=None):
 
 class W_IntObject(W_AbstractIntObject):
 
-    __slots__ = 'intval'
+    __slots__ = ('intval', '__weakref__')
     _immutable_fields_ = ['intval']
 
     def __init__(self, intval):

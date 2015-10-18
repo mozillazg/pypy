@@ -290,12 +290,20 @@ def track_reference(space, py_obj, w_obj, replace=False):
 
 def _create_pyobj_from_w_obj(w_obj):
     # XXX temp, needs cases
+    # We attach a PyObject to 'w_obj' here, without using track_allocation:
+    # some w_objs are kept alive for a long time and the PyObject attached
+    # to them has the same lifetime.  We can't easily check from here that
+    # rawrefcount is not leaking the PyObject afterwards, but we assume it
+    # is already tested independently.
     ob = lltype.malloc(PyObject.TO, flavor='raw', track_allocation=False)
     ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_DIRECT
     ob.c_ob_pypy_link = 0
     # ob.c_ob_type = ...
     rawrefcount.create_link_pypy(w_obj, ob)
     return ob
+
+def debug_collect():
+    rawrefcount._collect(track_allocation=False)
 
 
 def as_pyobj(w_obj):

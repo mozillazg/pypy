@@ -63,7 +63,7 @@ def to_obj(Class, ob):
     assert isinstance(p, Class)
     return p
 
-def _collect():
+def _collect(track_allocation=True):
     """NOT_RPYTHON: for tests only.  Emulates a GC collection.
     Will invoke dealloc_callback() for all objects whose _Py_Dealloc()
     should be called.
@@ -111,7 +111,7 @@ def _collect():
             ob.c_ob_pypy_link = 0
             if ob.c_ob_refcnt >= REFCNT_FROM_PYPY_DIRECT:
                 assert ob.c_ob_refcnt == REFCNT_FROM_PYPY_DIRECT
-                lltype.free(ob, flavor='raw')
+                lltype.free(ob, flavor='raw', track_allocation=track_allocation)
             else:
                 assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
                 assert ob.c_ob_refcnt < int(REFCNT_FROM_PYPY_DIRECT * 0.99)

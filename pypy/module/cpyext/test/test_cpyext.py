@@ -14,10 +14,12 @@ from rpython.translator.gensupp import uniquemodulename
 from rpython.tool.udir import udir
 from pypy.module.cpyext import api
 from pypy.module.cpyext.state import State
-from pypy.module.cpyext.pyobject import RefcountState
+from pypy.module.cpyext.pyobject import RefcountState, debug_collect
 from pypy.module.cpyext.pyobject import Py_DecRef, InvalidPointerException
 from rpython.tool.identity_dict import identity_dict
 from rpython.tool import leakfinder
+from rpython.rlib import rawrefcount
+
 
 def setup_module(module):
     if os.name == 'nt':
@@ -128,6 +130,7 @@ class LeakCheckingTest(object):
         state.reset_borrowed_references()
 
     def check_and_print_leaks(self):
+        debug_collect()
         return #ZZZ
         # check for sane refcnts
         import gc
