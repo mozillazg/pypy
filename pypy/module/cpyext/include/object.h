@@ -26,7 +26,7 @@ we have it for compatibility with CPython.
 	Py_ssize_t ob_size; /* Number of items in variable part */
 
 #define PyObject_HEAD_INIT(type)	\
-	1, type,
+	1, 0, type,
 
 #define PyVarObject_HEAD_INIT(type, size)	\
 	PyObject_HEAD_INIT(type) size,
