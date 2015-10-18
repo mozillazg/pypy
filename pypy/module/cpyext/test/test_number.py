@@ -56,26 +56,25 @@ class TestIterator(BaseApiTest):
         assert space.str_w(space.repr(w_res2)) == '456.789'
 
     def test_number_coerce_ex(self, space, api):
-        pl = make_ref(space.wrap(123))
-        pf = make_ref(space.wrap(42.))
+        w_objl = space.wrap(123)
+        w_objf = space.wrap(42.5)
         ppl = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
         ppf = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        ppl[0] = pl
-        ppf[0] = pf
+        ppl[0] = as_pyobj(w_objl)
+        ppf[0] = as_pyobj(w_objf)
 
         ret = api.PyNumber_CoerceEx(ppl, ppf)
         assert ret == 0
 
-        w_res = from_ref(ppl[0])
-
-        assert api.PyFloat_Check(w_res)
-        assert space.unwrap(w_res) == 123.
-        Py_DecRef(space, pl)
-        Py_DecRef(space, pf)
-        Py_DecRef(space, ppl[0])
-        Py_DecRef(space, ppf[0])
+        w_resl = get_w_obj_and_decref(ppl[0])
+        w_resf = get_w_obj_and_decref(ppf[0])
         lltype.free(ppl, flavor='raw')
         lltype.free(ppf, flavor='raw')
+
+        assert api.PyFloat_Check(w_resl)
+        assert space.unwrap(w_resl) == 123.
+        assert isinstance(space.unwrap(w_resl), float)
+        assert space.unwrap(w_resf) == 42.5
 
     def test_numbermethods(self, space, api):
         assert "ab" == space.unwrap(
