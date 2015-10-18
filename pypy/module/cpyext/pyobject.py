@@ -141,7 +141,6 @@ def setup_class_for_cpyext(W_Class, **kw):
     """NOT_RPYTHON
 
     basestruct: The basic structure to allocate
-    create_pyobj: Function called to make a PyObject from a PyPy object
     alloc_pyobj: default create_pyobj calls this to get the PyObject
     fill_pyobj: default create_pyobj calls this after attaching is done
     realize   : Function called to create a pypy object from a raw struct
@@ -149,7 +148,6 @@ def setup_class_for_cpyext(W_Class, **kw):
     """
 
     tp_basestruct = kw.pop('basestruct', PyObject.TO)
-    tp_create_pyobj = kw.pop('create_pyobj', None)
     tp_alloc_pyobj  = kw.pop('alloc_pyobj', None)
     tp_fill_pyobj   = kw.pop('fill_pyobj', None)
     force_create_pyobj = kw.pop('force_create_pyobj', False)
@@ -158,7 +156,6 @@ def setup_class_for_cpyext(W_Class, **kw):
     assert not kw, "Extra arguments to make_typedescr"
 
     if tp_alloc_pyobj or tp_fill_pyobj or force_create_pyobj:
-        assert not tp_create_pyobj
         #
         if not tp_alloc_pyobj:
             def tp_alloc_pyobj(space, w_obj):
@@ -170,19 +167,25 @@ def setup_class_for_cpyext(W_Class, **kw):
         if not tp_fill_pyobj:
             def tp_fill_pyobj(space, w_obj, py_obj):
                 pass
-        tp_fill_pyobj._always_inline_ = True
         #
-        def tp_create_pyobj(self, space):
+        def cpyext_create_pyobj(self, space):
             py_obj, light = tp_alloc_pyobj(space, self)
             ob = rffi.cast(PyObject, py_obj)
             ob_type = get_c_ob_type(space, space.type(self))
             init_link_pypy(self, ob, ob_type, light)
             tp_fill_pyobj(space, self, py_obj)
             return ob
+        W_Class.cpyext_create_pyobj = cpyext_create_pyobj
+        #
+        def cpyext_fill_prebuilt_pyobj(self, space):
+            ob_type = get_c_ob_type(space, space.type(self))
+            py_obj = as_pyobj(space, self)
+            py_obj.c_ob_type = ob_type
+            ob = rffi.cast(lltype.Ptr(tp_basestruct), py_obj)
+            tp_fill_pyobj(space, self, ob)
+        W_Class.cpyext_fill_prebuilt_pyobj = cpyext_fill_prebuilt_pyobj
 
     W_Class.cpyext_basestruct = tp_basestruct
-    if tp_create_pyobj:
-        W_Class.cpyext_create_pyobj = tp_create_pyobj
 
 
 def init_link_pypy(w_obj, ob, ob_type, light):
@@ -193,6 +196,12 @@ def init_link_pypy(w_obj, ob, ob_type, light):
     ob.c_ob_pypy_link = 0
     ob.c_ob_type = ob_type
     rawrefcount.create_link_pypy(w_obj, ob)
+
+def setup_prebuilt_pyobj(w_obj, py_obj):
+    assert lltype.typeOf(py_obj) == PyObject
+    init_link_pypy(w_obj, py_obj, lltype.nullptr(PyTypeObjectPtr.TO), False)
+    if isinstance(w_obj, W_TypeObject):
+        w_obj.cpyext_c_type_object = rffi.cast(PyTypeObjectPtr, py_obj)
 
 def get_c_ob_type(space, w_type):
     pto = w_type.cpyext_c_type_object

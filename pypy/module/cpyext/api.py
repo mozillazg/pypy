@@ -574,6 +574,7 @@ def build_type_checkers(type_name, cls=None):
         def get_w_type(space):
             return getattr(space, cls)
     else:
+        @specialize.memo()
         def get_w_type(space):
             return space.gettypeobject(cls.typedef)
     check_name = "Py" + type_name + "_Check"
@@ -584,11 +585,12 @@ def build_type_checkers(type_name, cls=None):
         w_type = get_w_type(space)
         return (space.is_w(w_obj_type, w_type) or
                 space.is_true(space.issubtype(w_obj_type, w_type)))
-    def check_exact(space, w_obj):
+    def check_exact(space, py_obj):
         "Implements the Py_Xxx_CheckExact function"
-        w_obj_type = space.type(w_obj)
-        w_type = get_w_type(space)
-        return space.is_w(w_obj_type, w_type)
+        from pypy.module.cpyext.pyobject import as_pyobj
+        py_type = get_w_type(space).cpyext_c_type_object
+        assert py_type
+        return py_obj.c_ob_type == py_type
 
     check = cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)(
         func_with_new_name(check, check_name))
@@ -769,7 +771,8 @@ def c_function_signature(db, func):
 # Do not call this more than once per process
 def build_bridge(space):
     "NOT_RPYTHON"
-    from pypy.module.cpyext.pyobject import make_ref
+    from pypy.module.cpyext.pyobject import setup_prebuilt_pyobj
+    from rpython.rlib import rawrefcount
 
     export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
     from rpython.translator.c.database import LowLevelDatabase
@@ -827,9 +830,11 @@ def build_bridge(space):
 
     space.fromcache(State).install_dll(eci)
 
+    rawrefcount.init(lambda ob: ZZZ)
+
     # populate static data
-    if 0:   # ZZZ
-      for name, (typ, expr) in GLOBALS.iteritems():
+    to_fill = []
+    for name, (typ, expr) in GLOBALS.iteritems():
         from pypy.module import cpyext
         w_obj = eval(expr)
         if name.endswith('#'):
@@ -862,17 +867,13 @@ def build_bridge(space):
                 # we have a structure, get its address
                 in_dll = ll2ctypes.get_ctypes_type(PyObject.TO).in_dll(bridge, name)
                 py_obj = ll2ctypes.ctypes2lltype(PyObject, ctypes.pointer(in_dll))
-            from pypy.module.cpyext.pyobject import (
-                track_reference, get_typedescr)
-            w_type = space.type(w_obj)
-            typedescr = get_typedescr(w_type.instancetypedef)
-            py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr,
-                                         make_ref(space, w_type))
-            typedescr.attach(space, py_obj, w_obj)
-            track_reference(space, py_obj, w_obj)
+            setup_prebuilt_pyobj(w_obj, py_obj)
+            to_fill.append(w_obj)
         else:
             assert False, "Unknown static object: %s %s" % (typ, name)
+
+    for w_obj in to_fill:    # do it after all cpyext_setup_prebuilt_pyobj()
+        w_obj.cpyext_fill_prebuilt_pyobj(space)
 
     pypyAPI = ctypes.POINTER(ctypes.c_void_p).in_dll(bridge, 'pypyAPI')
 
@@ -967,7 +968,8 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True):
     for name, (typ, expr) in GLOBALS.iteritems():
         if name.endswith('#'):
             name = name.replace("#", "")
-            typ = typ.replace("*", "")
+            assert typ.endswith('*')
+            typ = typ[:-1]
         elif name.startswith('PyExc_'):
             typ = 'PyObject*'
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name))

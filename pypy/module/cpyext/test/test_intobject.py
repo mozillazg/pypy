@@ -181,6 +181,16 @@ class AppTestIntObject(AppTestCpythonExtensionBase):
                     PyErr_SetNone(PyExc_ValueError);
                     return NULL;
                 }
+                if (!PyInt_CheckExact(obj)) {
+                    Py_DECREF(obj);
+                    PyErr_SetNone(PyExc_ValueError);
+                    return NULL;
+                }
+                if (obj->ob_type != &PyInt_Type) {
+                    Py_DECREF(obj);
+                    PyErr_SetNone(PyExc_ValueError);
+                    return NULL;
+                }
                 val = PyInt_FromLong(((PyIntObject *)obj)->ob_ival);
                 Py_DECREF(obj);
                 return val;

@@ -480,15 +480,18 @@ def type_alloc(space, w_metatype):
     return rffi.cast(PyObject, heaptype)
 
 def type_alloc_pyobj(space, w_type):
+    pto = lltype.malloc(PyTypeObject, flavor='raw', zero=True,
+                        track_allocation=False)
+    return pto, False
+
+def type_fill_pyobj(space, w_type, pto):
     """
-    Allocates a PyTypeObject from an existing type.
+    Fills a newly allocated PyTypeObject from an existing w_type.
     """
     from pypy.module.cpyext.object import PyObject_Del
 
     assert isinstance(w_type, W_TypeObject)
-
-    pto = lltype.malloc(PyTypeObject, flavor='raw', zero=True,
-                        track_allocation=False)
+    w_type.cpyext_c_type_object = pto
 
     # dealloc
     #pto.c_tp_dealloc = typedescr.get_dealloc(space)   ZZZ
@@ -516,16 +519,6 @@ def type_alloc_pyobj(space, w_type):
     pto.c_tp_itemsize = 0
     if space.is_w(w_type, space.w_object):
         pto.c_tp_new = rffi.cast(newfunc, 1)   # XXX temp
-
-    # Basic initialization is done, we can now publish this type
-    # before finishing.  This should handle the cases of recursion.
-    w_type.cpyext_c_type_object = pto
-    return pto, False
-
-def type_fill_pyobj(space, w_type, pto):
-    """
-    Fills a newly allocated type.
-    """
     # uninitialized fields:
     # c_tp_print, c_tp_getattr, c_tp_setattr
     # XXX implement
