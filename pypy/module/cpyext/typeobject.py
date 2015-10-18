@@ -595,7 +595,7 @@ def _type_realize(space, py_obj):
     py_type = rffi.cast(PyTypeObjectPtr, py_obj)
 
     if not py_type.c_tp_base:
-        base = as_pyobj(space, space.w_object)
+        base = get_pyobj_and_incref(space, space.w_object)
         py_type.c_tp_base = rffi.cast(PyTypeObjectPtr, base)
 
     finish_type_1(space, py_type)

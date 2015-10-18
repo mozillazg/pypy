@@ -587,7 +587,6 @@ def build_type_checkers(type_name, cls=None):
                 space.is_true(space.issubtype(w_obj_type, w_type)))
     def check_exact(space, py_obj):
         "Implements the Py_Xxx_CheckExact function"
-        from pypy.module.cpyext.pyobject import as_pyobj
         py_type = get_w_type(space).cpyext_c_type_object
         assert py_type
         return py_obj.c_ob_type == py_type

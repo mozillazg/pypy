@@ -2884,9 +2884,13 @@ class IncrementalMiniMarkGC(MovingGCBase):
         #
         rc = self._pyobj(pyobject).ob_refcnt
         if rc >= REFCNT_FROM_PYPY_LIGHT:
-            ll_assert(rc == REFCNT_FROM_PYPY_LIGHT,
-                    "cpyext: rrc_trace() should have marked the pypy obj alive")
-            lltype.free(self._pyobj(pyobject), flavor='raw')
+            rc -= REFCNT_FROM_PYPY_LIGHT
+            if rc == 0:
+                lltype.free(self._pyobj(pyobject), flavor='raw')
+            else:
+                # can only occur if LIGHT is used in create_link_pyobj()
+                self._pyobj(pyobject).ob_refcnt = rc
+                self._pyobj(pyobject).ob_pypy_link = 0
         else:
             ll_assert(rc >= REFCNT_FROM_PYPY, "refcount underflow?")
             ll_assert(rc < int(REFCNT_FROM_PYPY_LIGHT * 0.99),

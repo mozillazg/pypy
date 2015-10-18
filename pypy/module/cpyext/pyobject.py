@@ -183,6 +183,7 @@ def setup_class_for_cpyext(W_Class, **kw):
             py_obj.c_ob_type = ob_type
             ob = rffi.cast(lltype.Ptr(tp_basestruct), py_obj)
             tp_fill_pyobj(space, self, ob)
+            keepalive_until_here(self)
         W_Class.cpyext_fill_prebuilt_pyobj = cpyext_fill_prebuilt_pyobj
 
     W_Class.cpyext_basestruct = tp_basestruct
@@ -380,7 +381,8 @@ def as_pyobj(space, w_obj):
     """
     Returns a 'PyObject *' representing the given intepreter object.
     This doesn't give a new reference, but the returned 'PyObject *'
-    is valid at least as long as 'w_obj' is.
+    is valid at least as long as 'w_obj' is.  To be safe, you should
+    use keepalive_until_here(w_obj) some time later.
     """
     assert not is_pyobj(w_obj)
     assert w_obj is not None
@@ -450,6 +452,8 @@ def get_pyobj_and_incref(space, obj):
         pyobj = as_pyobj(space, obj)
     assert pyobj.c_ob_refcnt > 0
     pyobj.c_ob_refcnt += 1
+    if not is_pyobj(obj):
+        keepalive_until_here(obj)
     return pyobj
 
 @specialize.ll()
