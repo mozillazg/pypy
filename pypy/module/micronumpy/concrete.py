@@ -57,7 +57,9 @@ class BaseConcreteArray(object):
         return backstrides
 
     def get_flags(self):
-        return self.flags
+        flags = self.flags
+        jit.hint(flags, promote=True)
+        return flags
 
     def getitem(self, index):
         return self.dtype.read(self, index, 0)
@@ -84,7 +86,7 @@ class BaseConcreteArray(object):
                     ','.join([str(x) for x in self.get_shape()]),
                     )
         shape = shape_agreement(space, self.get_shape(), arr)
-        impl = arr.implementation
+        impl = arr.get_implementation()
         if impl.storage == self.storage:
             impl = impl.copy(space)
         loop.setslice(space, shape, self, impl)
@@ -293,7 +295,7 @@ class BaseConcreteArray(object):
             w_value = convert_to_array(space, w_value)
             chunks = self._prepare_slice_args(space, w_index)
             view = new_view(space, orig_arr, chunks)
-            view.implementation.setslice(space, w_value)
+            view.get_implementation().setslice(space, w_value)
 
     def transpose(self, orig_array, axes=None):
         if len(self.get_shape()) < 2:
@@ -347,7 +349,7 @@ class BaseConcreteArray(object):
         nd = len(self.get_shape()) or 1
         w_res = W_NDimArray.from_shape(space, [s, nd], index_type)
         loop.nonzero(w_res, self, box)
-        w_res = w_res.implementation.swapaxes(space, w_res, 0, 1)
+        w_res = w_res.get_implementation().swapaxes(space, w_res, 0, 1)
         l_w = [w_res.descr_getitem(space, space.wrap(d)) for d in range(nd)]
         return space.newtuple(l_w)
 

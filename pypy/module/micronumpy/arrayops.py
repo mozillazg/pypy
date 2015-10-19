@@ -150,7 +150,7 @@ def concatenate(space, w_args, w_axis=None):
         chunks[axis] = Chunk(axis_start, axis_start + arr.get_shape()[axis], 1,
                              arr.get_shape()[axis])
         view = new_view(space, res, chunks)
-        view.implementation.setslice(space, arr)
+        view.get_implementation().setslice(space, arr)
         axis_start += arr.get_shape()[axis]
     return res
 
@@ -166,7 +166,7 @@ def repeat(space, w_arr, repeats, w_axis):
         for i in range(repeats):
             chunks = [Chunk(i, shape[0] - repeats + i, repeats, orig_size)]
             view = new_view(space, w_res, chunks)
-            view.implementation.setslice(space, arr)
+            view.get_implementation().setslice(space, arr)
     else:
         axis = space.int_w(w_axis)
         shape = arr.get_shape()[:]
@@ -178,7 +178,7 @@ def repeat(space, w_arr, repeats, w_axis):
             chunks[axis] = Chunk(i, shape[axis] - repeats + i, repeats,
                                  orig_size)
             view = new_view(space, w_res, chunks)
-            view.implementation.setslice(space, arr)
+            view.get_implementation().setslice(space, arr)
     return w_res
 
 

@@ -77,7 +77,7 @@ def array(space, w_object, w_dtype=None, copy=True, w_order=None, subok=False,
     shape = w_res.get_shape()
     if len(shape) < ndmin:
         shape = [1] * (ndmin - len(shape)) + shape
-        impl = w_res.implementation.set_shape(space, w_res, shape)
+        impl = w_res.get_implementation().set_shape(space, w_res, shape)
         if w_res is w_object:
             return W_NDimArray(impl)
         else:
@@ -127,12 +127,12 @@ def _array(space, w_object, w_dtype=None, copy=True, w_order=None, subok=False):
             w_arr = W_NDimArray.from_shape(space, shape, dtype, order=npy_order)
             if support.product(shape) == 1:
                 w_arr.set_scalar_value(dtype.coerce(space,
-                        w_object.implementation.getitem(0)))
+                        w_object.get_implementation().getitem(0)))
             else:
-                loop.setslice(space, shape, w_arr.implementation, w_object.implementation)
+                loop.setslice(space, shape, w_arr.get_implementation(), w_object.implementation)
             return w_arr
         else:
-            imp = w_object.implementation
+            imp = w_object.get_implementation()
             w_base = w_object
             if imp.base() is not None:
                 w_base = imp.base()
@@ -302,7 +302,7 @@ def empty_like(space, w_a, w_dtype=None, w_order=None, subok=True):
             dtype = descriptor.variable_dtype(space, dtype.char + '1')
     if npy_order in (NPY.KEEPORDER, NPY.ANYORDER):
         # Try to copy the stride pattern
-        impl = w_a.implementation.astype(space, dtype, NPY.KEEPORDER)
+        impl = w_a.get_implementation().astype(space, dtype, NPY.KEEPORDER)
         if subok:
             w_type = space.type(w_a)
         else:

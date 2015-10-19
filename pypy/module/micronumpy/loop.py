@@ -358,7 +358,7 @@ def reduce(space, func, w_arr, axis_flags, dtype, out, identity):
     out_iter.track_index = False
     shape = w_arr.get_shape()
     shapelen = len(shape)
-    inner_iter, outer_iter = split_iter(w_arr.implementation, axis_flags)
+    inner_iter, outer_iter = split_iter(w_arr.get_implementation(), axis_flags)
     assert outer_iter.size == out_iter.size
 
     if identity is not None:
@@ -423,7 +423,7 @@ def accumulate(space, func, w_arr, axis, calc_dtype, w_out, identity):
     arr_shape = w_arr.get_shape()
     temp_shape = arr_shape[:axis] + arr_shape[axis + 1:]
     temp = W_NDimArray.from_shape(space, temp_shape, calc_dtype, w_instance=w_arr)
-    temp_iter = AxisIter(temp.implementation, w_arr.get_shape(), axis)
+    temp_iter = AxisIter(temp.get_implementation(), w_arr.get_shape(), axis)
     temp_state = temp_iter.reset()
     arr_iter, arr_state = w_arr.create_iter()
     arr_iter.track_index = False
@@ -521,7 +521,7 @@ def _new_argmin_argmax(op_name):
         shapelen = len(w_arr.get_shape())
         axis_flags = [False] * shapelen
         axis_flags[axis] = True
-        inner_iter, outer_iter = split_iter(w_arr.implementation, axis_flags)
+        inner_iter, outer_iter = split_iter(w_arr.get_implementation(), axis_flags)
         outer_state = outer_iter.reset()
         out_iter, out_state = w_out.create_iter()
         while not outer_iter.done(outer_state):
@@ -590,8 +590,8 @@ def multidim_dot(space, left, right, result, dtype, right_critical_dim):
     '''
     left_shape = left.get_shape()
     right_shape = right.get_shape()
-    left_impl = left.implementation
-    right_impl = right.implementation
+    left_impl = left.get_implementation()
+    right_impl = right.get_implementation()
     assert left_shape[-1] == right_shape[right_critical_dim]
     assert result.get_dtype() == dtype
     outi, outs = result.create_iter()
@@ -644,7 +644,7 @@ def count_all_true(arr):
     if arr.is_scalar():
         return arr.get_dtype().itemtype.bool(arr.get_scalar_value())
     else:
-        return count_all_true_concrete(arr.implementation)
+        return count_all_true_concrete(arr.get_implementation())
 
 nonzero_driver = jit.JitDriver(name = 'numpy_nonzero',
                                greens = ['shapelen', 'dims', 'dtype'],
@@ -784,11 +784,11 @@ def tostring(space, arr):
     iter, state = arr.create_iter()
     w_res_str = W_NDimArray.from_shape(space, [1], arr.get_dtype())
     itemsize = arr.get_dtype().elsize
-    with w_res_str.implementation as storage:
+    with w_res_str.get_implementation() as storage:
         res_str_casted = rffi.cast(rffi.CArrayPtr(lltype.Char),
                                support.get_storage_as_int(storage))
         while not iter.done(state):
-            w_res_str.implementation.setitem(0, iter.getitem(state))
+            w_res_str.get_implementation().setitem(0, iter.getitem(state))
             for i in range(itemsize):
                 builder.append(res_str_casted[i])
             state = iter.next(state)

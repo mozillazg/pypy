@@ -460,7 +460,7 @@ class W_NDIter(W_NumpyObject):
         if self.tracked_index != "":
             order = self.order
             if order == NPY.KEEPORDER:
-                order = self.seq[0].implementation.order
+                order = self.seq[0].get_order()
             if self.tracked_index == "multi":
                 backward = False
             else:
@@ -477,7 +477,7 @@ class W_NDIter(W_NumpyObject):
                 if not self_d:
                     self.dtypes[i] = seq_d
                 elif self_d != seq_d:
-                        impl = self.seq[i].implementation
+                        impl = self.seq[i].get_implementation()
                         if self.buffered or 'r' in self.op_flags[i].tmp_copy:
                             if not can_cast_array(
                                     space, self.seq[i], self_d, self.casting):
@@ -527,7 +527,7 @@ class W_NDIter(W_NumpyObject):
 
     def get_iter(self, space, i):
         arr = self.seq[i]
-        imp = arr.implementation
+        imp = arr.get_implementation()
         if arr.is_scalar():
             return ConcreteIter(imp, 1, [], [], [], self.op_flags[i], self)
         shape = self.shape

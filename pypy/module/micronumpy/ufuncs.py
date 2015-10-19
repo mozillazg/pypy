@@ -305,12 +305,12 @@ class W_Ufunc(W_Root):
             if keepdims:
                 shape = [1] * len(obj_shape)
                 out = W_NDimArray.from_shape(space, shape, dtype, w_instance=obj)
-                out.implementation.setitem(0, res)
+                out.get_implementation().setitem(0, res)
                 res = out
             elif not space.is_w(space.type(w_obj), space.gettypefor(W_NDimArray)):
                 # subtypes return a ndarray subtype, not a scalar
                 out = W_NDimArray.from_shape(space, [1], dtype, w_instance=obj)
-                out.implementation.setitem(0, res)
+                out.get_implementation().setitem(0, res)
                 res = out
             if call__array_wrap__:
                 res = space.call_method(obj, '__array_wrap__', res, space.w_None)
@@ -869,7 +869,7 @@ class W_UfuncGeneric(W_Ufunc):
                 _arg = allargs[i]
                 assert isinstance(_arg, W_NDimArray)
                 start_dim = len(iter_shape)
-                steps += _arg.implementation.strides[start_dim:]
+                steps += _arg.get_implementation().strides[start_dim:]
             func.set_dims_and_steps(space, dims, steps)
         else:
             # it is a function, ready to be called by the iterator,
@@ -1042,7 +1042,7 @@ class W_UfuncGeneric(W_Ufunc):
             if len(arg_shapes[i]) != curarg.ndims():
                 # reshape
                 sz = product(curarg.get_shape()) * curarg.get_dtype().elsize
-                with curarg.implementation as storage:
+                with curarg.get_implementation() as storage:
                     inargs[i] = W_NDimArray.from_shape_and_storage(
                         space, arg_shapes[i], storage,
                         curarg.get_dtype(), storage_bytes=sz, w_base=curarg)
@@ -1056,7 +1056,7 @@ class W_UfuncGeneric(W_Ufunc):
             elif len(arg_shapes[i]) != curarg.ndims():
                 # reshape
                 sz = product(curarg.get_shape()) * curarg.get_dtype().elsize
-                with curarg.implementation as storage:
+                with curarg.get_implementation() as storage:
                     outargs[i] = W_NDimArray.from_shape_and_storage(
                         space, arg_shapes[i], storage,
                         curarg.get_dtype(), storage_bytes=sz, w_base=curarg)
@@ -1541,7 +1541,7 @@ class W_GenericUFuncCaller(W_Root):
                     raise OperationError(space.w_NotImplementedError,
                          space.wrap("cannot mix ndarray and %r (arg %d) in call to ufunc" % (
                                     arg_i, i)))
-                with arg_i.implementation as storage:
+                with arg_i.get_implementation() as storage:
                     addr = get_storage_as_int(storage, arg_i.get_start())
                     raw_storage_setitem(dataps, CCHARP_SIZE * i, rffi.cast(rffi.CCHARP, addr))
                 #This assumes we iterate over the whole array (it should be a view...)
@@ -1551,7 +1551,7 @@ class W_GenericUFuncCaller(W_Root):
             for i in range(len(args_w)):
                 arg_i = args_w[i]
                 assert isinstance(arg_i, W_NDimArray)
-                with arg_i.implementation as storage:
+                with arg_i.get_implementation() as storage:
                     addr = get_storage_as_int(storage, arg_i.get_start())
                 raw_storage_setitem(dataps, CCHARP_SIZE * i, rffi.cast(rffi.CCHARP, addr))
         try:

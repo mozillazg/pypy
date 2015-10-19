@@ -134,7 +134,7 @@ def make_argsort_function(space, itemtype, comp_type, count=1):
         # create array of indexes
         dtype = descriptor.get_dtype_cache(space).w_longdtype
         index_arr = W_NDimArray.from_shape(space, arr.get_shape(), dtype)
-        with index_arr.implementation as storage, arr as arr_storage:
+        with index_arr.get_implementation() as storage, arr as arr_storage:
             if len(arr.get_shape()) == 1:
                 for i in range(arr.get_size()):
                     raw_storage_setitem(storage, i * INT_SIZE, i)
@@ -149,7 +149,7 @@ def make_argsort_function(space, itemtype, comp_type, count=1):
                     raise oefmt(space.w_IndexError, "Wrong axis %d", axis)
                 arr_iter = AllButAxisIter(arr, axis)
                 arr_state = arr_iter.reset()
-                index_impl = index_arr.implementation
+                index_impl = index_arr.get_implementation()
                 index_iter = AllButAxisIter(index_impl, axis)
                 index_state = index_iter.reset()
                 stride_size = arr.strides[axis]

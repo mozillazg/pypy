@@ -1,6 +1,7 @@
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError, oefmt
 from rpython.tool.pairtype import extendabletype
+from rpython.rlib import jit
 from rpython.rlib.rarithmetic import ovfcheck
 from pypy.module.micronumpy import support
 from pypy.module.micronumpy import constants as NPY
@@ -122,8 +123,8 @@ class W_NDimArray(W_NumpyObject):
     def new_slice(space, offset, strides, backstrides, shape, parent, w_arr, dtype=None):
         from pypy.module.micronumpy import concrete
         w_base = w_arr
-        if w_arr.implementation.base() is not None:
-            w_base = w_arr.implementation.base()
+        if w_arr.get_implementation().base() is not None:
+            w_base = w_arr.get_implementation().base()
         impl = concrete.SliceArray(offset, strides, backstrides, shape, parent,
                                    w_base, dtype)
         return wrap_impl(space, space.type(w_arr), w_arr, impl)
@@ -145,19 +146,30 @@ class W_NDimArray(W_NumpyObject):
         return w_arr
 
     def get_shape(self):
-        return self.implementation.get_shape()
+        return self.get_implementation().get_shape()
+
+    def get_implementation(self):
+        implementation = self.implementation
+        jit.hint(implementation, promote=True)
+        return implementation
 
     def get_dtype(self, space=None):
-        return self.implementation.dtype
+        dtype = self.get_implementation().dtype
+        jit.hint(dtype, promote=True)
+        return dtype
 
     def get_order(self):
-        return self.implementation.order
+        order = self.get_implementation().order
+        jit.hint(order, promote=True)
+        return order
 
     def get_start(self):
-        return self.implementation.start
+        start = self.get_implementation().start
+        jit.hint(start, promote=True)
+        return start
 
     def get_flags(self):
-        return self.implementation.flags
+        return self.get_implementation().get_flags()
 
     def ndims(self):
         return len(self.get_shape())

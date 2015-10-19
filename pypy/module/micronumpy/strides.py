@@ -79,7 +79,7 @@ class EllipsisChunk(BaseChunk):
 
 
 def new_view(space, w_arr, chunks):
-    arr = w_arr.implementation
+    arr = w_arr.get_implementation()
     r = calculate_slice_strides(space, arr.shape, arr.start, arr.get_strides(),
                                 arr.get_backstrides(), chunks)
     shape, start, strides, backstrides = r
