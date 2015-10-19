@@ -19,11 +19,12 @@ cpython_struct("PyIntObject", PyIntObjectFields, PyIntObjectStruct)
 @bootstrap_function
 def init_intobject(space):
     "Type description of PyIntObject"
-    from pypy.objspace.std.intobject import W_AbstractIntObject
+    from pypy.objspace.std.intobject import W_AbstractIntObject, W_IntObject
     setup_class_for_cpyext(W_AbstractIntObject,
                            basestruct=PyIntObject.TO,
-                           fill_pyobj=int_fill_pyobj)
-                           #realize=int_realize)
+                           fill_pyobj=int_fill_pyobj,
+                           realize=int_realize,
+                           realize_subclass_of=W_IntObject)
 
 def int_fill_pyobj(space, w_obj, py_int):
     """
@@ -32,15 +33,9 @@ def int_fill_pyobj(space, w_obj, py_int):
     """
     py_int.c_ob_ival = space.int_w(w_obj)
 
-def int_realize(space, obj):
-    intval = rffi.cast(lltype.Signed, rffi.cast(PyIntObject, obj).c_ob_ival)
-    w_type = from_ref(space, rffi.cast(PyObject, obj.c_ob_type))
-    w_obj = space.allocate_instance(W_IntObject, w_type)
-    w_obj.__init__(intval)
-    track_reference(space, obj, w_obj)
-    state = space.fromcache(RefcountState)
-    state.set_lifeline(w_obj, obj)
-    return w_obj
+def int_realize(space, w_obj, py_obj):
+    intval = rffi.cast(lltype.Signed, rffi.cast(PyIntObject, py_obj).c_ob_ival)
+    W_IntObject.__init__(w_obj, intval)
 
 PyInt_Check, PyInt_CheckExact = build_type_checkers("Int")
 

@@ -134,6 +134,7 @@ def get_typedescr(typedef):
     else:
         return _get_typedescr_1(typedef)
 
+
 #________________________________________________________
 # type description
 
@@ -143,17 +144,20 @@ def setup_class_for_cpyext(W_Class, **kw):
     basestruct: The basic structure to allocate
     alloc_pyobj: default create_pyobj calls this to get the PyObject
     fill_pyobj: default create_pyobj calls this after attaching is done
-    realize   : Function called to create a pypy object from a raw struct
+    realize   : Function called to create a pypy object from a PyObject
     dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
     """
 
     tp_basestruct = kw.pop('basestruct', PyObject.TO)
     tp_alloc_pyobj  = kw.pop('alloc_pyobj', None)
     tp_fill_pyobj   = kw.pop('fill_pyobj', None)
-    force_create_pyobj = kw.pop('force_create_pyobj', False)
-    #tp_realize    = kw.pop('realize', None)
+    tp_realize      = kw.pop('realize', None)
+    force_create_pyobj  = kw.pop('force_create_pyobj', False)
+    realize_subclass_of = kw.pop('realize_subclass_of', None)
     #tp_dealloc    = kw.pop('dealloc', None)
-    assert not kw, "Extra arguments to make_typedescr"
+    assert not kw, "Extra arguments to make_typedescr: %s" % kw.keys()
+
+    assert 'cpyext_basestruct' not in W_Class.__dict__    # double set
 
     if tp_alloc_pyobj or tp_fill_pyobj or force_create_pyobj:
         #
@@ -186,6 +190,22 @@ def setup_class_for_cpyext(W_Class, **kw):
             keepalive_until_here(self)
         W_Class.cpyext_fill_prebuilt_pyobj = cpyext_fill_prebuilt_pyobj
 
+    if tp_realize or realize_subclass_of:
+        W_CPyExtPlaceHolder = get_cpyextplaceholder_subclass(
+            realize_subclass_of or W_Class)
+        if tp_realize:
+            tp_realize._always_inline_ = True
+        #
+        def cpyext_realize(space, pyobj):
+            w_obj = W_CPyExtPlaceHolder(pyobj)
+            if tp_realize:
+                tp_realize(space, w_obj, pyobj)
+            return w_obj
+        #
+        typedef = realize_subclass_of.typedef
+        assert not hasattr(typedef, 'cpyext_realize')
+        typedef.cpyext_realize = cpyext_realize
+
     W_Class.cpyext_basestruct = tp_basestruct
 
 
@@ -210,13 +230,62 @@ def get_c_ob_type(space, w_type):
         ob = w_type.cpyext_create_pyobj(space)
         pto = rffi.cast(PyTypeObjectPtr, ob)
     return pto
-
 W_TypeObject.cpyext_c_type_object = lltype.nullptr(PyTypeObjectPtr.TO)
-
 
 @bootstrap_function
 def init_pyobject(space):
-    setup_class_for_cpyext(W_Root, force_create_pyobj=True)
+    setup_class_for_cpyext(W_Root, force_create_pyobj=True,
+                           realize_subclass_of=W_ObjectObject)
+
+
+#________________________________________________________
+# W_CPyExtPlaceHolderObject
+
+# When we ask for the convertion of a PyObject to a W_Root and there
+# is none, we look up the correct W_Root subclass to use (W_IntObject,
+# etc., or W_ObjectObject by default), take the W_CPyExtPlaceHolder
+# special subclass of it, and instantiate that.  W_CPyExtPlaceHolder
+# adds the field "cpyext_pyobj" pointing back to the PyObject.
+# W_CPyExtPlaceHolder is made using the following memo function.
+
+@specialize.memo()
+def get_cpyextplaceholder_subclass(W_Class):
+    try:
+        return W_Class.__dict__['_cpyextplaceholder_subclass']
+    except KeyError:
+        pass
+    assert W_Class is not W_TypeObject
+
+    class W_CPyExtPlaceHolder(W_Class):
+        def __init__(self, pyobj):
+            self.cpyext_pyobj = pyobj
+        def cpyext_as_pyobj(self, space):
+            return self.cpyext_pyobj
+
+    W_CPyExtPlaceHolder.__name__ = W_Class.__name__ + '_CPyExtPlaceHolder'
+    W_Class._cpyextplaceholder_subclass = W_CPyExtPlaceHolder
+    return W_CPyExtPlaceHolder
+
+
+
+def _default_cpyext_as_pyobj(self, space):
+    """Default implementation for most classes in PyPy.
+    Overridden by the W_CPyExtPlaceHolder subclasses."""
+    ob = rawrefcount.from_obj(PyObject, self)
+    if not ob:
+        ob = self.cpyext_create_pyobj(space)
+    return ob
+W_Root.cpyext_as_pyobj = _default_cpyext_as_pyobj
+
+def _type_cpyext_as_pyobj(self, space):
+    ob = get_c_ob_type(space, self)
+    return rffi.cast(PyObject, ob)
+W_TypeObject.cpyext_as_pyobj = _type_cpyext_as_pyobj
+W_TypeObject._cpyextplaceholder_subclass = W_TypeObject
+
+def _create_w_obj_from_pyobj(space, pyobj):
+    w_type = from_pyobj(pyobj.c_ob_type)
+    return w_type.instancetypedef.cpyext_realize(space, pyobj)
 
 #________________________________________________________
 # refcounted object support
@@ -385,13 +454,7 @@ def as_pyobj(space, w_obj):
     use keepalive_until_here(w_obj) some time later.
     """
     assert not is_pyobj(w_obj)
-    assert w_obj is not None
-    #if isinstance(w_obj, W_CPyExtPlaceHolderObject):
-    #    xxx
-    ob = rawrefcount.from_obj(PyObject, w_obj)
-    if not ob:
-        ob = w_obj.cpyext_create_pyobj(space)
-    return ob
+    return w_obj.cpyext_as_pyobj(space)
 as_pyobj._always_inline_ = True
 
 def as_xpyobj(space, w_obj):
@@ -408,7 +471,7 @@ def from_pyobj(space, pyobj):
     pyobj = rffi.cast(PyObject, pyobj)
     w_obj = rawrefcount.to_obj(W_Root, pyobj)
     if w_obj is None:
-        w_obj = _create_w_obj_from_pyobj(pyobj)
+        w_obj = _create_w_obj_from_pyobj(space, pyobj)
     return w_obj
 from_pyobj._always_inline_ = True
 
@@ -432,10 +495,7 @@ class Entry(ExtRegistryEntry):
     _about_ = is_pyobj
     def compute_result_annotation(self, s_x):
         from rpython.rtyper.llannotation import SomePtr
-        if isinstance(s_x, SomePtr):
-            return self.bookkeeper.immutablevalue(True)
-        else:
-            return self.bookkeeper.immutablevalue(False)
+        return self.bookkeeper.immutablevalue(isinstance(s_x, SomePtr))
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         return hop.inputconst(lltype.Bool, hop.s_result.const)
