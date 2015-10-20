@@ -593,9 +593,10 @@ def build_type_checkers3(type_name, cls=None):
             ZZZ
     _PyXxx_Type = func_with_new_name(_PyXxx_Type, '_' + py_type_name)
 
-    def check(space, w_obj):
+    def check(space, py_obj):
         "Implements the Py_Xxx_Check function"
-        w_obj_type = space.type(w_obj)
+        from pypy.module.cpyext.pyobject import from_pyobj
+        w_obj_type = from_pyobj(space, py_obj.c_ob_type)
         w_type = get_w_type(space)
         return (space.is_w(w_obj_type, w_type) or
                 space.is_true(space.issubtype(w_obj_type, w_type)))

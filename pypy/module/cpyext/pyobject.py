@@ -88,8 +88,6 @@ def setup_class_for_cpyext(W_Class, **kw):
     if tp_alloc_pyobj or tp_fill_pyobj or realize_subclass_of:
         if realize_subclass_of is None:
             realize_subclass_of = W_Class
-        assert 'typedef' in realize_subclass_of.__dict__, (
-            "no 'typedef' exactly on %s" % (realize_subclass_of,))
         #
         if not tp_alloc_pypy:
             W_CPyExtPlaceHolder = get_cpyextplaceholder_subclass(
@@ -290,6 +288,9 @@ def as_xpyobj(space, w_obj):
         return lltype.nullptr(PyObject.TO)
 
 
+def pyobj_has_w_obj(pyobj):
+    return rawrefcount.to_obj(W_Root, pyobj) is not None
+
 @specialize.ll()
 def from_pyobj(space, pyobj):
     assert is_pyobj(pyobj)
@@ -369,8 +370,13 @@ def get_w_obj_and_decref(space, obj):
 
 
 @specialize.ll()
-def new_pyobj(PYOBJ_TYPE, ob_type):
-    ob = lltype.malloc(PYOBJ_TYPE, flavor='raw', track_allocation=False)
+def new_pyobj(PYOBJ_TYPE, ob_type, length=None):
+    if length is None:
+        ob = lltype.malloc(PYOBJ_TYPE, flavor='raw', track_allocation=False)
+    else:
+        ob = lltype.malloc(PYOBJ_TYPE, length, flavor='raw',
+                           track_allocation=False)
+        ob.c_ob_size = length
     ob.c_ob_refcnt = 1
     ob.c_ob_type = ob_type
     ob.c_ob_pypy_link = 0

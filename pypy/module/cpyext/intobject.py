@@ -30,11 +30,12 @@ def init_intobject(space):
         # --the structure type derived from PyObject--
         basestruct=PyIntObjectStruct,
 
-        # --after a PyIntObject is allocated, we call this function to
-        #   fill it.  It gets attached as RRC_PERMANENT_LIGHT by default,
-        #   which means the association is permanent (the PyIntObject is
-        #   alive and won't appear to move as long as the W_IntObject is
-        #   alive) and light (the PyIntObject can be freed with free()).--
+        # --from a W_IntObject, we allocate a PyIntObject and then we
+        #   call this function to fill it.  It gets attached as
+        #   RRC_PERMANENT_LIGHT by default, which means the
+        #   association is permanent (the PyIntObject is alive and
+        #   won't appear to move as long as the W_IntObject is alive)
+        #   and light (the PyIntObject can be freed with free()).--
         fill_pyobj=int_fill_pyobj,
 
         # --reverse direction: from a PyIntObject, we make a W_IntObject
@@ -93,7 +94,7 @@ def PyInt_AsLong(space, py_obj):
         raise OperationError(space.w_TypeError,
                              space.wrap("an integer is required, got NULL"))
     if PyInt_Check(space, py_obj):
-        return PyInt_AS_LONG(space, py_obj)
+        return _PyInt_AS_LONG(py_obj)
     else:
         w_obj = from_pyobj(space, py_obj)
         return space.int_w(space.int(w_obj))   # XXX win64: check range
@@ -119,7 +120,7 @@ def PyInt_AsUnsignedLongMask(space, py_obj):
         raise OperationError(space.w_TypeError,
                              space.wrap("an integer is required, got NULL"))
     if PyInt_Check(space, py_obj):
-        return rffi.cast(rffi.ULONG, PyInt_AS_LONG(space, py_obj))
+        return rffi.cast(rffi.ULONG, _PyInt_AS_LONG(py_obj))
     else:
         w_obj = from_pyobj(space, py_obj)
         num = space.bigint_w(space.int(w_obj))
@@ -136,15 +137,14 @@ def PyInt_AsUnsignedLongLongMask(space, py_obj):
         raise OperationError(space.w_TypeError,
                              space.wrap("an integer is required, got NULL"))
     if PyInt_Check(space, py_obj):
-        return rffi.cast(rffi.ULONGLONG, PyInt_AS_LONG(space, py_obj))
+        return rffi.cast(rffi.ULONGLONG, _PyInt_AS_LONG(py_obj))
     else:
         w_obj = from_pyobj(space, py_obj)
         num = space.bigint_w(space.int(w_obj))
         return num.ulonglongmask()
 
 
-@cpython_api([PyObject], lltype.Signed, error=CANNOT_FAIL)
-def PyInt_AS_LONG(space, py_obj):
+def _PyInt_AS_LONG(py_obj):
     """Return the value of the object w_int. No error checking is performed."""
     py_int = rffi.cast(PyIntObject, py_obj)
     return py_int.c_ob_ival
@@ -159,7 +159,7 @@ def PyInt_AsSsize_t(space, py_obj):
         raise OperationError(space.w_TypeError,
                              space.wrap("an integer is required, got NULL"))
     if PyInt_Check(space, py_obj):
-        return rffi.cast(Py_ssize_t, PyInt_AS_LONG(space, py_obj))
+        return rffi.cast(Py_ssize_t, _PyInt_AS_LONG(py_obj))
     else:
         w_obj = from_pyobj(space, py_obj)
         return space.int_w(space.int(w_obj))

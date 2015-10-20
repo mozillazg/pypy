@@ -515,8 +515,10 @@ def struct_use_ctypes_storage(container, ctypes_storage):
                 struct_use_ctypes_storage(struct_container, struct_storage)
                 struct_container._setparentstructure(container, field_name)
             elif isinstance(FIELDTYPE, lltype.Array):
-                assert FIELDTYPE._hints.get('nolength', False) == False
-                arraycontainer = _array_of_known_length(FIELDTYPE)
+                if FIELDTYPE._hints.get('nolength', False):
+                    arraycontainer = _array_of_unknown_length(FIELDTYPE)
+                else:
+                    arraycontainer = _array_of_known_length(FIELDTYPE)
                 arraycontainer._storage = ctypes.pointer(
                     getattr(ctypes_storage.contents, field_name))
                 arraycontainer._setparentstructure(container, field_name)
@@ -934,7 +936,8 @@ def ctypes2lltype(T, cobj):
                 REAL_TYPE = T.TO
                 if T.TO._arrayfld is not None:
                     carray = getattr(cobj.contents, T.TO._arrayfld)
-                    container = lltype._struct(T.TO, carray.length)
+                    length = getattr(carray, 'length', 9999)   # XXX
+                    container = lltype._struct(T.TO, length)
                 else:
                     # special treatment of 'OBJECT' subclasses
                     if get_rtyper() and lltype._castdepth(REAL_TYPE, OBJECT) >= 0:

@@ -1,79 +1,114 @@
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, oefmt
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
-    cpython_struct, PyObjectFields, build_type_checkers, bootstrap_function)
+    cpython_struct, PyVarObjectFields, build_type_checkers3, bootstrap_function)
 from pypy.module.cpyext.pyobject import (PyObject, PyObjectP, Py_DecRef,
-                                         setup_class_for_cpyext)
+    setup_class_for_cpyext, as_pyobj, get_pyobj_and_incref, from_pyobj,
+    pyobj_has_w_obj, RRC_PERMANENT, RRC_PERMANENT_LIGHT, new_pyobj)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.objspace.std.tupleobject import W_TupleObject, W_AbstractTupleObject
 
 PyTupleObjectStruct = lltype.ForwardReference()
 PyTupleObject = lltype.Ptr(PyTupleObjectStruct)
-PyTupleObjectFields = PyObjectFields + \
+PyTupleObjectFields = PyVarObjectFields + \
     (("ob_item", rffi.CArray(PyObject)),)
 cpython_struct("PyTupleObject", PyTupleObjectFields, PyTupleObjectStruct)
 
-PyTuple_Check, PyTuple_CheckExact = build_type_checkers("Tuple")
+PyTuple_Check, PyTuple_CheckExact, _PyTuple_Type = build_type_checkers3("Tuple")
+
 
 @bootstrap_function
 def init_intobject(space):
     "Type description of PyTupleObject"
-    setup_class_for_cpyext(W_AbstractTupleObject,
-                           basestruct=PyTupleObject.TO,
-                           )
-                           #fill_pyobj=int_fill_pyobj,
-                           #fill_pypy=int_fill_pypy,
-                           #realize_subclass_of=W_IntObject)
+    setup_class_for_cpyext(
+        W_AbstractTupleObject,
+        basestruct=PyTupleObjectStruct,
+
+        # --from a W_TupleObject, we call this function to allocate and
+        #   fill a PyTupleObject --
+        alloc_pyobj=tuple_alloc_pyobj,
+
+        # --reverse direction: from a PyTupleObject, we make a W_TupleObject
+        #   by instantiating a custom subclass of W_TupleObject--
+        realize_subclass_of=W_TupleObject,
+
+        # --and then we call this function to initialize the W_TupleObject--
+        fill_pypy=tuple_fill_pypy,
+        )
+
+def tuple_alloc_pyobj(space, w_obj):
+    """
+    Makes a PyTupleObject from a W_AbstractTupleObject.
+    """
+    assert isinstance(w_obj, W_AbstractTupleObject)
+    lst_w = w_obj.tolist()
+    ob = lltype.malloc(PyTupleObjectStruct, len(lst_w), flavor='raw',
+                       track_allocation=False)
+    ob.c_ob_size = len(lst_w)
+    if w_obj.cpyext_returned_items_can_be_borrowed:
+        for i in range(len(lst_w)):
+            ob.c_ob_item[i] = as_pyobj(space, lst_w[i])
+        return ob, RRC_PERMANENT_LIGHT
+    else:
+        for i in range(len(lst_w)):
+            ob.c_ob_item[i] = get_pyobj_and_incref(space, lst_w[i])
+        return ob, RRC_PERMANENT
+
+def tuple_fill_pypy(space, w_obj, py_obj):
+    """
+    Fills in a W_TupleObject from a PyTupleObject.
+    """
+    py_tuple = rffi.cast(PyTupleObject, py_obj)
+    objects_w = [from_pyobj(space, py_tuple.c_ob_item[i])
+                 for i in range(py_tuple.c_ob_size)]
+    W_TupleObject.__init__(w_obj, objects_w)
+
 
 @cpython_api([Py_ssize_t], PyObject)
 def PyTuple_New(space, size):
-    ZZZ
-    return W_TupleObject([space.w_None] * size)
+    py_tuple = new_pyobj(PyTupleObjectStruct, _PyTuple_Type(space), size)
+    for i in range(size):
+        py_tuple.c_ob_item[i] = lltype.nullptr(PyObject.TO)
+    return py_tuple
 
 @cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
-def PyTuple_SetItem(space, w_t, pos, w_obj):
-    if not PyTuple_Check(space, w_t):
-        # XXX this should also steal a reference, test it!!!
+def PyTuple_SetItem(space, py_t, pos, py_obj):
+    if not PyTuple_Check(space, py_t) or py_t.c_ob_refcnt != 1:
+        Py_DecRef(space, py_obj)
         PyErr_BadInternalCall(space)
-    _setitem_tuple(w_t, pos, w_obj)
-    Py_DecRef(space, w_obj) # SetItem steals a reference!
+    py_tuple = rffi.cast(PyTupleObject, py_t)
+    if pos < 0 or pos >= py_tuple.c_ob_size:
+        raise oefmt(w_IndexError, "tuple assignment index out of range")
+
+    olditem = py_tuple.c_ob_item[pos]
+    py_tuple.c_ob_item[pos] = py_obj
+
+    if olditem:
+        Py_DecRef(space, olditem)
     return 0
 
-def _setitem_tuple(w_t, pos, w_obj):
-    # this function checks that w_t is really a W_TupleObject.  It
-    # should only ever be called with a freshly built tuple from
-    # PyTuple_New(), which always return a W_TupleObject, even if there
-    # are also other implementations of tuples.
-    assert isinstance(w_t, W_TupleObject)
-    w_t.wrappeditems[pos] = w_obj
-
 @cpython_api([PyObject, Py_ssize_t], PyObject, result_borrowed=True)
-def PyTuple_GetItem(space, w_t, pos):
-    if not isinstance(w_t, W_AbstractTupleObject):
+def PyTuple_GetItem(space, py_t, pos):
+    if not PyTuple_Check(space, py_t):
         PyErr_BadInternalCall(space)
-    #if w_t.cpyext_returned_items_can_be_borrowed:
-    ZZZ.x.x.x
-    xxxxxxx
-    w_obj = space.getitem(w_t, space.wrap(pos))
-    return borrow_from(w_t, w_obj)
+    py_tuple = rffi.cast(PyTupleObject, py_t)
+    if pos < 0 or pos >= py_tuple.c_ob_size:
+        raise oefmt(w_IndexError, "tuple assignment index out of range")
 
-@cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
-def PyTuple_GET_SIZE(space, w_t):
-    """Return the size of the tuple p, which must be non-NULL and point to a tuple;
-    no error checking is performed. """
-    return space.int_w(space.len(w_t))
+    return py_tuple.c_ob_item[pos]     # borrowed
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
-def PyTuple_Size(space, ref):
+def PyTuple_Size(space, py_t):
     """Take a pointer to a tuple object, and return the size of that tuple."""
-    if not PyTuple_Check(space, ref):
-        raise OperationError(space.w_TypeError,
-                             space.wrap("expected tuple object"))
-    return PyTuple_GET_SIZE(space, ref)
+    if not PyTuple_Check(space, py_t):
+        PyErr_BadInternalCall(space)
+    py_tuple = rffi.cast(PyTupleObject, py_t)
+    return py_tuple.c_ob_size
 
 
 @cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=-1)
 def _PyTuple_Resize(space, ref, newsize):
+    ZZZ
     """Can be used to resize a tuple.  newsize will be the new length of the tuple.
     Because tuples are supposed to be immutable, this should only be used if there
     is only one reference to the object.  Do not use this if the tuple may already
@@ -101,6 +136,7 @@ def _PyTuple_Resize(space, ref, newsize):
 
 @cpython_api([PyObject, Py_ssize_t, Py_ssize_t], PyObject)
 def PyTuple_GetSlice(space, w_obj, low, high):
+    ZZZ
     """Take a slice of the tuple pointed to by p from low to high and return it
     as a new tuple.
     """
