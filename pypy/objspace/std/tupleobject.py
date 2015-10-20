@@ -32,6 +32,7 @@ contains_jmp = jit.JitDriver(greens = ['tp'], reds = 'auto',
 
 class W_AbstractTupleObject(W_Root):
     __slots__ = ()
+    cpyext_returned_items_can_be_borrowed = False
 
     def __repr__(self):
         """representation for debugging purposes"""
@@ -248,6 +249,7 @@ W_AbstractTupleObject.typedef.flag_sequence_bug_compat = True
 
 class W_TupleObject(W_AbstractTupleObject):
     _immutable_fields_ = ['wrappeditems[*]']
+    cpyext_returned_items_can_be_borrowed = True
 
     def __init__(self, wrappeditems):
         make_sure_not_resized(wrappeditems)

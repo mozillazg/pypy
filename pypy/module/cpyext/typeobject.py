@@ -2,6 +2,7 @@ import os
 
 from rpython.rlib import jit
 from rpython.rlib.objectmodel import specialize, instantiate
+from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib.rstring import rsplit
 from rpython.rtyper.annlowlevel import llhelper
 from rpython.rtyper.lltypesystem import rffi, lltype
@@ -22,7 +23,7 @@ from pypy.module.cpyext.modsupport import convert_method_defs
 from pypy.module.cpyext.pyobject import (
     PyObject, make_ref, create_ref, get_typedescr, from_pyobj, as_pyobj,
     setup_class_for_cpyext, get_pyobj_and_incref, get_pyobj_and_xincref,
-    track_reference, RefcountState, borrow_from, Py_DecRef)
+    track_reference, RefcountState, borrow_from, Py_DecRef, RRC_PERMANENT)
 from pypy.module.cpyext.slotdefs import (
     slotdefs_for_tp_slots, slotdefs_for_wrappers, get_slot_tp_function)
 from pypy.module.cpyext.state import State
@@ -200,11 +201,9 @@ def tp_new_wrapper(space, self, w_args, w_kwds):
     w_subtype = args_w[0]
     w_args = space.newtuple(args_w[1:])
 
-    subtype = rffi.cast(PyTypeObjectPtr, make_ref(space, w_subtype))
-    try:
-        w_obj = generic_cpy_call(space, tp_new, subtype, w_args, w_kwds)
-    finally:
-        Py_DecRef(space, w_subtype)
+    subtype = rffi.cast(PyTypeObjectPtr, as_pyobj(space, w_subtype))
+    w_obj = generic_cpy_call(space, tp_new, subtype, w_args, w_kwds)
+    keepalive_until_here(w_subtype)
     return w_obj
 
 @specialize.memo()
@@ -463,7 +462,7 @@ def type_alloc_pyobj(space, w_type):
     pto = lltype.malloc(PyTypeObject, flavor='raw', zero=True,
                         track_allocation=False)
     pto.c_tp_flags |= Py_TPFLAGS_READYING
-    return pto, False
+    return pto, RRC_PERMANENT
 
 def type_fill_pyobj(space, w_type, pto):
     """
@@ -561,7 +560,7 @@ def type_alloc_pypy(space, py_obj):
 
     w_metatype = from_pyobj(space, pto.c_ob_type)
     w_type = space.allocate_instance(W_TypeObject, w_metatype)
-    return w_type, False
+    return w_type, RRC_PERMANENT
 
 def type_fill_pypy(space, w_type, py_obj):
     pto = rffi.cast(PyTypeObjectPtr, py_obj)

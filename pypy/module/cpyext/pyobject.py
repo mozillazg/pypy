@@ -14,129 +14,20 @@ from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rtyper.annlowlevel import llhelper
 from rpython.rlib import rawrefcount
 
-#________________________________________________________
-# type description ZZZ SEE BELOW
-
-class BaseCpyTypedescr(object):
-    basestruct = PyObject.TO
-    W_BaseObject = W_ObjectObject
-
-    def get_dealloc(self, space):
-        from pypy.module.cpyext.typeobject import subtype_dealloc
-        return llhelper(
-            subtype_dealloc.api_func.functype,
-            subtype_dealloc.api_func.get_wrapper(space))
-
-    def allocate(self, space, w_type, itemcount=0):
-        # similar to PyType_GenericAlloc?
-        # except that it's not related to any pypy object.
-
-        pytype = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
-        # Don't increase refcount for non-heaptypes
-        if pytype:
-            flags = rffi.cast(lltype.Signed, pytype.c_tp_flags)
-            if not flags & Py_TPFLAGS_HEAPTYPE:
-                Py_DecRef(space, w_type)
-
-        if pytype:
-            size = pytype.c_tp_basicsize
-        else:
-            size = rffi.sizeof(self.basestruct)
-        if itemcount:
-            size += itemcount * pytype.c_tp_itemsize
-        buf = lltype.malloc(rffi.VOIDP.TO, size,
-                            flavor='raw', zero=True)
-        pyobj = rffi.cast(PyObject, buf)
-        pyobj.c_ob_refcnt = 1
-        pyobj.c_ob_type = pytype
-        return pyobj
-
-    def attach(self, space, pyobj, w_obj):
-        pass
-
-    def realize(self, space, obj):
-        w_type = from_ref(space, rffi.cast(PyObject, obj.c_ob_type))
-        w_obj = space.allocate_instance(self.W_BaseObject, w_type)
-        track_reference(space, obj, w_obj)
-        if w_type is not space.gettypefor(self.W_BaseObject):
-            state = space.fromcache(RefcountState)
-            state.set_lifeline(w_obj, obj)
-        return w_obj
-
-def make_typedescr(typedef, **kw):
-    return #ZZZ
-    """NOT_RPYTHON
-
-    basestruct: The basic structure to allocate
-    alloc     : allocate and basic initialization of a raw PyObject
-    attach    : Function called to tie a raw structure to a pypy object
-    realize   : Function called to create a pypy object from a raw struct
-    dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
-    """
-
-    tp_basestruct = kw.pop('basestruct', PyObject.TO)
-    tp_alloc      = kw.pop('alloc', None)
-    tp_attach     = kw.pop('attach', None)
-    tp_realize    = kw.pop('realize', None)
-    tp_dealloc    = kw.pop('dealloc', None)
-    assert not kw, "Extra arguments to make_typedescr"
-
-    null_dealloc = lltype.nullptr(lltype.FuncType([PyObject], lltype.Void))
-
-    class CpyTypedescr(BaseCpyTypedescr):
-        basestruct = tp_basestruct
-
-        if tp_alloc:
-            def allocate(self, space, w_type, itemcount=0):
-                return tp_alloc(space, w_type)
-
-        if tp_dealloc:
-            def get_dealloc(self, space):
-                return llhelper(
-                    tp_dealloc.api_func.functype,
-                    tp_dealloc.api_func.get_wrapper(space))
-
-        if tp_attach:
-            def attach(self, space, pyobj, w_obj):
-                tp_attach(space, pyobj, w_obj)
-
-        if tp_realize:
-            def realize(self, space, ref):
-                return tp_realize(space, ref)
-    if typedef:
-        CpyTypedescr.__name__ = "CpyTypedescr_%s" % (typedef.name,)
-
-    typedescr_cache[typedef] = CpyTypedescr()
-
-#@bootstrap_function ZZZ
-def init_pyobject(space):
-    from pypy.module.cpyext.object import PyObject_dealloc
-    # typedescr for the 'object' type
-    make_typedescr(space.w_object.instancetypedef,
-                   dealloc=PyObject_dealloc)
-    # almost all types, which should better inherit from object.
-    make_typedescr(None)
-
-@specialize.memo()
-def _get_typedescr_1(typedef):
-    ZZZ
-    try:
-        return typedescr_cache[typedef]
-    except KeyError:
-        if typedef.bases:
-            return _get_typedescr_1(typedef.bases[0])
-        return typedescr_cache[None]
-
-def get_typedescr(typedef):
-    ZZZ
-    if typedef is None:
-        return typedescr_cache[None]
-    else:
-        return _get_typedescr_1(typedef)
-
 
 #________________________________________________________
 # type description
+
+def make_typedescr(arg0, *args, **kwds):
+    print "ZZZ: make_typedescr(%r)" % (arg0,)
+def get_typedescr(*args, **kwds):
+    ZZZ
+RefcountState = "ZZZ"
+
+RRC_PERMANENT       = 'P'  # the link pyobj<->pypy is permanent
+RRC_PERMANENT_LIGHT = 'p'  # same, but tp_dealloc can be replaced with free()
+RRC_TRANSIENT       = 'T'  # the pypy object is transient and can go away
+RRC_TRANSIENT_LIGHT = 't'  # same, but tp_dealloc can be replaced with free()
 
 def setup_class_for_cpyext(W_Class, **kw):
     """NOT_RPYTHON
@@ -156,6 +47,7 @@ def setup_class_for_cpyext(W_Class, **kw):
     tp_fill_pypy    = kw.pop('fill_pypy', None)
     force_create_pyobj  = kw.pop('force_create_pyobj', False)
     realize_subclass_of = kw.pop('realize_subclass_of', None)
+    alloc_pypy_light_if = kw.pop('alloc_pypy_light_if', None)
     #tp_dealloc    = kw.pop('dealloc', None)
     assert not kw, "Extra arguments to make_typedescr: %s" % kw.keys()
 
@@ -167,7 +59,7 @@ def setup_class_for_cpyext(W_Class, **kw):
             def tp_alloc_pyobj(space, w_obj):
                 ob = lltype.malloc(tp_basestruct, flavor='raw',
                                    track_allocation=False)
-                return ob, True
+                return ob, RRC_PERMANENT_LIGHT
         tp_alloc_pyobj._always_inline_ = True
         #
         if not tp_fill_pyobj:
@@ -175,10 +67,11 @@ def setup_class_for_cpyext(W_Class, **kw):
                 pass
         #
         def cpyext_create_pyobj(self, space):
-            py_obj, is_light = tp_alloc_pyobj(space, self)
+            py_obj, strength = tp_alloc_pyobj(space, self)
             ob = rffi.cast(PyObject, py_obj)
-            ob_type = get_c_ob_type(space, space.type(self))
-            init_link_from_pypy(self, ob, ob_type, is_light)
+            ob.c_ob_refcnt = 0
+            ob.c_ob_type = get_c_ob_type(space, space.type(self))
+            rawrefcount_init_link(self, ob, strength)
             tp_fill_pyobj(space, self, py_obj)
             return ob
         W_Class.cpyext_create_pyobj = cpyext_create_pyobj
@@ -203,7 +96,11 @@ def setup_class_for_cpyext(W_Class, **kw):
                 realize_subclass_of)
             def tp_alloc_pypy(space, pyobj):
                 w_obj = W_CPyExtPlaceHolder(pyobj)
-                return w_obj, True
+                strength = RRC_TRANSIENT
+                if alloc_pypy_light_if is not None:
+                    if alloc_pypy_light_if(space, pyobj):
+                        strength = RRC_TRANSIENT_LIGHT
+                return w_obj, strength
         tp_alloc_pypy._always_inline_ = True
         #
         if not tp_fill_pypy:
@@ -211,8 +108,8 @@ def setup_class_for_cpyext(W_Class, **kw):
                 pass
         #
         def cpyext_create_pypy(space, pyobj):
-            w_obj, is_transient = tp_alloc_pypy(space, pyobj)
-            init_link_from_pyobj(w_obj, pyobj, is_transient)
+            w_obj, strength = tp_alloc_pypy(space, pyobj)
+            rawrefcount_init_link(w_obj, pyobj, strength)
             tp_fill_pypy(space, w_obj, pyobj)
             return w_obj
         #
@@ -223,25 +120,30 @@ def setup_class_for_cpyext(W_Class, **kw):
     W_Class.cpyext_basestruct = tp_basestruct
 
 
-def init_link_from_pypy(w_obj, ob, ob_type, is_light):
-    if is_light:
-        ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_LIGHT
-    else:
-        ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY
-    ob.c_ob_type = ob_type
-    rawrefcount.create_link_pypy(w_obj, ob)
-
-def init_link_from_pyobj(w_obj, ob, is_transient):
-    ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
-    if is_transient:
-        rawrefcount.create_link_pyobj(w_obj, ob)
-    else:
+def rawrefcount_init_link(w_obj, ob, strength):
+    if strength == RRC_PERMANENT:
+        ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
         rawrefcount.create_link_pypy(w_obj, ob)
+    #
+    elif strength == RRC_PERMANENT_LIGHT:
+        ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY_LIGHT
+        rawrefcount.create_link_pypy(w_obj, ob)
+    #
+    elif strength == RRC_TRANSIENT:
+        ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
+        rawrefcount.create_link_pyobj(w_obj, ob)
+    #
+    elif strength == RRC_TRANSIENT_LIGHT:
+        ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY_LIGHT
+        rawrefcount.create_link_pyobj(w_obj, ob)
+    #
+    else:
+        assert False, "rawrefcount_init_link: strength=%r" % (strength,)
+
 
 def setup_prebuilt_pyobj(w_obj, py_obj):
     assert lltype.typeOf(py_obj) == PyObject
-    init_link_from_pypy(w_obj, py_obj, lltype.nullptr(PyTypeObjectPtr.TO),
-                        False)
+    rawrefcount_init_link(w_obj, py_obj, RRC_PERMANENT)
     if isinstance(w_obj, W_TypeObject):
         w_obj.cpyext_c_type_object = rffi.cast(PyTypeObjectPtr, py_obj)
 
@@ -315,108 +217,6 @@ def _create_w_obj_from_pyobj(space, pyobj):
 
 #________________________________________________________
 # refcounted object support
-
-class RefcountState:
-    def __init__(self, space):
-        ZZZ
-        self.space = space
-        self.py_objects_w2r = {} # { w_obj -> raw PyObject }
-        self.py_objects_r2w = {} # { addr of raw PyObject -> w_obj }
-
-        self.lifeline_dict = RWeakKeyDictionary(W_Root, PyOLifeline)
-
-        self.borrow_mapping = {None: {}}
-        # { w_container -> { w_containee -> None } }
-        # the None entry manages references borrowed during a call to
-        # generic_cpy_call()
-
-        # For tests
-        self.non_heaptypes_w = []
-
-    def _cleanup_(self):
-        assert self.borrow_mapping == {None: {}}
-        self.py_objects_r2w.clear() # is not valid anymore after translation
-
-    def init_r2w_from_w2r(self):
-        """Rebuilds the dict py_objects_r2w on startup"""
-        for w_obj, obj in self.py_objects_w2r.items():
-            ptr = rffi.cast(ADDR, obj)
-            self.py_objects_r2w[ptr] = w_obj
-
-    def print_refcounts(self):
-        print "REFCOUNTS"
-        for w_obj, obj in self.py_objects_w2r.items():
-            print "%r: %i" % (w_obj, obj.c_ob_refcnt)
-
-    def get_from_lifeline(self, w_obj):
-        lifeline = self.lifeline_dict.get(w_obj)
-        if lifeline is not None: # make old PyObject ready for use in C code
-            py_obj = lifeline.pyo
-            assert py_obj.c_ob_refcnt == 0
-            return py_obj
-        else:
-            return lltype.nullptr(PyObject.TO)
-
-    def set_lifeline(self, w_obj, py_obj):
-        self.lifeline_dict.set(w_obj,
-                               PyOLifeline(self.space, py_obj))
-
-    def make_borrowed(self, w_container, w_borrowed):
-        """
-        Create a borrowed reference, which will live as long as the container
-        has a living reference (as a PyObject!)
-        """
-        ref = make_ref(self.space, w_borrowed)
-        obj_ptr = rffi.cast(ADDR, ref)
-
-        borrowees = self.borrow_mapping.setdefault(w_container, {})
-        if w_borrowed in borrowees:
-            Py_DecRef(self.space, w_borrowed) # cancel incref from make_ref()
-        else:
-            borrowees[w_borrowed] = None
-
-        return ref
-
-    def reset_borrowed_references(self):
-        "Used in tests"
-        for w_container, w_borrowed in self.borrow_mapping.items():
-            Py_DecRef(self.space, w_borrowed)
-        self.borrow_mapping = {None: {}}
-
-    def delete_borrower(self, w_obj):
-        """
-        Called when a potential container for borrowed references has lost its
-        last reference.  Removes the borrowed references it contains.
-        """
-        if w_obj in self.borrow_mapping: # move to lifeline __del__
-            for w_containee in self.borrow_mapping[w_obj]:
-                self.forget_borrowee(w_containee)
-            del self.borrow_mapping[w_obj]
-
-    def swap_borrow_container(self, container):
-        """switch the current default contained with the given one."""
-        if container is None:
-            old_container = self.borrow_mapping[None]
-            self.borrow_mapping[None] = {}
-            return old_container
-        else:
-            old_container = self.borrow_mapping[None]
-            self.borrow_mapping[None] = container
-            for w_containee in old_container:
-                self.forget_borrowee(w_containee)
-
-    def forget_borrowee(self, w_obj):
-        "De-register an object from the list of borrowed references"
-        ref = self.py_objects_w2r.get(w_obj, lltype.nullptr(PyObject.TO))
-        if not ref:
-            if DEBUG_REFCOUNT:
-                print >>sys.stderr, "Borrowed object is already gone!"
-            return
-
-        Py_DecRef(self.space, ref)
-
-class InvalidPointerException(Exception):
-    pass
 
 DEBUG_REFCOUNT = False
 
@@ -566,6 +366,15 @@ def get_w_obj_and_decref(space, obj):
     assert pyobj.c_ob_refcnt >= rawrefcount.REFCNT_FROM_PYPY
     keepalive_until_here(w_obj)
     return w_obj
+
+
+@specialize.ll()
+def new_pyobj(PYOBJ_TYPE, ob_type):
+    ob = lltype.malloc(PYOBJ_TYPE, flavor='raw', track_allocation=False)
+    ob.c_ob_refcnt = 1
+    ob.c_ob_type = ob_type
+    ob.c_ob_pypy_link = 0
+    return ob
 
 
 def make_ref(space, w_obj):

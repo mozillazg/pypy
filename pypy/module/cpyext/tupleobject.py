@@ -1,16 +1,33 @@
 from pypy.interpreter.error import OperationError
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
-                                    build_type_checkers)
+    cpython_struct, PyObjectFields, build_type_checkers, bootstrap_function)
 from pypy.module.cpyext.pyobject import (PyObject, PyObjectP, Py_DecRef,
-    borrow_from, make_ref, from_ref)
+                                         setup_class_for_cpyext)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
-from pypy.objspace.std.tupleobject import W_TupleObject
+from pypy.objspace.std.tupleobject import W_TupleObject, W_AbstractTupleObject
+
+PyTupleObjectStruct = lltype.ForwardReference()
+PyTupleObject = lltype.Ptr(PyTupleObjectStruct)
+PyTupleObjectFields = PyObjectFields + \
+    (("ob_item", rffi.CArray(PyObject)),)
+cpython_struct("PyTupleObject", PyTupleObjectFields, PyTupleObjectStruct)
 
 PyTuple_Check, PyTuple_CheckExact = build_type_checkers("Tuple")
 
+@bootstrap_function
+def init_intobject(space):
+    "Type description of PyTupleObject"
+    setup_class_for_cpyext(W_AbstractTupleObject,
+                           basestruct=PyTupleObject.TO,
+                           )
+                           #fill_pyobj=int_fill_pyobj,
+                           #fill_pypy=int_fill_pypy,
+                           #realize_subclass_of=W_IntObject)
+
 @cpython_api([Py_ssize_t], PyObject)
 def PyTuple_New(space, size):
+    ZZZ
     return W_TupleObject([space.w_None] * size)
 
 @cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
@@ -30,10 +47,13 @@ def _setitem_tuple(w_t, pos, w_obj):
     assert isinstance(w_t, W_TupleObject)
     w_t.wrappeditems[pos] = w_obj
 
-@cpython_api([PyObject, Py_ssize_t], PyObject)
+@cpython_api([PyObject, Py_ssize_t], PyObject, result_borrowed=True)
 def PyTuple_GetItem(space, w_t, pos):
-    if not PyTuple_Check(space, w_t):
+    if not isinstance(w_t, W_AbstractTupleObject):
         PyErr_BadInternalCall(space)
+    #if w_t.cpyext_returned_items_can_be_borrowed:
+    ZZZ.x.x.x
+    xxxxxxx
     w_obj = space.getitem(w_t, space.wrap(pos))
     return borrow_from(w_t, w_obj)
 

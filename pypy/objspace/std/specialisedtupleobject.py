@@ -132,6 +132,8 @@ Cls_ii = make_specialised_class((int, int))
 Cls_oo = make_specialised_class((object, object))
 Cls_ff = make_specialised_class((float, float))
 
+Cls_oo.cpyext_returned_items_can_be_borrowed = True
+
 def makespecialisedtuple(space, list_w):
     from pypy.objspace.std.intobject import W_IntObject
     from pypy.objspace.std.floatobject import W_FloatObject

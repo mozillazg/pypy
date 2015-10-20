@@ -2,10 +2,10 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.api import (
-    cpython_api, cpython_struct, build_type_checkers, bootstrap_function,
+    cpython_api, cpython_struct, build_type_checkers3, bootstrap_function,
     PyObject, PyObjectFields, CONST_STRING, CANNOT_FAIL, Py_ssize_t)
-from pypy.module.cpyext.pyobject import (
-    setup_class_for_cpyext, track_reference, RefcountState, from_ref)
+from pypy.module.cpyext.pyobject import (setup_class_for_cpyext, new_pyobj,
+                                         from_pyobj)
 from rpython.rlib.rarithmetic import r_uint, intmask, LONG_TEST, r_ulonglong
 from pypy.objspace.std.intobject import W_IntObject
 import sys
@@ -16,15 +16,39 @@ PyIntObjectFields = PyObjectFields + \
     (("ob_ival", rffi.LONG),)
 cpython_struct("PyIntObject", PyIntObjectFields, PyIntObjectStruct)
 
+PyInt_Check, PyInt_CheckExact, _PyInt_Type = build_type_checkers3("Int")
+
+
 @bootstrap_function
 def init_intobject(space):
     "Type description of PyIntObject"
     from pypy.objspace.std.intobject import W_AbstractIntObject, W_IntObject
-    setup_class_for_cpyext(W_AbstractIntObject,
-                           basestruct=PyIntObject.TO,
-                           fill_pyobj=int_fill_pyobj,
-                           fill_pypy=int_fill_pypy,
-                           realize_subclass_of=W_IntObject)
+    setup_class_for_cpyext(
+        # --the base class of all 'int' objects inside PyPy--
+        W_AbstractIntObject,
+
+        # --the structure type derived from PyObject--
+        basestruct=PyIntObjectStruct,
+
+        # --after a PyIntObject is allocated, we call this function to
+        #   fill it.  It gets attached as RRC_PERMANENT_LIGHT by default,
+        #   which means the association is permanent (the PyIntObject is
+        #   alive and won't appear to move as long as the W_IntObject is
+        #   alive) and light (the PyIntObject can be freed with free()).--
+        fill_pyobj=int_fill_pyobj,
+
+        # --reverse direction: from a PyIntObject, we make a W_IntObject
+        #   by instantiating a custom subclass of W_IntObject--
+        realize_subclass_of=W_IntObject,
+
+        # --and then we call this function to initialize the W_IntObject--
+        fill_pypy=int_fill_pypy,
+
+        # --in this case, and if PyInt_CheckExact() returns True, then
+        #   the link can be light, i.e. the original PyIntObject might
+        #   be freed with free() by the GC--
+        alloc_pypy_light_if=PyInt_CheckExact,
+        )
 
 def int_fill_pyobj(space, w_obj, py_int):
     """
@@ -41,8 +65,6 @@ def int_fill_pypy(space, w_obj, py_obj):
     intval = rffi.cast(lltype.Signed, py_int.c_ob_ival)
     W_IntObject.__init__(w_obj, intval)
 
-PyInt_Check, PyInt_CheckExact = build_type_checkers("Int")
-
 @cpython_api([], lltype.Signed, error=CANNOT_FAIL)
 def PyInt_GetMax(space):
     """Return the system's idea of the largest integer it can handle (LONG_MAX,
@@ -52,19 +74,23 @@ def PyInt_GetMax(space):
 @cpython_api([lltype.Signed], PyObject)
 def PyInt_FromLong(space, ival):
     """Create a new integer object with a value of ival.
-    
     """
-    return space.wrap(ival)
+    py_int = new_pyobj(PyIntObjectStruct, _PyInt_Type(space))
+    py_int.c_ob_ival = ival
+    return rffi.cast(PyObject, py_int)
 
 @cpython_api([PyObject], lltype.Signed, error=-1)
-def PyInt_AsLong(space, w_obj):
+def PyInt_AsLong(space, py_obj):
     """Will first attempt to cast the object to a PyIntObject, if it is not
     already one, and then return its value. If there is an error, -1 is
     returned, and the caller should check PyErr_Occurred() to find out whether
     there was an error, or whether the value just happened to be -1."""
-    if w_obj is None:
+    if not py_obj:
         raise OperationError(space.w_TypeError,
                              space.wrap("an integer is required, got NULL"))
+    if PyInt_Check(space, py_obj):
+        return PyInt_AS_LONG(space, py_obj)
+    w_obj = from_pyobj(space, py_obj)
     return space.int_w(space.int(w_obj))
 
 @cpython_api([PyObject], lltype.Unsigned, error=-1)
@@ -108,9 +134,10 @@ def PyInt_AsUnsignedLongLongMask(space, w_obj):
         return num.ulonglongmask()
 
 @cpython_api([PyObject], lltype.Signed, error=CANNOT_FAIL)
-def PyInt_AS_LONG(space, w_int):
+def PyInt_AS_LONG(space, py_obj):
     """Return the value of the object w_int. No error checking is performed."""
-    return space.int_w(w_int)
+    py_int = rffi.cast(PyIntObject, py_obj)
+    return py_int.c_ob_ival
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyInt_AsSsize_t(space, w_obj):

@@ -112,8 +112,11 @@ def _collect(track_allocation=True):
         else:
             ob.c_ob_pypy_link = 0
             if ob.c_ob_refcnt >= REFCNT_FROM_PYPY_LIGHT:
-                assert ob.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
-                lltype.free(ob, flavor='raw', track_allocation=track_allocation)
+                ob.c_ob_refcnt -= REFCNT_FROM_PYPY_LIGHT
+                ob.c_ob_pypy_link = 0
+                if ob.c_ob_refcnt == 0:
+                    lltype.free(ob, flavor='raw',
+                                track_allocation=track_allocation)
             else:
                 assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
                 assert ob.c_ob_refcnt < int(REFCNT_FROM_PYPY_LIGHT * 0.99)

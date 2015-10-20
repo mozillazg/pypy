@@ -1,3 +1,4 @@
+from pypy.module.cpyext.pyobject import from_pyobj
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 import sys
@@ -12,7 +13,7 @@ class TestIntObject(BaseApiTest):
             y = api.PyInt_AS_LONG(space.wrap(i))
             assert x == i
             assert y == i
-            w_x = api.PyInt_FromLong(x + 1)
+            w_x = from_pyobj(space, api.PyInt_FromLong(x + 1))
             assert space.type(w_x) is space.w_int
             assert space.eq_w(w_x, space.wrap(i + 1))
 

@@ -381,6 +381,14 @@ def cpython_struct(name, fields, forward=None, level=1):
 INTERPLEVEL_API = {}
 FUNCTIONS = {}
 
+def constant_pyobj(space, name):
+    if we_are_translated():
+        ZZZ   # should return the C symbol "Py" + name, constant-folded
+    else:
+        from pypy.module.cpyext.pyobject import as_pyobj
+        w_obj = INTERPLEVEL_API[name]
+        return as_pyobj(space, w_obj)
+
 # These are C symbols which cpyext will export, but which are defined in .c
 # files somewhere in the implementation of cpyext (rather than being defined in
 # RPython).
@@ -496,7 +504,7 @@ def build_exported_objects():
         GLOBALS['%s#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
     for cpyname in '''PyMethodObject PyListObject PyLongObject
-                      PyDictObject PyTupleObject PyClassObject'''.split():
+                      PyDictObject PyClassObject'''.split():
         FORWARD_DECLS.append('typedef struct { PyObject_HEAD } %s'
                              % (cpyname, ))
 build_exported_objects()
@@ -559,25 +567,31 @@ def configure_types():
             if name in TYPES:
                 TYPES[name].become(TYPE)
 
-def build_type_checkers(type_name, cls=None):
+def build_type_checkers3(type_name, cls=None):
     """
     Builds two api functions: Py_XxxCheck() and Py_XxxCheckExact().
     - if `cls` is None, the type is space.w_[type].
     - if `cls` is a string, it is the name of a space attribute, e.g. 'w_str'.
     - else `cls` must be a W_Class with a typedef.
     """
+    py_type_name = "Py" + type_name + "_Type"
+    check_name = "Py" + type_name + "_Check"
+
     if cls is None:
-        attrname = "w_" + type_name.lower()
-        def get_w_type(space):
-            return getattr(space, attrname)
-    elif isinstance(cls, str):
+        cls = "w_" + type_name.lower()
+    if isinstance(cls, str):
         def get_w_type(space):
             return getattr(space, cls)
+        def _PyXxx_Type(space):
+            return rffi.cast(PyTypeObjectPtr,
+                             constant_pyobj(space, py_type_name))
     else:
         @specialize.memo()
         def get_w_type(space):
             return space.gettypeobject(cls.typedef)
-    check_name = "Py" + type_name + "_Check"
+        def _PyXxx_Type():
+            ZZZ
+    _PyXxx_Type = func_with_new_name(_PyXxx_Type, '_' + py_type_name)
 
     def check(space, w_obj):
         "Implements the Py_Xxx_Check function"
@@ -587,15 +601,18 @@ def build_type_checkers(type_name, cls=None):
                 space.is_true(space.issubtype(w_obj_type, w_type)))
     def check_exact(space, py_obj):
         "Implements the Py_Xxx_CheckExact function"
-        py_type = get_w_type(space).cpyext_c_type_object
-        assert py_type
-        return py_obj.c_ob_type == py_type
+        #py_type = get_w_type(space).cpyext_c_type_object
+        return py_obj.c_ob_type == _PyXxx_Type(space)
 
     check = cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)(
         func_with_new_name(check, check_name))
     check_exact = cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)(
         func_with_new_name(check_exact, check_name + "Exact"))
-    return check, check_exact
+    return check, check_exact, _PyXxx_Type
+
+def build_type_checkers(type_name, cls=None):
+    # backward compatibility
+    return build_type_checkers3(type_name, cls=cls)[:2]
 
 pypy_debug_catch_fatal_exception = rffi.llexternal('pypy_debug_catch_fatal_exception', [], lltype.Void)
 
@@ -793,7 +810,8 @@ def build_bridge(space):
     struct PyPyAPI {
     %(members)s
     } _pypyAPI;
-    RPY_EXTERN struct PyPyAPI* pypyAPI = &_pypyAPI;
+    RPY_EXTERN struct PyPyAPI* pypyAPI;
+    struct PyPyAPI* pypyAPI = &_pypyAPI;
     """ % dict(members=structmembers)
 
     functions = generate_decls_and_callbacks(db, export_symbols)
@@ -848,6 +866,7 @@ def build_bridge(space):
 
         INTERPLEVEL_API[name] = w_obj
 
+        orgname = name
         name = name.replace('Py', 'cpyexttest')
         if isptr:
             ptr = ctypes.c_void_p.in_dll(bridge, name)
