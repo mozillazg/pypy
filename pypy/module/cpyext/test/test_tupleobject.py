@@ -74,16 +74,16 @@ class TestTupleObject(BaseApiTest):
     def test_tuple_resize(self, space, api):
         py_tuple = api.PyTuple_New(3)
         ar = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        ar[0] = rffi.cast(PyObject, make_ref(space, py_tuple))
+        ar[0] = py_tuple
         api._PyTuple_Resize(ar, 2)
-        py_tuple = from_ref(space, ar[0])
-        assert space.int_w(space.len(py_tuple)) == 2
-        
+        py_tuple = ar[0]
+        assert api.PyTuple_Size(py_tuple) == 2
+
         api._PyTuple_Resize(ar, 10)
-        py_tuple = from_ref(space, ar[0])
-        assert space.int_w(space.len(py_tuple)) == 10
-        
-        api.Py_DecRef(ar[0])
+        py_tuple = ar[0]
+        assert api.PyTuple_Size(py_tuple) == 10
+
+        api.Py_DecRef(py_tuple)
         lltype.free(ar, flavor='raw')
 
     def test_getslice(self, space, api):

@@ -69,7 +69,7 @@ def PyTuple_New(space, size):
     py_tuple = new_pyobj(PyTupleObjectStruct, _PyTuple_Type(space), size)
     for i in range(size):
         py_tuple.c_ob_item[i] = lltype.nullptr(PyObject.TO)
-    return py_tuple
+    return rffi.cast(PyObject, py_tuple)
 
 @cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
 def PyTuple_SetItem(space, py_t, pos, py_obj):
@@ -108,7 +108,6 @@ def PyTuple_Size(space, py_t):
 
 @cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=-1)
 def _PyTuple_Resize(space, ref, newsize):
-    ZZZ
     """Can be used to resize a tuple.  newsize will be the new length of the tuple.
     Because tuples are supposed to be immutable, this should only be used if there
     is only one reference to the object.  Do not use this if the tuple may already
@@ -119,24 +118,29 @@ def _PyTuple_Resize(space, ref, newsize):
     this function. If the object referenced by *p is replaced, the original
     *p is destroyed.  On failure, returns -1 and sets *p to NULL, and
     raises MemoryError or SystemError."""
-    py_tuple = from_ref(space, ref[0])
-    if not PyTuple_Check(space, py_tuple):
+    py_t = ref[0]
+    if not PyTuple_Check(space, py_t) or py_t.c_ob_refcnt != 1:
         PyErr_BadInternalCall(space)
-    py_newtuple = PyTuple_New(space, newsize)
-    
-    to_cp = newsize
-    oldsize = space.int_w(space.len(py_tuple))
-    if oldsize < newsize:
-        to_cp = oldsize
-    for i in range(to_cp):
-        _setitem_tuple(py_newtuple, i, space.getitem(py_tuple, space.wrap(i)))
-    Py_DecRef(space, ref[0])
-    ref[0] = make_ref(space, py_newtuple)
+
+    py_oldtuple = rffi.cast(PyTupleObject, py_t)
+    py_newtuple = rffi.cast(PyTupleObject, PyTuple_New(space, newsize))
+
+    oldsize = py_oldtuple.c_ob_size
+    if oldsize > newsize:
+        to_copy = newsize
+        for i in range(to_copy, oldsize):
+            Py_DecRef(space, py_oldtuple.c_ob_item[i])
+    else:
+        to_copy = oldsize
+    for i in range(to_copy):
+        py_newtuple.c_ob_item[i] = py_oldtuple.c_ob_item[i]
+
+    ref[0] = rffi.cast(PyObject, py_newtuple)
+    Py_DecRef(space, py_oldtuple)
     return 0
 
 @cpython_api([PyObject, Py_ssize_t, Py_ssize_t], PyObject)
 def PyTuple_GetSlice(space, w_obj, low, high):
-    ZZZ
     """Take a slice of the tuple pointed to by p from low to high and return it
     as a new tuple.
     """
