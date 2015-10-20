@@ -5,7 +5,7 @@ from pypy.module.cpyext.api import (
     cpython_api, cpython_struct, build_type_checkers3, bootstrap_function,
     PyObject, PyObjectFields, CONST_STRING, CANNOT_FAIL, Py_ssize_t)
 from pypy.module.cpyext.pyobject import (setup_class_for_cpyext, new_pyobj,
-                                         from_pyobj)
+                                         from_pyobj, get_pyobj_and_incref)
 from rpython.rlib.rarithmetic import r_uint, intmask, LONG_TEST, r_ulonglong
 from pypy.objspace.std.intobject import W_IntObject
 import sys
@@ -65,19 +65,23 @@ def int_fill_pypy(space, w_obj, py_obj):
     intval = rffi.cast(lltype.Signed, py_int.c_ob_ival)
     W_IntObject.__init__(w_obj, intval)
 
+
 @cpython_api([], lltype.Signed, error=CANNOT_FAIL)
 def PyInt_GetMax(space):
     """Return the system's idea of the largest integer it can handle (LONG_MAX,
     as defined in the system header files)."""
     return sys.maxint
 
+def new_pyint(space, ival):
+    py_int = new_pyobj(PyIntObjectStruct, _PyInt_Type(space))
+    py_int.c_ob_ival = ival
+    return rffi.cast(PyObject, py_int)
+
 @cpython_api([lltype.Signed], PyObject)
 def PyInt_FromLong(space, ival):
     """Create a new integer object with a value of ival.
     """
-    py_int = new_pyobj(PyIntObjectStruct, _PyInt_Type(space))
-    py_int.c_ob_ival = ival
-    return rffi.cast(PyObject, py_int)
+    return new_pyint(space, ival)
 
 @cpython_api([PyObject], lltype.Signed, error=-1)
 def PyInt_AsLong(space, py_obj):
@@ -90,14 +94,15 @@ def PyInt_AsLong(space, py_obj):
                              space.wrap("an integer is required, got NULL"))
     if PyInt_Check(space, py_obj):
         return PyInt_AS_LONG(space, py_obj)
-    w_obj = from_pyobj(space, py_obj)
-    return space.int_w(space.int(w_obj))
+    else:
+        w_obj = from_pyobj(space, py_obj)
+        return space.int_w(space.int(w_obj))   # XXX win64: check range
 
 @cpython_api([PyObject], lltype.Unsigned, error=-1)
 def PyInt_AsUnsignedLong(space, w_obj):
     """Return a C unsigned long representation of the contents of pylong.
     If pylong is greater than ULONG_MAX, an OverflowError is
-    raised."""
+    raised.  (NOT ON CPYTHON)"""
     if w_obj is None:
         raise OperationError(space.w_TypeError,
                              space.wrap("an integer is required, got NULL"))
@@ -105,33 +110,38 @@ def PyInt_AsUnsignedLong(space, w_obj):
 
 
 @cpython_api([PyObject], rffi.ULONG, error=-1)
-def PyInt_AsUnsignedLongMask(space, w_obj):
+def PyInt_AsUnsignedLongMask(space, py_obj):
     """Will first attempt to cast the object to a PyIntObject or
     PyLongObject, if it is not already one, and then return its value as
     unsigned long.  This function does not check for overflow.
     """
-    w_int = space.int(w_obj)
-    if space.isinstance_w(w_int, space.w_int):
-        num = space.int_w(w_int)
-        return r_uint(num)
+    if not py_obj:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("an integer is required, got NULL"))
+    if PyInt_Check(space, py_obj):
+        return rffi.cast(rffi.ULONG, PyInt_AS_LONG(space, py_obj))
     else:
-        num = space.bigint_w(w_int)
+        w_obj = from_pyobj(space, py_obj)
+        num = space.bigint_w(space.int(w_obj))
         return num.uintmask()
 
 
 @cpython_api([PyObject], rffi.ULONGLONG, error=-1)
-def PyInt_AsUnsignedLongLongMask(space, w_obj):
+def PyInt_AsUnsignedLongLongMask(space, py_obj):
     """Will first attempt to cast the object to a PyIntObject or
     PyLongObject, if it is not already one, and then return its value as
     unsigned long long, without checking for overflow.
     """
-    w_int = space.int(w_obj)
-    if space.isinstance_w(w_int, space.w_int):
-        num = space.int_w(w_int)
-        return r_ulonglong(num)
+    if not py_obj:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("an integer is required, got NULL"))
+    if PyInt_Check(space, py_obj):
+        return rffi.cast(rffi.ULONGLONG, PyInt_AS_LONG(space, py_obj))
     else:
-        num = space.bigint_w(w_int)
+        w_obj = from_pyobj(space, py_obj)
+        num = space.bigint_w(space.int(w_obj))
         return num.ulonglongmask()
+
 
 @cpython_api([PyObject], lltype.Signed, error=CANNOT_FAIL)
 def PyInt_AS_LONG(space, py_obj):
@@ -140,15 +150,19 @@ def PyInt_AS_LONG(space, py_obj):
     return py_int.c_ob_ival
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
-def PyInt_AsSsize_t(space, w_obj):
+def PyInt_AsSsize_t(space, py_obj):
     """Will first attempt to cast the object to a PyIntObject or
     PyLongObject, if it is not already one, and then return its value as
     Py_ssize_t.
     """
-    if w_obj is None:
+    if not py_obj:
         raise OperationError(space.w_TypeError,
                              space.wrap("an integer is required, got NULL"))
-    return space.int_w(w_obj) # XXX this is wrong on win64
+    if PyInt_Check(space, py_obj):
+        return rffi.cast(Py_ssize_t, PyInt_AS_LONG(space, py_obj))
+    else:
+        w_obj = from_pyobj(space, py_obj)
+        return space.int_w(space.int(w_obj))
 
 LONG_MAX = int(LONG_TEST - 1)
 
@@ -158,8 +172,9 @@ def PyInt_FromSize_t(space, ival):
     LONG_MAX, a long integer object is returned.
     """
     if ival <= LONG_MAX:
-        return space.wrap(intmask(ival))
-    return space.wrap(ival)
+        return new_pyint(rffi.cast(rffi.LONG, ival))
+    else:
+        return get_pyobj_and_incref(space.wrap(ival))
 
 @cpython_api([Py_ssize_t], PyObject)
 def PyInt_FromSsize_t(space, ival):
@@ -167,7 +182,8 @@ def PyInt_FromSsize_t(space, ival):
     than LONG_MAX or smaller than LONG_MIN, a long integer object is
     returned.
     """
-    return space.wrap(ival)
+    # XXX win64
+    return new_pyint(ival)
 
 @cpython_api([CONST_STRING, rffi.CCHARPP, rffi.INT_real], PyObject)
 def PyInt_FromString(space, str, pend, base):
