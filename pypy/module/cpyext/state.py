@@ -82,8 +82,8 @@ class State:
         if we_are_translated():
             refcountstate = space.fromcache(RefcountState)
             refcountstate.init_r2w_from_w2r()
+            rawrefcount.init(lambda ob: ZZZ)
 
-        rawrefcount.init(lambda ob: ZZZ)
         for func in INIT_FUNCTIONS:
             func(space)
             self.check_and_raise_exception()

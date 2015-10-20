@@ -681,9 +681,11 @@ def make_wrapper(space, callable, gil=None):
             print 'Fatal error in cpyext, CPython compatibility layer, calling', callable.__name__
             print 'Either report a bug or consider not using this particular extension'
             if not we_are_translated():
+                tb = sys.exc_info()[2]
                 import traceback
                 traceback.print_exc()
-                print str(e)
+                if sys.stdout == sys.__stdout__:
+                    import pdb; pdb.post_mortem(tb)
                 # we can't do much here, since we're in ctypes, swallow
             else:
                 print str(e)
@@ -728,9 +730,9 @@ def setup_init_functions(eci, translating):
                                        compilation_info=eci, _nowrapper=True)
     def init_types(space):
         from pypy.module.cpyext.typeobject import py_type_ready
-        #py_type_ready(space, get_buffer_type()) ZZZ
-        #py_type_ready(space, get_cobject_type()) ZZZ
-        #py_type_ready(space, get_capsule_type()) ZZZ
+        py_type_ready(space, get_buffer_type())
+        py_type_ready(space, get_cobject_type())
+        py_type_ready(space, get_capsule_type())
     INIT_FUNCTIONS.append(init_types)
     from pypy.module.posix.interp_posix import add_fork_hook
     reinit_tls = rffi.llexternal('%sThread_ReInitTLS' % prefix, [], lltype.Void,

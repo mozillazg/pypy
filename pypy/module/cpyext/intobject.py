@@ -23,7 +23,7 @@ def init_intobject(space):
     setup_class_for_cpyext(W_AbstractIntObject,
                            basestruct=PyIntObject.TO,
                            fill_pyobj=int_fill_pyobj,
-                           realize=int_realize,
+                           fill_pypy=int_fill_pypy,
                            realize_subclass_of=W_IntObject)
 
 def int_fill_pyobj(space, w_obj, py_int):
@@ -33,8 +33,12 @@ def int_fill_pyobj(space, w_obj, py_int):
     """
     py_int.c_ob_ival = space.int_w(w_obj)
 
-def int_realize(space, w_obj, py_obj):
-    intval = rffi.cast(lltype.Signed, rffi.cast(PyIntObject, py_obj).c_ob_ival)
+def int_fill_pypy(space, w_obj, py_obj):
+    """
+    Fills a W_IntObject from a PyIntObject.
+    """
+    py_int = rffi.cast(PyIntObject, py_obj)
+    intval = rffi.cast(lltype.Signed, py_int.c_ob_ival)
     W_IntObject.__init__(w_obj, intval)
 
 PyInt_Check, PyInt_CheckExact = build_type_checkers("Int")

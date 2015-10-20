@@ -32,8 +32,9 @@ def init(dealloc_callback=None):
 
 def create_link_pypy(p, ob):
     "NOT_RPYTHON: a link where the PyPy object contains some or all the data"
+    #print 'create_link_pypy\n\t%s\n\t%s' % (p, ob)
     assert p not in _pypy2ob
-    assert not ob.c_ob_pypy_link
+    #assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
     _pypy2ob[p] = ob
     _p_list.append(ob)
@@ -41,8 +42,9 @@ def create_link_pypy(p, ob):
 def create_link_pyobj(p, ob):
     """NOT_RPYTHON: a link where the PyObject contains all the data.
        from_obj() will not work on this 'p'."""
+    #print 'create_link_pyobj\n\t%s\n\t%s' % (p, ob)
     assert p not in _pypy2ob
-    assert not ob.c_ob_pypy_link
+    #assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(p)
     _o_list.append(ob)
 

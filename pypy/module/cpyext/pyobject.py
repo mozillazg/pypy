@@ -142,16 +142,18 @@ def setup_class_for_cpyext(W_Class, **kw):
     """NOT_RPYTHON
 
     basestruct: The basic structure to allocate
-    alloc_pyobj: default create_pyobj calls this to get the PyObject
-    fill_pyobj: default create_pyobj calls this after attaching is done
-    realize   : Function called to create a pypy object from a PyObject
+    alloc_pyobj: function called to get the PyObject
+    fill_pyobj: called to fill the PyObject after attaching is done
+    alloc_pypy: function called to create a PyPy object from a PyObject
+    fill_pypy: called to fill the PyPy object after attaching is done
     dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
     """
 
     tp_basestruct = kw.pop('basestruct', PyObject.TO)
     tp_alloc_pyobj  = kw.pop('alloc_pyobj', None)
     tp_fill_pyobj   = kw.pop('fill_pyobj', None)
-    tp_realize      = kw.pop('realize', None)
+    tp_alloc_pypy   = kw.pop('alloc_pypy', None)
+    tp_fill_pypy    = kw.pop('fill_pypy', None)
     force_create_pyobj  = kw.pop('force_create_pyobj', False)
     realize_subclass_of = kw.pop('realize_subclass_of', None)
     #tp_dealloc    = kw.pop('dealloc', None)
@@ -173,10 +175,10 @@ def setup_class_for_cpyext(W_Class, **kw):
                 pass
         #
         def cpyext_create_pyobj(self, space):
-            py_obj, light = tp_alloc_pyobj(space, self)
+            py_obj, is_light = tp_alloc_pyobj(space, self)
             ob = rffi.cast(PyObject, py_obj)
             ob_type = get_c_ob_type(space, space.type(self))
-            init_link_pypy(self, ob, ob_type, light)
+            init_link_from_pypy(self, ob, ob_type, is_light)
             tp_fill_pyobj(space, self, py_obj)
             return ob
         W_Class.cpyext_create_pyobj = cpyext_create_pyobj
@@ -190,37 +192,56 @@ def setup_class_for_cpyext(W_Class, **kw):
             keepalive_until_here(self)
         W_Class.cpyext_fill_prebuilt_pyobj = cpyext_fill_prebuilt_pyobj
 
-    if tp_realize or realize_subclass_of:
-        W_CPyExtPlaceHolder = get_cpyextplaceholder_subclass(
-            realize_subclass_of or W_Class)
-        if tp_realize:
-            tp_realize._always_inline_ = True
+    if tp_alloc_pyobj or tp_fill_pyobj or realize_subclass_of:
+        if realize_subclass_of is None:
+            realize_subclass_of = W_Class
+        assert 'typedef' in realize_subclass_of.__dict__, (
+            "no 'typedef' exactly on %s" % (realize_subclass_of,))
         #
-        def cpyext_realize(space, pyobj):
-            w_obj = W_CPyExtPlaceHolder(pyobj)
-            if tp_realize:
-                tp_realize(space, w_obj, pyobj)
+        if not tp_alloc_pypy:
+            W_CPyExtPlaceHolder = get_cpyextplaceholder_subclass(
+                realize_subclass_of)
+            def tp_alloc_pypy(space, pyobj):
+                w_obj = W_CPyExtPlaceHolder(pyobj)
+                return w_obj, True
+        tp_alloc_pypy._always_inline_ = True
+        #
+        if not tp_fill_pypy:
+            def tp_fill_pypy(space, w_obj, pyobj):
+                pass
+        #
+        def cpyext_create_pypy(space, pyobj):
+            w_obj, is_transient = tp_alloc_pypy(space, pyobj)
+            init_link_from_pyobj(w_obj, pyobj, is_transient)
+            tp_fill_pypy(space, w_obj, pyobj)
             return w_obj
         #
         typedef = realize_subclass_of.typedef
-        assert not hasattr(typedef, 'cpyext_realize')
-        typedef.cpyext_realize = cpyext_realize
+        assert 'cpyext_create_pypy' not in typedef.__dict__
+        typedef.cpyext_create_pypy = cpyext_create_pypy
 
     W_Class.cpyext_basestruct = tp_basestruct
 
 
-def init_link_pypy(w_obj, ob, ob_type, light):
-    if light:
+def init_link_from_pypy(w_obj, ob, ob_type, is_light):
+    if is_light:
         ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY_LIGHT
     else:
         ob.c_ob_refcnt = rawrefcount.REFCNT_FROM_PYPY
-    ob.c_ob_pypy_link = 0
     ob.c_ob_type = ob_type
     rawrefcount.create_link_pypy(w_obj, ob)
 
+def init_link_from_pyobj(w_obj, ob, is_transient):
+    if is_transient:
+        rawrefcount.create_link_pyobj(w_obj, ob)
+    else:
+        rawrefcount.create_link_pypy(w_obj, ob)
+    ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
+
 def setup_prebuilt_pyobj(w_obj, py_obj):
     assert lltype.typeOf(py_obj) == PyObject
-    init_link_pypy(w_obj, py_obj, lltype.nullptr(PyTypeObjectPtr.TO), False)
+    init_link_from_pypy(w_obj, py_obj, lltype.nullptr(PyTypeObjectPtr.TO),
+                        False)
     if isinstance(w_obj, W_TypeObject):
         w_obj.cpyext_c_type_object = rffi.cast(PyTypeObjectPtr, py_obj)
 
@@ -236,6 +257,9 @@ W_TypeObject.cpyext_c_type_object = lltype.nullptr(PyTypeObjectPtr.TO)
 def init_pyobject(space):
     setup_class_for_cpyext(W_Root, force_create_pyobj=True,
                            realize_subclass_of=W_ObjectObject)
+    # use this cpyext_create_pypy as the default for all other TypeDefs
+    from pypy.interpreter.typedef import TypeDef
+    TypeDef.cpyext_create_pypy = W_ObjectObject.typedef.cpyext_create_pypy
 
 
 #________________________________________________________
@@ -262,6 +286,8 @@ def get_cpyextplaceholder_subclass(W_Class):
         def cpyext_as_pyobj(self, space):
             return self.cpyext_pyobj
 
+        # ZZZ getclass(), getweakref(), etc.?  like interpreter/typedef.py
+
     W_CPyExtPlaceHolder.__name__ = W_Class.__name__ + '_CPyExtPlaceHolder'
     W_Class._cpyextplaceholder_subclass = W_CPyExtPlaceHolder
     return W_CPyExtPlaceHolder
@@ -284,8 +310,8 @@ W_TypeObject.cpyext_as_pyobj = _type_cpyext_as_pyobj
 W_TypeObject._cpyextplaceholder_subclass = W_TypeObject
 
 def _create_w_obj_from_pyobj(space, pyobj):
-    w_type = from_pyobj(pyobj.c_ob_type)
-    return w_type.instancetypedef.cpyext_realize(space, pyobj)
+    w_type = from_pyobj(space, pyobj.c_ob_type)
+    return w_type.instancetypedef.cpyext_create_pypy(space, pyobj)
 
 #________________________________________________________
 # refcounted object support

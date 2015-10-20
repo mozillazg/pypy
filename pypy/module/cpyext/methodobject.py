@@ -12,7 +12,7 @@ from pypy.module.cpyext.api import (
     METH_STATIC, METH_VARARGS, PyObject, PyObjectFields, bootstrap_function,
     build_type_checkers, cpython_api, cpython_struct, generic_cpy_call)
 from pypy.module.cpyext.pyobject import (
-    Py_DecRef, from_ref, make_ref, make_typedescr)
+    Py_DecRef, from_pyobj, make_ref, make_typedescr)
 
 PyCFunction_typedef = rffi.COpaquePtr(typedef='PyCFunction')
 PyCFunction = lltype.Ptr(lltype.FuncType([PyObject, PyObject], PyObject))
