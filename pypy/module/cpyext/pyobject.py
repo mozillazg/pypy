@@ -232,11 +232,11 @@ def init_link_from_pypy(w_obj, ob, ob_type, is_light):
     rawrefcount.create_link_pypy(w_obj, ob)
 
 def init_link_from_pyobj(w_obj, ob, is_transient):
+    ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
     if is_transient:
         rawrefcount.create_link_pyobj(w_obj, ob)
     else:
         rawrefcount.create_link_pypy(w_obj, ob)
-    ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
 
 def setup_prebuilt_pyobj(w_obj, py_obj):
     assert lltype.typeOf(py_obj) == PyObject

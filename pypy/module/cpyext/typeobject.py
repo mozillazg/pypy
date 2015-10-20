@@ -567,6 +567,8 @@ def type_fill_pypy(space, w_type, py_obj):
     pto = rffi.cast(PyTypeObjectPtr, py_obj)
     assert pto.c_tp_flags & Py_TPFLAGS_READYING
 
+    w_type.cpyext_c_type_object = pto
+
     w_bases = from_pyobj(space, pto.c_tp_bases)
     bases_w = space.fixedview(w_bases) or [space.w_object]
     name = rffi.charp2str(pto.c_tp_name)
