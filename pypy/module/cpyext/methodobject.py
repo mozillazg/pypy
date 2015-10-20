@@ -159,7 +159,7 @@ class W_PyCWrapperObject(W_Root):
         self.doc = doc
         self.func = func
         pyo = rffi.cast(PyObject, pto)
-        w_type = from_ref(space, pyo)
+        w_type = from_pyobj(space, pyo)
         assert isinstance(w_type, W_TypeObject)
         self.w_objclass = w_type
 

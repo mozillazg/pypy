@@ -235,7 +235,7 @@ def add_tp_new_wrapper(space, dict_w, pto):
         return
     pyo = rffi.cast(PyObject, pto)
     dict_w["__new__"] = PyCFunction_NewEx(space, get_new_method_def(space),
-                                          from_ref(space, pyo), None)
+                                          from_pyobj(space, pyo), None)
 
 def inherit_special(space, pto, base_pto):
     # XXX missing: copy basicsize and flags in a magical way
@@ -286,7 +286,8 @@ def init_typeobject(space):
                            basestruct=PyTypeObject,
                            alloc_pyobj=type_alloc_pyobj,
                            fill_pyobj=type_fill_pyobj,
-                           alloc_pypy=type_alloc_pypy)
+                           alloc_pypy=type_alloc_pypy,
+                           fill_pypy=type_fill_pypy)
                    #dealloc=type_dealloc)
 
     # some types are difficult to create because of cycles.
@@ -544,17 +545,10 @@ def type_alloc_pypy(space, py_obj):
     pto = rffi.cast(PyTypeObjectPtr, py_obj)
     assert pto.c_tp_flags & Py_TPFLAGS_READY == 0
     assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
-    pto.c_tp_flags |= Py_TPFLAGS_READYING
-    try:
-        w_type = _type_realize(space, pto)
-    finally:
-        pto.c_tp_flags &= ~Py_TPFLAGS_READYING
-    pto.c_tp_flags |= Py_TPFLAGS_READY
-    return w_type, False
-
-def _type_realize(space, pto):
     assert pto.c_ob_type
-    # ^^^ we can't reach this place if c_ob_type is still NULL
+    # ^^^ shouldn't reach this place if these conditions fail
+
+    pto.c_tp_flags |= Py_TPFLAGS_READYING
 
     if not pto.c_tp_base:
         base = get_pyobj_and_incref(space, space.w_object)
@@ -564,12 +558,16 @@ def _type_realize(space, pto):
     if not pto.c_tp_bases:
         w_bases = space.newtuple([from_pyobj(space, pto.c_tp_base)])
         pto.c_tp_bases = get_pyobj_and_incref(space, w_bases)
-    else:
-        w_bases = from_pyobj(space, pto.c_tp_bases)
 
     w_metatype = from_pyobj(space, pto.c_ob_type)
     w_type = space.allocate_instance(W_TypeObject, w_metatype)
+    return w_type, False
 
+def type_fill_pypy(space, w_type, py_obj):
+    pto = rffi.cast(PyTypeObjectPtr, py_obj)
+    assert pto.c_tp_flags & Py_TPFLAGS_READYING
+
+    w_bases = from_pyobj(space, pto.c_tp_bases)
     bases_w = space.fixedview(w_bases) or [space.w_object]
     name = rffi.charp2str(pto.c_tp_name)
     dict_w = {}
@@ -593,7 +591,7 @@ def _type_realize(space, pto):
 
     W_TypeObject.__init__(w_type, space, name, bases_w, dict_w)
 
-    if not space.is_true(space.issubtype(self, space.w_type)):
+    if not space.is_true(space.issubtype(w_type, space.w_type)):  # ZZZ?
         w_type.flag_cpytype = True
     w_type.flag_heaptype = False
     if pto.c_tp_doc:
@@ -601,6 +599,8 @@ def _type_realize(space, pto):
 
     finish_type_2(space, pto, w_type)
     w_type.ready()
+    pto.c_tp_flags &= ~Py_TPFLAGS_READYING
+    pto.c_tp_flags |= Py_TPFLAGS_READY
     return w_type
 
 def solid_base(space, w_type):
