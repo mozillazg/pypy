@@ -10,6 +10,8 @@ from rpython.config.translationoption import get_combined_translation_config
 class W_Root(object):
     def __init__(self, intval=0):
         self.intval = intval
+    def __nonzero__(self):
+        raise Exception("you cannot do that, you must use space.is_true()")
 
 PyObjectS = lltype.Struct('PyObjectS',
                           ('c_ob_refcnt', lltype.Signed),

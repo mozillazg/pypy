@@ -126,7 +126,7 @@ def _collect(track_allocation=True):
     _p_list = new_p_list
     for ob, wr in wr_p_list:
         p = attach(ob, wr, _p_list)
-        if p:
+        if p is not None:
             _pypy2ob[p] = ob
     _o_list = []
     for ob, wr in wr_o_list:
