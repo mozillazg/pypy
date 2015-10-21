@@ -378,7 +378,7 @@ def cpython_struct(name, fields, forward=None, level=1):
     TYPES[configname] = forward
     return forward
 
-INTERPLEVEL_API = {}
+INTERPLEVEL_API = {}     # only for untranslated tests
 FUNCTIONS = {}
 
 def constant_pyobj(space, name):

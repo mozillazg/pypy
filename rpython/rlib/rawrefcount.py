@@ -82,7 +82,7 @@ def _collect(track_allocation=True):
     global _p_list, _o_list
     wr_p_list = []
     new_p_list = []
-    for ob in _p_list:
+    for ob in reversed(_p_list):
         if ob.c_ob_refcnt not in (REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_LIGHT):
             new_p_list.append(ob)
         else:
@@ -93,7 +93,7 @@ def _collect(track_allocation=True):
     _p_list = Ellipsis
 
     wr_o_list = []
-    for ob in _o_list:
+    for ob in reversed(_o_list):
         detach(ob, wr_o_list)
     _o_list = Ellipsis
 

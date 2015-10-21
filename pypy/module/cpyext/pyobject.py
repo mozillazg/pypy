@@ -5,7 +5,8 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from pypy.module.cpyext.api import (
     cpython_api, bootstrap_function, PyObject, PyObjectP, ADDR,
-    CANNOT_FAIL, Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr, is_PyObject)
+    CANNOT_FAIL, Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr, is_PyObject,
+    INTERPLEVEL_API)
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.objspace.std.objectobject import W_ObjectObject
@@ -280,16 +281,19 @@ def as_pyobj(space, w_obj):
     assert not is_pyobj(w_obj)
     return w_obj.cpyext_as_pyobj(space)
 as_pyobj._always_inline_ = True
+INTERPLEVEL_API['as_pyobj'] = as_pyobj
 
 def as_xpyobj(space, w_obj):
     if w_obj is not None:
         return as_pyobj(space, w_obj)
     else:
         return lltype.nullptr(PyObject.TO)
+INTERPLEVEL_API['as_xpyobj'] = as_xpyobj
 
 
 def pyobj_has_w_obj(pyobj):
     return rawrefcount.to_obj(W_Root, pyobj) is not None
+INTERPLEVEL_API['pyobj_has_w_obj'] = staticmethod(pyobj_has_w_obj)
 
 @specialize.ll()
 def from_pyobj(space, pyobj):
@@ -301,6 +305,7 @@ def from_pyobj(space, pyobj):
         w_obj = _create_w_obj_from_pyobj(space, pyobj)
     return w_obj
 from_pyobj._always_inline_ = True
+INTERPLEVEL_API['from_pyobj'] = from_pyobj
 
 @specialize.ll()
 def from_xpyobj(space, pyobj):
@@ -308,6 +313,7 @@ def from_xpyobj(space, pyobj):
         return from_pyobj(space, pyobj)
     else:
         return None
+INTERPLEVEL_API['from_xpyobj'] = from_xpyobj
 
 
 def is_pyobj(x):
@@ -317,6 +323,7 @@ def is_pyobj(x):
         return True
     else:
         raise TypeError(repr(type(x)))
+INTERPLEVEL_API['is_pyobj'] = staticmethod(is_pyobj)
 
 class Entry(ExtRegistryEntry):
     _about_ = is_pyobj
@@ -342,6 +349,7 @@ def get_pyobj_and_incref(space, obj):
     if not is_pyobj(obj):
         keepalive_until_here(obj)
     return pyobj
+INTERPLEVEL_API['get_pyobj_and_incref'] = get_pyobj_and_incref
 
 @specialize.ll()
 def get_pyobj_and_xincref(space, obj):
@@ -349,6 +357,7 @@ def get_pyobj_and_xincref(space, obj):
         return get_pyobj_and_incref(space, obj)
     else:
         return lltype.nullptr(PyObject.TO)
+INTERPLEVEL_API['get_pyobj_and_xincref'] = get_pyobj_and_xincref
 
 @specialize.ll()
 def get_w_obj_and_decref(space, obj):
@@ -367,6 +376,7 @@ def get_w_obj_and_decref(space, obj):
     assert pyobj.c_ob_refcnt >= rawrefcount.REFCNT_FROM_PYPY
     keepalive_until_here(w_obj)
     return w_obj
+INTERPLEVEL_API['get_w_obj_and_decref'] = get_w_obj_and_decref
 
 
 @specialize.ll()
@@ -381,6 +391,7 @@ def new_pyobj(PYOBJ_TYPE, ob_type, length=None):
     ob.c_ob_type = ob_type
     ob.c_ob_pypy_link = 0
     return ob
+INTERPLEVEL_API['new_pyobj'] = staticmethod(new_pyobj)
 
 
 def make_ref(space, w_obj):
