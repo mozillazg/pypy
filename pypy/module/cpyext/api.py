@@ -262,6 +262,7 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                       rffi.cast(restype, 0) == 0)
 
     def decorate(func):
+        func._always_inline_ = 'try'
         func_name = func.func_name
         if external:
             c_name = None
@@ -355,7 +356,6 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                 return res
             unwrapper.func = func
             unwrapper.api_func = api_function
-            unwrapper._always_inline_ = 'try'
             return unwrapper
 
         unwrapper_catch = make_unwrapper(True)

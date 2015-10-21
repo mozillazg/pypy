@@ -38,7 +38,7 @@ def setup_class_for_cpyext(W_Class, **kw):
     fill_pyobj: called to fill the PyObject after attaching is done
     alloc_pypy: function called to create a PyPy object from a PyObject
     fill_pypy: called to fill the PyPy object after attaching is done
-    dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
+    dealloc: function called with the pyobj when the refcount drops to zero
     """
 
     tp_basestruct = kw.pop('basestruct', PyObject.TO)
@@ -46,11 +46,11 @@ def setup_class_for_cpyext(W_Class, **kw):
     tp_fill_pyobj   = kw.pop('fill_pyobj', None)
     tp_alloc_pypy   = kw.pop('alloc_pypy', None)
     tp_fill_pypy    = kw.pop('fill_pypy', None)
+    tp_dealloc      = kw.pop('dealloc', None)
     force_create_pyobj  = kw.pop('force_create_pyobj', False)
     realize_subclass_of = kw.pop('realize_subclass_of', None)
     alloc_pypy_light_if = kw.pop('alloc_pypy_light_if', None)
-    #tp_dealloc    = kw.pop('dealloc', None)
-    assert not kw, "Extra arguments to make_typedescr: %s" % kw.keys()
+    assert not kw, "Extra arguments to setup_class_for_cpyext: %s" % kw.keys()
 
     assert 'cpyext_basestruct' not in W_Class.__dict__    # double set
 
@@ -86,7 +86,7 @@ def setup_class_for_cpyext(W_Class, **kw):
             keepalive_until_here(self)
         W_Class.cpyext_fill_prebuilt_pyobj = cpyext_fill_prebuilt_pyobj
 
-    if tp_alloc_pyobj or tp_fill_pyobj or realize_subclass_of:
+    if tp_alloc_pyobj or tp_fill_pyobj or realize_subclass_of or tp_dealloc:
         if realize_subclass_of is None:
             realize_subclass_of = W_Class
         #
@@ -115,6 +115,19 @@ def setup_class_for_cpyext(W_Class, **kw):
         typedef = realize_subclass_of.typedef
         assert 'cpyext_create_pypy' not in typedef.__dict__
         typedef.cpyext_create_pypy = cpyext_create_pypy
+
+        if tp_dealloc:
+            @cpython_api([PyObject], lltype.Void,
+                         external=False, error=CANNOT_FAIL)
+            def dealloc(space, py_obj):
+                tp_dealloc(space, rffi.cast(lltype.Ptr(tp_basestruct), py_obj))
+            #
+            def cpyext_get_dealloc(space):
+                return llhelper(dealloc.api_func.functype,
+                                dealloc.api_func.get_wrapper(space))
+            #
+            assert 'cpyext_get_dealloc' not in typedef.__dict__
+            typedef.cpyext_get_dealloc = cpyext_get_dealloc
 
     W_Class.cpyext_basestruct = tp_basestruct
 
@@ -157,10 +170,17 @@ W_TypeObject.cpyext_c_type_object = lltype.nullptr(PyTypeObjectPtr.TO)
 @bootstrap_function
 def init_pyobject(space):
     setup_class_for_cpyext(W_Root, force_create_pyobj=True,
-                           realize_subclass_of=W_ObjectObject)
+                           realize_subclass_of=W_ObjectObject,
+                           dealloc=_default_dealloc)
     # use this cpyext_create_pypy as the default for all other TypeDefs
     from pypy.interpreter.typedef import TypeDef
-    TypeDef.cpyext_create_pypy = W_ObjectObject.typedef.cpyext_create_pypy
+    TypeDef.cpyext_create_pypy = staticmethod(
+        W_ObjectObject.typedef.cpyext_create_pypy)
+    TypeDef.cpyext_get_dealloc = staticmethod(
+        W_ObjectObject.typedef.cpyext_get_dealloc)
+
+def _default_dealloc(space, py_obj):
+    lltype.free(py_obj, flavor='raw', track_allocation=False)
 
 
 #________________________________________________________
@@ -479,24 +499,6 @@ def _Py_Dealloc(space, obj):
     #      "'s type which is", rffi.charp2str(pto.c_tp_name)
     generic_cpy_call(space, pto.c_tp_dealloc, obj)
 
-#___________________________________________________________
-# Support for "lifelines"
-#
-# Object structure must stay alive even when not referenced
-# by any C code.
-
-class PyOLifeline(object):
-    def __init__(self, space, pyo):
-        ZZZ
-        self.pyo = pyo
-        self.space = space
-
-    def __del__(self):
-        if self.pyo:
-            assert self.pyo.c_ob_refcnt == 0
-            _Py_Dealloc(self.space, self.pyo)
-            self.pyo = lltype.nullptr(PyObject.TO)
-        # XXX handle borrowed objects here
 
 #___________________________________________________________
 # Support for borrowed references

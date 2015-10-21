@@ -1,7 +1,7 @@
 import py
 
 from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
-from pypy.module.cpyext.pyobject import PyObject, PyObjectP
+from pypy.module.cpyext.pyobject import PyObject, PyObjectP, debug_collect
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from rpython.rtyper.lltypesystem import rffi, lltype
 
@@ -26,6 +26,14 @@ class TestTupleObject(BaseApiTest):
         w_obj2 = api.from_pyobj(api.PyTuple_GetItem(atuple, 1))
         assert space.eq_w(w_obj1, space.wrap(10))
         assert space.eq_w(w_obj2, space.wrap(11))
+        #
+        # one reference from the PyTupleObject
+        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
+        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
+        del atuple
+        debug_collect()
+        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
+        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
 
     def test_tupleobject_spec_oo(self, space, api):
         w_obj1 = space.newlist([])
@@ -34,6 +42,14 @@ class TestTupleObject(BaseApiTest):
         assert api.PyTuple_Size(atuple) == 2
         assert api.from_pyobj(api.PyTuple_GetItem(atuple, 0)) is w_obj1
         assert api.from_pyobj(api.PyTuple_GetItem(atuple, 1)) is w_obj2
+        #
+        # no reference from the PyTupleObject: it is borrowed
+        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
+        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
+        del atuple
+        debug_collect()
+        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
+        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
 
     def test_new_setitem(self, space, api):
         w_obj1 = space.newlist([])

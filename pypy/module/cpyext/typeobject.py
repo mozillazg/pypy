@@ -428,7 +428,8 @@ def type_fill_pyobj(space, w_type, pto):
     w_type.cpyext_c_type_object = pto
 
     # dealloc
-    #pto.c_tp_dealloc = typedescr.get_dealloc(space)   ZZZ
+    pto.c_tp_dealloc = w_type.instancetypedef.cpyext_get_dealloc(space)
+
     # buffer protocol
     if space.is_w(w_type, space.w_str):
         setup_string_buffer_procs(space, pto)

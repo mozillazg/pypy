@@ -4,7 +4,7 @@ from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
     cpython_struct, PyVarObjectFields, build_type_checkers3, bootstrap_function)
 from pypy.module.cpyext.pyobject import (PyObject, PyObjectP, Py_DecRef,
     setup_class_for_cpyext, as_pyobj, get_pyobj_and_incref, from_pyobj,
-    pyobj_has_w_obj, RRC_PERMANENT, RRC_PERMANENT_LIGHT, new_pyobj)
+    pyobj_has_w_obj, RRC_PERMANENT, RRC_PERMANENT_LIGHT, new_pyobj, xdecref)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.objspace.std.tupleobject import W_TupleObject, W_AbstractTupleObject
 
@@ -34,6 +34,10 @@ def init_intobject(space):
 
         # --and then we call this function to initialize the W_TupleObject--
         fill_pypy=tuple_fill_pypy,
+
+        # --deallocator, *not* called if tuple_alloc_pyobj() made a
+        #   PyTupleObject of borrowed items--
+        dealloc=tuple_dealloc,
         )
 
 def tuple_alloc_pyobj(space, w_obj):
@@ -62,6 +66,11 @@ def tuple_fill_pypy(space, w_obj, py_obj):
     objects_w = [from_pyobj(space, py_tuple.c_ob_item[i])
                  for i in range(py_tuple.c_ob_size)]
     W_TupleObject.__init__(w_obj, objects_w)
+
+def tuple_dealloc(space, py_tup):
+    for i in range(py_tup.c_ob_size):
+        xdecref(space, py_tup.c_ob_item[i])
+    lltype.free(py_tup, flavor='raw', track_allocation=False)
 
 
 @cpython_api([Py_ssize_t], PyObject)
