@@ -107,6 +107,7 @@ class LeakCheckingTest(object):
     spaceconfig = dict(usemodules=['cpyext', 'thread', '_rawffi', 'array',
                                    'itertools', 'time', 'binascii', 'micronumpy'])
     spaceconfig['std.withmethodcache'] = True
+    spaceconfig['std.withspecialisedtuple'] = True
 
     enable_leak_checking = True
 

@@ -615,11 +615,14 @@ class _parentable_mixin(object):
             return object.__hash__(self)
 
     def __repr__(self):
-        if self._storage is None:
-            return '<freed C object %s>' % (self._TYPE,)
+        if '__str__' in self._TYPE._adtmeths:
+            r = self._TYPE._adtmeths['__str__'](self)
         else:
-            return '<C object %s at 0x%x>' % (self._TYPE,
-                                              fixid(self._addressof_storage()))
+            r = 'C object %s' % (self._TYPE,)
+        if self._storage is None:
+            return '<freed %s>' % (r,)
+        else:
+            return '<%s at 0x%x>' % (r, fixid(self._addressof_storage()))
 
     def __str__(self):
         return repr(self)

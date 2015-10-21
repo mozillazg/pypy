@@ -372,7 +372,17 @@ def cpython_struct(name, fields, forward=None, level=1):
         config = CConfig
     else:
         config = CConfig2
-    setattr(config, configname, rffi_platform.Struct(name, fields))
+    adtmeths = {}
+    if ("ob_type", PyTypeObjectPtr) in fields:
+        def my_str(ob):
+            r = name
+            tp = ob.c_ob_type
+            if tp:
+                r += " of type '%s'" % (rffi.charp2str(tp.c_tp_name),)
+            return r
+        adtmeths['__str__'] = my_str
+    setattr(config, configname, rffi_platform.Struct(name, fields,
+                                                     adtmeths=adtmeths))
     if forward is None:
         forward = lltype.ForwardReference()
     TYPES[configname] = forward
@@ -790,7 +800,7 @@ def c_function_signature(db, func):
 # Do not call this more than once per process
 def build_bridge(space):
     "NOT_RPYTHON"
-    from pypy.module.cpyext.pyobject import setup_prebuilt_pyobj
+    from pypy.module.cpyext.pyobject import setup_prebuilt_pyobj, _Py_Dealloc
     from rpython.rlib import rawrefcount
 
     export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
@@ -850,7 +860,7 @@ def build_bridge(space):
 
     space.fromcache(State).install_dll(eci)
 
-    rawrefcount.init(lambda ob: ZZZ)
+    rawrefcount.init(lambda ob: _Py_Dealloc(space, ob))
 
     # populate static data
     to_fill = []
@@ -1214,20 +1224,15 @@ def load_cpyext_module(space, name, path, dll, initptr):
 @specialize.ll()
 def generic_cpy_call(space, func, *args):
     FT = lltype.typeOf(func).TO
-    return make_generic_cpy_call(FT, True, False)(space, func, *args)
-
-@specialize.ll()
-def generic_cpy_call_dont_decref(space, func, *args):
-    FT = lltype.typeOf(func).TO
-    return make_generic_cpy_call(FT, False, False)(space, func, *args)
+    return make_generic_cpy_call(FT, False)(space, func, *args)
 
 @specialize.ll()
 def generic_cpy_call_expect_null(space, func, *args):
     FT = lltype.typeOf(func).TO
-    return make_generic_cpy_call(FT, True, True)(space, func, *args)
+    return make_generic_cpy_call(FT, True)(space, func, *args)
 
 @specialize.memo()
-def make_generic_cpy_call(FT, decref_args, expect_null):
+def make_generic_cpy_call(FT, expect_null):
     from pypy.module.cpyext.pyobject import is_pyobj, as_xpyobj
     from pypy.module.cpyext.pyobject import get_w_obj_and_decref
     from pypy.module.cpyext.pyerrors import PyErr_Occurred
@@ -1253,8 +1258,6 @@ def make_generic_cpy_call(FT, decref_args, expect_null):
     call_external_function._gctransformer_hint_close_stack_ = True
     # don't inline, as a hack to guarantee that no GC pointer is alive
     # anywhere in call_external_function
-
-    assert decref_args  #ZZZ
 
     @specialize.ll()
     def generic_cpy_call(space, func, *args):

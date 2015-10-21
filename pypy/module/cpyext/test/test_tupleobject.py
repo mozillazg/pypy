@@ -41,7 +41,7 @@ class TestTupleObject(BaseApiTest):
         w_obj2 = space.newlist([])
         pyobj2 = api.get_pyobj_and_incref(w_obj2)
         py_tuple = api.PyTuple_New(2)
-        assert not pyobj_has_w_obj(py_tuple)
+        assert not api.pyobj_has_w_obj(py_tuple)
 
         assert pyobj1.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
         assert pyobj2.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
@@ -57,7 +57,7 @@ class TestTupleObject(BaseApiTest):
         assert pyobj1.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 0
         assert pyobj2.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
 
-        assert not pyobj_has_w_obj(py_tuple)
+        assert not api.pyobj_has_w_obj(py_tuple)
         w_tup = api.from_pyobj(py_tuple)
         assert w_tup is api.from_pyobj(py_tuple)
         assert api.PyTuple_GetItem(py_tuple, 1) == pyobj2

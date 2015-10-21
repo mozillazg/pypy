@@ -120,6 +120,7 @@ def setup_class_for_cpyext(W_Class, **kw):
 
 
 def rawrefcount_init_link(w_obj, ob, strength):
+    assert lltype.typeOf(ob) == PyObject
     if strength == RRC_PERMANENT:
         ob.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
         rawrefcount.create_link_pypy(w_obj, ob)
@@ -141,7 +142,6 @@ def rawrefcount_init_link(w_obj, ob, strength):
 
 
 def setup_prebuilt_pyobj(w_obj, py_obj):
-    assert lltype.typeOf(py_obj) == PyObject
     rawrefcount_init_link(w_obj, py_obj, RRC_PERMANENT)
     if isinstance(w_obj, W_TypeObject):
         w_obj.cpyext_c_type_object = rffi.cast(PyTypeObjectPtr, py_obj)
@@ -394,6 +394,36 @@ def new_pyobj(PYOBJ_TYPE, ob_type, length=None):
 INTERPLEVEL_API['new_pyobj'] = staticmethod(new_pyobj)
 
 
+@specialize.ll()
+def incref(space, obj):
+    get_pyobj_and_incref(space, obj)
+INTERPLEVEL_API['incref'] = incref
+
+@specialize.ll()
+def xincref(space, obj):
+    get_pyobj_and_xincref(space, obj)
+INTERPLEVEL_API['xincref'] = xincref
+
+@specialize.ll()
+def decref(space, obj):
+    if is_pyobj(obj):
+        obj = rffi.cast(PyObject, obj)
+        assert obj.c_ob_refcnt > 0
+        obj.c_ob_refcnt -= 1
+        if obj.c_ob_refcnt == 0:
+            _Py_Dealloc(space, obj)
+    else:
+        get_w_obj_and_decref(space, obj)
+INTERPLEVEL_API['decref'] = decref
+
+@specialize.ll()
+def xdecref(space, obj):
+    if obj:
+        decref(space, obj)
+INTERPLEVEL_API['xdecref'] = xdecref
+
+# ----------
+
 def make_ref(space, w_obj):
     ZZZ
 
@@ -424,62 +454,30 @@ def from_ref(space, ref):
     return get_typedescr(w_type.instancetypedef).realize(space, ref)
 
 
-# XXX Optimize these functions and put them into macro definitions
-@cpython_api([PyObject], lltype.Void)
-def Py_DecRef(space, obj):
-    if not obj:
-        return
-    assert lltype.typeOf(obj) == PyObject
-
-    obj.c_ob_refcnt -= 1
-    if DEBUG_REFCOUNT:
-        debug_refcount("DECREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
-    if obj.c_ob_refcnt == 0:
-        return #ZZZ
-        state = space.fromcache(RefcountState)
-        ptr = rffi.cast(ADDR, obj)
-        if ptr not in state.py_objects_r2w:
-            # this is a half-allocated object, lets call the deallocator
-            # without modifying the r2w/w2r dicts
-            _Py_Dealloc(space, obj)
-        else:
-            w_obj = state.py_objects_r2w[ptr]
-            del state.py_objects_r2w[ptr]
-            w_type = space.type(w_obj)
-            if not w_type.is_cpytype():
-                _Py_Dealloc(space, obj)
-            del state.py_objects_w2r[w_obj]
-            # if the object was a container for borrowed references
-            state.delete_borrower(w_obj)
-    else:
-        if not we_are_translated() and obj.c_ob_refcnt < 0:
-            message = "Negative refcount for obj %s with type %s" % (
-                obj, rffi.charp2str(obj.c_ob_type.c_tp_name))
-            print >>sys.stderr, message
-            assert False, message
-
 @cpython_api([PyObject], lltype.Void)
 def Py_IncRef(space, obj):
-    if not obj:
-        return
-    obj.c_ob_refcnt += 1
-    assert obj.c_ob_refcnt > 0
-    if DEBUG_REFCOUNT:
-        debug_refcount("INCREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
+    xincref(space, obj)
+
+@cpython_api([PyObject], lltype.Void)
+def Py_DecRef(space, obj):
+    xdecref(space, obj)
+
 
 @cpython_api([PyObject], lltype.Void)
 def _Py_NewReference(space, obj):
+    ZZZ
     obj.c_ob_refcnt = 1
     w_type = from_ref(space, rffi.cast(PyObject, obj.c_ob_type))
     assert isinstance(w_type, W_TypeObject)
     get_typedescr(w_type.instancetypedef).realize(space, obj)
 
+@cpython_api([PyObject], lltype.Void)
 def _Py_Dealloc(space, obj):
-    from pypy.module.cpyext.api import generic_cpy_call_dont_decref
+    from pypy.module.cpyext.api import generic_cpy_call
     pto = obj.c_ob_type
     #print >>sys.stderr, "Calling dealloc slot", pto.c_tp_dealloc, "of", obj, \
     #      "'s type which is", rffi.charp2str(pto.c_tp_name)
-    generic_cpy_call_dont_decref(space, pto.c_tp_dealloc, obj)
+    generic_cpy_call(space, pto.c_tp_dealloc, obj)
 
 #___________________________________________________________
 # Support for "lifelines"

@@ -263,10 +263,11 @@ class Struct(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
     defined structure.
     """
-    def __init__(self, name, interesting_fields, ifdef=None):
+    def __init__(self, name, interesting_fields, ifdef=None, adtmeths={}):
         self.name = name
         self.interesting_fields = interesting_fields
         self.ifdef = ifdef
+        self.adtmeths = adtmeths
 
     def prepare_code(self):
         if self.ifdef is not None:
@@ -355,7 +356,7 @@ class Struct(CConfigEntry):
             name = name[7:]
         else:
             hints['typedef'] = True
-        kwds = {'hints': hints}
+        kwds = {'hints': hints, 'adtmeths': self.adtmeths}
         return rffi.CStruct(name, *fields, **kwds)
 
 class SimpleType(CConfigEntry):

@@ -48,12 +48,12 @@ typedef struct {
 #else
 /* Fast version */
 #define Py_INCREF(ob)   (((PyObject *)ob)->ob_refcnt++)
-#define Py_DECREF(ob)                                   \
+#define Py_DECREF(op)                                   \
     do {                                                \
-        if (((PyObject *)ob)->ob_refcnt > 1)            \
-            ((PyObject *)ob)->ob_refcnt--;              \
+        if (--((PyObject*)(op))->ob_refcnt != 0)        \
+            ;                                           \
         else                                            \
-            Py_DecRef((PyObject *)ob);                  \
+            _Py_Dealloc((PyObject *)(op));              \
     } while (0)
 
 #define Py_XINCREF(op) do { if ((op) == NULL) ; else Py_INCREF(op); } while (0)
