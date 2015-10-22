@@ -66,6 +66,7 @@ PyString_Check, PyString_CheckExact, _PyString_Type = (
 @bootstrap_function
 def init_stringobject(space):
     "Type description of PyStringObject"
+    global _basic_size
     setup_class_for_cpyext(
         W_AbstractBytesObject,
         basestruct=PyStringObjectStruct,
@@ -86,6 +87,8 @@ def init_stringobject(space):
         #   be freed with free() by the GC--
         alloc_pypy_light_if=PyString_CheckExact,
         )
+    W_BytesObject.typedef.cpyext_basicsize += 1    # includes the NULL
+    _basic_size = W_BytesObject.typedef.cpyext_basicsize
 
 def _string_fill_pyobj(s, ob):
     rffi.str2chararray(s, ob.c_ob_sval_pypy, len(s))
@@ -97,7 +100,7 @@ def string_alloc_pyobj(space, w_obj):
     """
     assert isinstance(w_obj, W_AbstractBytesObject)
     size = w_obj.string_length()
-    ob = lltype.malloc(PyStringObjectStruct, size + 1, flavor='raw',
+    ob = lltype.malloc(PyStringObjectStruct, _basic_size + size, flavor='raw',
                        track_allocation=False)
     ob.c_ob_size = size
     if size > 8:
@@ -152,7 +155,7 @@ def PyString_AsString(space, ref):
         raise OperationError(space.w_TypeError, space.wrap(
             "PyString_AsString only support strings"))
     ref_str = rffi.cast(PyStringObject, ref)
-    last_char = ref_str.c_ob_sval_pypy[ref_str.ob_size]
+    last_char = ref_str.c_ob_sval_pypy[ref_str.c_ob_size]
     if last_char != '\x00':
         assert last_char == '*'
         # copy string buffer

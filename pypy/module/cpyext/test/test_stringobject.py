@@ -28,7 +28,7 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
                  if(PyString_Size(s) == 11) {
                      result = 1;
                  }
-                 if(s->ob_type->tp_basicsize != sizeof(void*)*4)
+                 if(s->ob_type->tp_basicsize != sizeof(void*) * 4 + 1)
                      result = 0;
                  if(s->ob_type->tp_itemsize != sizeof(char))
                      result = 0;
@@ -79,8 +79,7 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
             ])
         s = module.getstring()
         assert len(s) == 4
-        assert s == 'ab\x00c'
-
+        assert s[:2] == 'ab' and s[3] == 'c'      # s[2] undefined
 
 
     def test_AsString(self):
