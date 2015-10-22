@@ -1,11 +1,12 @@
-from rpython.rtyper.lltypesystem import rffi, lltype
+from rpython.rtyper.lltypesystem import lltype, rffi
+from rpython.rlib.rarithmetic import intmask, ovfcheck
 from pypy.module.cpyext.api import (
     cpython_api, generic_cpy_call, CANNOT_FAIL, Py_ssize_t, Py_ssize_tP,
     PyVarObject, Py_buffer,
     Py_TPFLAGS_HEAPTYPE, Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT,
     Py_GE, CONST_STRING, FILEP, fwrite)
 from pypy.module.cpyext.pyobject import (
-    PyObject, PyObjectP, create_ref, from_ref, Py_IncRef, Py_DecRef,
+    PyObject, PyObjectP, create_ref, from_pyobj, Py_IncRef, Py_DecRef,
     track_reference, get_typedescr, _Py_NewReference, RefcountState)
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr
 from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
@@ -17,11 +18,12 @@ import pypy.module.__builtin__.operation as operation
 @cpython_api([Py_ssize_t], rffi.VOIDP)
 def PyObject_MALLOC(space, size):
     return lltype.malloc(rffi.VOIDP.TO, size,
-                         flavor='raw', zero=True)
+                         flavor='raw', zero=True,
+                         track_allocation=False)
 
 @cpython_api([rffi.VOIDP], lltype.Void)
 def PyObject_FREE(space, ptr):
-    lltype.free(ptr, flavor='raw')
+    lltype.free(ptr, flavor='raw', track_allocation=False)
 
 @cpython_api([PyTypeObjectPtr], PyObject)
 def _PyObject_New(space, type):
@@ -29,16 +31,26 @@ def _PyObject_New(space, type):
 
 @cpython_api([PyTypeObjectPtr, Py_ssize_t], PyObject)
 def _PyObject_NewVar(space, type, itemcount):
-    w_type = from_ref(space, rffi.cast(PyObject, type))
-    assert isinstance(w_type, W_TypeObject)
-    typedescr = get_typedescr(w_type.instancetypedef)
-    py_obj = typedescr.allocate(space, w_type, itemcount=itemcount)
-    py_obj.c_ob_refcnt = 0
-    if type.c_tp_itemsize == 0:
-        w_obj = PyObject_Init(space, py_obj, type)
+    # XXX lots and lots of speed improvements pending: these kind of functions
+    # should be written in C in the first place, mostly as copy-pastes of the
+    # CPython source code
+    size = intmask(type.c_tp_basicsize)
+    assert size > 0
+    itemsize = intmask(type.c_tp_itemsize)
+    if itemsize > 0:
+        try:
+            varsize = ovfcheck(itemsize * itemcount)
+            size = ovfcheck(size + varsize)
+        except OverflowError:
+            PyErr_NoMemory(space)
+    mem = lltype.malloc(rffi.VOIDP.TO, size, flavor='raw', zero=True,
+                        track_allocation=False)
+    py_obj = rffi.cast(PyObject, mem)
+    if itemsize == 0:
+        PyObject_Init(space, py_obj, type)
     else:
         py_objvar = rffi.cast(PyVarObject, py_obj)
-        w_obj = PyObject_InitVar(space, py_objvar, type, itemcount)
+        PyObject_InitVar(space, py_objvar, type, itemcount)
     return py_obj
 
 @cpython_api([rffi.VOIDP], lltype.Void)
@@ -193,6 +205,7 @@ def PyObject_Init(space, obj, type):
     if not obj:
         PyErr_NoMemory(space)
     obj.c_ob_type = type
+    obj.c_ob_pypy_link = 0
     obj.c_ob_refcnt = 1
     return obj
 

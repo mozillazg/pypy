@@ -172,9 +172,9 @@ def PyInt_FromSize_t(space, ival):
     LONG_MAX, a long integer object is returned.
     """
     if ival <= LONG_MAX:
-        return new_pyint(rffi.cast(rffi.LONG, ival))
+        return new_pyint(space, rffi.cast(rffi.LONG, ival))
     else:
-        return get_pyobj_and_incref(space.wrap(ival))
+        return get_pyobj_and_incref(space, space.wrap(ival))
 
 @cpython_api([Py_ssize_t], PyObject)
 def PyInt_FromSsize_t(space, ival):
@@ -183,7 +183,7 @@ def PyInt_FromSsize_t(space, ival):
     returned.
     """
     # XXX win64
-    return new_pyint(ival)
+    return new_pyint(space, ival)
 
 @cpython_api([CONST_STRING, rffi.CCHARPP, rffi.INT_real], PyObject)
 def PyInt_FromString(space, str, pend, base):

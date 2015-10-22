@@ -20,4 +20,4 @@ typedef struct {
 #ifdef __cplusplus
 }
 #endif
-#endif /* !Py_BOOLOBJECT_H */
+#endif /* !Py_INTOBJECT_H */

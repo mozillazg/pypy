@@ -207,6 +207,11 @@ def get_cpyextplaceholder_subclass(W_Class):
         def cpyext_as_pyobj(self, space):
             return self.cpyext_pyobj
 
+        def getclass(self, space):
+            w_type = from_pyobj(space, self.cpyext_pyobj.c_ob_type)
+            assert isinstance(w_type, W_TypeObject)
+            return w_type
+
         # ZZZ getclass(), getweakref(), etc.?  like interpreter/typedef.py
 
     W_CPyExtPlaceHolder.__name__ = W_Class.__name__ + '_CPyExtPlaceHolder'
@@ -232,6 +237,7 @@ W_TypeObject._cpyextplaceholder_subclass = W_TypeObject
 
 def _create_w_obj_from_pyobj(space, pyobj):
     w_type = from_pyobj(space, pyobj.c_ob_type)
+    assert isinstance(w_type, W_TypeObject)
     return w_type.instancetypedef.cpyext_create_pypy(space, pyobj)
 
 #________________________________________________________

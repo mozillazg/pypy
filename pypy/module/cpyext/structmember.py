@@ -5,7 +5,8 @@ from pypy.module.cpyext.structmemberdefs import *
 from pypy.module.cpyext.api import ADDR, PyObjectP, cpython_api
 from pypy.module.cpyext.intobject import PyInt_AsLong, PyInt_AsUnsignedLong
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
-from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, from_ref, make_ref
+from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, from_pyobj
+from pypy.module.cpyext.pyobject import get_pyobj_and_xincref
 from pypy.module.cpyext.stringobject import (
     PyString_FromString, PyString_FromStringAndSize)
 from pypy.module.cpyext.floatobject import PyFloat_AsDouble
@@ -67,13 +68,13 @@ def PyMember_GetOne(space, obj, w_member):
     elif member_type == T_OBJECT:
         obj_ptr = rffi.cast(PyObjectP, addr)
         if obj_ptr[0]:
-            w_result = from_ref(space, obj_ptr[0])
+            w_result = from_pyobj(space, obj_ptr[0])
         else:
             w_result = space.w_None
     elif member_type == T_OBJECT_EX:
         obj_ptr = rffi.cast(PyObjectP, addr)
         if obj_ptr[0]:
-            w_result = from_ref(space, obj_ptr[0])
+            w_result = from_pyobj(space, obj_ptr[0])
         else:
             w_name = space.wrap(rffi.charp2str(w_member.c_name))
             raise OperationError(space.w_AttributeError, w_name)
@@ -122,7 +123,7 @@ def PyMember_SetOne(space, obj, w_member, w_value):
         array = rffi.cast(PyObjectP, addr)
         if array[0]:
             Py_DecRef(space, array[0])
-        array[0] = make_ref(space, w_value)
+        array[0] = get_pyobj_and_xincref(space, w_value)
     else:
         raise OperationError(space.w_SystemError,
                              space.wrap("bad memberdescr type"))

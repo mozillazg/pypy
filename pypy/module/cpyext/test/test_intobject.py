@@ -10,9 +10,7 @@ class TestIntObject(BaseApiTest):
         assert not api.PyInt_Check(space.wrap((1, 2, 3)))
         for i in [3, -5, -1, -sys.maxint, sys.maxint - 1]:
             x = api.PyInt_AsLong(space.wrap(i))
-            y = api.PyInt_AS_LONG(space.wrap(i))
             assert x == i
-            assert y == i
             w_x = from_pyobj(space, api.PyInt_FromLong(x + 1))
             assert space.type(w_x) is space.w_int
             assert space.eq_w(w_x, space.wrap(i + 1))
