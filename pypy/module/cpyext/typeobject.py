@@ -4,7 +4,6 @@ from rpython.rlib import jit
 from rpython.rlib.objectmodel import specialize, instantiate
 from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rlib.rstring import rsplit
-from rpython.rtyper.annlowlevel import llhelper
 from rpython.rtyper.lltypesystem import rffi, lltype
 
 from pypy.interpreter.baseobjspace import W_Root, DescrMismatch
@@ -132,8 +131,7 @@ def update_all_slots(space, w_type, pto):
             if get_slot:
                 slot_func_helper = get_slot()
         elif slot_func:
-            slot_func_helper = llhelper(slot_func.api_func.functype,
-                                        slot_func.api_func.get_wrapper(space))
+            slot_func_helper = slot_func.api_func.get_llhelper(space)
 
         if slot_func_helper is None:
             if WARN_ABOUT_MISSING_SLOT_FUNCTIONS:
@@ -226,8 +224,7 @@ def get_new_method_def(space):
 def setup_new_method_def(space):
     ptr = get_new_method_def(space)
     ptr.c_ml_meth = rffi.cast(PyCFunction_typedef,
-        llhelper(tp_new_wrapper.api_func.functype,
-                 tp_new_wrapper.api_func.get_wrapper(space)))
+        tp_new_wrapper.api_func.get_llhelper(space))
 
 def add_tp_new_wrapper(space, dict_w, pto):
     if "__new__" in dict_w:
@@ -294,8 +291,7 @@ def init_typeobject(space):
 def subtype_dealloc(space, obj):
     pto = obj.c_ob_type
     base = pto
-    this_func_ptr = llhelper(subtype_dealloc.api_func.functype,
-            subtype_dealloc.api_func.get_wrapper(space))
+    this_func_ptr = subtype_dealloc.api_func.get_llhelper(space)
     while base.c_tp_dealloc == this_func_ptr:
         base = base.c_tp_base
         assert base
@@ -354,22 +350,17 @@ def buf_getreadbuffer(space, pyref, segment, ref):
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
     lltype.render_immortal(c_buf)
-    c_buf.c_bf_getsegcount = llhelper(str_segcount.api_func.functype,
-                                      str_segcount.api_func.get_wrapper(space))
-    c_buf.c_bf_getreadbuffer = llhelper(str_getreadbuffer.api_func.functype,
-                                 str_getreadbuffer.api_func.get_wrapper(space))
-    c_buf.c_bf_getcharbuffer = llhelper(str_getcharbuffer.api_func.functype,
-                                 str_getcharbuffer.api_func.get_wrapper(space))
+    c_buf.c_bf_getsegcount = str_segcount.api_func.get_llhelper(space)
+    c_buf.c_bf_getreadbuffer = str_getreadbuffer.api_func.get_llhelper(space)
+    c_buf.c_bf_getcharbuffer = str_getcharbuffer.api_func.get_llhelper(space)
     pto.c_tp_as_buffer = c_buf
     pto.c_tp_flags |= Py_TPFLAGS_HAVE_GETCHARBUFFER
 
 def setup_buffer_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
     lltype.render_immortal(c_buf)
-    c_buf.c_bf_getsegcount = llhelper(str_segcount.api_func.functype,
-                                      str_segcount.api_func.get_wrapper(space))
-    c_buf.c_bf_getreadbuffer = llhelper(buf_getreadbuffer.api_func.functype,
-                                 buf_getreadbuffer.api_func.get_wrapper(space))
+    c_buf.c_bf_getsegcount = str_segcount.api_func.get_llhelper(space)
+    c_buf.c_bf_getreadbuffer = buf_getreadbuffer.api_func.get_llhelper(space)
     pto.c_tp_as_buffer = c_buf
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -436,10 +427,8 @@ def type_fill_pyobj(space, w_type, pto):
     if space.is_w(w_type, space.w_buffer):
         setup_buffer_buffer_procs(space, pto)
 
-    pto.c_tp_free = llhelper(PyObject_Del.api_func.functype,
-            PyObject_Del.api_func.get_wrapper(space))
-    pto.c_tp_alloc = llhelper(PyType_GenericAlloc.api_func.functype,
-            PyType_GenericAlloc.api_func.get_wrapper(space))
+    pto.c_tp_free = PyObject_Del.api_func.get_llhelper(space)
+    pto.c_tp_alloc = PyType_GenericAlloc.api_func.get_llhelper(space)
     if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         w_typename = space.getattr(w_type, space.wrap('__name__'))
         heaptype = rffi.cast(PyHeapTypeObject, pto)
@@ -450,8 +439,10 @@ def type_fill_pyobj(space, w_type, pto):
         # leak the name, but only for types in PyPy that correspond to
         # non-heap types in CPython
         pto.c_tp_name = rffi.str2charp(w_type.name, track_allocation=False)
-    pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
-    pto.c_tp_itemsize = 0
+
+    typedef = w_type.instancetypedef
+    pto.c_tp_basicsize = typedef.cpyext_basicsize
+    pto.c_tp_itemsize = typedef.cpyext_itemsize
     if space.is_w(w_type, space.w_object):
         pto.c_tp_new = rffi.cast(newfunc, 1)   # XXX temp
     # uninitialized fields:
@@ -466,8 +457,6 @@ def type_fill_pyobj(space, w_type, pto):
 
     finish_type_2(space, pto, w_type)
 
-    #pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)   ZZZ
-    pto.c_tp_basicsize = rffi.sizeof(PyObject.TO)         #   ZZZ
     if pto.c_tp_base:
         if pto.c_tp_base.c_tp_basicsize > pto.c_tp_basicsize:
             pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
@@ -594,9 +583,7 @@ def finish_type_2(space, pto, w_type):
 
     if not pto.c_tp_setattro:
         from pypy.module.cpyext.object import PyObject_GenericSetAttr
-        pto.c_tp_setattro = llhelper(
-            PyObject_GenericSetAttr.api_func.functype,
-            PyObject_GenericSetAttr.api_func.get_wrapper(space))
+        pto.c_tp_setattro = PyObject_GenericSetAttr.api_func.get_llhelper(space)
 
     w_dict = w_type.getdict(space)
     old = pto.c_tp_dict

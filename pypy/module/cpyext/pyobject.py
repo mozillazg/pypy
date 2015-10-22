@@ -116,6 +116,15 @@ def setup_class_for_cpyext(W_Class, **kw):
         assert 'cpyext_create_pypy' not in typedef.__dict__
         typedef.cpyext_create_pypy = cpyext_create_pypy
 
+        if tp_basestruct._arrayfld is None:
+            typedef.cpyext_basicsize = rffi.sizeof(tp_basestruct)
+            typedef.cpyext_itemsize = 0
+        else:
+            typedef.cpyext_basicsize = rffi.offsetof(tp_basestruct,
+                                                     tp_basestruct._arrayfld)
+            ARRAY = getattr(tp_basestruct, tp_basestruct._arrayfld)
+            typedef.cpyext_itemsize = rffi.sizeof(ARRAY.OF)
+
         if tp_dealloc:
             @cpython_api([PyObject], lltype.Void,
                          external=False, error=CANNOT_FAIL)
@@ -178,6 +187,8 @@ def init_pyobject(space):
         W_ObjectObject.typedef.cpyext_create_pypy)
     TypeDef.cpyext_get_dealloc = staticmethod(
         W_ObjectObject.typedef.cpyext_get_dealloc)
+    TypeDef.cpyext_basicsize = W_ObjectObject.typedef.cpyext_basicsize
+    TypeDef.cpyext_itemsize = W_ObjectObject.typedef.cpyext_itemsize
 
 def _default_dealloc(space, py_obj):
     lltype.free(py_obj, flavor='raw', track_allocation=False)

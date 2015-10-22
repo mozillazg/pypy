@@ -215,11 +215,7 @@ class ApiFunction:
         return True
 
     def get_llhelper(self, space):
-        llh = getattr(self, '_llhelper', None)
-        if llh is None:
-            llh = llhelper(self.functype, self.get_wrapper(space))
-            self._llhelper = llh
-        return llh
+        return llhelper(self.functype, self.get_wrapper(space))
 
     @specialize.memo()
     def get_wrapper(self, space):
@@ -231,6 +227,7 @@ class ApiFunction:
             if self.c_name is not None:
                 wrapper.c_name = cpyext_namespace.uniquename(self.c_name)
         return wrapper
+
 
 def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                 gil=None, result_borrowed=False):
@@ -402,11 +399,11 @@ def constant_pyobj(space, name):
 # These are C symbols which cpyext will export, but which are defined in .c
 # files somewhere in the implementation of cpyext (rather than being defined in
 # RPython).
-SYMBOLS_C = [
+SYMBOLS_C = set([
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyArg_VaParse', 'PyArg_VaParseTupleAndKeywords', '_PyArg_NoKeywords',
-    'PyString_FromFormat', 'PyString_FromFormatV',
+    'PyString_FromFormat', 'PyString_FromFormatV', '_PyString_Resize',
     'PyModule_AddObject', 'PyModule_AddIntConstant', 'PyModule_AddStringConstant',
     'Py_BuildValue', 'Py_VaBuildValue', 'PyTuple_Pack',
     '_PyArg_Parse_SizeT', '_PyArg_ParseTuple_SizeT',
@@ -454,7 +451,7 @@ SYMBOLS_C = [
     'Py_FrozenFlag', 'Py_TabcheckFlag', 'Py_UnicodeFlag', 'Py_IgnoreEnvironmentFlag',
     'Py_DivisionWarningFlag', 'Py_DontWriteBytecodeFlag', 'Py_NoUserSiteDirectory',
     '_Py_QnewFlag', 'Py_Py3kWarningFlag', 'Py_HashRandomizationFlag', '_Py_PackageContext',
-]
+])
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     '_Py_NoneStruct#': ('PyObject*', 'space.w_None'),
@@ -803,7 +800,7 @@ def build_bridge(space):
     from pypy.module.cpyext.pyobject import setup_prebuilt_pyobj, _Py_Dealloc
     from rpython.rlib import rawrefcount
 
-    export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
+    export_symbols = sorted(FUNCTIONS) + sorted(SYMBOLS_C) + sorted(GLOBALS)
     from rpython.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
@@ -1100,7 +1097,7 @@ def setup_library(space):
     "NOT_RPYTHON"
     from pypy.module.cpyext.pyobject import make_ref
 
-    export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
+    export_symbols = sorted(FUNCTIONS) + sorted(SYMBOLS_C) + sorted(GLOBALS)
     from rpython.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 

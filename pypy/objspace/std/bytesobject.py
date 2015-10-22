@@ -478,6 +478,9 @@ class W_BytesObject(W_AbstractBytesObject):
     def _len(self):
         return len(self._value)
 
+    def string_length(self):         # for cpyext
+        return self._len()
+
     _val = str_w
 
     @staticmethod

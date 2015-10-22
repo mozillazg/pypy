@@ -43,6 +43,9 @@ class W_StringBufferObject(W_AbstractBytesObject):
     def readbuf_w(self, space):
         return StringBuffer(self.force())
 
+    def string_length(self):         # for cpyext
+        return self.length
+
     def descr_len(self, space):
         return space.wrap(self.length)
 

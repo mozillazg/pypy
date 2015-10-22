@@ -248,3 +248,21 @@ PyString_FromFormat(const char *format, ...)
     va_end(vargs);
     return ret;
 }
+
+int
+_PyString_Resize(PyObject **pv, Py_ssize_t newsize)
+{
+    /* XXX always create a new string so far */
+    PyObject *v = *pv;
+    Py_ssize_t size = PyString_GET_SIZE(v);
+    PyObject *newv = PyString_FromStringAndSize(NULL, newsize);
+    if (newv == NULL) {
+        Py_DECREF(v);
+        return -1;
+    }
+    memcpy(PyString_AS_STRING(newv), PyString_AS_STRING(v),
+           size < newsize ? size : newsize);
+    Py_DECREF(v);
+    *pv = newv;
+    return 0;
+}

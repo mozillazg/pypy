@@ -30,6 +30,8 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
                  }
                  if(s->ob_type->tp_basicsize != sizeof(void*)*4)
                      result = 0;
+                 if(s->ob_type->tp_itemsize != sizeof(char))
+                     result = 0;
                  Py_DECREF(s);
                  return PyBool_FromLong(result);
              """),

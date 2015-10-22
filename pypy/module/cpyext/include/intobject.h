@@ -13,6 +13,7 @@ typedef struct {
     long ob_ival;
 } PyIntObject;
 
+
 /* Macro, trading safety for speed */
 #define PyInt_AS_LONG(op) (((PyIntObject *)(op))->ob_ival)
 

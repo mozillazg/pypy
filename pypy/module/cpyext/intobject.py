@@ -45,9 +45,9 @@ def init_intobject(space):
         # --and then we call this function to initialize the W_IntObject--
         fill_pypy=int_fill_pypy,
 
-        # --in this case, and if PyInt_CheckExact() returns True, then
-        #   the link can be light, i.e. the original PyIntObject might
-        #   be freed with free() by the GC--
+        # --if PyInt_CheckExact() returns True, then such a link can
+        #   be light, i.e. the original PyIntObject is freed with free()
+        #   by the GC if there is no more reference to the PyIntObject--
         alloc_pypy_light_if=PyInt_CheckExact,
         )
 
