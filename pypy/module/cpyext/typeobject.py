@@ -316,10 +316,8 @@ def str_getreadbuffer(space, w_str, segment, ref):
     if segment != 0:
         raise OperationError(space.w_SystemError, space.wrap
                              ("accessing non-existent string segment"))
-    pyref = make_ref(space, w_str)
-    ref[0] = PyString_AsString(space, pyref)
+    ref[0] = PyString_AsString(space, w_str)
     # Stolen reference: the object has better exist somewhere else
-    Py_DecRef(space, pyref)
     return space.len_w(w_str)
 
 @cpython_api([PyObject, Py_ssize_t, rffi.CCHARPP], lltype.Signed,
@@ -329,10 +327,8 @@ def str_getcharbuffer(space, w_str, segment, ref):
     if segment != 0:
         raise OperationError(space.w_SystemError, space.wrap
                              ("accessing non-existent string segment"))
-    pyref = make_ref(space, w_str)
-    ref[0] = PyString_AsString(space, pyref)
+    ref[0] = PyString_AsString(space, w_str)
     # Stolen reference: the object has better exist somewhere else
-    Py_DecRef(space, pyref)
     return space.len_w(w_str)
 
 @cpython_api([PyObject, Py_ssize_t, rffi.VOIDPP], lltype.Signed,

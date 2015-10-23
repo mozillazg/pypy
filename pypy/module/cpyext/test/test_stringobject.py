@@ -3,7 +3,8 @@ from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.stringobject import new_empty_str, PyStringObject
 from pypy.module.cpyext.api import PyObjectP, PyObject, Py_ssize_tP
-from pypy.module.cpyext.pyobject import Py_DecRef, from_ref, make_ref
+from pypy.module.cpyext.pyobject import Py_DecRef
+from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
 
 import py
 import sys
@@ -192,24 +193,25 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
 
 class TestString(BaseApiTest):
     def test_string_resize(self, space, api):
+        py.test.skip("ZZZ testing C functions")
         py_str = new_empty_str(space, 10)
         ar = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
-        py_str.c_buffer[0] = 'a'
-        py_str.c_buffer[1] = 'b'
-        py_str.c_buffer[2] = 'c'
+        py_str.c_ob_sval_pypy[0] = 'a'
+        py_str.c_ob_sval_pypy[1] = 'b'
+        py_str.c_ob_sval_pypy[2] = 'c'
         ar[0] = rffi.cast(PyObject, py_str)
         api._PyString_Resize(ar, 3)
         py_str = rffi.cast(PyStringObject, ar[0])
         assert py_str.c_size == 3
-        assert py_str.c_buffer[1] == 'b'
-        assert py_str.c_buffer[3] == '\x00'
+        assert py_str.c_ob_sval_pypy[1] == 'b'
+        assert py_str.c_ob_sval_pypy[3] == '\x00'
         # the same for growing
         ar[0] = rffi.cast(PyObject, py_str)
         api._PyString_Resize(ar, 10)
         py_str = rffi.cast(PyStringObject, ar[0])
         assert py_str.c_size == 10
-        assert py_str.c_buffer[1] == 'b'
-        assert py_str.c_buffer[10] == '\x00'
+        assert py_str.c_ob_sval_pypy[1] == 'b'
+        assert py_str.c_ob_sval_pypy[10] == '\x00'
         Py_DecRef(space, ar[0])
         lltype.free(ar, flavor='raw')
 
@@ -229,11 +231,14 @@ class TestString(BaseApiTest):
         Py_DecRef(space, py_obj)
 
     def test_Concat(self, space, api):
-        ref = make_ref(space, space.wrap('abc'))
+        ref = api.get_pyobj_and_incref(space.wrap('abc'))
         ptr = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
         ptr[0] = ref
+        assert ref.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
         api.PyString_Concat(ptr, space.wrap('def'))
-        assert space.str_w(from_ref(space, ptr[0])) == 'abcdef'
+        assert ref.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
+        assert space.str_w(api.from_pyobj(ptr[0])) == 'abcdef'
+        assert ptr[0].c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
         api.PyString_Concat(ptr, space.w_None)
         assert not ptr[0]
         ptr[0] = lltype.nullptr(PyObject.TO)
@@ -241,18 +246,20 @@ class TestString(BaseApiTest):
         lltype.free(ptr, flavor='raw')
 
     def test_ConcatAndDel(self, space, api):
-        ref1 = make_ref(space, space.wrap('abc'))
-        ref2 = make_ref(space, space.wrap('def'))
+        ref1 = api.get_pyobj_and_incref(space.wrap('abc'))
+        ref2 = api.get_pyobj_and_incref(space.wrap('def'))
         ptr = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
         ptr[0] = ref1
+        assert ref2.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
         api.PyString_ConcatAndDel(ptr, ref2)
-        assert space.str_w(from_ref(space, ptr[0])) == 'abcdef'
-        assert ref2.c_ob_refcnt == 0
+        assert ref2.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
+        assert space.str_w(api.from_pyobj(ptr[0])) == 'abcdef'
+        assert ptr[0].c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
         Py_DecRef(space, ptr[0])
         ptr[0] = lltype.nullptr(PyObject.TO)
-        ref2 = make_ref(space, space.wrap('foo'))
+        ref2 = api.get_pyobj_and_incref(space.wrap('foo'))
         api.PyString_ConcatAndDel(ptr, ref2) # should not crash
-        assert ref2.c_ob_refcnt == 0
+        assert ref2.c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
         lltype.free(ptr, flavor='raw')
 
     def test_format(self, space, api):
