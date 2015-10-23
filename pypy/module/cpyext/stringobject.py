@@ -137,6 +137,7 @@ def PyString_FromStringAndSize(space, char_p, length):
     # XXX move to C
     py_str = new_empty_str(space, length)
     if char_p:
+        py_str = rffi.cast(PyStringObject, py_str)    # needed for ll2ctypes
         support.memcpy_fn(py_str.c_ob_sval_pypy, char_p, length)
     return rffi.cast(PyObject, py_str)
 

@@ -649,6 +649,7 @@ def make_wrapper(space, callable, gil=None):
         llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
         retval = fatal_value
         boxed_args = ()
+        tb = None
         try:
             if not we_are_translated() and DEBUG_WRAPPER:
                 print >>sys.stderr, callable,
@@ -672,6 +673,7 @@ def make_wrapper(space, callable, gil=None):
             except BaseException, e:
                 failed = True
                 if not we_are_translated():
+                    tb = sys.exc_info()[2]
                     message = repr(e)
                     import traceback
                     traceback.print_exc()
@@ -706,7 +708,8 @@ def make_wrapper(space, callable, gil=None):
             print 'Fatal error in cpyext, CPython compatibility layer, calling', callable.__name__
             print 'Either report a bug or consider not using this particular extension'
             if not we_are_translated():
-                tb = sys.exc_info()[2]
+                if tb is None:
+                    tb = sys.exc_info()[2]
                 import traceback
                 traceback.print_exc()
                 if sys.stdout == sys.__stdout__:
