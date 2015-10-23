@@ -1,7 +1,7 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.api import Py_ssize_tP, PyObjectP
-from pypy.module.cpyext.pyobject import from_pyobj
+from pypy.module.cpyext.pyobject import from_pyobj, as_pyobj
 from pypy.interpreter.error import OperationError
 
 class TestDictObject(BaseApiTest):
@@ -91,7 +91,6 @@ class TestDictObject(BaseApiTest):
 
     def test_iter(self, space, api):
         w_dict = space.sys.getdict(space)
-        py_dict = make_ref(space, w_dict)
 
         ppos = lltype.malloc(Py_ssize_tP.TO, 1, flavor='raw')
         ppos[0] = 0
@@ -109,14 +108,11 @@ class TestDictObject(BaseApiTest):
             lltype.free(pkey, flavor='raw')
             lltype.free(pvalue, flavor='raw')
 
-        api.Py_DecRef(py_dict) # release borrowed references
-
         assert space.eq_w(space.len(w_copy), space.len(w_dict))
         assert space.eq_w(w_copy, w_dict)
 
     def test_iterkeys(self, space, api):
         w_dict = space.sys.getdict(space)
-        py_dict = make_ref(space, w_dict)
 
         ppos = lltype.malloc(Py_ssize_tP.TO, 1, flavor='raw')
         pkey = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
@@ -137,8 +133,6 @@ class TestDictObject(BaseApiTest):
             lltype.free(ppos, flavor='raw')
             lltype.free(pkey, flavor='raw')
             lltype.free(pvalue, flavor='raw')
-
-        api.Py_DecRef(py_dict) # release borrowed references
 
         assert space.eq_w(space.newlist(keys_w),
                           space.call_method(w_dict, "keys"))

@@ -2,7 +2,7 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (
     cpython_api, CANNOT_FAIL, build_type_checkers, Py_ssize_t,
     Py_ssize_tP, CONST_STRING)
-from pypy.module.cpyext.pyobject import PyObject, PyObjectP, as_xpyobj
+from pypy.module.cpyext.pyobject import PyObject, PyObjectP, as_xpyobj, as_pyobj
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
@@ -164,28 +164,26 @@ def PyDict_Next(space, w_dict, ppos, pkey, pvalue):
         }
         Py_DECREF(o);
     }"""
-    if w_dict is None:
+    if not isinstance(w_dict, W_DictMultiObject):
         return 0
 
-    # Note: this is not efficient. Storing an iterator would probably
+    # XXX XXX PyDict_Next is not efficient. Storing an iterator would probably
     # work, but we can't work out how to not leak it if iteration does
-    # not complete.
-    ZZZ
+    # not complete.  Alternatively, we could add some RPython-only
+    # dict-iterator method to move forward by N steps.
 
+    w_dict.ensure_object_strategy()
+    w_iter = space.call_method(space.w_dict, "iteritems", w_dict)
     try:
-        w_iter = space.call_method(space.w_dict, "iteritems", w_dict)
-        pos = ppos[0]
-        while pos:
+        for i in range(ppos[0]):
             space.call_method(w_iter, "next")
-            pos -= 1
 
         w_item = space.call_method(w_iter, "next")
         w_key, w_value = space.fixedview(w_item, 2)
-        state = space.fromcache(RefcountState)
         if pkey:
-            pkey[0]   = state.make_borrowed(w_dict, w_key)
+            pkey[0]   = as_pyobj(space, w_key)
         if pvalue:
-            pvalue[0] = state.make_borrowed(w_dict, w_value)
+            pvalue[0] = as_pyobj(space, w_value)
         ppos[0] += 1
     except OperationError, e:
         if not e.match(space, space.w_StopIteration):

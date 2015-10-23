@@ -336,6 +336,11 @@ class W_DictMultiObject(W_Root):
         F: D[k] = F[k]"""
         init_or_update(space, self, __args__, 'dict.update')
 
+    def ensure_object_strategy(self):    # for cpyext
+        object_strategy = self.space.fromcache(ObjectDictStrategy)
+        if self.strategy  is not object_strategy:
+            self.strategy.switch_to_object_strategy(self)
+
 
 def _add_indirections():
     dict_methods = "getitem getitem_str setitem setdefault \
