@@ -166,7 +166,7 @@ def PyString_AsString(space, ref):
 
 @cpython_api([PyObject, rffi.CCHARPP, rffi.CArrayPtr(Py_ssize_t)], rffi.INT_real, error=-1)
 def PyString_AsStringAndSize(space, ref, buffer, length):
-    buffer[0] = Pystring_AsString(space, ref)
+    buffer[0] = PyString_AsString(space, ref)
     ref_str = rffi.cast(PyStringObject, ref)
     if length:
         length[0] = ref_str.c_ob_size
