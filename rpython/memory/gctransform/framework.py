@@ -491,7 +491,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
         if hasattr(GCClass, 'rawrefcount_init'):
             self.rawrefcount_init_ptr = getfn(
                 GCClass.rawrefcount_init,
-                [s_gc, SomePtr(GCClass.RAWREFCOUNT_DEALLOC)],
+                [s_gc, SomePtr(GCClass.RAWREFCOUNT_DEALLOC_TRIGGER)],
                 annmodel.s_None)
             self.rawrefcount_create_link_pypy_ptr = getfn(
                 GCClass.rawrefcount_create_link_pypy,
@@ -506,6 +506,9 @@ class BaseFrameworkGCTransformer(GCTransformer):
                 inline = True)
             self.rawrefcount_to_obj_ptr = getfn(
                 GCClass.rawrefcount_to_obj, [s_gc, SomeAddress()], s_gcref,
+                inline = True)
+            self.rawrefcount_next_dead_ptr = getfn(
+                GCClass.rawrefcount_next_dead, [s_gc], SomeAddress(),
                 inline = True)
 
         if GCClass.can_usually_pin_objects:
@@ -1255,7 +1258,7 @@ class BaseFrameworkGCTransformer(GCTransformer):
 
     def gct_gc_rawrefcount_init(self, hop):
         [v_fnptr] = hop.spaceop.args
-        assert v_fnptr.concretetype == self.GCClass.RAWREFCOUNT_DEALLOC
+        assert v_fnptr.concretetype == self.GCClass.RAWREFCOUNT_DEALLOC_TRIGGER
         hop.genop("direct_call",
                   [self.rawrefcount_init_ptr, self.c_const_gc, v_fnptr])
 
@@ -1289,6 +1292,12 @@ class BaseFrameworkGCTransformer(GCTransformer):
         assert hop.spaceop.result.concretetype == llmemory.GCREF
         hop.genop("direct_call",
                   [self.rawrefcount_to_obj_ptr, self.c_const_gc, v_pyobject],
+                  resultvar=hop.spaceop.result)
+
+    def gct_gc_rawrefcount_next_dead(self, hop):
+        assert hop.spaceop.result.concretetype == llmemory.Address
+        hop.genop("direct_call",
+                  [self.rawrefcount_next_dead_ptr, self.c_const_gc],
                   resultvar=hop.spaceop.result)
 
     def _set_into_gc_array_part(self, op):

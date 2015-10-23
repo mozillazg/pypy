@@ -98,7 +98,7 @@ class TestRawRefCount:
         lltype.free(ob, flavor='raw')
 
     def test_collect_o_dies(self):
-        dealloc = []; rawrefcount.init(dealloc.append)
+        trigger = []; rawrefcount.init(lambda: trigger.append(1))
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True)
         rawrefcount.create_link_pyobj(p, ob)
@@ -110,7 +110,10 @@ class TestRawRefCount:
         rawrefcount._collect()
         ob = wr_ob()
         assert ob is not None
-        assert dealloc == [ob]
+        assert trigger == [1]
+        assert rawrefcount.next_dead(PyObject) == ob
+        assert rawrefcount.next_dead(PyObject) == lltype.nullptr(PyObjectS)
+        assert rawrefcount.next_dead(PyObject) == lltype.nullptr(PyObjectS)
         assert rawrefcount._o_list == []
         assert wr_p() is None
         assert ob.c_ob_refcnt == 0
@@ -154,7 +157,7 @@ class TestRawRefCount:
         lltype.free(ob, flavor='raw')
 
     def test_collect_s_dies(self):
-        dealloc = []; rawrefcount.init(dealloc.append)
+        trigger = []; rawrefcount.init(lambda: trigger.append(1))
         p = W_Root(42)
         ob = lltype.malloc(PyObjectS, flavor='raw', zero=True)
         rawrefcount.create_link_pypy(p, ob)
@@ -166,7 +169,8 @@ class TestRawRefCount:
         rawrefcount._collect()
         ob = wr_ob()
         assert ob is not None
-        assert dealloc == [ob]
+        assert trigger == [1]
+        assert rawrefcount._d_list == [ob]
         assert rawrefcount._p_list == []
         assert wr_p() is None
         assert ob.c_ob_refcnt == 0
@@ -216,8 +220,8 @@ class TestTranslated(StandaloneTests):
             pass
         state = State()
         state.seen = []
-        def dealloc_callback(ob):
-            state.seen.append(ob)
+        def dealloc_trigger():
+            state.seen.append(1)
 
         def make_p():
             p = W_Root(42)
@@ -228,11 +232,11 @@ class TestTranslated(StandaloneTests):
             assert rawrefcount.to_obj(W_Root, ob) == p
             return ob, p
 
-        FTYPE = rawrefcount.RAWREFCOUNT_DEALLOC
+        FTYPE = rawrefcount.RAWREFCOUNT_DEALLOC_TRIGGER
 
         def entry_point(argv):
-            ll_dealloc_callback = llhelper(FTYPE, dealloc_callback)
-            rawrefcount.init(ll_dealloc_callback)
+            ll_dealloc_trigger_callback = llhelper(FTYPE, dealloc_trigger)
+            rawrefcount.init(ll_dealloc_trigger_callback)
             ob, p = make_p()
             if state.seen != []:
                 print "OB COLLECTED REALLY TOO SOON"
@@ -244,13 +248,18 @@ class TestTranslated(StandaloneTests):
             objectmodel.keepalive_until_here(p)
             p = None
             rgc.collect()
-            if state.seen == [llmemory.cast_ptr_to_adr(ob)]:
-                print "OK!"
-                lltype.free(ob, flavor='raw')
-                return 0
-            else:
+            if state.seen != [1]:
                 print "OB NOT COLLECTED"
                 return 1
+            if rawrefcount.next_dead(PyObject) != ob:
+                print "NEXT_DEAD != OB"
+                return 1
+            if rawrefcount.next_dead(PyObject) != lltype.nullptr(PyObjectS):
+                print "NEXT_DEAD second time != NULL"
+                return 1
+            print "OK!"
+            lltype.free(ob, flavor='raw')
+            return 0
 
         self.config = get_combined_translation_config(translating=True)
         self.config.translation.gc = "incminimark"

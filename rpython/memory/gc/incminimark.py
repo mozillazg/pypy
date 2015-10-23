@@ -706,6 +706,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 self.major_collection_step()
         else:
             self.minor_and_major_collection()
+        self.rrc_invoke_callback()
 
 
     def collect_and_reserve(self, totalsize):
@@ -783,12 +784,15 @@ class IncrementalMiniMarkGC(MovingGCBase):
                                self.threshold_reached()):  # ^^but only if still
                             self.minor_collection()        # the same collection
                             self.major_collection_step()
-                        #
-                        # The nursery might not be empty now, because of
-                        # execute_finalizers().  If it is almost full again,
-                        # we need to fix it with another call to minor_collection().
-                        if self.nursery_free + totalsize > self.nursery_top:
-                            self.minor_collection()
+                    #
+                    self.rrc_invoke_callback()
+                    #
+                    # The nursery might not be empty now, because of
+                    # execute_finalizers() or rrc_invoke_callback().
+                    # If it is almost full again,
+                    # we need to fix it with another call to minor_collection().
+                    if self.nursery_free + totalsize > self.nursery_top:
+                        self.minor_collection()
                     #
                 else:
                     ll_assert(minor_collection_count == 2,
@@ -861,6 +865,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             if self.threshold_reached(raw_malloc_usage(totalsize) +
                                       self.nursery_size // 2):
                 self.major_collection_step(raw_malloc_usage(totalsize))
+            self.rrc_invoke_callback()
             # note that this loop should not be infinite: when the
             # last step of a major collection is done but
             # threshold_reached(totalsize) is still true, then
@@ -2757,13 +2762,12 @@ class IncrementalMiniMarkGC(MovingGCBase):
                               ('ob_refcnt', lltype.Signed),
                               ('ob_pypy_link', lltype.Signed))
     PYOBJ_HDR_PTR = lltype.Ptr(PYOBJ_HDR)
-    RAWREFCOUNT_DEALLOC = lltype.Ptr(lltype.FuncType([llmemory.Address],
-                                                     lltype.Void))
+    RAWREFCOUNT_DEALLOC_TRIGGER = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
     def _pyobj(self, pyobjaddr):
         return llmemory.cast_adr_to_ptr(pyobjaddr, self.PYOBJ_HDR_PTR)
 
-    def rawrefcount_init(self, dealloc_callback):
+    def rawrefcount_init(self, dealloc_trigger_callback):
         # see pypy/doc/discussion/rawrefcount.rst
         if not self.rrc_enabled:
             self.rrc_p_list_young = self.AddressStack()
@@ -2775,7 +2779,8 @@ class IncrementalMiniMarkGC(MovingGCBase):
             p = lltype.malloc(self._ADDRARRAY, 1, flavor='raw',
                               track_allocation=False)
             self.rrc_singleaddr = llmemory.cast_ptr_to_adr(p)
-            self.rrc_dealloc_callback = dealloc_callback
+            self.rrc_dealloc_trigger_callback = dealloc_trigger_callback
+            self.rrc_dealloc_pending = self.AddressStack()
             self.rrc_enabled = True
 
     def check_no_more_rawrefcount_state(self):
@@ -2828,6 +2833,15 @@ class IncrementalMiniMarkGC(MovingGCBase):
         obj = llmemory.cast_int_to_adr(self._pyobj(pyobject).ob_pypy_link)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
+    def rawrefcount_next_dead(self):
+        if self.rrc_dealloc_pending.non_empty():
+            return self.rrc_dealloc_pending.pop()
+        return llmemory.NULL
+
+
+    def rrc_invoke_callback(self):
+        if self.rrc_enabled and self.rrc_dealloc_pending.non_empty():
+            self.rrc_dealloc_trigger_callback()
 
     def rrc_minor_collection_trace(self):
         length_estimate = self.rrc_p_dict_nurs.length()
@@ -2918,7 +2932,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self._pyobj(pyobject).ob_refcnt = rc
             self._pyobj(pyobject).ob_pypy_link = 0
             if rc == 0:
-                self.rrc_dealloc_callback(pyobject)
+                self.rrc_dealloc_pending.append(pyobject)
     _rrc_free._always_inline_ = True
 
     def rrc_major_collection_trace(self):

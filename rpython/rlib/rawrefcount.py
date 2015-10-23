@@ -11,8 +11,7 @@ from rpython.rlib import rgc
 REFCNT_FROM_PYPY       = 80
 REFCNT_FROM_PYPY_LIGHT = REFCNT_FROM_PYPY + (sys.maxint//2+1)
 
-RAWREFCOUNT_DEALLOC = lltype.Ptr(lltype.FuncType([llmemory.Address],
-                                                 lltype.Void))
+RAWREFCOUNT_DEALLOC_TRIGGER = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
 
 def _build_pypy_link(p):
@@ -21,14 +20,16 @@ def _build_pypy_link(p):
     return res
 
 
-def init(dealloc_callback=None):
+def init(dealloc_trigger_callback=None):
     "NOT_RPYTHON: set up rawrefcount with the GC"
-    global _p_list, _o_list, _adr2pypy, _pypy2ob, _dealloc_callback
+    global _p_list, _o_list, _adr2pypy, _pypy2ob
+    global _d_list, _dealloc_trigger_callback
     _p_list = []
     _o_list = []
     _adr2pypy = [None]
     _pypy2ob = {}
-    _dealloc_callback = dealloc_callback
+    _d_list = []
+    _dealloc_trigger_callback = dealloc_trigger_callback
 
 def create_link_pypy(p, ob):
     "NOT_RPYTHON: a link where the PyPy object contains some or all the data"
@@ -65,10 +66,17 @@ def to_obj(Class, ob):
     assert isinstance(p, Class)
     return p
 
+def next_dead(OB_PTR_TYPE):
+    if len(_d_list) == 0:
+        return lltype.nullptr(OB_PTR_TYPE.TO)
+    ob = _d_list.pop()
+    assert lltype.typeOf(ob) == OB_PTR_TYPE
+    return ob
+
 def _collect(track_allocation=True):
     """NOT_RPYTHON: for tests only.  Emulates a GC collection.
-    Will invoke dealloc_callback() for all objects whose _Py_Dealloc()
-    should be called.
+    Will invoke dealloc_trigger_callback() once if there are objects
+    whose _Py_Dealloc() should be called.
     """
     def detach(ob, wr_list):
         assert ob.c_ob_refcnt >= REFCNT_FROM_PYPY
@@ -123,7 +131,7 @@ def _collect(track_allocation=True):
                 ob.c_ob_refcnt -= REFCNT_FROM_PYPY
                 ob.c_ob_pypy_link = 0
                 if ob.c_ob_refcnt == 0:
-                    _dealloc_callback(ob)
+                    _d_list.append(ob)
             return None
 
     _p_list = new_p_list
@@ -135,11 +143,15 @@ def _collect(track_allocation=True):
     for ob, wr in wr_o_list:
         attach(ob, wr, _o_list)
 
+    if _d_list:
+        _dealloc_trigger_callback()
+
 _keepalive_forever = set()
 def _dont_free_any_more():
     "Make sure that any object still referenced won't be freed any more."
     for ob in _p_list + _o_list:
         _keepalive_forever.add(to_obj(object, ob))
+    del _d_list[:]
 
 # ____________________________________________________________
 
@@ -229,3 +241,18 @@ class Entry(ExtRegistryEntry):
         v_p = hop.genop('gc_rawrefcount_to_obj', [_unspec_ob(hop, v_ob)],
                         resulttype = llmemory.GCREF)
         return _spec_p(hop, v_p)
+
+class Entry(ExtRegistryEntry):
+    _about_ = next_dead
+
+    def compute_result_annotation(self, s_OB_PTR_TYPE):
+        from rpython.annotator import model as annmodel
+        from rpython.rtyper.llannotation import lltype_to_annotation
+        assert s_OB_PTR_TYPE.is_constant()
+        return lltype_to_annotation(s_OB_PTR_TYPE.const)
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        v_ob = hop.genop('gc_rawrefcount_next_dead', [],
+                         resulttype = llmemory.Address)
+        return _spec_ob(hop, v_ob)
