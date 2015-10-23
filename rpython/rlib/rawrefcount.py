@@ -21,7 +21,9 @@ def _build_pypy_link(p):
 
 
 def init(dealloc_trigger_callback=None):
-    "NOT_RPYTHON: set up rawrefcount with the GC"
+    """NOT_RPYTHON: set up rawrefcount with the GC.  This is only used
+    for tests; it should not be called at all during translation.
+    """
     global _p_list, _o_list, _adr2pypy, _pypy2ob
     global _d_list, _dealloc_trigger_callback
     _p_list = []

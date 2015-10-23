@@ -520,7 +520,7 @@ def type_fill_pypy(space, w_type, py_obj):
                 key = space.str_w(w_key)
                 dict_w[key] = space.getitem(w_org_dict, w_key)
             except OperationError, e:
-                if e.async(self):
+                if e.async(space):
                     raise
 
     add_operators(space, dict_w, pto)

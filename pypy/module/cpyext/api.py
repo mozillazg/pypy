@@ -30,7 +30,6 @@ from rpython.rlib.entrypoint import entrypoint_lowlevel
 from rpython.rlib.rposix import is_valid_fd, validate_fd
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.rlib.objectmodel import specialize
-from rpython.rlib.exports import export_struct
 from pypy.module import exceptions
 from pypy.module.exceptions import interp_exceptions
 # CPython 2.4 compatibility
@@ -210,12 +209,13 @@ class ApiFunction:
         assert len(self.argnames) == len(self.argtypes)
         self.gil = gil
         self.result_borrowed = result_borrowed
+        #
+        def get_llhelper(space):
+            return llhelper(self.functype, self.get_wrapper(space))
+        self.get_llhelper = get_llhelper
 
     def _freeze_(self):
         return True
-
-    def get_llhelper(self, space):
-        return llhelper(self.functype, self.get_wrapper(space))
 
     @specialize.memo()
     def get_wrapper(self, space):
@@ -387,9 +387,11 @@ def cpython_struct(name, fields, forward=None, level=1):
 INTERPLEVEL_API = {}     # only for untranslated tests
 FUNCTIONS = {}
 
+@specialize.memo()
 def constant_pyobj(space, name):
-    if we_are_translated():
-        ZZZ   # should return the C symbol "Py" + name, constant-folded
+    # returns the C symbol "Py" + name, constant-folded
+    if space.config.translating:
+        return rffi.CConstant("((PyObject *)&PyPy%s)" % (name,), PyObject)
     else:
         from pypy.module.cpyext.pyobject import as_pyobj
         w_obj = INTERPLEVEL_API[name]
@@ -800,6 +802,7 @@ def c_function_signature(db, func):
 def build_bridge(space):
     "NOT_RPYTHON"
     from pypy.module.cpyext.pyobject import setup_prebuilt_pyobj, _Py_Dealloc
+    from pypy.module.cpyext.pyobject import get_pyobj_and_incref
     from rpython.rlib import rawrefcount
 
     export_symbols = sorted(FUNCTIONS) + sorted(SYMBOLS_C) + sorted(GLOBALS)
@@ -881,7 +884,7 @@ def build_bridge(space):
         if isptr:
             ptr = ctypes.c_void_p.in_dll(bridge, name)
             if typ == 'PyObject*':
-                value = make_ref(space, w_obj)
+                value = get_pyobj_and_incref(space, w_obj)
             elif typ == 'PyDateTime_CAPI*':
                 value = w_obj
             else:
@@ -1097,10 +1100,9 @@ def build_eci(building_bridge, export_symbols, code):
 
 def setup_library(space):
     "NOT_RPYTHON"
-    from pypy.module.cpyext.pyobject import make_ref
-
     export_symbols = sorted(FUNCTIONS) + sorted(SYMBOLS_C) + sorted(GLOBALS)
     from rpython.translator.c.database import LowLevelDatabase
+    from pypy.module.cpyext.pyobject import get_pyobj_and_incref
     db = LowLevelDatabase()
 
     generate_macros(export_symbols, prefix='PyPy')
@@ -1116,21 +1118,21 @@ def setup_library(space):
     setup_va_functions(eci)
 
     # populate static data
-    for name, (typ, expr) in GLOBALS.iteritems():
-        name = name.replace("#", "")
-        if name.startswith('PyExc_'):
-            name = '_' + name
-        from pypy.module import cpyext
-        w_obj = eval(expr)
-        if typ in ('PyObject*', 'PyTypeObject*'):
-            struct_ptr = make_ref(space, w_obj)
-        elif typ == 'PyDateTime_CAPI*':
-            continue
-        else:
-            assert False, "Unknown static data: %s %s" % (typ, name)
-        struct = rffi.cast(get_structtype_for_ctype(typ), struct_ptr)._obj
-        struct._compilation_info = eci
-        export_struct(name, struct)
+    ## for name, (typ, expr) in GLOBALS.iteritems():
+    ##     name = name.replace("#", "")
+    ##     if name.startswith('PyExc_'):
+    ##         name = '_' + name
+    ##     from pypy.module import cpyext
+    ##     w_obj = eval(expr)
+    ##     if typ in ('PyObject*', 'PyTypeObject*'):
+    ##         struct_ptr = get_pyobj_and_incref(space, w_obj)
+    ##     elif typ == 'PyDateTime_CAPI*':
+    ##         continue
+    ##     else:
+    ##         assert False, "Unknown static data: %s %s" % (typ, name)
+    ##     struct = rffi.cast(get_structtype_for_ctype(typ), struct_ptr)._obj
+    ##     struct._compilation_info = eci
+    ##     export_struct(name, struct)
 
     for name, func in FUNCTIONS.iteritems():
         newname = mangle_name('PyPy', name) or name

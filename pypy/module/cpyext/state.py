@@ -3,6 +3,7 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.executioncontext import AsyncAction
 from rpython.rtyper.lltypesystem import lltype
+from rpython.rtyper.annlowlevel import llhelper
 from rpython.rlib.rdynload import DLLHANDLE
 from rpython.rlib import rawrefcount
 import sys
@@ -81,7 +82,8 @@ class State:
         from pypy.module.cpyext.api import INIT_FUNCTIONS
 
         if we_are_translated():
-            rawrefcount.init(self.dealloc_trigger)
+            rawrefcount.init(llhelper(rawrefcount.RAWREFCOUNT_DEALLOC_TRIGGER,
+                                      self.dealloc_trigger))
 
         setup_new_method_def(space)
 
