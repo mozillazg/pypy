@@ -20,7 +20,7 @@ from pypy.module.cpyext.methodobject import (
     PyDescr_NewWrapper, PyCFunction_NewEx, PyCFunction_typedef)
 from pypy.module.cpyext.modsupport import convert_method_defs
 from pypy.module.cpyext.pyobject import (
-    PyObject, create_ref, get_typedescr, from_pyobj, as_pyobj,
+    PyObject, create_ref, get_typedescr, from_pyobj, as_pyobj, as_xpyobj,
     setup_class_for_cpyext, get_pyobj_and_incref, get_pyobj_and_xincref,
     track_reference, Py_DecRef, RRC_PERMANENT)
 from pypy.module.cpyext.slotdefs import (
@@ -592,8 +592,8 @@ def finish_type_2(space, pto, w_type):
 def PyType_IsSubtype(space, a, b):
     """Return true if a is a subtype of b.
     """
-    w_type1 = from_ref(space, rffi.cast(PyObject, a))
-    w_type2 = from_ref(space, rffi.cast(PyObject, b))
+    w_type1 = from_pyobj(space, a)
+    w_type2 = from_pyobj(space, b)
     return int(abstract_issubclass_w(space, w_type1, w_type2)) #XXX correct?
 
 @cpython_api([PyTypeObjectPtr, Py_ssize_t], PyObject)
@@ -610,16 +610,14 @@ def PyType_GenericNew(space, type, w_args, w_kwds):
 def _PyType_Lookup(space, type, w_name):
     """Internal API to look for a name through the MRO.
     This returns a borrowed reference, and doesn't set an exception!"""
-    w_type = from_ref(space, rffi.cast(PyObject, type))
+    w_type = from_pyobj(space, type)
     assert isinstance(w_type, W_TypeObject)
 
-    if not space.isinstance_w(w_name, space.w_str):
-        return None
     name = space.str_w(w_name)
     w_obj = w_type.lookup(name)
     # return a borrowed ref.  assumes lookup() returns already-referenced
     # objs OR that the result will not be used for long
-    return as_pyobj(space, w_obj)
+    return as_xpyobj(space, w_obj)
 
 @cpython_api([PyTypeObjectPtr], lltype.Void)
 def PyType_Modified(space, w_obj):

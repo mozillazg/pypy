@@ -148,7 +148,7 @@ class PyObjDeallocAction(AsyncAction):
         from pypy.module.cpyext.pyobject import PyObject, _Py_Dealloc
 
         while True:
-            py_obj = rawrefcount.next_dead(PyObject.TO)
+            py_obj = rawrefcount.next_dead(PyObject)
             if not py_obj:
                 break
             _Py_Dealloc(self.space, py_obj)

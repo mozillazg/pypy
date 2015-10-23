@@ -597,8 +597,9 @@ def build_type_checkers3(type_name, cls=None):
         @specialize.memo()
         def get_w_type(space):
             return space.gettypeobject(cls.typedef)
-        def _PyXxx_Type():
-            ZZZ
+        def _PyXxx_Type(space):
+            from rpython.rlib.debug import fatalerror
+            fatalerror(py_type_name + " not implemented ZZZ")
     _PyXxx_Type = func_with_new_name(_PyXxx_Type, '_' + py_type_name)
 
     def check(space, py_obj):
@@ -701,6 +702,7 @@ def make_wrapper(space, callable, gil=None):
                             retval = as_pyobj(space, result)
                         else:
                             retval = get_pyobj_and_incref(space, result)
+                        retval = rffi.cast(callable.api_func.restype, retval)
                     else:
                         retval = lltype.nullptr(PyObject.TO)
             elif callable.api_func.restype is not lltype.Void:
@@ -719,6 +721,7 @@ def make_wrapper(space, callable, gil=None):
             else:
                 print str(e)
                 pypy_debug_catch_fatal_exception()
+                assert False
         rffi.stackcounter.stacks_counter -= 1
         if gil_release:
             before = rffi.aroundstate.before

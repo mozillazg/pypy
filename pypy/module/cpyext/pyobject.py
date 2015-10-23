@@ -21,8 +21,9 @@ from rpython.rlib import rawrefcount
 
 def make_typedescr(arg0, *args, **kwds):
     print "ZZZ: make_typedescr(%r)" % (arg0,)
-def get_typedescr(*args, **kwds):
-    ZZZ
+def get_typedescr(*args):
+    from rpython.rlib.debug import fatalerror
+    fatalerror("get_typedescr not fully removed ZZZ")
 
 RRC_PERMANENT       = 'P'  # the link pyobj<->pypy is permanent
 RRC_PERMANENT_LIGHT = 'p'  # same, but tp_dealloc can be replaced with free()
@@ -472,11 +473,7 @@ def Py_DecRef(space, obj):
 
 @cpython_api([PyObject], lltype.Void)
 def _Py_NewReference(space, obj):
-    ZZZ
     obj.c_ob_refcnt = 1
-    w_type = from_ref(space, rffi.cast(PyObject, obj.c_ob_type))
-    assert isinstance(w_type, W_TypeObject)
-    get_typedescr(w_type.instancetypedef).realize(space, obj)
 
 @cpython_api([PyObject], lltype.Void)
 def _Py_Dealloc(space, obj):

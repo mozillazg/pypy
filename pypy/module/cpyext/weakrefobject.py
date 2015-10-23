@@ -42,7 +42,7 @@ def PyWeakref_GET_OBJECT(space, w_ref):
     """Similar to PyWeakref_GetObject(), but implemented as a macro that does no
     error checking.
     """
-    return as_xpyobj(space.call_function(w_ref))   # borrowed
+    return as_xpyobj(space, space.call_function(w_ref))   # borrowed
 
 @cpython_api([PyObject], PyObject)
 def PyWeakref_LockObject(space, w_ref):

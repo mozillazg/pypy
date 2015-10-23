@@ -87,7 +87,7 @@ def PyTuple_SetItem(space, py_t, pos, py_obj):
         PyErr_BadInternalCall(space)
     py_tuple = rffi.cast(PyTupleObject, py_t)
     if pos < 0 or pos >= py_tuple.c_ob_size:
-        raise oefmt(w_IndexError, "tuple assignment index out of range")
+        raise oefmt(space.w_IndexError, "tuple assignment index out of range")
 
     olditem = py_tuple.c_ob_item[pos]
     py_tuple.c_ob_item[pos] = py_obj
@@ -102,7 +102,7 @@ def PyTuple_GetItem(space, py_t, pos):
         PyErr_BadInternalCall(space)
     py_tuple = rffi.cast(PyTupleObject, py_t)
     if pos < 0 or pos >= py_tuple.c_ob_size:
-        raise oefmt(w_IndexError, "tuple assignment index out of range")
+        raise oefmt(space.w_IndexError, "tuple assignment index out of range")
 
     return py_tuple.c_ob_item[pos]     # borrowed
 
