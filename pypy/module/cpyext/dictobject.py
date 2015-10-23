@@ -35,7 +35,7 @@ def PyDict_SetItem(space, w_dict, w_key, w_obj):
 def PyDict_DelItem(space, w_dict, w_key):
     if not isinstance(w_dict, W_DictMultiObject):
         PyErr_BadInternalCall(space)
-    w_dict.delitem(w_key)
+    space.delitem(w_dict, w_key)
     return 0
 
 @cpython_api([PyObject, CONST_STRING, PyObject], rffi.INT_real, error=-1)
@@ -64,7 +64,7 @@ def PyDict_DelItemString(space, w_dict, key_ptr):
     if not isinstance(w_dict, W_DictMultiObject):
         PyErr_BadInternalCall(space)
     key = rffi.charp2str(key_ptr)
-    w_dict.delitem(space.wrap(key))
+    space.delitem(w_dict, space.wrap(key))
     return 0
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
