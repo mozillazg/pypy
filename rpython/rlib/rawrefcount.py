@@ -135,6 +135,12 @@ def _collect(track_allocation=True):
     for ob, wr in wr_o_list:
         attach(ob, wr, _o_list)
 
+_keepalive_forever = set()
+def _dont_free_any_more():
+    "Make sure that any object still referenced won't be freed any more."
+    for ob in _p_list + _o_list:
+        _keepalive_forever.add(to_obj(object, ob))
+
 # ____________________________________________________________
 
 

@@ -569,7 +569,7 @@ class _parentable_mixin(object):
             raise Exception("internal ll2ctypes error - "
                             "double conversion from lltype to ctypes?")
         # XXX don't store here immortal structures
-        print "LL2CTYPES:", self._getid()
+        print "LL2CTYPES:", addr
         ALLOCATED[addr] = self
 
     def _addressof_storage(self):
@@ -579,10 +579,10 @@ class _parentable_mixin(object):
         return intmask(ctypes.cast(self._storage, ctypes.c_void_p).value)
 
     def _free(self):
-        print "LL2C FREE:", self._getid()
         self._check()   # no double-frees
         # allow the ctypes object to go away now
         addr = ctypes.cast(self._storage, ctypes.c_void_p).value
+        print "LL2C FREE:", addr
         try:
             del ALLOCATED[addr]
         except KeyError:

@@ -18,7 +18,6 @@ from pypy.module.cpyext.pyobject import RefcountState, debug_collect
 from pypy.module.cpyext.pyobject import Py_DecRef
 from rpython.tool.identity_dict import identity_dict
 from rpython.tool import leakfinder
-from rpython.rlib import rawrefcount
 
 
 def setup_module(module):
