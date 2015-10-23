@@ -22,7 +22,7 @@ from pypy.module.cpyext.modsupport import convert_method_defs
 from pypy.module.cpyext.pyobject import (
     PyObject, create_ref, get_typedescr, from_pyobj, as_pyobj,
     setup_class_for_cpyext, get_pyobj_and_incref, get_pyobj_and_xincref,
-    track_reference, RefcountState, Py_DecRef, RRC_PERMANENT)
+    track_reference, Py_DecRef, RRC_PERMANENT)
 from pypy.module.cpyext.slotdefs import (
     slotdefs_for_tp_slots, slotdefs_for_wrappers, get_slot_tp_function)
 from pypy.module.cpyext.state import State

@@ -23,7 +23,6 @@ def make_typedescr(arg0, *args, **kwds):
     print "ZZZ: make_typedescr(%r)" % (arg0,)
 def get_typedescr(*args, **kwds):
     ZZZ
-RefcountState = "ZZZ"
 
 RRC_PERMANENT       = 'P'  # the link pyobj<->pypy is permanent
 RRC_PERMANENT_LIGHT = 'p'  # same, but tp_dealloc can be replaced with free()

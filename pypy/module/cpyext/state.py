@@ -75,11 +75,11 @@ class State:
         "This function is called when the program really starts"
 
         from pypy.module.cpyext.typeobject import setup_new_method_def
-        from pypy.module.cpyext.pyobject import RefcountState
         from pypy.module.cpyext.api import INIT_FUNCTIONS
 
         setup_new_method_def(space)
         if we_are_translated():
+            ZZZ
             refcountstate = space.fromcache(RefcountState)
             refcountstate.init_r2w_from_w2r()
             rawrefcount.init(lambda ob: ZZZ)

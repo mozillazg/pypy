@@ -1,6 +1,6 @@
 import py
 
-from pypy.module.cpyext.pyobject import PyObject, PyObjectP, make_ref, from_ref
+from pypy.module.cpyext.pyobject import PyObject, PyObjectP
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from rpython.rtyper.lltypesystem import rffi, lltype
 

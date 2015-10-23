@@ -1,7 +1,7 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.test.test_api import BaseApiTest
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
+from pypy.module.cpyext.pyobject import PyObject, as_pyobj, from_pyobj
 from pypy.module.cpyext.funcobject import (
     PyFunctionObject, PyCodeObject, CODE_FLAGS)
 from pypy.interpreter.function import Function, Method
@@ -15,12 +15,11 @@ class TestFunctionObject(BaseApiTest):
             def f(): pass
             return f
         """)
-        ref = make_ref(space, w_function)
-        assert (from_ref(space, rffi.cast(PyObject, ref.c_ob_type)) is
+        ref = as_pyobj(space, w_function)
+        assert (from_pyobj(space, rffi.cast(PyObject, ref.c_ob_type)) is
                 space.gettypeobject(Function.typedef))
         assert "f" == space.unwrap(
-           from_ref(space, rffi.cast(PyFunctionObject, ref).c_func_name))
-        api.Py_DecRef(ref)
+           from_pyobj(space, rffi.cast(PyFunctionObject, ref).c_func_name))
 
     def test_method(self, space, api):
         w_method = space.appexec([], """():
@@ -48,13 +47,12 @@ class TestFunctionObject(BaseApiTest):
         w_code = api.PyFunction_GetCode(w_function)
         assert w_code.co_name == "func"
 
-        ref = make_ref(space, w_code)
-        assert (from_ref(space, rffi.cast(PyObject, ref.c_ob_type)) is
+        ref = as_pyobj(space, w_code)
+        assert (from_pyobj(space, rffi.cast(PyObject, ref.c_ob_type)) is
                 space.gettypeobject(PyCode.typedef))
         assert "func" == space.unwrap(
-           from_ref(space, rffi.cast(PyCodeObject, ref).c_co_name))
+           from_pyobj(space, rffi.cast(PyCodeObject, ref).c_co_name))
         assert 3 == rffi.cast(PyCodeObject, ref).c_co_argcount
-        api.Py_DecRef(ref)
 
     def test_co_flags(self, space, api):
         def get_flags(signature, body="pass"):
@@ -62,9 +60,8 @@ class TestFunctionObject(BaseApiTest):
                 def func(%s): %s
                 return func.__code__
             """ % (signature, body))
-            ref = make_ref(space, w_code)
+            ref = as_pyobj(space, w_code)
             co_flags = rffi.cast(PyCodeObject, ref).c_co_flags
-            api.Py_DecRef(ref)
             return co_flags
         assert get_flags("x") == CO_NESTED | CO_OPTIMIZED | CO_NEWLOCALS
         assert get_flags("x", "exec x") == CO_NESTED | CO_NEWLOCALS

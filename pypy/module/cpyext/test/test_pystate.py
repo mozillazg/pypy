@@ -2,7 +2,6 @@ from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from rpython.rtyper.lltypesystem.lltype import nullptr
 from pypy.module.cpyext.pystate import PyInterpreterState, PyThreadState
-from pypy.module.cpyext.pyobject import from_ref
 from rpython.rtyper.lltypesystem import lltype
 from pypy.module.cpyext.test.test_cpyext import LeakCheckingTest, freeze_refcnts
 from pypy.module.cpyext.pystate import PyThreadState_Get, PyInterpreterState_Head

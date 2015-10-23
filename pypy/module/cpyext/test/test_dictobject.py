@@ -1,7 +1,7 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.api import Py_ssize_tP, PyObjectP
-from pypy.module.cpyext.pyobject import make_ref, from_ref
+from pypy.module.cpyext.pyobject import from_pyobj
 from pypy.interpreter.error import OperationError
 
 class TestDictObject(BaseApiTest):
@@ -99,8 +99,8 @@ class TestDictObject(BaseApiTest):
         try:
             w_copy = space.newdict()
             while api.PyDict_Next(w_dict, ppos, pkey, pvalue):
-                w_key = from_ref(space, pkey[0])
-                w_value = from_ref(space, pvalue[0])
+                w_key = from_pyobj(space, pkey[0])
+                w_value = from_pyobj(space, pvalue[0])
                 space.setitem(w_copy, w_key, w_value)
         finally:
             lltype.free(ppos, flavor='raw')
@@ -125,11 +125,11 @@ class TestDictObject(BaseApiTest):
         try:
             ppos[0] = 0
             while api.PyDict_Next(w_dict, ppos, pkey, None):
-                w_key = from_ref(space, pkey[0])
+                w_key = from_pyobj(space, pkey[0])
                 keys_w.append(w_key)
             ppos[0] = 0
             while api.PyDict_Next(w_dict, ppos, None, pvalue):
-                w_value = from_ref(space, pvalue[0])
+                w_value = from_pyobj(space, pvalue[0])
                 values_w.append(w_value)
         finally:
             lltype.free(ppos, flavor='raw')

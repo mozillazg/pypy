@@ -1,7 +1,7 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.test.test_api import BaseApiTest
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
+from pypy.module.cpyext.pyobject import PyObject, as_pyobj, from_pyobj
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr
 
 import py
@@ -332,13 +332,11 @@ class TestTypes(BaseApiTest):
                 pass
             return A
             """)
-        ref = make_ref(space, w_class)
+        ref = as_pyobj(space, w_class)
 
         py_type = rffi.cast(PyTypeObjectPtr, ref)
         assert py_type.c_tp_alloc
-        assert from_ref(space, py_type.c_tp_mro).wrappeditems is w_class.mro_w
-
-        api.Py_DecRef(ref)
+        assert from_pyobj(space, py_type.c_tp_mro).wrappeditems is w_class.mro_w
 
     def test_multiple_inheritance(self, space, api):
         w_class = space.appexec([], """():
@@ -350,8 +348,7 @@ class TestTypes(BaseApiTest):
                 pass
             return C
             """)
-        ref = make_ref(space, w_class)
-        api.Py_DecRef(ref)
+        ref = as_pyobj(space, w_class)
 
     def test_lookup(self, space, api):
         w_type = space.w_str
@@ -366,8 +363,7 @@ class TestTypes(BaseApiTest):
         w_obj = space.appexec([], """():
             import _numpypy
             return _numpypy.multiarray.dtype('int64').type(2)""")
-        ref = make_ref(space, w_obj)
-        api.Py_DecRef(ref)
+        ref = as_pyobj(space, w_obj)
 
 class AppTestSlots(AppTestCpythonExtensionBase):
     def test_some_slots(self):

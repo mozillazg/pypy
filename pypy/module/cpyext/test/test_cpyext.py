@@ -14,7 +14,7 @@ from rpython.translator.gensupp import uniquemodulename
 from rpython.tool.udir import udir
 from pypy.module.cpyext import api
 from pypy.module.cpyext.state import State
-from pypy.module.cpyext.pyobject import RefcountState, debug_collect
+from pypy.module.cpyext.pyobject import debug_collect
 from pypy.module.cpyext.pyobject import Py_DecRef
 from rpython.tool.identity_dict import identity_dict
 from rpython.tool import leakfinder
@@ -112,6 +112,7 @@ class LeakCheckingTest(object):
 
     @staticmethod
     def cleanup_references(space):
+        ZZZ
         state = space.fromcache(RefcountState)
 
         import gc; gc.collect()

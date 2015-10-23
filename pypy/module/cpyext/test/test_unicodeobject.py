@@ -4,7 +4,7 @@ from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.unicodeobject import (
     Py_UNICODE, PyUnicodeObject, new_empty_unicode)
 from pypy.module.cpyext.api import PyObjectP, PyObject
-from pypy.module.cpyext.pyobject import Py_DecRef, from_ref
+from pypy.module.cpyext.pyobject import Py_DecRef, from_pyobj
 from rpython.rtyper.lltypesystem import rffi, lltype
 import sys, py
 
@@ -147,7 +147,7 @@ class TestUnicode(BaseApiTest):
         assert space.unwrap(w_res) == u'späm'
 
         res = api.PyUnicode_FromStringAndSize(s, 4)
-        w_res = from_ref(space, res)
+        w_res = from_pyobj(space, res)
         api.Py_DecRef(res)
         assert space.unwrap(w_res) == u'spä'
         rffi.free_charp(s)
