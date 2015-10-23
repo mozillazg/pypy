@@ -388,14 +388,15 @@ INTERPLEVEL_API = {}     # only for untranslated tests
 FUNCTIONS = {}
 
 @specialize.memo()
-def constant_pyobj(space, name):
-    # returns the C symbol "Py" + name, constant-folded
+def constant_pytypeobj(space, name):
+    # returns the C symbol given by "name", constant-folded,
+    # of type "PyTypeObject *"
     if space.config.translating:
-        return rffi.CConstant("((PyObject *)&PyPy%s)" % (name,), PyObject)
+        return rffi.CConstant("(&%s)" % (name,), PyTypeObjectPtr)
     else:
         from pypy.module.cpyext.pyobject import as_pyobj
         w_obj = INTERPLEVEL_API[name]
-        return as_pyobj(space, w_obj)
+        return rffi.cast(PyTypeObjectPtr, as_pyobj(space, w_obj))
 
 # These are C symbols which cpyext will export, but which are defined in .c
 # files somewhere in the implementation of cpyext (rather than being defined in
@@ -591,8 +592,7 @@ def build_type_checkers3(type_name, cls=None):
         def get_w_type(space):
             return getattr(space, cls)
         def _PyXxx_Type(space):
-            return rffi.cast(PyTypeObjectPtr,
-                             constant_pyobj(space, py_type_name))
+            return constant_pytypeobj(space, py_type_name)
     else:
         @specialize.memo()
         def get_w_type(space):
@@ -600,6 +600,7 @@ def build_type_checkers3(type_name, cls=None):
         def _PyXxx_Type(space):
             from rpython.rlib.debug import fatalerror
             fatalerror(py_type_name + " not implemented ZZZ")
+            assert 0
     _PyXxx_Type = func_with_new_name(_PyXxx_Type, '_' + py_type_name)
 
     def check(space, py_obj):
@@ -1090,7 +1091,7 @@ def build_eci(building_bridge, export_symbols, code):
                                source_dir / "capsule.c",
                                source_dir / "pysignals.c",
                                source_dir / "pythread.c",
-                               source_dir / "ndarrayobject.c",
+                               #source_dir / "ndarrayobject.c", ZZZ
                                source_dir / "missing.c",
                                ],
         separate_module_sources=separate_module_sources,

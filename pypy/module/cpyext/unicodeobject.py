@@ -48,6 +48,9 @@ def new_empty_unicode(space, length):
     interpreter object.  The buffer may be mutated, until unicode_realize() is
     called.
     """
+    from rpython.rlib.debug import fatalerror
+    fatalerror("new_empty_unicode not implemented ZZZ")
+    assert 0
     typedescr = get_typedescr(space.w_unicode.instancetypedef)
     py_obj = typedescr.allocate(space, space.w_unicode)
     py_uni = rffi.cast(PyUnicodeObject, py_obj)

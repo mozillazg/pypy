@@ -61,7 +61,7 @@ def setup_class_for_cpyext(W_Class, **kw):
                 ob = lltype.malloc(tp_basestruct, flavor='raw',
                                    track_allocation=False)
                 return ob, RRC_PERMANENT_LIGHT
-        tp_alloc_pyobj._always_inline_ = True
+        tp_alloc_pyobj._always_inline_ = 'try'
         #
         if not tp_fill_pyobj:
             def tp_fill_pyobj(space, w_obj, py_obj):
@@ -100,7 +100,7 @@ def setup_class_for_cpyext(W_Class, **kw):
                     if alloc_pypy_light_if(space, pyobj):
                         strength = RRC_TRANSIENT_LIGHT
                 return w_obj, strength
-        tp_alloc_pypy._always_inline_ = True
+        tp_alloc_pypy._always_inline_ = 'try'
         #
         if not tp_fill_pypy:
             def tp_fill_pypy(space, w_obj, pyobj):
@@ -160,7 +160,7 @@ def rawrefcount_init_link(w_obj, ob, strength):
         rawrefcount.create_link_pyobj(w_obj, ob)
     #
     else:
-        assert False, "rawrefcount_init_link: strength=%r" % (strength,)
+        assert False, "rawrefcount_init_link: strength=%s" % (strength,)
 
 
 def setup_prebuilt_pyobj(w_obj, py_obj):
@@ -317,7 +317,7 @@ def as_pyobj(space, w_obj):
     """
     assert not is_pyobj(w_obj)
     return w_obj.cpyext_as_pyobj(space)
-as_pyobj._always_inline_ = True
+as_pyobj._always_inline_ = 'try'
 INTERPLEVEL_API['as_pyobj'] = as_pyobj
 
 def as_xpyobj(space, w_obj):
@@ -341,7 +341,7 @@ def from_pyobj(space, pyobj):
     if w_obj is None:
         w_obj = _create_w_obj_from_pyobj(space, pyobj)
     return w_obj
-from_pyobj._always_inline_ = True
+from_pyobj._always_inline_ = 'try'
 INTERPLEVEL_API['from_pyobj'] = from_pyobj
 
 @specialize.ll()
