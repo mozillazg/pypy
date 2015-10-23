@@ -2,7 +2,7 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (
     cpython_api, CANNOT_FAIL, build_type_checkers, Py_ssize_t,
     Py_ssize_tP, CONST_STRING)
-from pypy.module.cpyext.pyobject import PyObject, PyObjectP
+from pypy.module.cpyext.pyobject import PyObject, PyObjectP, as_xpyobj
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
@@ -68,13 +68,13 @@ def PyDict_DelItemString(space, w_dict, key_ptr):
     return 0
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
-def PyDict_Size(space, w_obj):
+def PyDict_Size(space, w_dict):
     """
     Return the number of items in the dictionary.  This is equivalent to
     len(p) on a dictionary."""
     if not isinstance(w_dict, W_DictMultiObject):
         PyErr_BadInternalCall(space)
-    return space.wrap(w_dict.length())
+    return w_dict.length()
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyDict_Contains(space, w_obj, w_value):
