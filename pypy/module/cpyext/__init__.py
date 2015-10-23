@@ -16,7 +16,7 @@ class Module(MixedModule):
         space.fromcache(State).startup(space)
 
     def register_atexit(self, function):
-        if len(self.atexit_funcs) >= 32:
+        if len(self.atexit_funcs) >= 32:      # XXX uh?
             raise ValueError("cannot register more than 32 atexit functions")
         self.atexit_funcs.append(function)
 

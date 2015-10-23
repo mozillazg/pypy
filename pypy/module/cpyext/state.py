@@ -1,6 +1,7 @@
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.executioncontext import AsyncAction
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rlib.rdynload import DLLHANDLE
 from rpython.rlib import rawrefcount
@@ -12,6 +13,8 @@ class State:
         self.reset()
         self.programname = lltype.nullptr(rffi.CCHARP.TO)
         self.version = lltype.nullptr(rffi.CCHARP.TO)
+        pyobj_dealloc_action = PyObjDeallocAction(space)
+        self.dealloc_trigger = lambda: pyobj_dealloc_action.fire()
 
     def reset(self):
         from pypy.module.cpyext.modsupport import PyMethodDef
@@ -77,12 +80,10 @@ class State:
         from pypy.module.cpyext.typeobject import setup_new_method_def
         from pypy.module.cpyext.api import INIT_FUNCTIONS
 
-        setup_new_method_def(space)
         if we_are_translated():
-            ZZZ
-            refcountstate = space.fromcache(RefcountState)
-            refcountstate.init_r2w_from_w2r()
-            rawrefcount.init(lambda ob: ZZZ)
+            rawrefcount.init(self.dealloc_trigger)
+
+        setup_new_method_def(space)
 
         for func in INIT_FUNCTIONS:
             func(space)
@@ -135,3 +136,17 @@ class State:
         w_dict = w_mod.getdict(space)
         w_copy = space.call_method(w_dict, 'copy')
         self.extensions[path] = w_copy
+
+
+class PyObjDeallocAction(AsyncAction):
+    """An action that invokes _Py_Dealloc() on the dying PyObjects.
+    """
+
+    def perform(self, executioncontext, frame):
+        from pypy.module.cpyext.pyobject import PyObject, _Py_Dealloc
+
+        while True:
+            py_obj = rawrefcount.next_dead(PyObject.TO)
+            if not py_obj:
+                break
+            _Py_Dealloc(self.space, py_obj)
