@@ -1,6 +1,7 @@
 from pypy.module.cpyext.api import (
     cpython_api, generic_cpy_call, CANNOT_FAIL, CConfig, cpython_struct)
-from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, make_ref, from_ref
+from pypy.module.cpyext.pyobject import (
+    PyObject, Py_DecRef, get_pyobj_and_incref)
 from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.rlib import rthread
 
@@ -112,7 +113,7 @@ class InterpreterState(object):
         capsule = ThreadStateCapsule(space)
         ts = capsule.memory
         ts.c_interp = self.interpreter_state
-        ts.c_dict = make_ref(space, space.newdict())
+        ts.c_dict = get_pyobj_and_incref(space, space.newdict())
         return capsule
 
 

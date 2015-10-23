@@ -3,7 +3,7 @@ from pypy.module.cpyext.api import (
     PyObjectFields, generic_cpy_call, CONST_STRING, CANNOT_FAIL, Py_ssize_t,
     cpython_api, bootstrap_function, cpython_struct, build_type_checkers)
 from pypy.module.cpyext.pyobject import (
-    PyObject, make_ref, from_ref, Py_DecRef, make_typedescr, borrow_from)
+    PyObject, Py_DecRef, make_typedescr)
 from pypy.module.cpyext.frameobject import PyFrameObject
 from rpython.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError
@@ -36,6 +36,7 @@ def traceback_attach(space, py_obj, w_obj):
         w_next_traceback = None
     else:
         w_next_traceback = space.wrap(traceback.next)
+    ZZZ
     py_traceback.c_tb_next = rffi.cast(PyTracebackObject, make_ref(space, w_next_traceback))
     py_traceback.c_tb_frame = rffi.cast(PyFrameObject, make_ref(space, space.wrap(traceback.frame)))
     rffi.setintfield(py_traceback, 'c_tb_lasti', traceback.lasti)

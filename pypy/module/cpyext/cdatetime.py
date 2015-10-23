@@ -1,5 +1,5 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
-from pypy.module.cpyext.pyobject import PyObject, make_ref
+from pypy.module.cpyext.pyobject import PyObject, get_pyobj_and_incref
 from pypy.module.cpyext.api import (cpython_api, CANNOT_FAIL, cpython_struct,
     PyObjectFields)
 from pypy.module.cpyext.import_ import PyImport_Import
@@ -26,19 +26,19 @@ def _PyDateTime_Import(space):
 
     w_type = space.getattr(w_datetime, space.wrap("date"))
     datetimeAPI.c_DateType = rffi.cast(
-        PyTypeObjectPtr, make_ref(space, w_type))
+        PyTypeObjectPtr, get_pyobj_and_incref(space, w_type))
 
     w_type = space.getattr(w_datetime, space.wrap("datetime"))
     datetimeAPI.c_DateTimeType = rffi.cast(
-        PyTypeObjectPtr, make_ref(space, w_type))
+        PyTypeObjectPtr, get_pyobj_and_incref(space, w_type))
 
     w_type = space.getattr(w_datetime, space.wrap("time"))
     datetimeAPI.c_TimeType = rffi.cast(
-        PyTypeObjectPtr, make_ref(space, w_type))
+        PyTypeObjectPtr, get_pyobj_and_incref(space, w_type))
 
     w_type = space.getattr(w_datetime, space.wrap("timedelta"))
     datetimeAPI.c_DeltaType = rffi.cast(
-        PyTypeObjectPtr, make_ref(space, w_type))
+        PyTypeObjectPtr, get_pyobj_and_incref(space, w_type))
 
     return datetimeAPI
 

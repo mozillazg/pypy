@@ -353,6 +353,7 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
             interp2app(record_imported_module))
         self.w_here = self.space.wrap(
             str(py.path.local(pypydir)) + '/module/cpyext/test/')
+        self.w_debug_collect = self.space.wrap(interp2app(debug_collect))
 
 
         # create the file lock before we count allocations

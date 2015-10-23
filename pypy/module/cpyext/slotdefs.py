@@ -11,7 +11,7 @@ from pypy.module.cpyext.typeobjectdefs import (
     ssizessizeargfunc, ssizeobjargproc, iternextfunc, initproc, richcmpfunc,
     cmpfunc, hashfunc, descrgetfunc, descrsetfunc, objobjproc, objobjargproc,
     readbufferproc)
-from pypy.module.cpyext.pyobject import from_ref
+from pypy.module.cpyext.pyobject import from_pyobj
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, oefmt
@@ -311,8 +311,7 @@ def wrap_cmpfunc(space, w_self, w_args, func):
 @cpython_api([PyTypeObjectPtr, PyObject, PyObject], PyObject, external=False)
 def slot_tp_new(space, type, w_args, w_kwds):
     from pypy.module.cpyext.tupleobject import PyTuple_Check
-    pyo = rffi.cast(PyObject, type)
-    w_type = from_ref(space, pyo)
+    w_type = from_pyobj(space, type)
     w_func = space.getattr(w_type, space.wrap("__new__"))
     assert PyTuple_Check(space, w_args)
     args_w = [w_type] + space.fixedview(w_args)

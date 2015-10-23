@@ -1,7 +1,7 @@
 from pypy.interpreter import module
 from pypy.module.cpyext.api import (
     generic_cpy_call, cpython_api, PyObject, CONST_STRING)
-from pypy.module.cpyext.pyobject import borrow_from
+from pypy.module.cpyext.pyobject import as_pyobj
 from rpython.rtyper.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.module import Module
@@ -74,15 +74,16 @@ def PyImport_AddModule(space, name):
     w_mod = check_sys_modules_w(space, modulename)
     if not w_mod or space.is_w(w_mod, space.w_None):
         w_mod = Module(space, space.wrap(modulename))
-        XXX - "insert it into sys.modules!"
-    return borrow_from(None, w_mod)
+        space.setitem(space.sys.get('modules'), space.wrap(modulename), w_mod)
+    # return a borrowed ref --- assumes one copy in sys.modules
+    return as_pyobj(space, w_mod)
 
 @cpython_api([], PyObject)
 def PyImport_GetModuleDict(space):
     """Return the dictionary used for the module administration (a.k.a.
     sys.modules).  Note that this is a per-interpreter variable."""
     w_modulesDict = space.sys.get('modules')
-    return borrow_from(None, w_modulesDict)
+    return as_pyobj(space, w_modulesDict)     # borrowed ref
 
 @cpython_api([rffi.CCHARP, PyObject], PyObject)
 def PyImport_ExecCodeModule(space, name, w_code):

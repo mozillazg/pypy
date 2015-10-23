@@ -461,35 +461,6 @@ INTERPLEVEL_API['xdecref'] = xdecref
 
 # ----------
 
-def make_ref(space, w_obj):
-    ZZZ
-
-def from_ref(space, ref):
-    """
-    Finds the interpreter object corresponding to the given reference.  If the
-    object is not yet realized (see stringobject.py), creates it.
-    """
-    assert lltype.typeOf(ref) == PyObject
-    ZZZ
-    if not ref:
-        return None
-    state = space.fromcache(RefcountState)
-    ptr = rffi.cast(ADDR, ref)
-
-    try:
-        return state.py_objects_r2w[ptr]
-    except KeyError:
-        pass
-
-    # This reference is not yet a real interpreter object.
-    # Realize it.
-    ref_type = rffi.cast(PyObject, ref.c_ob_type)
-    if ref_type == ref: # recursion!
-        raise InvalidPointerException(str(ref))
-    w_type = from_ref(space, ref_type)
-    assert isinstance(w_type, W_TypeObject)
-    return get_typedescr(w_type.instancetypedef).realize(space, ref)
-
 
 @cpython_api([PyObject], lltype.Void)
 def Py_IncRef(space, obj):
@@ -516,51 +487,6 @@ def _Py_Dealloc(space, obj):
     #      "'s type which is", rffi.charp2str(pto.c_tp_name)
     generic_cpy_call(space, pto.c_tp_dealloc, obj)
 
-
-#___________________________________________________________
-# Support for borrowed references
-
-def make_borrowed_ref(space, w_container, w_borrowed):
-    """
-    Create a borrowed reference, which will live as long as the container
-    has a living reference (as a PyObject!)
-    """
-    ZZZ
-    if w_borrowed is None:
-        return lltype.nullptr(PyObject.TO)
-
-    state = space.fromcache(RefcountState)
-    return state.make_borrowed(w_container, w_borrowed)
-
-class Reference:
-    def __init__(self, pyobj):
-        ZZZ
-        assert not isinstance(pyobj, W_Root)
-        self.pyobj = pyobj
-
-    def get_ref(self, space):
-        return self.pyobj
-
-    def get_wrapped(self, space):
-        return from_ref(space, self.pyobj)
-
-class BorrowPair(Reference):
-    """
-    Delays the creation of a borrowed reference.
-    """
-    def __init__(self, w_container, w_borrowed):
-        ZZZ
-        self.w_container = w_container
-        self.w_borrowed = w_borrowed
-
-    def get_ref(self, space):
-        return make_borrowed_ref(space, self.w_container, self.w_borrowed)
-
-    def get_wrapped(self, space):
-        return self.w_borrowed
-
-def borrow_from(container, borrowed):
-    return BorrowPair(container, borrowed)
 
 #___________________________________________________________
 

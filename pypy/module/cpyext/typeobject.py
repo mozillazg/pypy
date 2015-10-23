@@ -20,9 +20,9 @@ from pypy.module.cpyext.methodobject import (
     PyDescr_NewWrapper, PyCFunction_NewEx, PyCFunction_typedef)
 from pypy.module.cpyext.modsupport import convert_method_defs
 from pypy.module.cpyext.pyobject import (
-    PyObject, make_ref, create_ref, get_typedescr, from_pyobj, as_pyobj,
+    PyObject, create_ref, get_typedescr, from_pyobj, as_pyobj,
     setup_class_for_cpyext, get_pyobj_and_incref, get_pyobj_and_xincref,
-    track_reference, RefcountState, borrow_from, Py_DecRef, RRC_PERMANENT)
+    track_reference, RefcountState, Py_DecRef, RRC_PERMANENT)
 from pypy.module.cpyext.slotdefs import (
     slotdefs_for_tp_slots, slotdefs_for_wrappers, get_slot_tp_function)
 from pypy.module.cpyext.state import State
@@ -376,6 +376,7 @@ def type_dealloc(space, obj):
 
 
 def type_alloc(space, w_metatype):
+    ZZZ
     metatype = rffi.cast(PyTypeObjectPtr, make_ref(space, w_metatype))
     # Don't increase refcount for non-heaptypes
     if metatype:
@@ -428,7 +429,7 @@ def type_fill_pyobj(space, w_type, pto):
     if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         w_typename = space.getattr(w_type, space.wrap('__name__'))
         heaptype = rffi.cast(PyHeapTypeObject, pto)
-        heaptype.c_ht_name = make_ref(space, w_typename)
+        heaptype.c_ht_name = get_pyobj_and_incref(space, w_typename)
         from pypy.module.cpyext.stringobject import PyString_AsString
         pto.c_tp_name = PyString_AsString(space, heaptype.c_ht_name)
     else:
@@ -616,7 +617,9 @@ def _PyType_Lookup(space, type, w_name):
         return None
     name = space.str_w(w_name)
     w_obj = w_type.lookup(name)
-    return borrow_from(w_type, w_obj)
+    # return a borrowed ref.  assumes lookup() returns already-referenced
+    # objs OR that the result will not be used for long
+    return as_pyobj(space, w_obj)
 
 @cpython_api([PyTypeObjectPtr], lltype.Void)
 def PyType_Modified(space, w_obj):

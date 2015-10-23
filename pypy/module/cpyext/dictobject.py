@@ -2,10 +2,11 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (
     cpython_api, CANNOT_FAIL, build_type_checkers, Py_ssize_t,
     Py_ssize_tP, CONST_STRING)
-from pypy.module.cpyext.pyobject import PyObject, PyObjectP, borrow_from
+from pypy.module.cpyext.pyobject import PyObject, PyObjectP
 from pypy.module.cpyext.pyobject import RefcountState
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
+from pypy.objspace.std.dictmultiobject import W_DictMultiObject
 from rpython.rlib.objectmodel import specialize
 
 @cpython_api([], PyObject)
@@ -16,68 +17,65 @@ PyDict_Check, PyDict_CheckExact = build_type_checkers("Dict")
 
 @cpython_api([PyObject, PyObject], PyObject, error=CANNOT_FAIL)
 def PyDict_GetItem(space, w_dict, w_key):
-    try:
-        w_res = space.getitem(w_dict, w_key)
-    except:
-        return None
-    return borrow_from(w_dict, w_res)
+    if not isinstance(w_dict, W_DictMultiObject):
+        w_res = None
+    else:
+        w_res = w_dict.getitem(w_key)    # possibly None
+    # borrowed result.  assumes that the dict *values* are always strongly
+    # referenced from inside the W_DictMultiObject.
+    return as_xpyobj(space, w_res)
 
 @cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
 def PyDict_SetItem(space, w_dict, w_key, w_obj):
-    if PyDict_Check(space, w_dict):
-        space.setitem(w_dict, w_key, w_obj)
-        return 0
-    else:
+    if not isinstance(w_dict, W_DictMultiObject):
         PyErr_BadInternalCall(space)
+    w_dict.setitem(w_key, w_obj)
+    return 0
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyDict_DelItem(space, w_dict, w_key):
-    if PyDict_Check(space, w_dict):
-        space.delitem(w_dict, w_key)
-        return 0
-    else:
+    if not isinstance(w_dict, W_DictMultiObject):
         PyErr_BadInternalCall(space)
+    w_dict.delitem(w_key)
+    return 0
 
 @cpython_api([PyObject, CONST_STRING, PyObject], rffi.INT_real, error=-1)
 def PyDict_SetItemString(space, w_dict, key_ptr, w_obj):
-    if PyDict_Check(space, w_dict):
-        key = rffi.charp2str(key_ptr)
-        space.setitem_str(w_dict, key, w_obj)
-        return 0
-    else:
+    if not isinstance(w_dict, W_DictMultiObject):
         PyErr_BadInternalCall(space)
+    key = rffi.charp2str(key_ptr)
+    w_dict.setitem_str(key, w_obj)
+    return 0
 
 @cpython_api([PyObject, CONST_STRING], PyObject, error=CANNOT_FAIL)
 def PyDict_GetItemString(space, w_dict, key):
     """This is the same as PyDict_GetItem(), but key is specified as a
     char*, rather than a PyObject*."""
-    try:
-        w_res = space.finditem_str(w_dict, rffi.charp2str(key))
-    except:
+    if not isinstance(w_dict, W_DictMultiObject):
         w_res = None
-    if w_res is None:
-        return None
-    return borrow_from(w_dict, w_res)
+    else:
+        w_res = space.finditem_str(w_dict, rffi.charp2str(key))
+    # borrowed result, possibly None
+    return as_xpyobj(space, w_res)
 
 @cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=-1)
 def PyDict_DelItemString(space, w_dict, key_ptr):
     """Remove the entry in dictionary p which has a key specified by the string
     key.  Return 0 on success or -1 on failure."""
-    if PyDict_Check(space, w_dict):
-        key = rffi.charp2str(key_ptr)
-        # our dicts dont have a standardized interface, so we need
-        # to go through the space
-        space.delitem(w_dict, space.wrap(key))
-        return 0
-    else:
+    if not isinstance(w_dict, W_DictMultiObject):
         PyErr_BadInternalCall(space)
+    key = rffi.charp2str(key_ptr)
+    w_dict.delitem(space.wrap(key))
+    return 0
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyDict_Size(space, w_obj):
     """
     Return the number of items in the dictionary.  This is equivalent to
     len(p) on a dictionary."""
-    return space.len_w(w_obj)
+    if not isinstance(w_dict, W_DictMultiObject):
+        PyErr_BadInternalCall(space)
+    return space.wrap(w_dict.length())
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyDict_Contains(space, w_obj, w_value):
@@ -173,6 +171,7 @@ def PyDict_Next(space, w_dict, ppos, pkey, pvalue):
     # Note: this is not efficient. Storing an iterator would probably
     # work, but we can't work out how to not leak it if iteration does
     # not complete.
+    ZZZ
 
     try:
         w_iter = space.call_method(space.w_dict, "iteritems", w_dict)

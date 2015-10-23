@@ -6,7 +6,8 @@ from pypy.interpreter import pytraceback
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, CONST_STRING
 from pypy.module.exceptions.interp_exceptions import W_RuntimeWarning
 from pypy.module.cpyext.pyobject import (
-    PyObject, PyObjectP, make_ref, from_ref, Py_DecRef, as_pyobj)
+    PyObject, PyObjectP, Py_DecRef, as_pyobj, get_pyobj_and_incref,
+    get_w_obj_and_decref, from_pyobj, get_pyobj_and_xincref)
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.import_ import PyImport_Import
 from rpython.rlib import rposix, jit
@@ -56,9 +57,9 @@ def PyErr_Fetch(space, ptype, pvalue, ptraceback):
     state = space.fromcache(State)
     operror = state.clear_exception()
     if operror:
-        ptype[0] = make_ref(space, operror.w_type)
-        pvalue[0] = make_ref(space, operror.get_w_value(space))
-        ptraceback[0] = make_ref(space, space.wrap(operror.get_traceback()))
+        ptype[0] = get_pyobj_and_incref(space, operror.w_type)
+        pvalue[0] = get_pyobj_and_incref(space, operror.get_w_value(space))
+        ptraceback[0] = get_pyobj_and_xincref(space, operror.get_traceback())
     else:
         ptype[0] = lltype.nullptr(PyObject.TO)
         pvalue[0] = lltype.nullptr(PyObject.TO)
@@ -95,13 +96,11 @@ def PyErr_NormalizeException(space, exc_p, val_p, tb_p):
     not an instance of the  same class.  This function can be used to instantiate
     the class in that case.  If the values are already normalized, nothing happens.
     The delayed normalization is implemented to improve performance."""
-    operr = OperationError(from_ref(space, exc_p[0]),
-                           from_ref(space, val_p[0]))
+    operr = OperationError(get_w_obj_and_decref(space, exc_p[0]),
+                           get_w_obj_and_decref(space, val_p[0]))
     operr.normalize_exception(space)
-    Py_DecRef(space, exc_p[0])
-    Py_DecRef(space, val_p[0])
-    exc_p[0] = make_ref(space, operr.w_type)
-    val_p[0] = make_ref(space, operr.get_w_value(space))
+    exc_p[0] = get_pyobj_and_incref(space, operr.w_type)
+    val_p[0] = get_pyobj_and_incref(space, operr.get_w_value(space))
 
 @cpython_api([], rffi.INT_real, error=0)
 def PyErr_BadArgument(space):
@@ -303,10 +302,8 @@ def PyErr_Print(space):
     PyErr_PrintEx(space, 1)
 
 @cpython_api([PyObject, PyObject, PyObject], lltype.Void)
-def PyErr_Display(space, w_type, w_value, tb):
-    if tb:
-        w_tb = from_ref(space, tb)
-    else:
+def PyErr_Display(space, w_type, w_value, w_tb):
+    if w_tb is None:
         w_tb = space.w_None
     try:
         space.call_function(space.sys.get("excepthook"),
@@ -372,9 +369,9 @@ def PyErr_GetExcInfo(space, ptype, pvalue, ptraceback):
     ec = space.getexecutioncontext()
     operror = ec.sys_exc_info()
     if operror:
-        ptype[0] = make_ref(space, operror.w_type)
-        pvalue[0] = make_ref(space, operror.get_w_value(space))
-        ptraceback[0] = make_ref(space, space.wrap(operror.get_traceback()))
+        ptype[0] = get_pyobj_and_incref(space, operror.w_type)
+        pvalue[0] = get_pyobj_and_incref(space, operror.get_w_value(space))
+        ptraceback[0] = get_pyobj_and_xincref(space, operror.get_traceback())
     else:
         ptype[0] = lltype.nullptr(PyObject.TO)
         pvalue[0] = lltype.nullptr(PyObject.TO)

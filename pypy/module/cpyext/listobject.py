@@ -3,7 +3,7 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, CANNOT_FAIL, Py_ssize_t,
                                     build_type_checkers)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
-from pypy.module.cpyext.pyobject import Py_DecRef, PyObject, borrow_from
+from pypy.module.cpyext.pyobject import Py_DecRef, PyObject, as_pyobj
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.interpreter.error import OperationError
 
@@ -49,8 +49,9 @@ def PyList_GetItem(space, w_list, index):
     if index < 0 or index >= w_list.length():
         raise OperationError(space.w_IndexError, space.wrap(
             "list index out of range"))
-    w_item = w_list.getitem(index)
-    return borrow_from(w_list, w_item)
+    # force the object strategy: it ensures a borrowed result stays around
+    w_list.ensure_object_strategy()
+    return as_pyobj(space, w_list.getitem(index))
 
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
@@ -77,14 +78,14 @@ def PyList_GET_SIZE(space, w_list):
 
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
-def PyList_Size(space, ref):
+def PyList_Size(space, w_list):
     """Return the length of the list object in list; this is equivalent to
     len(list) on a list object.
     """
-    if not PyList_Check(space, ref):
+    if not isinstance(w_list, W_ListObject):
         raise OperationError(space.w_TypeError,
                              space.wrap("expected list object"))
-    return PyList_GET_SIZE(space, ref)
+    return w_list.length()
 
 @cpython_api([PyObject], PyObject)
 def PyList_AsTuple(space, w_list):

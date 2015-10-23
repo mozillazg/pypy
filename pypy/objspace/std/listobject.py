@@ -216,6 +216,11 @@ class W_ListObject(W_Root):
         items = [space.unwrap(w_item) for w_item in w_list.getitems()]
         return list(items)
 
+    def ensure_object_strategy(self):    # for cpyext
+        object_strategy = self.space.fromcache(ObjectListStrategy)
+        if self.strategy is not object_strategy:
+            self.switch_to_object_strategy()
+
     def switch_to_object_strategy(self):
         list_w = self.getitems()
         object_strategy = self.space.fromcache(ObjectListStrategy)

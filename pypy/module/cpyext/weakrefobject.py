@@ -1,5 +1,5 @@
 from pypy.module.cpyext.api import cpython_api
-from pypy.module.cpyext.pyobject import PyObject, borrow_from
+from pypy.module.cpyext.pyobject import PyObject, as_xpyobj
 from pypy.module._weakref.interp__weakref import W_Weakref, proxy
 
 @cpython_api([PyObject, PyObject], PyObject)
@@ -42,12 +42,12 @@ def PyWeakref_GET_OBJECT(space, w_ref):
     """Similar to PyWeakref_GetObject(), but implemented as a macro that does no
     error checking.
     """
-    return borrow_from(w_ref, space.call_function(w_ref))
+    return as_xpyobj(space.call_function(w_ref))   # borrowed
 
 @cpython_api([PyObject], PyObject)
 def PyWeakref_LockObject(space, w_ref):
     """Return the referenced object from a weak reference.  If the referent is
     no longer live, returns None. This function returns a new reference.
+    (This is a PyPy extension!)
     """
     return space.call_function(w_ref)
-

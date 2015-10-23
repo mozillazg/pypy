@@ -7,8 +7,8 @@ from pypy.module.cpyext.api import (
     CONST_WSTRING)
 from pypy.module.cpyext.pyerrors import PyErr_BadArgument
 from pypy.module.cpyext.pyobject import (
-    PyObject, PyObjectP, Py_DecRef, make_ref, from_ref, track_reference,
-    make_typedescr, get_typedescr)
+    PyObject, PyObjectP, Py_DecRef, track_reference, get_pyobj_and_incref,
+    make_typedescr, get_typedescr, from_pyobj)
 from pypy.module.cpyext.stringobject import PyString_Check
 from pypy.module.sys.interp_encoding import setdefaultencoding
 from pypy.module._codecs.interp_codecs import CodecState
@@ -206,7 +206,7 @@ def PyUnicode_AS_UNICODE(space, ref):
     ref_unicode = rffi.cast(PyUnicodeObject, ref)
     if not ref_unicode.c_buffer:
         # Copy unicode buffer
-        w_unicode = from_ref(space, ref)
+        w_unicode = from_pyobj(space, ref)
         u = space.unicode_w(w_unicode)
         ref_unicode.c_buffer = rffi.unicode2wcharp(u)
     return ref_unicode.c_buffer
@@ -216,19 +216,18 @@ def PyUnicode_AsUnicode(space, ref):
     """Return a read-only pointer to the Unicode object's internal Py_UNICODE
     buffer, NULL if unicode is not a Unicode object."""
     # Don't use PyUnicode_Check, it will realize the object :-(
-    w_type = from_ref(space, rffi.cast(PyObject, ref.c_ob_type))
-    if not space.is_true(space.issubtype(w_type, space.w_unicode)):
+    if not PyUnicode_Check(space, ref):
         raise OperationError(space.w_TypeError,
                              space.wrap("expected unicode object"))
     return PyUnicode_AS_UNICODE(space, ref)
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyUnicode_GetSize(space, ref):
-    if from_ref(space, rffi.cast(PyObject, ref.c_ob_type)) is space.w_unicode:
+    if PyUnicode_Check(space, ref):
         ref = rffi.cast(PyUnicodeObject, ref)
         return ref.c_size
     else:
-        w_obj = from_ref(space, ref)
+        w_obj = from_pyobj(space, ref)
         return space.len_w(w_obj)
 
 @cpython_api([PyUnicodeObject, rffi.CWCHARP, Py_ssize_t], Py_ssize_t, error=-1)
@@ -330,7 +329,7 @@ def PyUnicode_FromUnicode(space, wchar_p, length):
     is NULL."""
     if wchar_p:
         s = rffi.wcharpsize2unicode(wchar_p, length)
-        return make_ref(space, space.wrap(s))
+        return get_pyobj_and_incref(space, space.wrap(s))
     else:
         return rffi.cast(PyObject, new_empty_unicode(space, length))
 
@@ -424,7 +423,7 @@ def PyUnicode_FromStringAndSize(space, s, size):
     NULL, the return value might be a shared object. Therefore, modification of
     the resulting Unicode object is only allowed when u is NULL."""
     if s:
-        return make_ref(space, PyUnicode_DecodeUTF8(
+        return get_pyobj_and_incref(space, PyUnicode_DecodeUTF8(
             space, s, size, lltype.nullptr(rffi.CCHARP.TO)))
     else:
         return rffi.cast(PyObject, new_empty_unicode(space, size))

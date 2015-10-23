@@ -3,7 +3,7 @@ from rpython.rtyper.lltypesystem.lltype import Ptr, FuncType, Void
 from pypy.module.cpyext.api import (cpython_struct, Py_ssize_t, Py_ssize_tP,
     PyVarObjectFields, PyTypeObject, PyTypeObjectPtr, FILEP,
     Py_TPFLAGS_READYING, Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE)
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
+from pypy.module.cpyext.pyobject import PyObject
 from pypy.module.cpyext.modsupport import PyMethodDef
 
 

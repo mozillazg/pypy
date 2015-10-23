@@ -3,7 +3,7 @@ from pypy.module.cpyext.api import (
     cpython_api, bootstrap_function, PyObjectFields, cpython_struct,
     CANNOT_FAIL)
 from pypy.module.cpyext.pyobject import (
-    PyObject, Py_DecRef, make_ref, from_ref, track_reference,
+    PyObject, Py_DecRef, track_reference, get_pyobj_and_xincref,
     make_typedescr, get_typedescr)
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pystate import PyThreadState
@@ -33,6 +33,7 @@ def frame_attach(space, py_obj, w_obj):
     "Fills a newly allocated PyFrameObject with a frame object"
     frame = space.interp_w(PyFrame, w_obj)
     py_frame = rffi.cast(PyFrameObject, py_obj)
+    ZZZ
     py_frame.c_f_code = rffi.cast(PyCodeObject, make_ref(space, frame.pycode))
     py_frame.c_f_globals = make_ref(space, frame.w_globals)
     rffi.setintfield(py_frame, 'c_f_lineno', frame.getorcreatedebug().f_lineno)
@@ -53,6 +54,7 @@ def frame_realize(space, py_obj):
     """
     py_frame = rffi.cast(PyFrameObject, py_obj)
     py_code = rffi.cast(PyObject, py_frame.c_f_code)
+    ZZZ
     w_code = from_ref(space, py_code)
     code = space.interp_w(PyCode, w_code)
     w_globals = from_ref(space, py_frame.c_f_globals)
@@ -70,8 +72,9 @@ def PyFrame_New(space, tstate, w_code, w_globals, w_locals):
     py_obj = typedescr.allocate(space, space.gettypeobject(PyFrame.typedef))
     py_frame = rffi.cast(PyFrameObject, py_obj)
     space.interp_w(PyCode, w_code) # sanity check
-    py_frame.c_f_code = rffi.cast(PyCodeObject, make_ref(space, w_code))
-    py_frame.c_f_globals = make_ref(space, w_globals)
+    py_frame.c_f_code = rffi.cast(PyCodeObject,
+                                  get_pyobj_and_xincref(space, w_code))
+    py_frame.c_f_globals = get_pyobj_and_xincref(space, w_globals)
     return py_frame
 
 @cpython_api([PyFrameObject], rffi.INT_real, error=-1)

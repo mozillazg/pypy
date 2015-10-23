@@ -4,7 +4,7 @@ from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.api import (
     cpython_api, Py_ssize_t, cpython_struct, bootstrap_function,
     PyObjectFields, PyObject)
-from pypy.module.cpyext.pyobject import make_typedescr, Py_DecRef, make_ref
+from pypy.module.cpyext.pyobject import make_typedescr, Py_DecRef
 from pypy.module.array.interp_array import ArrayBuffer
 from pypy.objspace.std.bufferobject import W_Buffer
 
@@ -51,6 +51,7 @@ def buffer_attach(space, py_obj, w_obj):
     # reference to buf.
     # Otherwise, b_base stays NULL, and we own the b_ptr.
 
+    ZZZ
     if isinstance(buf, StringBuffer):
         py_buf.c_b_base = lltype.nullptr(PyObject.TO)
         py_buf.c_b_ptr = rffi.cast(rffi.VOIDP, rffi.str2charp(buf.value))

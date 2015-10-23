@@ -2,7 +2,7 @@
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.module.cpyext.api import (
     cpython_api, CANNOT_FAIL, CONST_STRING, Py_ssize_t)
-from pypy.module.cpyext.pyobject import PyObject, borrow_from
+from pypy.module.cpyext.pyobject import PyObject, as_pyobj
 from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.objspace.std import listobject, tupleobject
 
@@ -56,11 +56,12 @@ def PySequence_Fast_GET_ITEM(space, w_obj, index):
     PySequence_Fast(), o is not NULL, and that i is within bounds.
     """
     if isinstance(w_obj, listobject.W_ListObject):
+        w_obj.ensure_object_strategy()
         w_res = w_obj.getitem(index)
     else:
         assert isinstance(w_obj, tupleobject.W_TupleObject)
         w_res = w_obj.wrappeditems[index]
-    return borrow_from(w_obj, w_res)
+    return as_pyobj(space, w_res)    # borrowed
 
 @cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
 def PySequence_Fast_GET_SIZE(space, w_obj):

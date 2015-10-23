@@ -3,7 +3,7 @@ from pypy.module.cpyext.api import (
     PyObjectFields, generic_cpy_call, CONST_STRING, CANNOT_FAIL, Py_ssize_t,
     cpython_api, bootstrap_function, cpython_struct, build_type_checkers)
 from pypy.module.cpyext.pyobject import (
-    PyObject, make_ref, from_ref, Py_DecRef, make_typedescr, borrow_from)
+    PyObject, Py_DecRef, make_typedescr, as_pyobj, as_xpyobj)
 from rpython.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.function import Function, Method
@@ -51,6 +51,7 @@ PyMethod_Check, PyMethod_CheckExact = build_type_checkers("Method", Method)
 PyCode_Check, PyCode_CheckExact = build_type_checkers("Code", PyCode)
 
 def function_attach(space, py_obj, w_obj):
+    ZZZ
     py_func = rffi.cast(PyFunctionObject, py_obj)
     assert isinstance(w_obj, Function)
     py_func.c_func_name = make_ref(space, space.wrap(w_obj.name))
@@ -63,6 +64,7 @@ def function_dealloc(space, py_obj):
     PyObject_dealloc(space, py_obj)
 
 def code_attach(space, py_obj, w_obj):
+    ZZZ
     py_code = rffi.cast(PyCodeObject, py_obj)
     assert isinstance(w_obj, PyCode)
     py_code.c_co_name = make_ref(space, space.wrap(w_obj.co_name))
@@ -84,8 +86,7 @@ def code_dealloc(space, py_obj):
 def PyFunction_GetCode(space, w_func):
     """Return the code object associated with the function object op."""
     func = space.interp_w(Function, w_func)
-    w_code = space.wrap(func.code)
-    return borrow_from(w_func, w_code)
+    return as_pyobj(space, func.code)      # borrowed
 
 @cpython_api([PyObject, PyObject, PyObject], PyObject)
 def PyMethod_New(space, w_func, w_self, w_cls):
@@ -100,21 +101,21 @@ def PyMethod_New(space, w_func, w_self, w_cls):
 def PyMethod_Function(space, w_method):
     """Return the function object associated with the method meth."""
     assert isinstance(w_method, Method)
-    return borrow_from(w_method, w_method.w_function)
+    return as_pyobj(space, w_method.w_function)   # borrowed
 
 @cpython_api([PyObject], PyObject)
 def PyMethod_Self(space, w_method):
     """Return the instance associated with the method meth if it is bound,
     otherwise return NULL."""
     assert isinstance(w_method, Method)
-    return borrow_from(w_method, w_method.w_instance)
+    return as_xpyobj(space, w_method.w_instance)   # borrowed
 
 @cpython_api([PyObject], PyObject)
 def PyMethod_Class(space, w_method):
     """Return the class object from which the method meth was created; if this was
     created from an instance, it will be the class of the instance."""
     assert isinstance(w_method, Method)
-    return borrow_from(w_method, w_method.w_class)
+    return as_pyobj(space, w_method.w_class)    # borrowed
 
 def unwrap_list_of_strings(space, w_list):
     return [space.str_w(w_item) for w_item in space.fixedview(w_list)]

@@ -4,7 +4,7 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (
     cpython_api, CANNOT_FAIL, CONST_STRING, FILEP, fread, feof, Py_ssize_tP,
     cpython_struct, is_valid_fp)
-from pypy.module.cpyext.pyobject import PyObject, borrow_from
+from pypy.module.cpyext.pyobject import PyObject, as_pyobj, as_xpyobj
 from pypy.module.cpyext.pyerrors import PyErr_SetFromErrno
 from pypy.module.cpyext.funcobject import PyCodeObject
 from pypy.module.__builtin__ import compiling
@@ -36,7 +36,7 @@ def PyEval_GetBuiltins(space):
             w_builtins = w_builtins.getdict(space)
     else:
         w_builtins = space.builtin.getdict(space)
-    return borrow_from(None, w_builtins)
+    return as_pyobj(space, w_builtins)   # borrowed
 
 @cpython_api([], PyObject, error=CANNOT_FAIL)
 def PyEval_GetLocals(space):
@@ -44,8 +44,10 @@ def PyEval_GetLocals(space):
     frame, or NULL if no frame is currently executing."""
     caller = space.getexecutioncontext().gettopframe_nohidden()
     if caller is None:
-        return None
-    return borrow_from(None, caller.getdictscope())
+        w_res = None
+    else:
+        w_res = caller.getdictscope()
+    return as_xpyobj(space, w_res)    # borrowed
 
 @cpython_api([], PyObject, error=CANNOT_FAIL)
 def PyEval_GetGlobals(space):
@@ -53,8 +55,10 @@ def PyEval_GetGlobals(space):
     frame, or NULL if no frame is currently executing."""
     caller = space.getexecutioncontext().gettopframe_nohidden()
     if caller is None:
-        return None
-    return borrow_from(None, caller.w_globals)
+        w_res = None
+    else:
+        w_res = caller.w_globals
+    return as_xpyobj(space, w_res)    # borrowed
 
 @cpython_api([PyCodeObject, PyObject, PyObject], PyObject)
 def PyEval_EvalCode(space, w_code, w_globals, w_locals):

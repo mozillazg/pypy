@@ -3,7 +3,7 @@ from pypy.module.cpyext.api import (
     cpython_api, cpython_struct, bootstrap_function, build_type_checkers,
     CANNOT_FAIL, Py_ssize_t, Py_ssize_tP, PyObjectFields)
 from pypy.module.cpyext.pyobject import (
-    Py_DecRef, PyObject, make_ref, make_typedescr)
+    Py_DecRef, PyObject, make_typedescr)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.sliceobject import W_SliceObject
@@ -30,6 +30,7 @@ def slice_attach(space, py_obj, w_obj):
     Fills a newly allocated PySliceObject with the given slice object. The
     fields must not be modified.
     """
+    ZZZ
     py_slice = rffi.cast(PySliceObject, py_obj)
     assert isinstance(w_obj, W_SliceObject)
     py_slice.c_start = make_ref(space, w_obj.w_start)
