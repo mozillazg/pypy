@@ -250,10 +250,10 @@ def PyString_InternInPlace(space, string):
 
     This function is not available in 3.x and does not have a PyBytes
     alias."""
-    w_str = from_ref(space, string[0])
+    w_str = from_pyobj(space, string[0])
     w_str = space.new_interned_w_str(w_str)
     Py_DecRef(space, string[0])
-    string[0] = make_ref(space, w_str)
+    string[0] = get_pyobj_and_incref(space, w_str)
 
 @cpython_api([PyObject, CONST_STRING, CONST_STRING], PyObject)
 def PyString_AsEncodedObject(space, w_str, encoding, errors):
