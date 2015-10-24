@@ -643,7 +643,8 @@ def COpaquePtr(*args, **kwds):
 
 def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
                     sandboxsafe=False, _nowrapper=False,
-                    c_type=None, getter_only=False):
+                    c_type=None, getter_only=False,
+                    declare_as_extern=(sys.platform != 'win32')):
     """Return a pair of functions - a getter and a setter - to access
     the given global C variable.
     """
@@ -673,7 +674,7 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     c_setter = "void %(setter_name)s (%(c_type)s v) { %(name)s = v; }" % locals()
 
     lines = ["#include <%s>" % i for i in eci.includes]
-    if sys.platform != 'win32':
+    if declare_as_extern:
         lines.append('extern %s %s;' % (c_type, name))
     lines.append(c_getter)
     if not getter_only:

@@ -25,7 +25,7 @@ from pypy.interpreter.function import StaticMethod
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.module.__builtin__.descriptor import W_Property
 from pypy.module.__builtin__.interp_classobj import W_ClassObject
-from pypy.module.micronumpy.base import W_NDimArray
+#from pypy.module.micronumpy.base import W_NDimArray ZZZ
 from rpython.rlib.entrypoint import entrypoint_lowlevel
 from rpython.rlib.rposix import is_valid_fd, validate_fd
 from rpython.rlib.unroll import unrolling_iterable
@@ -497,7 +497,7 @@ def build_exported_objects():
         "PyComplex_Type": "space.w_complex",
         "PyByteArray_Type": "space.w_bytearray",
         "PyMemoryView_Type": "space.w_memoryview",
-        "PyArray_Type": "space.gettypeobject(W_NDimArray.typedef)",
+        #"PyArray_Type": "space.gettypeobject(W_NDimArray.typedef)", ZZZ
         "PyBaseObject_Type": "space.w_object",
         'PyNone_Type': 'space.type(space.w_None)',
         'PyNotImplemented_Type': 'space.type(space.w_NotImplemented)',
@@ -871,7 +871,7 @@ def build_bridge(space):
     # populate static data
     to_fill = []
     for name, (typ, expr) in GLOBALS.iteritems():
-        from pypy.module import cpyext
+        from pypy.module import cpyext    # for the eval() below
         w_obj = eval(expr)
         if name.endswith('#'):
             name = name[:-1]
@@ -1049,7 +1049,7 @@ def build_eci(building_bridge, export_symbols, code):
         if name.endswith('#'):
             structs.append('%s %s;' % (typ[:-1], name[:-1]))
         elif name.startswith('PyExc_'):
-            structs.append('extern PyTypeObject _%s;' % (name,))
+            structs.append('PyTypeObject _%s;' % (name,))
             structs.append('PyObject* %s = (PyObject*)&_%s;' % (name, name))
         elif typ == 'PyDateTime_CAPI*':
             structs.append('%s %s = NULL;' % (typ, name))
@@ -1125,35 +1125,35 @@ def setup_library(space):
     # emit uninitialized static data
     static_objs_w = []
     static_pyobjs = []
-    lines = []
-    entries = []
+    lines = ['PyObject *pypy_static_pyobjs[] = {\n']
+    include_lines = ['RPY_EXTERN PyObject *pypy_static_pyobjs[];\n']
     for name, (typ, expr) in sorted(GLOBALS.items()):
-        name = name.replace("#", "")
-        if name.startswith('PyExc_'):
+        if name.endswith('#'):
+            assert typ in ('PyObject*', 'PyTypeObject*')
+            typ, name = typ[:-1], name[:-1]
+        elif name.startswith('PyExc_'):
+            typ = 'PyTypeObject'
             name = '_' + name
-        if typ in ('PyObject*', 'PyTypeObject*'):
-            w_obj = eval(expr)
-            static_objs_w.append(w_obj)
-            lines.append('%s %s;\n' % (typ, name))
-            if typ == 'PyObject*':
-                entries.append('\t%s,\n' % (name,))
-            else:
-                entries.append('\t(PyObject *)%s,\n' % (name,))
         elif typ == 'PyDateTime_CAPI*':
             continue
         else:
             assert False, "Unknown static data: %s %s" % (typ, name)
-    lines.append('\n')
-    lines.append('PyObject *pypy_static_pyobjs[] = {\n')
-    lines.extend(entries)
+
+        from pypy.module import cpyext     # for the eval() below
+        w_obj = eval(expr)
+        static_objs_w.append(w_obj)
+        lines.append('\t(PyObject *)&%s,\n' % (name,))
+        include_lines.append('RPY_EXPORTED %s %s;\n' % (typ, name))
+
     lines.append('};\n')
-    eci2 = ExternalCompilationInfo(
-        separate_module_sources = ''.join(lines),
-        post_include_bits = ['RPY_EXTERN PyObject *pypy_static_pyobjs[];\n'],
-        )
+    eci2 = CConfig._compilation_info_.merge(ExternalCompilationInfo(
+        separate_module_sources = [''.join(lines)],
+        post_include_bits = [''.join(include_lines)],
+        ))
     state.static_objs_w = static_objs_w
-    state.static_pyobjs = rffi.CExternVariable(
-        PyObjectP, 'pypy_static_pyobjs', eci2, c_type='PyObject **')
+    state.get_static_pyobjs = rffi.CExternVariable(
+        PyObjectP, 'pypy_static_pyobjs', eci2, c_type='PyObject **',
+        getter_only=True, declare_as_extern=False)
 
     for name, func in FUNCTIONS.iteritems():
         newname = mangle_name('PyPy', name) or name
@@ -1165,10 +1165,12 @@ def setup_library(space):
     copy_header_files(trunk_include)
 
 def init_static_data_translated(space):
+    from pypy.module.cpyext.pyobject import setup_prebuilt_pyobj
     # populate static data
     state = space.fromcache(State)
+    static_pyobjs = state.get_static_pyobjs()
     for i, w_obj in enumerate(state.static_objs_w):
-        py_obj = state.static_pyobjs[i]
+        py_obj = static_pyobjs[i]
         setup_prebuilt_pyobj(w_obj, py_obj)
     # step 2
     for w_obj in state.static_objs_w:
