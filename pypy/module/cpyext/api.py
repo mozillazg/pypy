@@ -330,23 +330,27 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True,
                         # arg is not declared as PyObject, no magic
                         arg = input_arg
                     newargs += (arg, )
-                try:
+                if not catch_exception:
                     try:
                         res = func(space, *newargs)
                     finally:
                         keepalive_until_here(*keepalives)
-                except OperationError, e:
-                    if not catch_exception:
-                        raise
-                    if not hasattr(api_function, "error_value"):
-                        raise
-                    state = space.fromcache(State)
-                    state.set_exception(e)
-                    if is_PyObject(restype):
-                        return None
-                    else:
-                        return api_function.error_value
-                if not we_are_translated():
+                else:
+                    # non-rpython variant
+                    assert not we_are_translated()
+                    try:
+                        res = func(space, *newargs)
+                    except OperationError, e:
+                        if not hasattr(api_function, "error_value"):
+                            raise
+                        state = space.fromcache(State)
+                        state.set_exception(e)
+                        if is_PyObject(restype):
+                            return None
+                        else:
+                            return api_function.error_value
+                    finally:
+                        keepalive_until_here(*keepalives)
                     got_integer = isinstance(res, (int, long, float))
                     assert got_integer == expect_integer,'got %r not integer' % res
                 return res
