@@ -146,7 +146,6 @@ def update_all_slots(space, w_type, pto):
             assert len(slot_names) == 2
             struct = getattr(pto, slot_names[0])
             if not struct:
-                assert not space.config.translating
                 assert not pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
                 if slot_names[0] == 'c_tp_as_number':
                     STRUCT_TYPE = PyNumberMethods
