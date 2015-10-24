@@ -374,6 +374,7 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
     def teardown_method(self, func):
         for name in self.imported_module_names:
             self.unimport_module(name)
+        self.check_and_print_leaks()
         return #ZZZ
         self.cleanup_references(self.space)
         # XXX: find out how to disable check_and_print_leaks() if the

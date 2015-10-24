@@ -803,6 +803,12 @@ def make_string_mappings(strtype):
         return length
     str2chararray._annenforceargs_ = [strtype, None, int]
 
+    # s[start:start+length] -> already-existing char[],
+    # all characters including zeros
+    def str2rawmem(s, array, start, length):
+        ll_s = llstrtype(s)
+        copy_string_to_raw(ll_s, array, start, length)
+
     # char* -> str
     # doesn't free char*
     def charp2str(cp):
@@ -953,19 +959,19 @@ def make_string_mappings(strtype):
     return (str2charp, free_charp, charp2str,
             get_nonmovingbuffer, free_nonmovingbuffer,
             alloc_buffer, str_from_buffer, keep_buffer_alive_until_here,
-            charp2strn, charpsize2str, str2chararray,
+            charp2strn, charpsize2str, str2chararray, str2rawmem,
             )
 
 (str2charp, free_charp, charp2str,
  get_nonmovingbuffer, free_nonmovingbuffer,
  alloc_buffer, str_from_buffer, keep_buffer_alive_until_here,
- charp2strn, charpsize2str, str2chararray,
+ charp2strn, charpsize2str, str2chararray, str2rawmem,
  ) = make_string_mappings(str)
 
 (unicode2wcharp, free_wcharp, wcharp2unicode,
  get_nonmoving_unicodebuffer, free_nonmoving_unicodebuffer,
  alloc_unicodebuffer, unicode_from_buffer, keep_unicodebuffer_alive_until_here,
- wcharp2unicoden, wcharpsize2unicode, unicode2wchararray,
+ wcharp2unicoden, wcharpsize2unicode, unicode2wchararray, unicode2rawmem,
  ) = make_string_mappings(unicode)
 
 # char**

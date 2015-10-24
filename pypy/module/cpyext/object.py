@@ -55,7 +55,7 @@ def _PyObject_NewVar(space, type, itemcount):
 
 @cpython_api([rffi.VOIDP], lltype.Void)
 def PyObject_Del(space, obj):
-    lltype.free(obj, flavor='raw')
+    lltype.free(obj, flavor='raw', track_allocation=False)
 
 @cpython_api([PyObject], lltype.Void)
 def PyObject_dealloc(space, obj):

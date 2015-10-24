@@ -146,7 +146,9 @@ def _collect(track_allocation=True):
         attach(ob, wr, _o_list)
 
     if _d_list:
-        _dealloc_trigger_callback()
+        res = _dealloc_trigger_callback()
+        if res == "RETRY":
+            _collect(track_allocation=track_allocation)
 
 _keepalive_forever = set()
 def _dont_free_any_more():

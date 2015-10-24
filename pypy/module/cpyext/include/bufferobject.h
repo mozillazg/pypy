@@ -17,6 +17,7 @@ typedef struct {
 	Py_ssize_t b_offset;
 	int b_readonly;
 	long b_hash;
+	char _b_data_pypy[1];
 } PyBufferObject;
 
 

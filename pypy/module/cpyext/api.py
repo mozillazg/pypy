@@ -870,7 +870,17 @@ def build_bridge(space):
 
     space.fromcache(State).install_dll(eci)
 
-    rawrefcount.init(lambda ob: _Py_Dealloc(space, ob))
+    def dealloc_trigger():
+        print 'dealloc_trigger...'
+        while True:
+            ob = rawrefcount.next_dead(PyObject)
+            if not ob:
+                break
+            print ob
+            _Py_Dealloc(space, ob)
+        print 'dealloc_trigger DONE'
+        return "RETRY"
+    rawrefcount.init(dealloc_trigger)
 
     # populate static data
     to_fill = []
