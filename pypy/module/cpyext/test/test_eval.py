@@ -149,10 +149,10 @@ class TestEval(BaseApiTest):
         rffi.free_charp(filename)
 
     def test_getbuiltins(self, space, api):
-        assert api.PyEval_GetBuiltins() is space.builtin.w_dict
+        assert api.from_pyobj(api.PyEval_GetBuiltins()) is space.builtin.w_dict
 
         def cpybuiltins(space):
-            return api.PyEval_GetBuiltins()
+            return api.from_pyobj(api.PyEval_GetBuiltins())
         w_cpybuiltins = space.wrap(interp2app(cpybuiltins))
 
         w_result = space.appexec([w_cpybuiltins], """(cpybuiltins):
@@ -167,12 +167,12 @@ class TestEval(BaseApiTest):
         assert space.len_w(w_result) == 1
 
     def test_getglobals(self, space, api):
-        assert api.PyEval_GetLocals() is None
-        assert api.PyEval_GetGlobals() is None
+        assert api.from_xpyobj(api.PyEval_GetLocals()) is None
+        assert api.from_xpyobj(api.PyEval_GetGlobals()) is None
 
         def cpyvars(space):
-            return space.newtuple([api.PyEval_GetGlobals(),
-                                   api.PyEval_GetLocals()])
+            return space.newtuple([api.from_xpyobj(api.PyEval_GetGlobals()),
+                                   api.from_xpyobj(api.PyEval_GetLocals())])
         w_cpyvars = space.wrap(interp2app(cpyvars))
 
         w_result = space.appexec([w_cpyvars], """(cpyvars):
