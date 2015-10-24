@@ -38,10 +38,10 @@ class TestListObject(BaseApiTest):
         assert api.PyList_Insert(w_l, 0, space.wrap(1)) == 0
         assert api.PyList_Size(w_l) == 3
         assert api.PyList_Insert(w_l, 99, space.wrap(2)) == 0
-        assert space.unwrap(api.PyList_GetItem(w_l, 3)) == 2
+        assert space.unwrap(api.from_pyobj(api.PyList_GetItem(w_l, 3))) == 2
         # insert at index -1: next-to-last
         assert api.PyList_Insert(w_l, -1, space.wrap(3)) == 0
-        assert space.unwrap(api.PyList_GetItem(w_l, 3)) == 3
+        assert space.unwrap(api.from_pyobj(api.PyList_GetItem(w_l, 3))) == 3
     
     def test_sort(self, space, api):
         l = space.newlist([space.wrap(1), space.wrap(0), space.wrap(7000)])
