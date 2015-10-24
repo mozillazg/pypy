@@ -1116,27 +1116,44 @@ def setup_library(space):
 
     eci = build_eci(False, export_symbols, code)
 
-    space.fromcache(State).install_dll(eci)
+    state = space.fromcache(State)
+    state.install_dll(eci)
 
     run_bootstrap_functions(space)
     setup_va_functions(eci)
 
-    # populate static data
-    ## for name, (typ, expr) in GLOBALS.iteritems():
-    ##     name = name.replace("#", "")
-    ##     if name.startswith('PyExc_'):
-    ##         name = '_' + name
-    ##     from pypy.module import cpyext
-    ##     w_obj = eval(expr)
-    ##     if typ in ('PyObject*', 'PyTypeObject*'):
-    ##         struct_ptr = get_pyobj_and_incref(space, w_obj)
-    ##     elif typ == 'PyDateTime_CAPI*':
-    ##         continue
-    ##     else:
-    ##         assert False, "Unknown static data: %s %s" % (typ, name)
-    ##     struct = rffi.cast(get_structtype_for_ctype(typ), struct_ptr)._obj
-    ##     struct._compilation_info = eci
-    ##     export_struct(name, struct)
+    # emit uninitialized static data
+    static_objs_w = []
+    static_pyobjs = []
+    lines = []
+    entries = []
+    for name, (typ, expr) in sorted(GLOBALS.items()):
+        name = name.replace("#", "")
+        if name.startswith('PyExc_'):
+            name = '_' + name
+        if typ in ('PyObject*', 'PyTypeObject*'):
+            w_obj = eval(expr)
+            static_objs_w.append(w_obj)
+            lines.append('%s %s;\n' % (typ, name))
+            if typ == 'PyObject*':
+                entries.append('\t%s,\n' % (name,))
+            else:
+                entries.append('\t(PyObject *)%s,\n' % (name,))
+        elif typ == 'PyDateTime_CAPI*':
+            continue
+        else:
+            assert False, "Unknown static data: %s %s" % (typ, name)
+    lines.append('\n')
+    lines.append('PyObject *pypy_static_pyobjs[] = {\n')
+    lines.extend(entries)
+    lines.append('};\n')
+    eci2 = ExternalCompilationInfo(
+        separate_module_sources = ''.join(lines),
+        post_include_bits = ['RPY_EXTERN PyObject *pypy_static_pyobjs[];\n'],
+        )
+    state.static_objs_w = static_objs_w
+    state.static_pyobjs = rffi.CExternVariable(
+        PyObjectP, 'pypy_static_pyobjs', eci2, c_type='PyObject **')
 
     for name, func in FUNCTIONS.iteritems():
         newname = mangle_name('PyPy', name) or name
@@ -1146,6 +1163,17 @@ def setup_library(space):
     setup_init_functions(eci, translating=True)
     trunk_include = pypydir.dirpath() / 'include'
     copy_header_files(trunk_include)
+
+def init_static_data_translated(space):
+    # populate static data
+    state = space.fromcache(State)
+    for i, w_obj in enumerate(state.static_objs_w):
+        py_obj = state.static_pyobjs[i]
+        setup_prebuilt_pyobj(w_obj, py_obj)
+    # step 2
+    for w_obj in state.static_objs_w:
+        w_obj.cpyext_fill_prebuilt_pyobj(space)
+
 
 def _load_from_cffi(space, name, path, initptr):
     from pypy.module._cffi_backend import cffi1_module
