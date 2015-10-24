@@ -74,7 +74,7 @@ def buffer_alloc_pyobj(space, w_obj):
     py_buf.c_b_base = get_pyobj_and_xincref(space, w_base)
 
     if w_base is None:
-        ptr = py_buf._b_data_pypy
+        ptr = py_buf.c__b_data_pypy
         rffi.str2rawmem(srcstring, ptr, 0, size)
         ptr = rffi.cast(rffi.VOIDP, ptr)
     py_buf.c_b_ptr = ptr
