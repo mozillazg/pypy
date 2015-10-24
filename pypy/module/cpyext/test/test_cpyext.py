@@ -669,8 +669,10 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
                 return NULL;
             refcnt_after = true_obj->ob_refcnt;
             Py_DECREF(tup);
-            fprintf(stderr, "REFCNT2 %i %i\\n", refcnt, refcnt_after);
-            return PyBool_FromLong(refcnt_after == refcnt + 1);
+            fprintf(stderr, "REFCNT2 %i %i %i\\n", refcnt, refcnt_after,
+                    true_obj->ob_refcnt);
+            return PyBool_FromLong(refcnt_after == refcnt + 1 &&
+                                   refcnt == true_obj->ob_refcnt);
         }
 
         static PyMethodDef methods[] = {
