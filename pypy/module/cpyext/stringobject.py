@@ -66,7 +66,6 @@ PyString_Check, PyString_CheckExact, _PyString_Type = (
 @bootstrap_function
 def init_stringobject(space):
     "Type description of PyStringObject"
-    global _basic_size
     setup_class_for_cpyext(
         W_AbstractBytesObject,
         basestruct=PyStringObjectStruct,
@@ -87,8 +86,7 @@ def init_stringobject(space):
         #   be freed with free() by the GC--
         alloc_pypy_light_if=PyString_CheckExact,
         )
-    W_BytesObject.typedef.cpyext_basicsize += 1    # includes the NULL
-    _basic_size = W_BytesObject.typedef.cpyext_basicsize
+    W_BytesObject.typedef.cpyext_basicsize += 1    # includes the final NULL
 
 def _string_fill_pyobj(s, ob):
     rffi.str2chararray(s, ob.c_ob_sval_pypy, len(s))
@@ -100,7 +98,7 @@ def string_alloc_pyobj(space, w_obj):
     """
     assert isinstance(w_obj, W_AbstractBytesObject)
     size = w_obj.string_length()
-    ob = lltype.malloc(PyStringObjectStruct, _basic_size + size, flavor='raw',
+    ob = lltype.malloc(PyStringObjectStruct, size + 1, flavor='raw',
                        track_allocation=False)
     ob.c_ob_size = size
     if size > 8:
