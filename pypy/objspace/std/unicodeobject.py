@@ -100,6 +100,9 @@ class W_UnicodeObject(W_Root):
     def _len(self):
         return len(self._value)
 
+    def unicode_length(self):         # for cpyext
+        return self._len()
+
     _val = unicode_w
 
     @staticmethod
