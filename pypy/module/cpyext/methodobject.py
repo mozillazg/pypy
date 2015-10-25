@@ -12,7 +12,7 @@ from pypy.module.cpyext.api import (
     METH_STATIC, METH_VARARGS, PyObject, PyObjectFields, bootstrap_function,
     build_type_checkers, cpython_api, cpython_struct, generic_cpy_call)
 from pypy.module.cpyext.pyobject import (
-    Py_DecRef, from_pyobj, make_typedescr)
+    Py_DecRef, from_pyobj, get_pyobj_and_xincref, setup_class_for_cpyext)
 
 PyCFunction_typedef = rffi.COpaquePtr(typedef='PyCFunction')
 PyCFunction = lltype.Ptr(lltype.FuncType([PyObject, PyObject], PyObject))
@@ -38,25 +38,28 @@ PyCFunctionObject = lltype.Ptr(PyCFunctionObjectStruct)
 
 @bootstrap_function
 def init_methodobject(space):
-    make_typedescr(W_PyCFunctionObject.typedef,
-                   basestruct=PyCFunctionObject.TO,
-                   attach=cfunction_attach,
-                   dealloc=cfunction_dealloc)
+    setup_class_for_cpyext(
+        W_PyCFunctionObject,
+        basestruct=PyCFunctionObjectStruct,
+        # --from a W_PyCFunctionObject, this function fills a
+        #   PyCFunctionObject--
+        fill_pyobj=cfunction_fill_pyobj,
+        alloc_pyobj_light=False,
+        # --deallocator--
+        dealloc=cfunction_dealloc,
+        )
 
-def cfunction_attach(space, py_obj, w_obj):
-    py_func = rffi.cast(PyCFunctionObject, py_obj)
+def cfunction_fill_pyobj(space, w_obj, py_func):
     assert isinstance(w_obj, W_PyCFunctionObject)
     py_func.c_m_ml = w_obj.ml
-    py_func.c_m_self = make_ref(space, w_obj.w_self)
-    py_func.c_m_module = make_ref(space, w_obj.w_module)
+    py_func.c_m_self = get_pyobj_and_xincref(space, w_obj.w_self)
+    py_func.c_m_module = get_pyobj_and_xincref(space, w_obj.w_module)
 
-@cpython_api([PyObject], lltype.Void, external=False)
-def cfunction_dealloc(space, py_obj):
-    py_func = rffi.cast(PyCFunctionObject, py_obj)
+def cfunction_dealloc(space, py_func):
     Py_DecRef(space, py_func.c_m_self)
     Py_DecRef(space, py_func.c_m_module)
     from pypy.module.cpyext.object import PyObject_dealloc
-    PyObject_dealloc(space, py_obj)
+    PyObject_dealloc(space, rffi.cast(PyObject, py_func))
 
 
 class W_PyCFunctionObject(W_Root):
