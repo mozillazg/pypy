@@ -32,9 +32,16 @@ class TestFunctionObject(BaseApiTest):
         w_self = space.getattr(w_method, space.wrap("im_self"))
         w_class = space.getattr(w_method, space.wrap("im_class"))
 
-        assert space.is_w(api.PyMethod_Function(w_method), w_function)
-        assert space.is_w(api.PyMethod_Self(w_method), w_self)
-        assert space.is_w(api.PyMethod_Class(w_method), w_class)
+        assert space.is_w(api.from_pyobj(api.PyMethod_Function(w_method)),
+                          w_function)
+        assert space.is_w(api.from_pyobj(api.PyMethod_Self(w_method)),
+                          w_self)
+        assert space.is_w(api.from_pyobj(api.PyMethod_Class(w_method)),
+                          w_class)
+
+        assert api.PyMethod_Function(w_method) == api.as_pyobj(w_function)
+        assert api.PyMethod_Self(w_method) == api.as_pyobj(w_self)
+        assert api.PyMethod_Class(w_method) == api.as_pyobj(w_class)
 
         w_method2 = api.PyMethod_New(w_function, w_self, w_class)
         assert space.eq_w(w_method, w_method2)
@@ -44,10 +51,9 @@ class TestFunctionObject(BaseApiTest):
             def func(x, y, z): return x
             return func
         """)
-        w_code = api.PyFunction_GetCode(w_function)
-        assert w_code.co_name == "func"
+        ref = api.PyFunction_GetCode(w_function)
+        assert api.from_pyobj(ref).co_name == "func"
 
-        ref = as_pyobj(space, w_code)
         assert (from_pyobj(space, rffi.cast(PyObject, ref.c_ob_type)) is
                 space.gettypeobject(PyCode.typedef))
         assert "func" == space.unwrap(

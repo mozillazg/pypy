@@ -50,6 +50,7 @@ def setup_class_for_cpyext(W_Class, **kw):
     force_create_pyobj  = kw.pop('force_create_pyobj', False)
     realize_subclass_of = kw.pop('realize_subclass_of', None)
     alloc_pypy_light_if = kw.pop('alloc_pypy_light_if', None)
+    alloc_pyobj_light = kw.pop('alloc_pyobj_light', None)
     assert not kw, "Extra arguments to setup_class_for_cpyext: %s" % kw.keys()
 
     assert 'cpyext_basestruct' not in W_Class.__dict__    # double set
@@ -57,10 +58,15 @@ def setup_class_for_cpyext(W_Class, **kw):
     if tp_alloc_pyobj or tp_fill_pyobj or force_create_pyobj:
         #
         if not tp_alloc_pyobj:
+            assert isinstance(alloc_pyobj_light, bool)
+            if alloc_pyobj_light:
+                strength = RRC_PERMANENT_LIGHT
+            else:
+                strength = RRC_PERMANENT
             def tp_alloc_pyobj(space, w_obj):
                 ob = lltype.malloc(tp_basestruct, flavor='raw',
                                    track_allocation=False)
-                return ob, RRC_PERMANENT_LIGHT
+                return ob, strength
         tp_alloc_pyobj._always_inline_ = 'try'
         #
         if not tp_fill_pyobj:
@@ -179,6 +185,7 @@ W_TypeObject.cpyext_c_type_object = lltype.nullptr(PyTypeObjectPtr.TO)
 @bootstrap_function
 def init_pyobject(space):
     setup_class_for_cpyext(W_Root, force_create_pyobj=True,
+                           alloc_pyobj_light=True,
                            realize_subclass_of=W_ObjectObject,
                            dealloc=_default_dealloc)
     # use this cpyext_create_pypy as the default for all other TypeDefs

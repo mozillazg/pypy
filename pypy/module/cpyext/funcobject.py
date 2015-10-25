@@ -3,7 +3,8 @@ from pypy.module.cpyext.api import (
     PyObjectFields, generic_cpy_call, CONST_STRING, CANNOT_FAIL, Py_ssize_t,
     cpython_api, bootstrap_function, cpython_struct, build_type_checkers)
 from pypy.module.cpyext.pyobject import (
-    PyObject, Py_DecRef, make_typedescr, as_pyobj, as_xpyobj)
+    PyObject, Py_DecRef, setup_class_for_cpyext, as_pyobj, as_xpyobj,
+    get_pyobj_and_incref)
 from rpython.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.function import Function, Method
@@ -37,37 +38,41 @@ cpython_struct("PyCodeObject", PyCodeObjectFields, PyCodeObjectStruct)
 
 @bootstrap_function
 def init_functionobject(space):
-    make_typedescr(Function.typedef,
-                   basestruct=PyFunctionObject.TO,
-                   attach=function_attach,
-                   dealloc=function_dealloc)
-    make_typedescr(PyCode.typedef,
-                   basestruct=PyCodeObject.TO,
-                   attach=code_attach,
-                   dealloc=code_dealloc)
+    setup_class_for_cpyext(
+        Function,
+        basestruct=PyFunctionObjectStruct,
+        # --from a (W_)Function, this function fill a PyFunctionObject--
+        fill_pyobj=function_fill_pyobj,
+        alloc_pyobj_light=False,
+        # --deallocator--
+        dealloc=function_dealloc,
+        )
+    setup_class_for_cpyext(
+        PyCode,
+        basestruct=PyCodeObjectStruct,
+        # --from a PyCode, this function fill a PyCodeObject--
+        fill_pyobj=code_fill_pyobj,
+        alloc_pyobj_light=False,
+        # --deallocator--
+        dealloc=code_dealloc,
+        )
 
 PyFunction_Check, PyFunction_CheckExact = build_type_checkers("Function", Function)
 PyMethod_Check, PyMethod_CheckExact = build_type_checkers("Method", Method)
 PyCode_Check, PyCode_CheckExact = build_type_checkers("Code", PyCode)
 
-def function_attach(space, py_obj, w_obj):
-    ZZZ
-    py_func = rffi.cast(PyFunctionObject, py_obj)
-    assert isinstance(w_obj, Function)
-    py_func.c_func_name = make_ref(space, space.wrap(w_obj.name))
+def function_fill_pyobj(space, w_func, py_func):
+    assert isinstance(w_func, Function)
+    py_func.c_func_name = get_pyobj_and_incref(space, space.wrap(w_func.name))
 
-@cpython_api([PyObject], lltype.Void, external=False)
-def function_dealloc(space, py_obj):
-    py_func = rffi.cast(PyFunctionObject, py_obj)
+def function_dealloc(space, py_func):
     Py_DecRef(space, py_func.c_func_name)
     from pypy.module.cpyext.object import PyObject_dealloc
-    PyObject_dealloc(space, py_obj)
+    PyObject_dealloc(space, rffi.cast(PyObject, py_func))
 
-def code_attach(space, py_obj, w_obj):
-    ZZZ
-    py_code = rffi.cast(PyCodeObject, py_obj)
+def code_fill_pyobj(space, w_obj, py_code):
     assert isinstance(w_obj, PyCode)
-    py_code.c_co_name = make_ref(space, space.wrap(w_obj.co_name))
+    py_code.c_co_name = get_pyobj_and_incref(space, space.wrap(w_obj.co_name))
     co_flags = 0
     for name, value in ALL_CODE_FLAGS:
         if w_obj.co_flags & getattr(pycode, name):
@@ -75,12 +80,10 @@ def code_attach(space, py_obj, w_obj):
     rffi.setintfield(py_code, 'c_co_flags', co_flags)
     rffi.setintfield(py_code, 'c_co_argcount', w_obj.co_argcount)
 
-@cpython_api([PyObject], lltype.Void, external=False)
-def code_dealloc(space, py_obj):
-    py_code = rffi.cast(PyCodeObject, py_obj)
+def code_dealloc(space, py_code):
     Py_DecRef(space, py_code.c_co_name)
     from pypy.module.cpyext.object import PyObject_dealloc
-    PyObject_dealloc(space, py_obj)
+    PyObject_dealloc(space, rffi.cast(PyObject, py_code))
 
 @cpython_api([PyObject], PyObject)
 def PyFunction_GetCode(space, w_func):

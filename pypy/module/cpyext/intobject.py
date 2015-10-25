@@ -32,11 +32,12 @@ def init_intobject(space):
 
         # --from a W_IntObject, we allocate a PyIntObject and then we
         #   call this function to fill it.  It gets attached as
-        #   RRC_PERMANENT_LIGHT by default, which means the
+        #   RRC_PERMANENT_LIGHT, which means that the
         #   association is permanent (the PyIntObject is alive and
         #   won't appear to move as long as the W_IntObject is alive)
         #   and light (the PyIntObject can be freed with free()).--
         fill_pyobj=int_fill_pyobj,
+        alloc_pyobj_light=False,
 
         # --reverse direction: from a PyIntObject, we make a W_IntObject
         #   by instantiating a custom subclass of W_IntObject--
