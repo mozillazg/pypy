@@ -3,7 +3,7 @@ from pypy.module.cpyext.api import (
     cpython_api, cpython_struct, bootstrap_function, build_type_checkers,
     CANNOT_FAIL, Py_ssize_t, Py_ssize_tP, PyObjectFields)
 from pypy.module.cpyext.pyobject import (
-    Py_DecRef, PyObject, make_typedescr)
+    PyObject, setup_class_for_cpyext, get_pyobj_and_incref, decref)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.sliceobject import W_SliceObject
@@ -20,33 +20,34 @@ cpython_struct("PySliceObject", PySliceObjectFields, PySliceObjectStruct)
 @bootstrap_function
 def init_sliceobject(space):
     "Type description of PySliceObject"
-    make_typedescr(W_SliceObject.typedef,
-                   basestruct=PySliceObject.TO,
-                   attach=slice_attach,
-                   dealloc=slice_dealloc)
+    setup_class_for_cpyext(
+        W_SliceObject,
+        basestruct=PySliceObjectStruct,
+        # --from a W_SliceObject, this function fills a PySliceObject--
+        fill_pyobj=slice_fill_pyobj,
+        alloc_pyobj_light=False,
+        # --deallocator--
+        dealloc=slice_dealloc,
+        )
 
-def slice_attach(space, py_obj, w_obj):
+def slice_fill_pyobj(space, w_slice, py_slice):
     """
     Fills a newly allocated PySliceObject with the given slice object. The
     fields must not be modified.
     """
-    ZZZ
-    py_slice = rffi.cast(PySliceObject, py_obj)
-    assert isinstance(w_obj, W_SliceObject)
-    py_slice.c_start = make_ref(space, w_obj.w_start)
-    py_slice.c_stop = make_ref(space, w_obj.w_stop)
-    py_slice.c_step = make_ref(space, w_obj.w_step)
+    assert isinstance(w_slice, W_SliceObject)
+    py_slice.c_start = get_pyobj_and_incref(space, w_slice.w_start)
+    py_slice.c_stop = get_pyobj_and_incref(space, w_slice.w_stop)
+    py_slice.c_step = get_pyobj_and_incref(space, w_slice.w_step)
 
-@cpython_api([PyObject], lltype.Void, external=False)
-def slice_dealloc(space, py_obj):
-    """Frees allocated PyStringObject resources.
+def slice_dealloc(space, py_slice):
+    """Frees allocated PySliceObject resources.
     """
-    py_slice = rffi.cast(PySliceObject, py_obj)
-    Py_DecRef(space, py_slice.c_start)
-    Py_DecRef(space, py_slice.c_stop)
-    Py_DecRef(space, py_slice.c_step)
+    decref(space, py_slice.c_start)
+    decref(space, py_slice.c_stop)
+    decref(space, py_slice.c_step)
     from pypy.module.cpyext.object import PyObject_dealloc
-    PyObject_dealloc(space, py_obj)
+    PyObject_dealloc(space, rffi.cast(PyObject, py_slice))
 
 PySlice_Check, PySlice_CheckExact = build_type_checkers("Slice")
 
