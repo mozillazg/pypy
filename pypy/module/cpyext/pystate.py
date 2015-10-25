@@ -61,14 +61,16 @@ def encapsulator(T, flavor='raw', dealloc=None):
         def __init__(self, space):
             self.space = space
             if space is not None:
-                self.memory = lltype.malloc(T, flavor=flavor)
+                self.memory = lltype.malloc(T, flavor=flavor,
+                                            track_allocation=False)
             else:
                 self.memory = lltype.nullptr(T)
         def __del__(self):
             if self.memory:
                 if dealloc and self.space:
                     dealloc(self.memory, self.space)
-                lltype.free(self.memory, flavor=flavor)
+                lltype.free(self.memory, flavor=flavor,
+                            track_allocation=False)
     return MemoryCapsule
 
 def ThreadState_dealloc(ts, space):
