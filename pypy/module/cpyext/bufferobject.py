@@ -91,4 +91,5 @@ def buffer_alloc_pyobj(space, w_obj):
 
 def buffer_dealloc(space, py_buf):
     xdecref(space, py_buf.c_b_base)
-    lltype.free(py_buf, flavor='raw', track_allocation=False)
+    from pypy.module.cpyext.object import PyObject_dealloc
+    PyObject_dealloc(space, rffi.cast(PyObject, py_buf))

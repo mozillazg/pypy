@@ -10,17 +10,17 @@ class TestImport(BaseApiTest):
 
     def test_addmodule(self, space, api):
         with rffi.scoped_str2charp("sys") as modname:
-            w_sys = api.PyImport_AddModule(modname)
+            w_sys = api.from_pyobj(api.PyImport_AddModule(modname))
         assert w_sys is space.sys
 
         with rffi.scoped_str2charp("foobar") as modname:
-            w_foobar = api.PyImport_AddModule(modname)
+            w_foobar = api.from_pyobj(api.PyImport_AddModule(modname))
         assert space.str_w(space.getattr(w_foobar,
                                          space.wrap('__name__'))) == 'foobar'
 
     def test_getmoduledict(self, space, api):
         testmod = "_functools"
-        w_pre_dict = api.PyImport_GetModuleDict()
+        w_pre_dict = api.from_pyobj(api.PyImport_GetModuleDict())
         assert not space.is_true(space.contains(w_pre_dict, space.wrap(testmod)))
 
         with rffi.scoped_str2charp(testmod) as modname:
@@ -28,7 +28,7 @@ class TestImport(BaseApiTest):
             print w_module
             assert w_module
 
-        w_dict = api.PyImport_GetModuleDict()
+        w_dict = api.from_pyobj(api.PyImport_GetModuleDict())
         assert space.is_true(space.contains(w_dict, space.wrap(testmod)))
 
     def test_reload(self, space, api):
