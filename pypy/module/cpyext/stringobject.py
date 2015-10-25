@@ -94,7 +94,7 @@ def _string_fill_pyobj(s, ob):
 
 def string_alloc_pyobj(space, w_obj):
     """
-    Makes a PyTupleObject from a W_AbstractBytesObject.
+    Makes a PyStringObject from a W_AbstractBytesObject.
     """
     assert isinstance(w_obj, W_AbstractBytesObject)
     size = w_obj.string_length()
@@ -152,7 +152,7 @@ def PyString_FromString(space, char_p):
 def PyString_AsString(space, ref):
     if not PyString_Check(space, ref):
         raise OperationError(space.w_TypeError, space.wrap(
-            "PyString_AsString only support strings"))
+            "PyString_AsString only supports strings"))
     ref_str = rffi.cast(PyStringObject, ref)
     last_char = ref_str.c_ob_sval_pypy[ref_str.c_ob_size]
     if last_char != '\x00':
@@ -160,6 +160,7 @@ def PyString_AsString(space, ref):
         # copy string buffer
         w_str = from_pyobj(space, ref)
         _string_fill_pyobj(w_str.str_w(space), ref_str)
+        ref_str.c_ob_sval_pypy[ref_str.c_ob_size] = '\x00'
     return rffi.cast(rffi.CCHARP, ref_str.c_ob_sval_pypy)
 
 @cpython_api([PyObject, rffi.CCHARPP, rffi.CArrayPtr(Py_ssize_t)], rffi.INT_real, error=-1)
