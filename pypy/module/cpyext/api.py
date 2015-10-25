@@ -22,6 +22,8 @@ from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.nestedscope import Cell
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import StaticMethod
+from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.pyframe import PyFrame
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.module.__builtin__.descriptor import W_Property
 from pypy.module.__builtin__.interp_classobj import W_ClassObject
@@ -512,7 +514,9 @@ def build_exported_objects():
         'PyClass_Type': 'space.gettypeobject(W_ClassObject.typedef)',
         'PyStaticMethod_Type': 'space.gettypeobject(StaticMethod.typedef)',
         'PyCFunction_Type': 'space.gettypeobject(cpyext.methodobject.W_PyCFunctionObject.typedef)',
-        'PyWrapperDescr_Type': 'space.gettypeobject(cpyext.methodobject.W_PyCMethodObject.typedef)'
+        'PyWrapperDescr_Type': 'space.gettypeobject(cpyext.methodobject.W_PyCMethodObject.typedef)',
+        'PyCode_Type': 'space.gettypeobject(PyCode.typedef)',
+        'PyFrame_Type': 'space.gettypeobject(PyFrame.typedef)',
         }.items():
         GLOBALS['%s#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
@@ -595,16 +599,13 @@ def build_type_checkers3(type_name, cls=None):
     if isinstance(cls, str):
         def get_w_type(space):
             return getattr(space, cls)
-        def _PyXxx_Type(space):
-            return constant_pytypeobj(space, py_type_name)
     else:
         @specialize.memo()
         def get_w_type(space):
             return space.gettypeobject(cls.typedef)
-        def _PyXxx_Type(space):
-            from rpython.rlib.debug import fatalerror
-            fatalerror(py_type_name + " not implemented ZZZ")
-            assert 0
+
+    def _PyXxx_Type(space):
+        return constant_pytypeobj(space, py_type_name)
     _PyXxx_Type = func_with_new_name(_PyXxx_Type, '_' + py_type_name)
 
     def check(space, py_obj):

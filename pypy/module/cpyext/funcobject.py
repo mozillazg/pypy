@@ -41,7 +41,7 @@ def init_functionobject(space):
     setup_class_for_cpyext(
         Function,
         basestruct=PyFunctionObjectStruct,
-        # --from a (W_)Function, this function fill a PyFunctionObject--
+        # --from a (W_)Function, this function fills a PyFunctionObject--
         fill_pyobj=function_fill_pyobj,
         alloc_pyobj_light=False,
         # --deallocator--
@@ -50,7 +50,7 @@ def init_functionobject(space):
     setup_class_for_cpyext(
         PyCode,
         basestruct=PyCodeObjectStruct,
-        # --from a PyCode, this function fill a PyCodeObject--
+        # --from a PyCode, this function fills a PyCodeObject--
         fill_pyobj=code_fill_pyobj,
         alloc_pyobj_light=False,
         # --deallocator--
@@ -59,26 +59,25 @@ def init_functionobject(space):
 
 PyFunction_Check, PyFunction_CheckExact = build_type_checkers("Function", Function)
 PyMethod_Check, PyMethod_CheckExact = build_type_checkers("Method", Method)
-PyCode_Check, PyCode_CheckExact = build_type_checkers("Code", PyCode)
 
 def function_fill_pyobj(space, w_func, py_func):
-    assert isinstance(w_func, Function)
-    py_func.c_func_name = get_pyobj_and_incref(space, space.wrap(w_func.name))
+    func = space.interp_w(Function, w_func)
+    py_func.c_func_name = get_pyobj_and_incref(space, space.wrap(func.name))
 
 def function_dealloc(space, py_func):
     Py_DecRef(space, py_func.c_func_name)
     from pypy.module.cpyext.object import PyObject_dealloc
     PyObject_dealloc(space, rffi.cast(PyObject, py_func))
 
-def code_fill_pyobj(space, w_obj, py_code):
-    assert isinstance(w_obj, PyCode)
-    py_code.c_co_name = get_pyobj_and_incref(space, space.wrap(w_obj.co_name))
+def code_fill_pyobj(space, w_code, py_code):
+    code = space.interp_w(PyCode, w_code)
+    py_code.c_co_name = get_pyobj_and_incref(space, space.wrap(code.co_name))
     co_flags = 0
     for name, value in ALL_CODE_FLAGS:
-        if w_obj.co_flags & getattr(pycode, name):
+        if code.co_flags & getattr(pycode, name):
             co_flags |= value
     rffi.setintfield(py_code, 'c_co_flags', co_flags)
-    rffi.setintfield(py_code, 'c_co_argcount', w_obj.co_argcount)
+    rffi.setintfield(py_code, 'c_co_argcount', code.co_argcount)
 
 def code_dealloc(space, py_code):
     Py_DecRef(space, py_code.c_co_name)
