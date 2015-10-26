@@ -71,6 +71,7 @@ def buffer_alloc_pyobj(space, w_obj):
 
     py_buf = lltype.malloc(PyBufferObjectStruct, len(srcstring), flavor='raw',
                            track_allocation=False)
+    rffi.cast(rffi.VOIDP, py_buf)   # <- ?? needed for test_getargs.py
     py_buf.c_b_base = get_pyobj_and_xincref(space, w_base)
 
     if w_base is None:
