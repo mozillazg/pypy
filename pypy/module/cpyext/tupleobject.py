@@ -58,13 +58,20 @@ def tuple_alloc_pyobj(space, w_obj):
             ob.c_ob_item[i] = get_pyobj_and_incref(space, lst_w[i])
         return ob, RRC_PERMANENT
 
+class PyTupleObjectWithNullItem(Exception):
+    pass
+
 def tuple_fill_pypy(space, w_obj, py_obj):
     """
     Fills in a W_TupleObject from a PyTupleObject.
     """
     py_tuple = rffi.cast(PyTupleObject, py_obj)
-    objects_w = [from_pyobj(space, py_tuple.c_ob_item[i])
-                 for i in range(py_tuple.c_ob_size)]
+    objects_w = []
+    for i in range(py_tuple.c_ob_size):
+        item = py_tuple.c_ob_item[i]
+        if not item:
+            raise PyTupleObjectWithNullItem
+        objects_w.append(from_pyobj(space, item))
     W_TupleObject.__init__(w_obj, objects_w)
 
 def tuple_dealloc(space, py_tup):

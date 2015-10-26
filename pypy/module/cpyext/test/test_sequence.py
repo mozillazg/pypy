@@ -11,7 +11,8 @@ class TestSequence(BaseApiTest):
         w_l = space.wrap([1, 2, 3, 4])
         assert api.PySequence_Fast(w_l, "message") is w_l
 
-        assert space.int_w(api.PySequence_Fast_GET_ITEM(w_l, 1)) == 2
+        assert space.int_w(api.from_pyobj(
+            api.PySequence_Fast_GET_ITEM(w_l, 1))) == 2
         assert api.PySequence_Fast_GET_SIZE(w_l) == 4
 
         w_set = space.wrap(set((1, 2, 3, 4)))
@@ -91,7 +92,7 @@ class TestSequence(BaseApiTest):
                     l, 3, w_value)
 
         self.raises(space, api, TypeError, api.PySequence_SetItem,
-                    api.PyTuple_New(1), 0, w_value)
+                    api.PyTuple_New(0), 0, w_value)
 
         self.raises(space, api, TypeError, api.PySequence_SetItem,
                     space.newdict(), 0, w_value)
