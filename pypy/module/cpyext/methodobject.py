@@ -118,6 +118,7 @@ class W_PyCFunctionObject(W_Root):
 
 class W_PyCMethodObject(W_PyCFunctionObject):
     w_self = None
+    w_module = None
     def __init__(self, space, ml, w_type):
         self.space = space
         self.ml = ml
@@ -137,6 +138,7 @@ PyCFunction_Check, PyCFunction_CheckExact = build_type_checkers(
 
 class W_PyCClassMethodObject(W_PyCFunctionObject):
     w_self = None
+    w_module = None
     def __init__(self, space, ml, w_type):
         self.space = space
         self.ml = ml
