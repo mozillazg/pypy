@@ -220,6 +220,7 @@ def get_cpyextplaceholder_subclass(W_Class):
     assert W_Class is not W_TypeObject
 
     class W_CPyExtPlaceHolder(W_Class):
+        _immutable_fields_ = ['cpyext_pyobj']
         def __init__(self, pyobj):
             self.cpyext_pyobj = pyobj
         def cpyext_as_pyobj(self, space):
@@ -230,9 +231,11 @@ def get_cpyextplaceholder_subclass(W_Class):
             assert isinstance(w_type, W_TypeObject)
             return w_type
 
-        # ZZZ getclass(), getweakref(), etc.?  like interpreter/typedef.py
+        # ZZZ setclass(), getweakref(), etc.?  like interpreter/typedef.py
 
     W_CPyExtPlaceHolder.__name__ = W_Class.__name__ + '_CPyExtPlaceHolder'
+    if getattr(W_Class, '_immutable_', False):
+        W_CPyExtPlaceHolder._immutable_ = True
     W_Class._cpyextplaceholder_subclass = W_CPyExtPlaceHolder
     return W_CPyExtPlaceHolder
 
