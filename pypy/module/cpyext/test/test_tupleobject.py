@@ -1,6 +1,6 @@
 import py
 
-from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
+from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_LIGHT
 from pypy.module.cpyext.pyobject import PyObject, PyObjectP, debug_collect
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from rpython.rtyper.lltypesystem import rffi, lltype
@@ -28,12 +28,12 @@ class TestTupleObject(BaseApiTest):
         assert space.eq_w(w_obj2, space.wrap(11))
         #
         # one reference from the PyTupleObject
-        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
-        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT + 1
+        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY + 1
+        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY + 1
         del atuple
         debug_collect()
-        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
-        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY_LIGHT
+        assert api.as_pyobj(w_obj1).c_ob_refcnt == REFCNT_FROM_PYPY
+        assert api.as_pyobj(w_obj2).c_ob_refcnt == REFCNT_FROM_PYPY
 
     def test_tupleobject_spec_oo(self, space, api):
         w_obj1 = space.newlist([])
