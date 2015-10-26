@@ -126,7 +126,7 @@ class W_TypeObject(W_Root):
 
     @dont_look_inside
     def __init__(w_self, space, name, bases_w, dict_w,
-                 overridetypedef=None):
+                 overridetypedef=None, from_cpyext=False):
         w_self.space = space
         w_self.name = name
         w_self.bases_w = bases_w
@@ -146,7 +146,7 @@ class W_TypeObject(W_Root):
         if overridetypedef is not None:
             setup_builtin_type(w_self)
         else:
-            setup_user_defined_type(w_self)
+            setup_user_defined_type(w_self, from_cpyext=from_cpyext)
         w_self.w_same_layout_as = get_parent_layout(w_self)
 
         if space.config.objspace.std.withtypeversion:
@@ -1096,7 +1096,7 @@ def valid_slot_name(slot_name):
             return False
     return True
 
-def setup_user_defined_type(w_self):
+def setup_user_defined_type(w_self, from_cpyext=False):
     if len(w_self.bases_w) == 0:
         w_self.bases_w = [w_self.space.w_object]
     w_bestbase = check_and_find_best_base(w_self.space, w_self.bases_w)
@@ -1108,8 +1108,9 @@ def setup_user_defined_type(w_self):
         w_self.flag_cpytype |= w_base.flag_cpytype
         w_self.flag_abstract |= w_base.flag_abstract
 
-    hasoldstylebase = copy_flags_from_bases(w_self, w_bestbase)
-    create_all_slots(w_self, hasoldstylebase, w_bestbase)
+    if not from_cpyext:
+        hasoldstylebase = copy_flags_from_bases(w_self, w_bestbase)
+        create_all_slots(w_self, hasoldstylebase, w_bestbase)
 
     ensure_common_attributes(w_self)
 

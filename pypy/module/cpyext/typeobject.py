@@ -527,7 +527,8 @@ def type_fill_pypy(space, w_type, py_obj):
     convert_getset_defs(space, dict_w, pto.c_tp_getset, w_type)
     convert_member_defs(space, dict_w, pto.c_tp_members, w_type)
 
-    W_TypeObject.__init__(w_type, space, name, bases_w, dict_w)
+    W_TypeObject.__init__(w_type, space, name, bases_w, dict_w,
+                          from_cpyext=True)
 
     if not space.is_true(space.issubtype(w_type, space.w_type)):  # ZZZ?
         w_type.flag_cpytype = True
