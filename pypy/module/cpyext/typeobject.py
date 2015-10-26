@@ -282,8 +282,8 @@ def init_typeobject(space):
                            alloc_pyobj=type_alloc_pyobj,
                            fill_pyobj=type_fill_pyobj,
                            alloc_pypy=type_alloc_pypy,
-                           fill_pypy=type_fill_pypy)
-                   #dealloc=type_dealloc)
+                           fill_pypy=type_fill_pypy,
+                           dealloc=type_dealloc)
 
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -358,21 +358,18 @@ def setup_buffer_buffer_procs(space, pto):
     c_buf.c_bf_getreadbuffer = buf_getreadbuffer.api_func.get_llhelper(space)
     pto.c_tp_as_buffer = c_buf
 
-@cpython_api([PyObject], lltype.Void, external=False)
-def type_dealloc(space, obj):
+def type_dealloc(space, obj_pto):
     from pypy.module.cpyext.object import PyObject_dealloc
-    obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_DecRef(space, obj_pto.c_tp_bases)
     Py_DecRef(space, obj_pto.c_tp_mro)
     Py_DecRef(space, obj_pto.c_tp_cache) # let's do it like cpython
     Py_DecRef(space, obj_pto.c_tp_dict)
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
-        heaptype = rffi.cast(PyHeapTypeObject, obj)
+        heaptype = rffi.cast(PyHeapTypeObject, obj_pto)
         Py_DecRef(space, heaptype.c_ht_name)
         Py_DecRef(space, base_pyo)
-        PyObject_dealloc(space, obj)
-
+        PyObject_dealloc(space, rffi.cast(PyObject, obj_pto))
 
 def type_alloc(space, w_metatype):
     ZZZ
@@ -397,9 +394,15 @@ def type_alloc(space, w_metatype):
     return rffi.cast(PyObject, heaptype)
 
 def type_alloc_pyobj(space, w_type):
-    pto = lltype.malloc(PyTypeObject, flavor='raw', zero=True,
+    heaptype = lltype.malloc(PyHeapTypeObjectStruct, flavor='raw', zero=True,
                         track_allocation=False)
-    pto.c_tp_flags |= Py_TPFLAGS_READYING
+    pto = heaptype.c_ht_type
+    pto.c_tp_flags |= Py_TPFLAGS_HEAPTYPE | Py_TPFLAGS_READYING
+    pto.c_tp_as_number = heaptype.c_as_number
+    pto.c_tp_as_sequence = heaptype.c_as_sequence
+    pto.c_tp_as_mapping = heaptype.c_as_mapping
+    pto.c_tp_as_buffer = heaptype.c_as_buffer
+
     return pto, RRC_PERMANENT
 
 def type_fill_pyobj(space, w_type, pto):
