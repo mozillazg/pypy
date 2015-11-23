@@ -1087,30 +1087,34 @@ _oplist = [
     'INSTANCE_PTR_NE/2b/i',
     'NURSERY_PTR_INCREMENT/2/r',
     #
-    'ARRAYLEN_GC/1d/i',
-    'STRLEN/1/i',
-    'STRGETITEM/2/i',
-    'GETFIELD_GC_PURE/1d/rfi',
-    'GETARRAYITEM_GC_PURE/2d/rfi',
+    #'ARRAYLEN_GC/1d/i',
+    #'STRLEN/1/i',
+    # DEL 'STRGETITEM/2/i',
+    # DEL 'GETFIELD_GC_PURE/1d/rfi',
+    # DEL 'GETARRAYITEM_GC_PURE/2d/rfi',
     #'GETFIELD_RAW_PURE/1d/rfi',     these two operations not useful and
     #'GETARRAYITEM_RAW_PURE/2d/fi',  dangerous when unrolling speculatively
-    'UNICODELEN/1/i',
-    'UNICODEGETITEM/2/i',
+    #'UNICODELEN/1/i',
+    # DEL 'UNICODEGETITEM/2/i',
     #
     '_ALWAYS_PURE_LAST',  # ----- end of always_pure operations -----
 
     '_RAW_LOAD_FIRST',
-    'GETARRAYITEM_GC/2d/rfi',
-    'VEC_GETARRAYITEM_GC/2d/fi',
-    'GETARRAYITEM_RAW/2d/fi',
-    'VEC_GETARRAYITEM_RAW/2d/fi',
-    'RAW_LOAD/2d/fi',
-    'VEC_RAW_LOAD/2d/fi',
+    #'GETARRAYITEM_GC/2d/rfi',
+    #'VEC_GETARRAYITEM_GC/2d/fi',
+    #'GETARRAYITEM_RAW/2d/fi',
+    #'VEC_GETARRAYITEM_RAW/2d/fi',
+    'RAW_LOAD/2d/rfi',
+    'RAW_LOAD_INDEXED/2d/rfi',
+    'VEC_RAW_LOAD/2d/rfi',
     '_RAW_LOAD_LAST',
 
-    'GETINTERIORFIELD_GC/2d/rfi',
-    'GETFIELD_GC/1d/rfi',
-    'GETFIELD_RAW/1d/rfi',
+    'GC_LOAD/2d/rfi',
+    'GC_LOAD_INDEXED/2d/rfi',
+
+    # DEL 'GETINTERIORFIELD_GC/2d/rfi',
+    # DEL 'GETFIELD_GC/1d/rfi',
+    # DEL 'GETFIELD_RAW/1d/rfi',
     '_MALLOC_FIRST',
     'NEW/0d/r',           #-> GcStruct, gcptrs inside are zeroed (not the rest)
     'NEW_WITH_VTABLE/0d/r',#-> GcStruct with vtable, gcptrs inside are zeroed
@@ -1127,23 +1131,28 @@ _oplist = [
 
     'INCREMENT_DEBUG_COUNTER/1/n',
     '_RAW_STORE_FIRST',
-    'SETARRAYITEM_GC/3d/n',
-    'VEC_SETARRAYITEM_GC/3d/n',
-    'SETARRAYITEM_RAW/3d/n',
-    'VEC_SETARRAYITEM_RAW/3d/n',
+    # DEL 'SETARRAYITEM_GC/3d/n',
+    # DEL 'VEC_SETARRAYITEM_GC/3d/n',
+    # DEL 'SETARRAYITEM_RAW/3d/n',
+    # DEL 'VEC_SETARRAYITEM_RAW/3d/n',
     'RAW_STORE/3d/n',
+    'RAW_STORE_INDEXED/3d/n',
     'VEC_RAW_STORE/3d/n',
     '_RAW_STORE_LAST',
-    'SETINTERIORFIELD_GC/3d/n',
-    'SETINTERIORFIELD_RAW/3d/n',    # right now, only used by tests
-    'SETFIELD_GC/2d/n',
+
+    'GC_STORE/3d/n',
+    'GC_STORE_INDEXED/3d/n',
+
+    # DEL 'SETINTERIORFIELD_GC/3d/n',
+    # DEL 'SETINTERIORFIELD_RAW/3d/n',    # right now, only used by tests
+    # DEL 'SETFIELD_GC/2d/n',
     'ZERO_PTR_FIELD/2/n', # only emitted by the rewrite, clears a pointer field
                         # at a given constant offset, no descr
     'ZERO_ARRAY/3d/n',  # only emitted by the rewrite, clears (part of) an array
                         # [arraygcptr, firstindex, length], descr=ArrayDescr
-    'SETFIELD_RAW/2d/n',
-    'STRSETITEM/3/n',
-    'UNICODESETITEM/3/n',
+    # DEL 'SETFIELD_RAW/2d/n',
+    # DEL 'STRSETITEM/3/n',
+    # DEL 'UNICODESETITEM/3/n',
     'COND_CALL_GC_WB/1d/n',       # [objptr] (for the write barrier)
     'COND_CALL_GC_WB_ARRAY/2d/n', # [objptr, arrayindex] (write barr. for array)
     '_JIT_DEBUG_FIRST',
