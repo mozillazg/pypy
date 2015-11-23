@@ -32,6 +32,10 @@ class AbstractLLCPU(AbstractCPU):
     done_with_this_frame_descr_void     = None
     exit_frame_with_exception_descr_ref = None
 
+    # which operations can be specified in the ISA of this
+    # cpu? E.g. x86 can multiply an index with 1,2,4,8 while loading/storing
+    indexing_factors = [1]
+
     vector_extension = False
     vector_register_size = 0 # in bytes
     vector_horizontal_operations = False

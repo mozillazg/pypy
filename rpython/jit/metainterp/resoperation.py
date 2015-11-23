@@ -1087,14 +1087,14 @@ _oplist = [
     'INSTANCE_PTR_NE/2b/i',
     'NURSERY_PTR_INCREMENT/2/r',
     #
-    #'ARRAYLEN_GC/1d/i',
-    #'STRLEN/1/i',
-    # DEL 'STRGETITEM/2/i',
-    # DEL 'GETFIELD_GC_PURE/1d/rfi',
+    # DEL 'ARRAYLEN_GC/1d/i',
+    # DEL 'STRLEN/1/i',
+    'STRGETITEM/2/i',
+    'GETFIELD_GC_PURE/1d/rfi',
     # DEL 'GETARRAYITEM_GC_PURE/2d/rfi',
     #'GETFIELD_RAW_PURE/1d/rfi',     these two operations not useful and
     #'GETARRAYITEM_RAW_PURE/2d/fi',  dangerous when unrolling speculatively
-    #'UNICODELEN/1/i',
+    # DEL 'UNICODELEN/1/i',
     # DEL 'UNICODEGETITEM/2/i',
     #
     '_ALWAYS_PURE_LAST',  # ----- end of always_pure operations -----
@@ -1374,17 +1374,20 @@ _opboolreflex = {
 _opvector = {
     rop.RAW_LOAD_I:         rop.VEC_RAW_LOAD_I,
     rop.RAW_LOAD_F:         rop.VEC_RAW_LOAD_F,
-    rop.GETARRAYITEM_RAW_I: rop.VEC_GETARRAYITEM_RAW_I,
-    rop.GETARRAYITEM_RAW_F: rop.VEC_GETARRAYITEM_RAW_F,
-    rop.GETARRAYITEM_GC_I: rop.VEC_GETARRAYITEM_GC_I,
-    rop.GETARRAYITEM_GC_F: rop.VEC_GETARRAYITEM_GC_F,
+    rop.GC_LOAD_I:         rop.VEC_RAW_LOAD_I,
+    rop.GC_LOAD_F:         rop.VEC_RAW_LOAD_F,
+    #rop.GETARRAYITEM_RAW_I: rop.VEC_GETARRAYITEM_RAW_I,
+    #rop.GETARRAYITEM_RAW_F: rop.VEC_GETARRAYITEM_RAW_F,
+    #rop.GETARRAYITEM_GC_I: rop.VEC_GETARRAYITEM_GC_I,
+    #rop.GETARRAYITEM_GC_F: rop.VEC_GETARRAYITEM_GC_F,
     # note that there is no _PURE operation for vector operations.
     # reason: currently we do not care if it is pure or not!
-    rop.GETARRAYITEM_GC_PURE_I: rop.VEC_GETARRAYITEM_GC_I,
-    rop.GETARRAYITEM_GC_PURE_F: rop.VEC_GETARRAYITEM_GC_F,
+    #rop.GETARRAYITEM_GC_PURE_I: rop.VEC_GETARRAYITEM_GC_I,
+    #rop.GETARRAYITEM_GC_PURE_F: rop.VEC_GETARRAYITEM_GC_F,
     rop.RAW_STORE:        rop.VEC_RAW_STORE,
-    rop.SETARRAYITEM_RAW: rop.VEC_SETARRAYITEM_RAW,
-    rop.SETARRAYITEM_GC: rop.VEC_SETARRAYITEM_GC,
+    rop.GC_STORE:         rop.VEC_RAW_STORE, # TODO
+    #rop.SETARRAYITEM_RAW: rop.VEC_SETARRAYITEM_RAW,
+    #rop.SETARRAYITEM_GC: rop.VEC_SETARRAYITEM_GC,
 
     rop.INT_ADD:   rop.VEC_INT_ADD,
     rop.INT_SUB:   rop.VEC_INT_SUB,

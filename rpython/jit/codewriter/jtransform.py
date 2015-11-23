@@ -703,16 +703,14 @@ class Transformer(object):
             pure = '_pure'
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.result.concretetype)
-        if ARRAY._gckind != 'gc':
-            assert ARRAY._gckind == 'raw'
-            if kind == 'r':
-                raise Exception("getarrayitem_raw_r not supported")
-            pure = ''   # always redetected from pyjitpl.py: we don't need
-                        # a '_pure' version of getarrayitem_raw
-        return SpaceOperation('getarrayitem_%s_%s%s' % (ARRAY._gckind,
-                                                        kind[0], pure),
-                              [op.args[0], op.args[1], arraydescr],
-                              op.result)
+        index_ops = []
+        obj = op.args[0]
+        index = op.args[1]
+
+        assert ARRAY._gckind in ('gc','raw')
+        name = '%s_load_%s' % (ARRAY._gckind, kind[0])
+        args = [obj, index, arraydescr]
+        return index_ops + [SpaceOperation(name, args, op.result)]
 
     def rewrite_op_setarrayitem(self, op):
         ARRAY = op.args[0].concretetype.TO
