@@ -635,14 +635,14 @@ class AbstractVirtualInfo(object):
     def allocate_and_fill_ptr(self, decoder, index):
         struct = self.allocate_ptr(decoder)
         decoder.virtuals_cache.set_ptr(index, struct)
-        self.fill(decoder, struct)
+        self.fill_ptr(decoder, struct)
         return struct
 
     @specialize.argtype(1)
     def allocate_and_fill_int(self, decoder, index):
         struct = self.allocate_int(decoder)
         decoder.virtuals_cache.set_int(index, struct)
-        self.fill(decoder, struct)
+        self.fill_int(decoder, struct)
         return struct
 
 class AbstractVirtualStructInfo(AbstractVirtualInfo):
@@ -651,7 +651,7 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
         #self.fieldnums = ...
 
     @specialize.argtype(1)
-    def fill(self, decoder, struct):
+    def fill_ptr(self, decoder, struct):
         for i in range(len(self.fielddescrs)):
             descr = self.fielddescrs[i]
             num = self.fieldnums[i]
@@ -704,7 +704,7 @@ class AbstractVArrayInfo(AbstractVirtualInfo):
         return decoder.allocate_array(length, self.arraydescr, self.clear)
 
     @specialize.argtype(1)
-    def fill(self, decoder, array):
+    def fill_ptr(self, decoder, array):
         arraydescr = self.arraydescr
         length = len(self.fieldnums)
         # NB. the check for the kind of array elements is moved out of the loop
@@ -756,7 +756,7 @@ class VRawBufferInfo(VAbstractRawInfo):
         return decoder.allocate_raw_buffer(self.size)
 
     @specialize.argtype(1)
-    def fill(self, decoder, buffer):
+    def fill_int(self, decoder, buffer):
         for i in range(len(self.offsets)):
             offset = self.offsets[i]
             descr = self.descrs[i]
@@ -782,7 +782,7 @@ class VRawSliceInfo(VAbstractRawInfo):
         return buffer
 
     @specialize.argtype(1)
-    def fill(self, decoder, buffer):
+    def fill_int(self, decoder, buffer):
         pass
 
     def debug_prints(self):
@@ -808,7 +808,7 @@ class VArrayStructInfo(AbstractVirtualInfo):
                                        clear=True)
 
     @specialize.argtype(1)
-    def fill(self, decoder, array):
+    def fill_ptr(self, decoder, array):
         p = 0
         for i in range(self.size):
             for j in range(len(self.fielddescrs)):
@@ -853,7 +853,7 @@ class VStrConcatInfo(AbstractVirtualInfo):
         return decoder.concat_strings(left, right)
 
     @specialize.argtype(1)
-    def fill(self, decoder, str):
+    def fill_ptr(self, decoder, str):
         pass
 
     def debug_prints(self):
@@ -871,7 +871,7 @@ class VStrSliceInfo(AbstractVirtualInfo):
         return decoder.slice_string(largerstr, start, length)
 
     @specialize.argtype(1)
-    def fill(self, decoder, str):
+    def fill_ptr(self, decoder, str):
         pass
 
     def debug_prints(self):
@@ -890,7 +890,7 @@ class VUniPlainInfo(AbstractVirtualInfo):
         return decoder.allocate_unicode(length)
 
     @specialize.argtype(1)
-    def fill(self, decoder, string):
+    def fill_ptr(self, decoder, string):
         length = len(self.fieldnums)
         for i in range(length):
             charnum = self.fieldnums[i]
@@ -916,7 +916,7 @@ class VUniConcatInfo(AbstractVirtualInfo):
         return string
 
     @specialize.argtype(1)
-    def fill(self, decoder, str):
+    def fill_ptr(self, decoder, str):
         pass
 
     def debug_prints(self):
@@ -935,7 +935,7 @@ class VUniSliceInfo(AbstractVirtualInfo):
         return decoder.slice_unicode(largerstr, start, length)
 
     @specialize.argtype(1)
-    def fill(self, decoder, str):
+    def fill_ptr(self, decoder, str):
         pass
 
     def debug_prints(self):
@@ -1052,9 +1052,9 @@ class AbstractResumeDataReader(object):
             rd_virtual = rd_virtuals[i]
             if rd_virtual is not None:
                 if rd_virtual.kind == REF:
-                    rd_virtual.fill(self, self.virtuals_cache.get_ptr(i))
+                    rd_virtual.fill_ptr(self, self.virtuals_cache.get_ptr(i))
                 elif rd_virtual.kind == INT:
-                    rd_virtual.fill(self, self.virtuals_cache.get_int(i))
+                    rd_virtual.fill_int(self, self.virtuals_cache.get_int(i))
                 else:
                     assert False
     _fill_all_virtuals._always_inline_ = False
