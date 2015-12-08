@@ -622,8 +622,6 @@ class ResumeDataVirtualAdder(VirtualVisitor):
 class AbstractVirtualInfo(object):
     kind = REF
     is_about_raw = False
-    #def allocate(self, decoder, index):
-    #    raise NotImplementedError
     def equals(self, fieldnums):
         return tagged_list_eq(self.fieldnums, fieldnums)
 
@@ -633,6 +631,19 @@ class AbstractVirtualInfo(object):
     def debug_prints(self):
         raise NotImplementedError
 
+    @specialize.argtype(1)
+    def allocate_and_fill_ptr(self, decoder, index):
+        struct = self.allocate_ptr(decoder)
+        decoder.virtuals_cache.set_ptr(index, struct)
+        self.fill(decoder, struct)
+        return struct
+
+    @specialize.argtype(1)
+    def allocate_and_fill_int(self, decoder, index):
+        struct = self.allocate_int(decoder)
+        decoder.virtuals_cache.set_int(index, struct)
+        self.fill(decoder, struct)
+        return struct
 
 class AbstractVirtualStructInfo(AbstractVirtualInfo):
     def __init__(self, fielddescrs):
@@ -640,13 +651,12 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
         #self.fieldnums = ...
 
     @specialize.argtype(1)
-    def setfields(self, decoder, struct):
+    def fill(self, decoder, struct):
         for i in range(len(self.fielddescrs)):
             descr = self.fielddescrs[i]
             num = self.fieldnums[i]
             if not tagged_eq(num, UNINITIALIZED):
                 decoder.setfield(struct, num, descr)
-        return struct
 
     def debug_prints(self):
         assert len(self.fielddescrs) == len(self.fieldnums)
@@ -661,10 +671,8 @@ class VirtualInfo(AbstractVirtualStructInfo):
         self.descr = descr
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
-        struct = decoder.allocate_with_vtable(descr=self.descr)
-        decoder.virtuals_cache.set_ptr(index, struct)
-        return self.setfields(decoder, struct)
+    def allocate_ptr(self, decoder):
+        return decoder.allocate_with_vtable(descr=self.descr)
 
     def debug_prints(self):
         debug_print("\tvirtualinfo", self.known_class.repr_rpython(), " at ",  compute_unique_id(self))
@@ -677,10 +685,8 @@ class VStructInfo(AbstractVirtualStructInfo):
         self.typedescr = typedescr
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
-        struct = decoder.allocate_struct(self.typedescr)
-        decoder.virtuals_cache.set_ptr(index, struct)
-        return self.setfields(decoder, struct)
+    def allocate_ptr(self, decoder):
+        return decoder.allocate_struct(self.typedescr)
 
     def debug_prints(self):
         debug_print("\tvstructinfo", self.typedescr.repr_rpython(), " at ",  compute_unique_id(self))
@@ -693,11 +699,14 @@ class AbstractVArrayInfo(AbstractVirtualInfo):
         #self.fieldnums = ...
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
+    def allocate_ptr(self, decoder):
         length = len(self.fieldnums)
+        return decoder.allocate_array(length, self.arraydescr, self.clear)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, array):
         arraydescr = self.arraydescr
-        array = decoder.allocate_array(length, arraydescr, self.clear)
-        decoder.virtuals_cache.set_ptr(index, array)
+        length = len(self.fieldnums)
         # NB. the check for the kind of array elements is moved out of the loop
         if arraydescr.is_array_of_pointers():
             for i in range(length):
@@ -743,10 +752,11 @@ class VRawBufferInfo(VAbstractRawInfo):
         self.descrs = descrs
 
     @specialize.argtype(1)
-    def allocate_int(self, decoder, index):
-        length = len(self.fieldnums)
-        buffer = decoder.allocate_raw_buffer(self.size)
-        decoder.virtuals_cache.set_int(index, buffer)
+    def allocate_int(self, decoder):
+        return decoder.allocate_raw_buffer(self.size)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, buffer):
         for i in range(len(self.offsets)):
             offset = self.offsets[i]
             descr = self.descrs[i]
@@ -765,12 +775,15 @@ class VRawSliceInfo(VAbstractRawInfo):
         self.offset = offset
 
     @specialize.argtype(1)
-    def allocate_int(self, decoder, index):
+    def allocate_int(self, decoder):
         assert len(self.fieldnums) == 1
         base_buffer = decoder.decode_int(self.fieldnums[0])
         buffer = decoder.int_add_const(base_buffer, self.offset)
-        decoder.virtuals_cache.set_int(index, buffer)
         return buffer
+
+    @specialize.argtype(1)
+    def fill(self, decoder, buffer):
+        pass
 
     def debug_prints(self):
         debug_print("\tvrawsliceinfo", " at ",  compute_unique_id(self))
@@ -790,10 +803,12 @@ class VArrayStructInfo(AbstractVirtualInfo):
             debug_print("\t\t", str(untag(i)))
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
-        array = decoder.allocate_array(self.size, self.arraydescr,
+    def allocate_ptr(self, decoder):
+        return decoder.allocate_array(self.size, self.arraydescr,
                                        clear=True)
-        decoder.virtuals_cache.set_ptr(index, array)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, array):
         p = 0
         for i in range(self.size):
             for j in range(len(self.fielddescrs)):
@@ -802,17 +817,19 @@ class VArrayStructInfo(AbstractVirtualInfo):
                     decoder.setinteriorfield(i, array, num,
                                              self.fielddescrs[j])
                 p += 1
-        return array
 
 
 class VStrPlainInfo(AbstractVirtualInfo):
     """Stands for the string made out of the characters of all fieldnums."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
+    def allocate_ptr(self, decoder):
         length = len(self.fieldnums)
-        string = decoder.allocate_string(length)
-        decoder.virtuals_cache.set_ptr(index, string)
+        return decoder.allocate_string(length)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, string):
+        length = len(self.fieldnums)
         for i in range(length):
             charnum = self.fieldnums[i]
             if not tagged_eq(charnum, UNINITIALIZED):
@@ -828,14 +845,16 @@ class VStrConcatInfo(AbstractVirtualInfo):
     other strings."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
+    def allocate_ptr(self, decoder):
         # xxx for blackhole resuming, this will build all intermediate
         # strings and throw them away immediately, which is a bit sub-
         # efficient.  Not sure we care.
         left, right = self.fieldnums
-        string = decoder.concat_strings(left, right)
-        decoder.virtuals_cache.set_ptr(index, string)
-        return string
+        return decoder.concat_strings(left, right)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, str):
+        pass
 
     def debug_prints(self):
         debug_print("\tvstrconcatinfo at ",  compute_unique_id(self))
@@ -847,11 +866,13 @@ class VStrSliceInfo(AbstractVirtualInfo):
     """Stands for the string made out of slicing another string."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
+    def allocate_ptr(self, decoder):
         largerstr, start, length = self.fieldnums
-        string = decoder.slice_string(largerstr, start, length)
-        decoder.virtuals_cache.set_ptr(index, string)
-        return string
+        return decoder.slice_string(largerstr, start, length)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, str):
+        pass
 
     def debug_prints(self):
         debug_print("\tvstrsliceinfo at ",  compute_unique_id(self))
@@ -864,10 +885,13 @@ class VUniPlainInfo(AbstractVirtualInfo):
     fieldnums."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
+    def allocate_ptr(self, decoder):
         length = len(self.fieldnums)
-        string = decoder.allocate_unicode(length)
-        decoder.virtuals_cache.set_ptr(index, string)
+        return decoder.allocate_unicode(length)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, string):
+        length = len(self.fieldnums)
         for i in range(length):
             charnum = self.fieldnums[i]
             if not tagged_eq(charnum, UNINITIALIZED):
@@ -883,14 +907,17 @@ class VUniConcatInfo(AbstractVirtualInfo):
     other unicode strings."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
+    def allocate_ptr(self, decoder):
         # xxx for blackhole resuming, this will build all intermediate
         # strings and throw them away immediately, which is a bit sub-
         # efficient.  Not sure we care.
         left, right = self.fieldnums
         string = decoder.concat_unicodes(left, right)
-        decoder.virtuals_cache.set_ptr(index, string)
         return string
+
+    @specialize.argtype(1)
+    def fill(self, decoder, str):
+        pass
 
     def debug_prints(self):
         debug_print("\tvuniconcatinfo at ",  compute_unique_id(self))
@@ -903,11 +930,13 @@ class VUniSliceInfo(AbstractVirtualInfo):
     unicode string."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder, index):
+    def allocate_ptr(self, decoder):
         largerstr, start, length = self.fieldnums
-        string = decoder.slice_unicode(largerstr, start, length)
-        decoder.virtuals_cache.set_ptr(index, string)
-        return string
+        return decoder.slice_unicode(largerstr, start, length)
+
+    @specialize.argtype(1)
+    def fill(self, decoder, str):
+        pass
 
     def debug_prints(self):
         debug_print("\tvunisliceinfo at ",  compute_unique_id(self))
@@ -966,7 +995,6 @@ class AbstractResumeDataReader(object):
 
     def _prepare(self, storage):
         self._prepare_virtuals(storage.rd_virtuals)
-        self._prepare_pendingfields(storage.rd_pendingfields)
 
     def read_jitcode_pos_pc(self):
         jitcode_pos, self.cur_index = resumecode.numb_next_item(self.numb,
@@ -987,8 +1015,7 @@ class AbstractResumeDataReader(object):
         v = self.virtuals_cache.get_ptr(index)
         if not v:
             assert self.rd_virtuals is not None
-            v = self.rd_virtuals[index].allocate(self, index)
-            ll_assert(v == self.virtuals_cache.get_ptr(index), "resume.py: bad cache")
+            v = self.rd_virtuals[index].allocate_and_fill_ptr(self, index)
         return v
 
     def getvirtual_int(self, index):
@@ -998,23 +1025,40 @@ class AbstractResumeDataReader(object):
             v = self.rd_virtuals[index]
             ll_assert(bool(v), "resume.py: null rd_virtuals[index]")
             assert v.is_about_raw and isinstance(v, VAbstractRawInfo)
-            v = v.allocate_int(self, index)
-            ll_assert(v == self.virtuals_cache.get_int(index), "resume.py: bad cache")
+            v = v.allocate_and_fill_int(self, index)
         return v
 
     def force_all_virtuals(self):
         rd_virtuals = self.rd_virtuals
         if rd_virtuals:
+            # allocate them
             for i in range(len(rd_virtuals)):
                 rd_virtual = rd_virtuals[i]
                 if rd_virtual is not None:
                     if rd_virtual.kind == REF:
-                        self.getvirtual_ptr(i)
+                        self.virtuals_cache.set_ptr(i,
+                            rd_virtual.allocate_ptr(self))
                     elif rd_virtual.kind == INT:
-                        self.getvirtual_int(i)
+                        self.virtuals_cache.set_int(i,
+                            rd_virtual.allocate_int(self))
                     else:
                         assert False
+            self._fill_all_virtuals()
         return self.virtuals_cache
+
+    def _fill_all_virtuals(self):
+        rd_virtuals = self.rd_virtuals
+        for i in range(len(rd_virtuals)):
+            rd_virtual = rd_virtuals[i]
+            if rd_virtual is not None:
+                if rd_virtual.kind == REF:
+                    rd_virtual.fill(self, self.virtuals_cache.get_ptr(i))
+                elif rd_virtual.kind == INT:
+                    rd_virtual.fill(self, self.virtuals_cache.get_int(i))
+                else:
+                    assert False
+    _fill_all_virtuals._always_inline_ = False
+
 
     def _prepare_virtuals(self, virtuals):
         if virtuals:
@@ -1082,6 +1126,7 @@ class AbstractResumeDataReader(object):
 def rebuild_from_resumedata(metainterp, storage, deadframe,
                             virtualizable_info, greenfield_info):
     resumereader = ResumeDataBoxReader(storage, deadframe, metainterp)
+    resumereader._prepare_pendingfields(storage.rd_pendingfields)
     boxes = resumereader.consume_vref_and_vable_boxes(virtualizable_info,
                                                       greenfield_info)
     virtualizable_boxes, virtualref_boxes = boxes
@@ -1361,6 +1406,9 @@ def blackhole_from_resumedata(blackholeinterpbuilder, jitcodes,
     try:
         resumereader = ResumeDataDirectReader(blackholeinterpbuilder.metainterp_sd,
                                               storage, deadframe, all_virtuals)
+        if all_virtuals is None:
+            resumereader.force_all_virtuals()
+        resumereader._prepare_pendingfields(storage.rd_pendingfields)
         vinfo = jitdriver_sd.virtualizable_info
         ginfo = jitdriver_sd.greenfield_info
         vrefinfo = blackholeinterpbuilder.metainterp_sd.virtualref_info
@@ -1394,7 +1442,9 @@ def force_from_resumedata(metainterp_sd, storage, deadframe, vinfo, ginfo):
     resumereader.handling_async_forcing()
     vrefinfo = metainterp_sd.virtualref_info
     resumereader.consume_vref_and_vable(vrefinfo, vinfo, ginfo)
-    return resumereader.force_all_virtuals()
+    virtuals = resumereader.force_all_virtuals()
+    resumereader._prepare_pendingfields(storage.rd_pendingfields)
+    return virtuals
 
 
 class ResumeDataDirectReader(AbstractResumeDataReader):
