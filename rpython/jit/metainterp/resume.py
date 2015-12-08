@@ -723,7 +723,6 @@ class AbstractVArrayInfo(AbstractVirtualInfo):
                 num = self.fieldnums[i]
                 if not tagged_eq(num, UNINITIALIZED):
                     decoder.setarrayitem_int(array, i, num, arraydescr)
-        return array
 
     def debug_prints(self):
         debug_print("\tvarrayinfo", self.arraydescr, " at ",
@@ -896,7 +895,6 @@ class VUniPlainInfo(AbstractVirtualInfo):
             charnum = self.fieldnums[i]
             if not tagged_eq(charnum, UNINITIALIZED):
                 decoder.unicode_setitem(string, i, charnum)
-        return string
 
     def debug_prints(self):
         debug_print("\tvuniplaininfo length", len(self.fieldnums), " at ",  compute_unique_id(self))
