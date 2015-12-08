@@ -1036,11 +1036,13 @@ class AbstractResumeDataReader(object):
                 rd_virtual = rd_virtuals[i]
                 if rd_virtual is not None:
                     if rd_virtual.kind == REF:
-                        self.virtuals_cache.set_ptr(i,
-                            rd_virtual.allocate_ptr(self))
+                        if not self.virtuals_cache.get_ptr(i):
+                            self.virtuals_cache.set_ptr(i,
+                                rd_virtual.allocate_ptr(self))
                     elif rd_virtual.kind == INT:
-                        self.virtuals_cache.set_int(i,
-                            rd_virtual.allocate_int(self))
+                        if not self.virtuals_cache.get_int(i):
+                            self.virtuals_cache.set_int(i,
+                                rd_virtual.allocate_int(self))
                     else:
                         assert False
             self._fill_all_virtuals()
