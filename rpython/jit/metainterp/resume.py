@@ -826,13 +826,12 @@ class VStrPlainInfo(AbstractVirtualInfo):
         return decoder.allocate_string(length)
 
     @specialize.argtype(1)
-    def fill(self, decoder, string):
+    def fill_ptr(self, decoder, string):
         length = len(self.fieldnums)
         for i in range(length):
             charnum = self.fieldnums[i]
             if not tagged_eq(charnum, UNINITIALIZED):
                 decoder.string_setitem(string, i, charnum)
-        return string
 
     def debug_prints(self):
         debug_print("\tvstrplaininfo length", len(self.fieldnums), " at ",  compute_unique_id(self))
