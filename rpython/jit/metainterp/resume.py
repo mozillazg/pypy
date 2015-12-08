@@ -760,7 +760,6 @@ class VRawBufferInfo(VAbstractRawInfo):
             offset = self.offsets[i]
             descr = self.descrs[i]
             decoder.setrawbuffer_item(buffer, self.fieldnums[i], offset, descr)
-        return buffer
 
     def debug_prints(self):
         debug_print("\tvrawbufferinfo", " at ",  compute_unique_id(self))
