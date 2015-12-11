@@ -689,7 +689,7 @@ class ResumeDescr(AbstractFailDescr):
         return self
 
 class AbstractResumeGuardDescr(ResumeDescr):
-    _attrs_ = ('status',)
+    _attrs_ = ('status', 'global_status')
 
     status = r_uint(0)
     global_status = r_uint(0) # quick hack, we can put it on a subclass if we want
