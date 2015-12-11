@@ -205,7 +205,7 @@ class W_TypeObject(W_Root):
         # prebuilt objects cannot get their version_tag changed
         return w_self._pure_version_tag()
 
-    @elidable_promote()
+#    @elidable_promote()
     def _pure_version_tag(w_self):
         return w_self._version_tag
 
@@ -396,13 +396,13 @@ class W_TypeObject(W_Root):
 
     def lookup_where_with_method_cache(w_self, name):
         space = w_self.space
-        promote(w_self)
+#        promote(w_self)
         assert space.config.objspace.std.withmethodcache
-        version_tag = promote(w_self.version_tag())
+        version_tag = w_self.version_tag()#promote(w_self.version_tag())
         if version_tag is None:
             tup = w_self._lookup_where(name)
             return tup
-        name = promote_string(name)
+     #   name = promote_string(name)
         tup_w = w_self._pure_lookup_where_with_method_cache(name, version_tag)
         w_class, w_value = tup_w
         if (space.config.objspace.std.withtypeversion and
@@ -498,8 +498,8 @@ class W_TypeObject(W_Root):
         w_self.flag_abstract = bool(abstract)
 
     def issubtype(w_self, w_type):
-        promote(w_self)
-        promote(w_type)
+        #promote(w_self)
+        #promote(w_type)
         if w_self.space.config.objspace.std.withtypeversion and we_are_jitted():
             version_tag1 = w_self.version_tag()
             version_tag2 = w_type.version_tag()
@@ -581,7 +581,7 @@ class W_TypeObject(W_Root):
         self._lifeline_ = None
 
     def descr_call(self, space, __args__):
-        promote(self)
+        #promote(self)
         # invoke the __new__ of the type
         if not we_are_jitted():
             # note that the annotator will figure out that self.w_new_function
@@ -1177,7 +1177,7 @@ def is_mro_purely_of_types(mro_w):
 def _issubtype(w_sub, w_type):
     return w_type in w_sub.mro_w
 
-@elidable_promote()
+#@elidable_promote()
 def _pure_issubtype(w_sub, w_type, version_tag1, version_tag2):
     return _issubtype(w_sub, w_type)
 
