@@ -569,14 +569,14 @@ class BlackholeInterpreter(object):
     def bhimpl_float_copy(a):
         return a
 
-    @arguments("i")
-    def bhimpl_int_guard_value(a):
+    @arguments("i", "i")
+    def bhimpl_int_guard_value(a, f):
         pass
-    @arguments("r")
-    def bhimpl_ref_guard_value(a):
+    @arguments("r", "i")
+    def bhimpl_ref_guard_value(a, f):
         pass
-    @arguments("f")
-    def bhimpl_float_guard_value(a):
+    @arguments("f", "i")
+    def bhimpl_float_guard_value(a, f):
         pass
     @arguments("r", "i", "d", returns="r")
     def bhimpl_str_guard_value(a, i, d):

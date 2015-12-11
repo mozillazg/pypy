@@ -1163,9 +1163,9 @@ class MIFrame(object):
     def opimpl_copyunicodecontent(self, srcbox, dstbox, srcstartbox, dststartbox, lengthbox):
         return self.execute(rop.COPYUNICODECONTENT, srcbox, dstbox, srcstartbox, dststartbox, lengthbox)
 
-    @arguments("box", "orgpc")
-    def _opimpl_guard_value(self, box, orgpc):
-        self.implement_guard_value(box, orgpc)
+    @arguments("box", "orgpc", "box")
+    def _opimpl_guard_value(self, box, orgpc, flag):
+        self.implement_guard_value(box, orgpc, flag.getint())
 
     @arguments("box", "box", "descr", "orgpc")
     def opimpl_str_guard_value(self, box, funcbox, descr, orgpc):
@@ -1474,15 +1474,15 @@ class MIFrame(object):
         except ChangeFrame:
             pass
 
-    def implement_guard_value(self, box, orgpc):
+    def implement_guard_value(self, box, orgpc, force=False):
         """Promote the given Box into a Const.  Note: be careful, it's a
         bit unclear what occurs if a single opcode needs to generate
         several ones and/or ones not near the beginning."""
         if isinstance(box, Const):
             return box     # no promotion needed, already a Const
         else:
-            if (self.metainterp.forbidden_val and box.type == 'r' and
-                lltype.cast_ptr_to_int(box.getref_base()) ==
+            if (not force and self.metainterp.forbidden_val and box.type == 'r'
+                and lltype.cast_ptr_to_int(box.getref_base()) ==
                 self.metainterp.forbidden_val):
                 return box
             promoted_box = executor.constant_from_op(box)
