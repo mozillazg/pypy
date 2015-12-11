@@ -28,7 +28,7 @@ class LLTrace(object):
     has_been_freed = False
     invalid = False
 
-    def __init__(self, inputargs, operations):
+    def __init__(self, jitcounter, inputargs, operations):
         # We need to clone the list of operations because the
         # front-end will mutate them under our feet again.  We also
         # need to make sure things get freed.
@@ -52,7 +52,7 @@ class LLTrace(object):
             if opnum == rop.GUARD_VALUE:
                 # we don't care about the value 13 here, because we gonna
                 # fish it from the extra slot on frame anyway
-                op.getdescr().make_a_counter_per_value(op, 13)
+                op.getdescr().make_a_counter_per_value(jitcounter, op, 13)
             if op.getdescr() is not None:
                 if op.is_guard() or op.getopnum() == rop.FINISH:
                     newdescr = op.getdescr()
@@ -348,7 +348,7 @@ class LLGraphCPU(model.AbstractCPU):
                      unique_id=0, log=True, name='', logger=None):
         clt = model.CompiledLoopToken(self, looptoken.number)
         looptoken.compiled_loop_token = clt
-        lltrace = LLTrace(inputargs, operations)
+        lltrace = LLTrace(self.jitcounter, inputargs, operations)
         clt._llgraph_loop = lltrace
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
@@ -357,7 +357,7 @@ class LLGraphCPU(model.AbstractCPU):
                        original_loop_token, log=True, logger=None):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
-        lltrace = LLTrace(inputargs, operations)
+        lltrace = LLTrace(self.jitcounter, inputargs, operations)
         faildescr._llgraph_bridge = lltrace
         clt._llgraph_alltraces.append(lltrace)
         self._record_labels(lltrace)

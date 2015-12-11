@@ -251,6 +251,7 @@ class WarmRunnerDesc(object):
             self.jitcounter = counter.JitCounter(translator=translator)
         else:
             self.jitcounter = counter.DeterministicJitCounter()
+        self.cpu.jitcounter = self.jitcounter
         #
         self.hooks = policy.jithookiface
         self.make_virtualizable_infos()

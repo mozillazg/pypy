@@ -1,6 +1,6 @@
 import py
 from rpython.rlib.jit import JitDriver, hint, set_param, dont_look_inside,\
-     elidable
+     elidable, promote
 from rpython.rlib.objectmodel import compute_hash
 from rpython.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from rpython.jit.metainterp.test.support import LLJitMixin
@@ -1107,6 +1107,29 @@ class LoopTest(object):
         self.meta_interp(f, [15])
         # one guard_false got removed
         self.check_resops(guard_false=4, guard_true=5)
+
+    def test_too_many_promotes(self):
+        driver = JitDriver(greens=[], reds='auto')
+
+        class A(object):
+            _immutable_fields_ = ['a']
+
+            def __init__(self, a):
+                self.a = a
+
+        lst = [A(1), A(2), A(3), A(4), A(5)]
+
+        def f(i):
+            s = 0
+            while i > 0:
+                driver.jit_merge_point()
+                s += promote(lst[i % 5]).a
+                i -= 1
+            return s
+
+        assert self.meta_interp(f, [45]) == f(45)
+        self.check_resops(getfield_gc_pure_i=1)
+        self.check_trace_count(2)
 
 class TestLLtype(LoopTest, LLJitMixin):
     pass

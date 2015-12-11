@@ -692,6 +692,7 @@ class AbstractResumeGuardDescr(ResumeDescr):
     _attrs_ = ('status',)
 
     status = r_uint(0)
+    global_status = r_uint(0) # quick hack, we can put it on a subclass if we want
 
     ST_BUSY_FLAG    = 0x01     # if set, busy tracing from the guard
     ST_TYPE_MASK    = 0x06     # mask for the type (TY_xxx)
@@ -705,11 +706,12 @@ class AbstractResumeGuardDescr(ResumeDescr):
     TY_FLOAT        = 0x06
 
     def handle_fail(self, deadframe, metainterp_sd, jitdriver_sd):
-        if self.must_compile(deadframe, metainterp_sd, jitdriver_sd):
+        must_compile, forbidden_val = self.must_compile(deadframe, metainterp_sd, jitdriver_sd)
+        if must_compile:
             self.start_compiling()
             try:
                 self._trace_and_compile_from_bridge(deadframe, metainterp_sd,
-                                                    jitdriver_sd)
+                                                    jitdriver_sd, forbidden_val)
             finally:
                 self.done_compiling()
         else:
@@ -722,14 +724,14 @@ class AbstractResumeGuardDescr(ResumeDescr):
         assert 0, "unreachable"
 
     def _trace_and_compile_from_bridge(self, deadframe, metainterp_sd,
-                                       jitdriver_sd):
+                                       jitdriver_sd, forbidden_val=0):
         # 'jitdriver_sd' corresponds to the outermost one, i.e. the one
         # of the jit_merge_point where we started the loop, even if the
         # loop itself may contain temporarily recursion into other
         # jitdrivers.
         from rpython.jit.metainterp.pyjitpl import MetaInterp
         metainterp = MetaInterp(metainterp_sd, jitdriver_sd)
-        metainterp.handle_guard_failure(self, deadframe)
+        metainterp.handle_guard_failure(self, deadframe, forbidden_val)
     _trace_and_compile_from_bridge._dont_inline_ = True
 
     def get_jitcounter_hash(self):
@@ -738,6 +740,7 @@ class AbstractResumeGuardDescr(ResumeDescr):
     def must_compile(self, deadframe, metainterp_sd, jitdriver_sd):
         jitcounter = metainterp_sd.warmrunnerdesc.jitcounter
         #
+        increment = jitdriver_sd.warmstate.increment_trace_eagerness
         if self.status & (self.ST_BUSY_FLAG | self.ST_TYPE_MASK) == 0:
             # common case: this is not a guard_value, and we are not
             # already busy tracing.  The rest of self.status stores a
@@ -777,11 +780,16 @@ class AbstractResumeGuardDescr(ResumeDescr):
                     intval = llmemory.cast_adr_to_int(
                         llmemory.cast_int_to_adr(intval), "forced")
 
+            glob_tick = jitcounter.tick(self.global_status, increment / 2)
+            # XXXX tweak the number "2" here
+            if glob_tick:
+                # XXX what if the contents of const move and are ref?
+                #     a bit unlikely, but still
+                return True, intval
             hash = r_uint(current_object_addr_as_int(self) * 777767777 +
                           intval * 1442968193)
         #
-        increment = jitdriver_sd.warmstate.increment_trace_eagerness
-        return jitcounter.tick(hash, increment)
+        return jitcounter.tick(hash, increment), 0
 
     def start_compiling(self):
         # start tracing and compiling from this guard.
@@ -809,7 +817,7 @@ class AbstractResumeGuardDescr(ResumeDescr):
                                new_loop.original_jitcell_token,
                                metainterp.box_names_memo)
 
-    def make_a_counter_per_value(self, guard_value_op, index):
+    def make_a_counter_per_value(self, jitcounter, guard_value_op, index):
         assert guard_value_op.getopnum() == rop.GUARD_VALUE
         box = guard_value_op.getarg(0)
         if box.type == history.INT:
@@ -821,6 +829,8 @@ class AbstractResumeGuardDescr(ResumeDescr):
         else:
             assert 0, box.type
         self.status = ty | (r_uint(index) << self.ST_SHIFT)
+        hash = jitcounter.fetch_next_hash()
+        self.global_status = hash & self.ST_SHIFT_MASK
 
     def store_hash(self, metainterp_sd):
         if metainterp_sd.warmrunnerdesc is not None:   # for tests

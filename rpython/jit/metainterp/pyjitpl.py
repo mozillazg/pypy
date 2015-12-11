@@ -1481,6 +1481,10 @@ class MIFrame(object):
         if isinstance(box, Const):
             return box     # no promotion needed, already a Const
         else:
+            if (self.metainterp.forbidden_val and box.type == 'r' and
+                lltype.cast_ptr_to_int(box.getref_base()) ==
+                self.metainterp.forbidden_val):
+                return box
             promoted_box = executor.constant_from_op(box)
             self.metainterp.generate_guard(rop.GUARD_VALUE, box, [promoted_box],
                                            resumepc=orgpc)
@@ -1869,6 +1873,7 @@ class MetaInterp(object):
     cancel_count = 0
     exported_state = None
     last_exc_box = None
+    forbidden_val = 0
 
     def __init__(self, staticdata, jitdriver_sd):
         self.staticdata = staticdata
@@ -2315,9 +2320,10 @@ class MetaInterp(object):
             self.run_blackhole_interp_to_cancel_tracing(stb)
         assert False, "should always raise"
 
-    def handle_guard_failure(self, resumedescr, deadframe):
+    def handle_guard_failure(self, resumedescr, deadframe, forbidden_val):
         debug_start('jit-tracing')
         self.staticdata.profiler.start_tracing()
+        self.forbidden_val = forbidden_val
         if isinstance(resumedescr, compile.ResumeGuardCopiedDescr):
             key = resumedescr.prev
         else:

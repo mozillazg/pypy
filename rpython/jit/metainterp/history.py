@@ -181,7 +181,7 @@ class BasicFailDescr(AbstractFailDescr):
     def __init__(self, identifier=None):
         self.identifier = identifier      # for testing
 
-    def make_a_counter_per_value(self, op, index):
+    def make_a_counter_per_value(self, metainterp_sd, op, index):
         pass # for testing
 
 
