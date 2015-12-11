@@ -751,7 +751,7 @@ class AbstractResumeGuardDescr(ResumeDescr):
         # do we have the BUSY flag?  If so, we're tracing right now, e.g. in an
         # outer invocation of the same function, so don't trace again for now.
         elif self.status & self.ST_BUSY_FLAG:
-            return False
+            return False, 0
         #
         else:    # we have a GUARD_VALUE that fails.
             from rpython.rlib.objectmodel import current_object_addr_as_int
