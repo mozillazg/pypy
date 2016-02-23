@@ -6,6 +6,10 @@ from rpython.jit.backend.x86.arch import DEFAULT_FRAME_BYTES
 from rpython.jit.metainterp.history import TargetToken
 from rpython.jit.metainterp.resoperation import (rop, ResOperation,
         AbstractValue, CountingDict)
+from rpython.rtyper.lltypesystem import lltype
+from rpython.rtyper.lltypesystem import rffi
+from rpython.rtyper.annlowlevel import llhelper
+from rpython.jit.codewriter.effectinfo import EffectInfo
 
 class FakeReg(object):
     def __init__(self, i):
@@ -19,8 +23,8 @@ callee_saved = []
 
 CPU = getcpuclass()
 
-def parse_loop(text):
-    ops = parse(text)
+def parse_loop(text, namespace={}):
+    ops = parse(text, namespace=namespace)
     tt = None
     tt = TargetToken(ops.operations[-1].getdescr())
     for op in ops.operations:
@@ -47,7 +51,7 @@ class FakeAssembler(object):
         self.pushes = []
 
     def regalloc_mov(self, prev_loc, loc):
-        self.moves.append((prev_loc, loc))
+        self.moves.append((prev_loc, loc, 'pos: ' + str(self.regalloc.rm.position)))
         print "mov bindings: ", self.regalloc.rm.reg_bindings
         print prev_loc, "->", loc
     def regalloc_push(self, loc):
@@ -128,6 +132,19 @@ class TraceAllocation(object):
 
 class TestRegalloc(object):
 
+    def setup_method(self, name):
+        cpu = CPU(None, None)
+        cpu.setup_once()
+
+        def x(i):
+            return i
+        FPTR = lltype.Ptr(lltype.FuncType([rffi.UINT], rffi.UINT))
+        func_ptr = llhelper(FPTR, x)
+        calldescr = cpu.calldescrof(FPTR.TO, FPTR.TO.ARGS, FPTR.TO.RESULT, EffectInfo.MOST_GENERAL)
+
+        ns = {'calldescr': calldescr}
+        self.namespace = ns
+
     def test_allocate_register_into_jump_register(self):
         tt, ops = parse_loop("""
         [p0,i1]
@@ -141,15 +158,32 @@ class TestRegalloc(object):
 
     def test_2allocate_register_into_jump_register2(self):
         tt, ops = parse_loop("""
-        [p0,i1]
-        i2 = int_add(i1,i1)
-        i3 = int_add(i2,i1)
-        guard_true(i3) []
-        jump(p0,i2)
+        [p0,i0]
+        i1 = int_add(i0,i0)
+        i2 = int_add(i0,i1)
+        guard_true(i2) []
+        jump(p0,i1)
         """)
-        i2 = ops.operations[0]
-        i3 = ops.operations[1]
+        i1 = ops.operations[0]
+        i2 = ops.operations[1]
         trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
-        assert trace_alloc.initial_register(i2) == edx
-        assert trace_alloc.initial_register(i3) != edx
+        assert trace_alloc.initial_register(i1) == edx
+        assert trace_alloc.initial_register(i2) != edx
+        assert trace_alloc.move_count() == 1
+
+    def test_call_allocate_first_param_to_callee(self):
+        tt, ops = parse_loop("""
+        [p0,i0]
+        i1 = int_add(i0,i0)
+        i2 = int_add(i0,i1)
+        call_n(p0, i1, descr=calldescr)
+        guard_true(i2) []
+        jump(p0,i1)
+        """, namespace=self.namespace)
+        i1 = ops.operations[0]
+        i2 = ops.operations[1]
+        trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
+        assert trace_alloc.initial_register(i1) == edx
+        assert trace_alloc.initial_register(i2) != edx
+        assert trace_alloc.move_count() == 1
 
