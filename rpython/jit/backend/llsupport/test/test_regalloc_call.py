@@ -37,22 +37,24 @@ class FakeAssembler(object):
     cpu = CPU(None, None)
     current_clt = None
     target_tokens_currently_compiling = {}
-    def __init__(self):
+    def __init__(self, regalloc):
         self.mc = FakeMachineCodeBuilder()
+        self.regalloc = regalloc
         self.moves = []
         self.pushes = []
 
     def regalloc_mov(self, prev_loc, loc):
         self.moves.append((prev_loc, loc))
+        print "mov bindings: ", self.regalloc.rm.reg_bindings
+        print prev_loc, "->", loc
     def regalloc_push(self, loc):
         import pdb; pdb.set_trace()
         self.pushes.append(loc)
     def regalloc_pop(self, loc):
         pass
-
-    def regalloc_mov(self, prev, loc): pass
     def dump(self, *args): pass
     def regalloc_perform(self, *args): pass
+    def regalloc_perform_guard(self, *args): pass
     def label(self): pass
     def closing_jump(self, target): pass
 
@@ -63,7 +65,7 @@ class FakeRegAlloc(CPURegalloc):
         self.callee_saved = callee_saved
         self.all_regs = caller_saved[:] + callee_saved
         self.free_regs = caller_saved[:] + callee_saved
-        CPURegalloc.__init__(self, FakeAssembler(), False)
+        CPURegalloc.__init__(self, FakeAssembler(self), False)
         self.tracealloc = tracealloc
         self.steps = set()
 
@@ -87,7 +89,7 @@ class TraceAllocation(object):
         self.regalloc = FakeRegAlloc(self, caller_saved, callee_saved)
         self.initial_binding = { str(var): reg for var, reg in zip(trace.inputargs, binding) }
         looptoken = FakeLoopToken()
-        gcrefs = None
+        gcrefs = []
         tt._x86_arglocs = binding
 
         for op in trace.operations:
@@ -113,6 +115,7 @@ class TraceAllocation(object):
 
     def regalloc_one_step(self, i):
         bindings = self.regalloc.rm.reg_bindings
+        print bindings
         for var in bindings:
             varname = str(var)
             if varname not in self.initial_binding:
@@ -122,15 +125,26 @@ class TestRegalloc(object):
 
     def test_allocate_register_into_jump_register(self):
         tt, ops = parse_loop("""
-        [i0,i1]
-        i2 = int_add(i0,i1)
+        [p0,i1]
+        i2 = int_add(i1,i1)
         i3 = int_add(i2,i1)
-        i4 = int_add(i3,i0)
-        jump(i4,i2)
+        jump(p0,i2)
         """)
         trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
-        assert trace_alloc.initial_register('i2') == edx
-        assert trace_alloc.initial_register('i0') == eax
-        assert trace_alloc.initial_register('i4') == eax
-        assert trace_alloc.move_count() == 0
+        i2 = trace_alloc.initial_register('i2')
+        assert i2 == edx
+
+    def test_allocate_register_into_jump_register2(self):
+        tt, ops = parse_loop("""
+        [p0,i1]
+        i2 = int_add(i1,i1)
+        i3 = int_add(i2,i1)
+        guard_true(i3) []
+        jump(p0,i2)
+        """)
+        trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
+        i2 = trace_alloc.initial_register('i2')
+        i3 = trace_alloc.initial_register('i3')
+        assert i2 == edx
+        assert i3 == r8
 
