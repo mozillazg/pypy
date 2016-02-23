@@ -50,8 +50,8 @@ class FakeRegAlloc(CPURegalloc):
     def __init__(self, tracealloc, caller_saved, callee_saved):
         self.caller_saved = caller_saved
         self.callee_saved = callee_saved
-        self.all_regs = callee_saved[:] + callee_saved
-        self.free_regs = callee_saved[:] + callee_saved
+        self.all_regs = caller_saved[:] + callee_saved
+        self.free_regs = caller_saved[:] + callee_saved
         CPURegalloc.__init__(self, FakeAssembler(), False)
         self.tracealloc = tracealloc
         self.steps = set()
@@ -64,6 +64,7 @@ class FakeRegAlloc(CPURegalloc):
         if i not in self.steps:
             self.steps.add(i)
             self.tracealloc.regalloc_one_step(i)
+        CPURegalloc.possibly_free_vars_for_op(self, op)
 
 class FakeLoopToken(object):
     def __init__(self):
@@ -83,10 +84,9 @@ class TraceAllocation(object):
                 pass
         self.regalloc.prepare_loop(self.trace.inputargs, self.trace.operations, looptoken, gcrefs)
 
-
         for var, reg in zip(trace.inputargs, binding):
             self.regalloc.rm.reg_bindings[var] = reg
-        fr = self.regalloc.rm.free_regs
+        fr = self.regalloc.free_regs
         self.regalloc.rm.free_regs = [reg for reg in fr if reg not in binding]
 
         self.regalloc.rm.all_regs = self.regalloc.all_regs
@@ -115,6 +115,5 @@ class TestRegalloc(object):
         """)
         trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
         i2 = trace_alloc.initial_register('i2')
-        i1 = trace_alloc.initial_register('i1')
-        assert i2 == i1
+        assert i2 == edx
 
