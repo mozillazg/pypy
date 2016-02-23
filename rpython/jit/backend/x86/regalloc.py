@@ -168,10 +168,10 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
         self.live_ranges = live_ranges
         self.longevity = live_ranges.longevity
         self.last_real_usage = live_ranges.last_real_usage
-        self.rm = gpr_reg_mgr_cls(self.longevity,
+        self.rm = gpr_reg_mgr_cls(self.live_ranges,
                                   frame_manager = self.fm,
                                   assembler = self.assembler)
-        self.xrm = xmm_reg_mgr_cls(self.longevity, frame_manager = self.fm,
+        self.xrm = xmm_reg_mgr_cls(self.live_ranges, frame_manager = self.fm,
                                    assembler = self.assembler)
         return operations
 
@@ -515,7 +515,7 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
         # and won't be used after the current operation finishes,
         # then swap the role of 'x' and 'y'
         if (symm and isinstance(argloc, RegLoc) and
-                self.rm.longevity[y][1] == self.rm.position):
+                self.rm.live_ranges.last_use(y) == self.rm.position):
             x, y = y, x
             argloc = self.loc(y)
         #

@@ -2,6 +2,7 @@ import py
 from rpython.jit.metainterp.history import ConstInt, INT, FLOAT
 from rpython.jit.backend.llsupport.regalloc import FrameManager, LinkedList
 from rpython.jit.backend.llsupport.regalloc import RegisterManager as BaseRegMan
+from rpython.jit.backend.llsupport.regalloc import LiveRanges
 from rpython.jit.metainterp.resoperation import InputArgInt, InputArgRef,\
      InputArgFloat
 
@@ -77,7 +78,7 @@ class TestRegalloc(object):
     def test_freeing_vars(self):
         b0, b1, b2 = newboxes(0, 0, 0)
         longevity = {b0: (0, 1), b1: (0, 2), b2: (0, 2)}
-        rm = RegisterManager(longevity)
+        rm = RegisterManager(LiveRanges(longevity, None, None))
         rm.next_instruction()
         for b in b0, b1, b2:
             rm.try_allocate_reg(b)
@@ -102,7 +103,7 @@ class TestRegalloc(object):
         
     def test_register_exhaustion(self):
         boxes, longevity = boxes_and_longevity(5)
-        rm = RegisterManager(longevity)
+        rm = RegisterManager(LiveRanges(longevity, None, None))
         rm.next_instruction()
         for b in boxes[:len(regs)]:
             assert rm.try_allocate_reg(b)
@@ -116,7 +117,7 @@ class TestRegalloc(object):
         class XRegisterManager(RegisterManager):
             no_lower_byte_regs = [r2, r3]
         
-        rm = XRegisterManager(longevity)
+        rm = XRegisterManager(LiveRanges(longevity, None, None))
         rm.next_instruction()
         loc0 = rm.try_allocate_reg(b0, need_lower_byte=True)
         assert loc0 not in XRegisterManager.no_lower_byte_regs
@@ -130,7 +131,7 @@ class TestRegalloc(object):
 
     def test_specific_register(self):
         boxes, longevity = boxes_and_longevity(5)
-        rm = RegisterManager(longevity)
+        rm = RegisterManager(LiveRanges(longevity, None, None))
         rm.next_instruction()
         loc = rm.try_allocate_reg(boxes[0], selected_reg=r1)
         assert loc is r1
@@ -151,7 +152,7 @@ class TestRegalloc(object):
         class XRegisterManager(RegisterManager):
             no_lower_byte_regs = [r2, r3]
         
-        rm = XRegisterManager(longevity,
+        rm = XRegisterManager(LiveRanges(longevity, None, None),
                               frame_manager=fm,
                               assembler=MockAsm())
         rm.next_instruction()
@@ -177,7 +178,7 @@ class TestRegalloc(object):
     def test_make_sure_var_in_reg(self):
         boxes, longevity = boxes_and_longevity(5)
         fm = TFrameManager()
-        rm = RegisterManager(longevity, frame_manager=fm,
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm,
                              assembler=MockAsm())
         rm.next_instruction()
         # allocate a stack position
@@ -193,7 +194,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 1), b1: (1, 3)}
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         rm.next_instruction()
         # first path, var is already in reg and dies
         loc0 = rm.force_allocate_reg(b0)
@@ -209,7 +210,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 2), b1: (1, 3)}
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         rm.next_instruction()
         loc0 = rm.force_allocate_reg(b0)
         rm._check_invariants()
@@ -225,7 +226,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 2), b1: (0, 2), b3: (0, 2), b2: (0, 2), b4: (1, 3)}
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         rm.next_instruction()
         for b in b0, b1, b2, b3:
             rm.force_allocate_reg(b)
@@ -241,7 +242,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 1), b1: (0, 1)}
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         rm.next_instruction()
         fm.loc(b0)
         rm.force_result_in_reg(b1, b0)
@@ -257,7 +258,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 1), b1: (0, 1)}
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         rm.free_regs = rm.free_regs[:1]
         rm.all_regs = rm.free_regs[:]
         rm.next_instruction()
@@ -275,7 +276,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 1)}
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         rm.next_instruction()
         # invalid call to make_sure_var_in_reg(): box unknown so far
         py.test.raises(KeyError, rm.make_sure_var_in_reg, b0)
@@ -284,7 +285,7 @@ class TestRegalloc(object):
         asm = MockAsm()
         boxes, longevity = boxes_and_longevity(5)
         fm = TFrameManager()
-        rm = RegisterManager(longevity, assembler=asm,
+        rm = RegisterManager(LiveRanges(longevity, None, None), assembler=asm,
                              frame_manager=fm)
         rm.next_instruction()
         loc = rm.return_constant(ConstInt(1), selected_reg=r1)
@@ -303,7 +304,7 @@ class TestRegalloc(object):
         boxes, longevity = boxes_and_longevity(2)
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm,
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm,
                              assembler=asm)
         rm.next_instruction()
         c = ConstInt(0)
@@ -325,7 +326,7 @@ class TestRegalloc(object):
         fm = TFrameManager()
         asm = MockAsm()
         boxes, longevity = boxes_and_longevity(5)
-        rm = XRegisterManager(longevity, frame_manager=fm,
+        rm = XRegisterManager(LiveRanges(longevity, None, None), frame_manager=fm,
                               assembler=asm)
         for b in boxes[:-1]:
             rm.force_allocate_reg(b)
@@ -348,7 +349,7 @@ class TestRegalloc(object):
         fm = TFrameManager()
         asm = MockAsm()
         boxes, longevity = boxes_and_longevity(5)
-        rm = XRegisterManager(longevity, frame_manager=fm,
+        rm = XRegisterManager(LiveRanges(longevity, None, None), frame_manager=fm,
                               assembler=asm)
         for b in boxes[:-1]:
             rm.force_allocate_reg(b)
@@ -370,10 +371,10 @@ class TestRegalloc(object):
         b0 = InputArgInt()
         longevity = {b0: (0, 1)}
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         f0 = InputArgFloat()
         longevity = {f0: (0, 1)}
-        xrm = XRegisterManager(longevity, frame_manager=fm, assembler=asm)
+        xrm = XRegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         xrm.loc(f0)
         rm.loc(b0)
         assert fm.get_frame_depth() == 3
@@ -383,7 +384,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 3), b1: (0, 3), b3: (0, 5), b2: (0, 2), b4: (1, 4), b5: (1, 3)}
         fm = TFrameManager()
         asm = MockAsm()
-        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
         rm.next_instruction()
         for b in b0, b1, b2, b3:
             rm.force_allocate_reg(b)
