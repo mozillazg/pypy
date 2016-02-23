@@ -276,10 +276,10 @@ class RegisterManager(object):
     save_around_call_regs = []
     frame_reg             = None
 
-    def __init__(self, longevity, frame_manager=None, assembler=None):
+    def __init__(self, live_ranges, frame_manager=None, assembler=None):
         self.free_regs = self.all_regs[:]
         self.free_regs.reverse()
-        self.longevity = longevity
+        self.live_ranges = live_ranges
         self.temp_boxes = []
         if not we_are_translated():
             self.reg_bindings = OrderedDict()
@@ -293,12 +293,12 @@ class RegisterManager(object):
     def is_still_alive(self, v):
         # Check if 'v' is alive at the current position.
         # Return False if the last usage is strictly before.
-        return self.longevity.last_use(v) >= self.position
+        return self.live_ranges.last_use(v) >= self.position
 
     def stays_alive(self, v):
         # Check if 'v' stays alive after the current position.
         # Return False if the last usage is before or at position.
-        return self.longevity.last_use(v) > self.position
+        return self.live_ranges.last_use(v) > self.position
 
     def next_instruction(self, incr=1):
         self.position += incr
@@ -315,7 +315,7 @@ class RegisterManager(object):
         self._check_type(v)
         if isinstance(v, Const):
             return
-        if not self.longevity.exists(v) or self.longevity.last_use(v) <= self.position:
+        if not self.live_ranges.exists(v) or self.live_ranges.last_use(v) <= self.position:
             if v in self.reg_bindings:
                 self.free_regs.append(self.reg_bindings[v])
                 del self.reg_bindings[v]
@@ -347,9 +347,9 @@ class RegisterManager(object):
         else:
             assert len(self.reg_bindings) + len(self.free_regs) == len(self.all_regs)
         assert len(self.temp_boxes) == 0
-        if self.longevity:
+        if self.live_ranges:
             for v in self.reg_bindings:
-                assert self.longevity.last_use(v) > self.position
+                assert self.live_ranges.last_use(v) > self.position
 
     def try_allocate_reg(self, v, selected_reg=None, need_lower_byte=False):
         """ Try to allocate a register, if we have one free.
@@ -425,7 +425,7 @@ class RegisterManager(object):
                     continue
             if need_lower_byte and reg in self.no_lower_byte_regs:
                 continue
-            max_age = self.longevity.last_use(next)
+            max_age = self.live_ranges.last_use(next)
             if cur_max_age < max_age:
                 cur_max_age = max_age
                 candidate = next
@@ -444,7 +444,7 @@ class RegisterManager(object):
         """
         self._check_type(v)
         if isinstance(v, TempVar):
-            self.longevity.new_live_range(v, self.position, self.position)
+            self.live_ranges.new_live_range(v, self.position, self.position)
         loc = self.try_allocate_reg(v, selected_reg,
                                     need_lower_byte=need_lower_byte)
         if loc:
@@ -554,7 +554,7 @@ class RegisterManager(object):
             loc = self.force_allocate_reg(v, forbidden_vars)
             self.assembler.regalloc_mov(prev_loc, loc)
         assert v in self.reg_bindings
-        if self.longevity.last_use(v) > self.position:
+        if self.live_ranges.last_use(v) > self.position:
             # we need to find a new place for variable v and
             # store result in the same place
             loc = self.reg_bindings[v]
@@ -583,7 +583,7 @@ class RegisterManager(object):
         1 (save all), or 2 (save default+PTRs).
         """
         for v, reg in self.reg_bindings.items():
-            if v not in force_store and self.longevity.last_use(v) <= self.position:
+            if v not in force_store and self.live_ranges.last_use(v) <= self.position:
                 # variable dies
                 del self.reg_bindings[v]
                 self.free_regs.append(reg)
