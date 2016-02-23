@@ -249,6 +249,24 @@ class TestRegalloc(object):
         loc = rm.loc(b1)
         assert isinstance(loc, FakeReg)
         loc = rm.loc(b0)
+        assert isinstance(loc, FakeReg)
+        assert len(asm.moves) == 2
+
+    def test_force_result_in_register_reload_parameter_from_frame_later(self):
+        b0, b1 = newboxes(0, 0)
+        longevity = {b0: (0, 1), b1: (0, 1)}
+        fm = TFrameManager()
+        asm = MockAsm()
+        rm = RegisterManager(longevity, frame_manager=fm, assembler=asm)
+        rm.free_regs = rm.free_regs[:1]
+        rm.all_regs = rm.free_regs[:]
+        rm.next_instruction()
+        fm.loc(b0)
+        rm.force_result_in_reg(b1, b0)
+        rm._check_invariants()
+        loc = rm.loc(b1)
+        assert isinstance(loc, FakeReg)
+        loc = rm.loc(b0)
         assert isinstance(loc, FakeFramePos)
         assert len(asm.moves) == 1
 

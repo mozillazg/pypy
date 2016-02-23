@@ -559,8 +559,9 @@ class RegisterManager(object):
             # store result in the same place
             loc = self.reg_bindings[v]
             del self.reg_bindings[v]
-            if self.frame_manager.get(v) is None:
+            if self.frame_manager.get(v) is None or self.free_regs:
                 self._move_variable_away(v, loc)
+
             self.reg_bindings[result_v] = loc
         else:
             self._reallocate_from_to(v, result_v)
