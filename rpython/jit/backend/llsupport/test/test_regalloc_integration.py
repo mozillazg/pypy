@@ -7,7 +7,8 @@ from rpython.jit.metainterp.history import BasicFailDescr, JitCellToken,\
      TargetToken
 from rpython.jit.metainterp.resoperation import rop
 from rpython.jit.backend.detect_cpu import getcpuclass
-from rpython.jit.backend.llsupport.regalloc import is_comparison_or_ovf_op
+from rpython.jit.backend.llsupport.regalloc import is_comparison_or_ovf_op,\
+    compute_var_live_ranges
 from rpython.jit.tool.oparser import parse
 from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.rtyper.annlowlevel import llhelper
@@ -155,6 +156,40 @@ class BaseTestRegalloc(object):
         return self.cpu.get_latest_descr(self.deadframe)
 
 class TestRegallocSimple(BaseTestRegalloc):
+    def test_compute_live_ranges(self):
+        ops = '''
+        [i0]
+        label(i0, descr=targettoken)
+        i1 = int_add(i0, 1)
+        i2 = int_lt(i1, 20)
+        guard_true(i2) [i1]
+        jump(i1, descr=targettoken)
+        '''
+        loop = self.parse(ops)
+        lrs = compute_var_live_ranges(loop.inputargs, loop.operations)
+        assert lrs.longevity[loop.operations[1]] == (1, 4)
+        assert lrs.longevity[loop.operations[2]] == (2, 3)
+        assert lrs.last_real_usage[loop.operations[1]] == 2
+        assert lrs.last_real_usage[loop.operations[2]] == 3
+        assert all([i < 0 for i in lrs.dist_to_next_call])
+
+    def test_compute_call_distances(self):
+        ops = '''
+        [i0]
+        label(i0, descr=targettoken)
+        i1 = int_add(i0, 1)
+        i2 = int_lt(i1, 20)
+        call_n(ConstClass(raising_fptr), i0, descr=raising_calldescr)
+        guard_true(i2) [i1]
+        call_n(ConstClass(raising_fptr), i0, descr=raising_calldescr)
+        guard_true(i2) [i1]
+        jump(i1, descr=targettoken)
+        '''
+        loop = self.parse(ops)
+        lrs = compute_var_live_ranges(loop.inputargs, loop.operations)
+        assert lrs.dist_to_next_call == [3, 2, 1, 0, 1, 0, -7, -8]
+
+
     def test_simple_loop(self):
         ops = '''
         [i0]
