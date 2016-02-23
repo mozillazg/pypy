@@ -39,6 +39,17 @@ class FakeAssembler(object):
     target_tokens_currently_compiling = {}
     def __init__(self):
         self.mc = FakeMachineCodeBuilder()
+        self.moves = []
+        self.pushes = []
+
+    def regalloc_mov(self, prev_loc, loc):
+        self.moves.append((prev_loc, loc))
+    def regalloc_push(self, loc):
+        import pdb; pdb.set_trace()
+        self.pushes.append(loc)
+    def regalloc_pop(self, loc):
+        pass
+
     def regalloc_mov(self, prev, loc): pass
     def dump(self, *args): pass
     def regalloc_perform(self, *args): pass
@@ -97,6 +108,9 @@ class TraceAllocation(object):
     def initial_register(self, name):
         return self.initial_binding.get(name, None)
 
+    def move_count(self):
+        return len(self.regalloc.assembler.moves)
+
     def regalloc_one_step(self, i):
         bindings = self.regalloc.rm.reg_bindings
         for var in bindings:
@@ -108,12 +122,15 @@ class TestRegalloc(object):
 
     def test_allocate_register_into_jump_register(self):
         tt, ops = parse_loop("""
-        [p0,i1]
-        i2 = int_add(i1,i1)
+        [i0,i1]
+        i2 = int_add(i0,i1)
         i3 = int_add(i2,i1)
-        jump(p0,i2)
+        i4 = int_add(i3,i0)
+        jump(i4,i2)
         """)
         trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
-        i2 = trace_alloc.initial_register('i2')
-        assert i2 == edx
+        assert trace_alloc.initial_register('i2') == edx
+        assert trace_alloc.initial_register('i0') == eax
+        assert trace_alloc.initial_register('i4') == eax
+        assert trace_alloc.move_count() == 0
 
