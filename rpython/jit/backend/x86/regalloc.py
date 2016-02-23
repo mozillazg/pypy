@@ -515,7 +515,7 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
         # and won't be used after the current operation finishes,
         # then swap the role of 'x' and 'y'
         if (symm and isinstance(argloc, RegLoc) and
-                self.rm.live_ranges.last_use(y) == self.rm.position):
+                self.rm.longevity.last_use(y) == self.rm.position):
             x, y = y, x
             argloc = self.loc(y)
         #

@@ -1,7 +1,7 @@
 import os
-from rpython.jit.metainterp.history import Const, Box, REF, JitCellToken
+from rpython.jit.metainterp.history import Const, REF, JitCellToken
 from rpython.rlib.objectmodel import we_are_translated, specialize
-from rpython.jit.metainterp.resoperation import rop
+from rpython.jit.metainterp.resoperation import rop, AbstractValue
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rtyper.lltypesystem.lloperation import llop
 
@@ -10,7 +10,7 @@ try:
 except ImportError:
     OrderedDict = dict # too bad
 
-class TempBox(Box):
+class TempVar(AbstractValue):
     def __init__(self):
         pass
 
@@ -267,6 +267,7 @@ class FrameManager(object):
         raise NotImplementedError("Purely abstract")
 
 class RegisterManager(object):
+
     """ Class that keeps track of register allocations
     """
     box_types             = None       # or a list of acceptable types
@@ -292,19 +293,19 @@ class RegisterManager(object):
     def is_still_alive(self, v):
         # Check if 'v' is alive at the current position.
         # Return False if the last usage is strictly before.
-        return self.longevity[v][1] >= self.position
+        return self.longevity.last_use(v) >= self.position
 
     def stays_alive(self, v):
         # Check if 'v' stays alive after the current position.
         # Return False if the last usage is before or at position.
-        return self.longevity[v][1] > self.position
+        return self.longevity.last_use(v) > self.position
 
     def next_instruction(self, incr=1):
         self.position += incr
 
     def _check_type(self, v):
         if not we_are_translated() and self.box_types is not None:
-            assert isinstance(v, TempBox) or v.type in self.box_types
+            assert isinstance(v, TempVar) or v.type in self.box_types
 
     def possibly_free_var(self, v):
         """ If v is stored in a register and v is not used beyond the
@@ -314,7 +315,7 @@ class RegisterManager(object):
         self._check_type(v)
         if isinstance(v, Const):
             return
-        if v not in self.longevity or self.longevity[v][1] <= self.position:
+        if not self.longevity.exists(v) or self.longevity.last_use(v) <= self.position:
             if v in self.reg_bindings:
                 self.free_regs.append(self.reg_bindings[v])
                 del self.reg_bindings[v]
@@ -348,7 +349,7 @@ class RegisterManager(object):
         assert len(self.temp_boxes) == 0
         if self.longevity:
             for v in self.reg_bindings:
-                assert self.longevity[v][1] > self.position
+                assert self.longevity.last_use(v) > self.position
 
     def try_allocate_reg(self, v, selected_reg=None, need_lower_byte=False):
         """ Try to allocate a register, if we have one free.
@@ -424,7 +425,7 @@ class RegisterManager(object):
                     continue
             if need_lower_byte and reg in self.no_lower_byte_regs:
                 continue
-            max_age = self.longevity[next][1]
+            max_age = self.longevity.last_use(next)
             if cur_max_age < max_age:
                 cur_max_age = max_age
                 candidate = next
@@ -442,8 +443,8 @@ class RegisterManager(object):
         Will not spill a variable from 'forbidden_vars'.
         """
         self._check_type(v)
-        if isinstance(v, TempBox):
-            self.longevity[v] = (self.position, self.position)
+        if isinstance(v, TempVar):
+            self.longevity.new_live_range(v, self.position, self.position)
         loc = self.try_allocate_reg(v, selected_reg,
                                     need_lower_byte=need_lower_byte)
         if loc:
@@ -553,13 +554,14 @@ class RegisterManager(object):
             loc = self.force_allocate_reg(v, forbidden_vars)
             self.assembler.regalloc_mov(prev_loc, loc)
         assert v in self.reg_bindings
-        if self.longevity[v][1] > self.position:
+        if self.longevity.last_use(v) > self.position:
             # we need to find a new place for variable v and
             # store result in the same place
             loc = self.reg_bindings[v]
             del self.reg_bindings[v]
-            if self.frame_manager.get(v) is None:
+            if self.frame_manager.get(v) is None or self.free_regs:
                 self._move_variable_away(v, loc)
+
             self.reg_bindings[result_v] = loc
         else:
             self._reallocate_from_to(v, result_v)
@@ -581,7 +583,7 @@ class RegisterManager(object):
         1 (save all), or 2 (save default+PTRs).
         """
         for v, reg in self.reg_bindings.items():
-            if v not in force_store and self.longevity[v][1] <= self.position:
+            if v not in force_store and self.longevity.last_use(v) <= self.position:
                 # variable dies
                 del self.reg_bindings[v]
                 self.free_regs.append(reg)
@@ -633,69 +635,79 @@ class BaseRegalloc(object):
         locs = []
         base_ofs = self.assembler.cpu.get_baseofs_of_frame_field()
         for box in inputargs:
-            assert isinstance(box, Box)
+            assert not isinstance(box, Const)
             loc = self.fm.get_new_loc(box)
             locs.append(loc.value - base_ofs)
         if looptoken.compiled_loop_token is not None:
             # for tests
             looptoken.compiled_loop_token._ll_initial_locs = locs
 
-    def can_merge_with_next_guard(self, op, i, operations):
-        if (op.getopnum() == rop.CALL_MAY_FORCE or
-            op.getopnum() == rop.CALL_ASSEMBLER or
-            op.getopnum() == rop.CALL_RELEASE_GIL):
-            assert operations[i + 1].getopnum() == rop.GUARD_NOT_FORCED
-            return True
-        if not op.is_comparison():
-            if op.is_ovf():
-                if (operations[i + 1].getopnum() != rop.GUARD_NO_OVERFLOW and
-                    operations[i + 1].getopnum() != rop.GUARD_OVERFLOW):
-                    not_implemented("int_xxx_ovf not followed by "
-                                    "guard_(no)_overflow")
-                return True
+    def next_op_can_accept_cc(self, operations, i):
+        op = operations[i]
+        next_op = operations[i + 1]
+        opnum = next_op.getopnum()
+        if (opnum != rop.GUARD_TRUE and opnum != rop.GUARD_FALSE
+                                    and opnum != rop.COND_CALL):
             return False
-        if (operations[i + 1].getopnum() != rop.GUARD_TRUE and
-            operations[i + 1].getopnum() != rop.GUARD_FALSE):
+        if next_op.getarg(0) is not op:
             return False
-        if operations[i + 1].getarg(0) is not op.result:
+        if self.longevity[op][1] > i + 1:
             return False
-        if (self.longevity[op.result][1] > i + 1 or
-            op.result in operations[i + 1].getfailargs()):
-            return False
+        if opnum != rop.COND_CALL:
+            if op in operations[i + 1].getfailargs():
+                return False
+        else:
+            if op in operations[i + 1].getarglist()[1:]:
+                return False
         return True
 
-    def locs_for_call_assembler(self, op, guard_op):
+    def locs_for_call_assembler(self, op):
         descr = op.getdescr()
         assert isinstance(descr, JitCellToken)
         if op.numargs() == 2:
             self.rm._sync_var(op.getarg(1))
             return [self.loc(op.getarg(0)), self.fm.loc(op.getarg(1))]
         else:
+            assert op.numargs() == 1
             return [self.loc(op.getarg(0))]
 
 
-def compute_vars_longevity(inputargs, operations):
+class LiveRanges(object):
+    def __init__(self, longevity, last_real_usage, dist_to_next_call):
+        self.longevity = longevity
+        self.last_real_usage = last_real_usage
+        self.dist_to_next_call = dist_to_next_call
+
+    def exists(self, var):
+         return var in self.longevity
+
+    def last_use(self, var):
+         return self.longevity[var][1]
+
+    def new_live_range(self, var, start, end):
+         self.longevity[var] = (start, end)
+
+def compute_var_live_ranges(inputargs, operations):
     # compute a dictionary that maps variables to index in
     # operations that is a "last-time-seen"
 
-    # returns a pair longevity/useful. Non-useful variables are ones that
+    # returns a Longevity object with longevity/useful. Non-useful variables are ones that
     # never appear in the assembler or it does not matter if they appear on
     # stack or in registers. Main example is loop arguments that go
     # only to guard operations or to jump or to finish
-    produced = {}
     last_used = {}
     last_real_usage = {}
+    dist_to_next_call = [0] * len(operations)
+    last_call_pos = -1
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]
-        if op.result:
-            if op.result not in last_used and op.has_no_side_effect():
+        if op.type != 'v':
+            if op not in last_used and op.has_no_side_effect():
                 continue
-            assert op.result not in produced
-            produced[op.result] = i
         opnum = op.getopnum()
         for j in range(op.numargs()):
             arg = op.getarg(j)
-            if not isinstance(arg, Box):
+            if isinstance(arg, Const):
                 continue
             if arg not in last_used:
                 last_used[arg] = i
@@ -706,26 +718,40 @@ def compute_vars_longevity(inputargs, operations):
             for arg in op.getfailargs():
                 if arg is None: # hole
                     continue
-                assert isinstance(arg, Box)
+                assert not isinstance(arg, Const)
                 if arg not in last_used:
                     last_used[arg] = i
+        if op.is_call():
+            last_call_pos = i
+        dist_to_next_call[i] = last_call_pos - i
     #
     longevity = {}
-    for arg in produced:
-        if arg in last_used:
-            assert isinstance(arg, Box)
-            assert produced[arg] < last_used[arg]
-            longevity[arg] = (produced[arg], last_used[arg])
+    for i, arg in enumerate(operations):
+        if arg.type != 'v' and arg in last_used:
+            assert not isinstance(arg, Const)
+            assert i < last_used[arg]
+            longevity[arg] = (i, last_used[arg])
             del last_used[arg]
     for arg in inputargs:
-        assert isinstance(arg, Box)
+        assert not isinstance(arg, Const)
         if arg not in last_used:
             longevity[arg] = (-1, -1)
         else:
             longevity[arg] = (0, last_used[arg])
             del last_used[arg]
     assert len(last_used) == 0
-    return longevity, last_real_usage
+
+    if not we_are_translated():
+        produced = {}
+        for arg in inputargs:
+            produced[arg] = None
+        for op in operations:
+            for arg in op.getarglist():
+                if not isinstance(arg, Const):
+                    assert arg in produced
+            produced[op] = None
+
+    return LiveRanges(longevity, last_real_usage, dist_to_next_call)
 
 def is_comparison_or_ovf_op(opnum):
     from rpython.jit.metainterp.resoperation import opclasses
@@ -734,7 +760,7 @@ def is_comparison_or_ovf_op(opnum):
     # any instance field, we can use a fake object
     class Fake(cls):
         pass
-    op = Fake(None)
+    op = Fake()
     return op.is_comparison() or op.is_ovf()
 
 def valid_addressing_size(size):
