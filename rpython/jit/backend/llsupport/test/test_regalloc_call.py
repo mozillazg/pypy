@@ -45,10 +45,20 @@ class FakeAssembler(object):
 
 CPURegalloc = RegAlloc
 class FakeRegAlloc(CPURegalloc):
-    def __init__(self, caller_saved, callee_saved):
+    def __init__(self, tracealloc, caller_saved, callee_saved):
         self.all_regs = callee_saved[:] + callee_saved
         CPURegalloc.__init__(self, FakeAssembler(), False)
-    def flush_loop(self): pass
+        self.tracealloc = tracealloc
+        self.steps = set()
+
+    def flush_loop(self):
+        pass
+
+    def possibly_free_vars_for_op(self, op):
+        i = self.rm.position
+        if i not in self.steps:
+            self.steps.add(i)
+            self.tracealloc.regalloc_one_step(i)
 
 class FakeLoopToken(object):
     def __init__(self):
@@ -57,19 +67,25 @@ class FakeLoopToken(object):
 class TraceAllocation(object):
     def __init__(self, trace, caller_saved, callee_saved, binding):
         self.trace = trace
-        self.regalloc = FakeRegAlloc(caller_saved, callee_saved)
+        self.regalloc = FakeRegAlloc(self, caller_saved, callee_saved)
         self.initial_binding = binding
         looptoken = FakeLoopToken()
         gcrefs = None
         for op in trace.operations:
             for arg in op.getarglist():
                 pass
-            pass
         self.regalloc.prepare_loop(self.trace.inputargs, self.trace.operations, looptoken, gcrefs)
         self.regalloc.walk_operations(trace.inputargs, trace.operations)
 
     def initial_register(self, name):
-        pass
+        return self.initial_binding.get(name, None)
+
+    def regalloc_one_step(self, i):
+        bindings = self.regalloc.rm.reg_bindings
+        for var in bindings:
+            varname = str(var)
+            if varname not in self.initial_binding:
+                self.initial_binding[varname] = bindings[var]
 
 class TestRegalloc(object):
 
