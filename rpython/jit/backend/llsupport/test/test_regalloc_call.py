@@ -23,6 +23,11 @@ callee_saved = []
 
 CPU = getcpuclass()
 
+def get_param(i):
+    # x86 specific!!
+    ABI_PARAMS_REGISTERS = [edi, esi, edx, ecx, r8, r9]
+    return ABI_PARAMS_REGISTERS[i]
+
 def parse_loop(text, namespace={}):
     ops = parse(text, namespace=namespace)
     tt = None
@@ -95,30 +100,48 @@ class TraceAllocation(object):
         self.trace = trace
         self.regalloc = FakeRegAlloc(self, caller_saved, callee_saved)
         self.initial_binding = { var: reg for var, reg in zip(trace.inputargs, binding) }
-        looptoken = FakeLoopToken()
-        gcrefs = []
         tt._x86_arglocs = binding
 
+    def run_allocation(self, free_regs=None):
+        inputargs = self.trace.inputargs
+        operations = self.trace.operations
+        looptoken = FakeLoopToken()
+        gcrefs = []
+
+        # force naming of the variables!
         AbstractValue._repr_memo = CountingDict()
-        for op in trace.operations:
+        for op in operations:
             for arg in op.getarglist():
                 arg.repr_short(arg._repr_memo)
-                pass
             op.repr_short(op._repr_memo)
-        self.regalloc.prepare_loop(self.trace.inputargs, self.trace.operations, looptoken, gcrefs)
 
-        for var, reg in zip(trace.inputargs, binding):
+        # setup the register allocator
+        self.regalloc.prepare_loop(inputargs, operations, looptoken, gcrefs)
+
+        # setup the initial binding the test requires
+        for var, reg in self.initial_binding.items():
             self.regalloc.rm.reg_bindings[var] = reg
-        fr = self.regalloc.free_regs
-        self.regalloc.rm.free_regs = [reg for reg in fr if reg not in binding]
 
+        # instead of having all machine registers, we want only to provide some
+        fr = self.regalloc.free_regs
+        if free_regs is None:
+            self.regalloc.rm.free_regs = [reg for reg in fr if reg not in binding]
+        else:
+            self.regalloc.rm.free_regs = free_regs
         self.regalloc.rm.all_regs = self.regalloc.all_regs
         self.regalloc.rm.save_around_call_regs = self.regalloc.caller_saved
 
-        self.regalloc.walk_operations(trace.inputargs, trace.operations)
+        # invoke the allocator!
+        self.regalloc.walk_operations(inputargs, operations)
 
     def initial_register(self, var):
         return self.initial_binding.get(var, None)
+
+    def is_caller_saved(self, var):
+        return self.initial_register(var) in self.regalloc.caller_saved
+
+    def is_callee_saved(self, var):
+        return self.initial_register(var) in self.regalloc.callee_saved
 
     def move_count(self):
         return len(self.regalloc.assembler.moves)
@@ -153,11 +176,13 @@ class TestRegalloc(object):
         i3 = int_add(i2,i1)
         jump(p0,i2)
         """)
+        i2 = ops.operations[0]
         trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
-        i2 = trace_alloc.initial_register('i2')
+        trace_alloc.run_allocation()
+        i2 = trace_alloc.initial_register(i2)
         assert i2 == edx
 
-    def test_2allocate_register_into_jump_register2(self):
+    def test_single_move(self):
         tt, ops = parse_loop("""
         [p0,i0]
         i1 = int_add(i0,i0)
@@ -165,27 +190,29 @@ class TestRegalloc(object):
         guard_true(i2) []
         jump(p0,i1)
         """)
-        i1 = ops.operations[0]
-        i2 = ops.operations[1]
         trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
-        assert trace_alloc.initial_register(i1) == edx
-        assert trace_alloc.initial_register(i2) != edx
+        trace_alloc.run_allocation()
         assert trace_alloc.move_count() == 1
 
-    def test_call_allocate_first_param_to_callee(self):
+    def test_prefer_callee_saved_register(self):
         tt, ops = parse_loop("""
         [p0,i0]
         i1 = int_add(i0,i0)
-        i2 = int_add(i0,i1)
+        i2 = int_sub(i0,i1)
         call_n(p0, i1, descr=calldescr)
-        guard_true(i2) []
-        jump(p0,i1)
+        i3 = int_mul(i2,i0)
+        jump(p0,i2)
         """, namespace=self.namespace)
         i1 = ops.operations[0]
         i2 = ops.operations[1]
-        trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
-        assert trace_alloc.initial_register(i1) == edx
-        assert trace_alloc.initial_register(i2) != edx
+        trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9, r10], [eax, r10], tt)
+        trace_alloc.run_allocation([r8,r9,edx])
+        # we force the allocation to immediately take the first call parameter register
+        # the new regalloc will not shuffle register binding around (other than spilling)
+        # in the best case this will reduce a lot of movement
+        assert trace_alloc.initial_register(i1) == get_param(0)
+        assert trace_alloc.is_caller_saved(i1)
+        assert trace_alloc.is_callee_saved(i2)
         assert trace_alloc.move_count() == 1
 
     def test_call_allocate_first_param_to_callee2(self):
@@ -204,6 +231,7 @@ class TestRegalloc(object):
         i1 = ops.operations[0]
         i2 = ops.operations[1]
         trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
+        trace_alloc.run_allocation()
         assert trace_alloc.initial_register(i1) == edx
         assert trace_alloc.initial_register(i2) != edx
         assert trace_alloc.move_count() == 1
