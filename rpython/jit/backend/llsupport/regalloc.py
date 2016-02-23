@@ -671,16 +671,24 @@ class BaseRegalloc(object):
             return [self.loc(op.getarg(0))]
 
 
-def compute_vars_longevity(inputargs, operations):
+class LiveRanges(object):
+    def __init__(self, longevity, last_real_usage, dist_to_next_call):
+        self.longevity = longevity
+        self.last_real_usage = last_real_usage
+        self.dist_to_next_call = dist_to_next_call
+
+def compute_var_live_ranges(inputargs, operations):
     # compute a dictionary that maps variables to index in
     # operations that is a "last-time-seen"
 
-    # returns a pair longevity/useful. Non-useful variables are ones that
+    # returns a Longevity object with longevity/useful. Non-useful variables are ones that
     # never appear in the assembler or it does not matter if they appear on
     # stack or in registers. Main example is loop arguments that go
     # only to guard operations or to jump or to finish
     last_used = {}
     last_real_usage = {}
+    dist_to_next_call = [0] * len(operations)
+    last_call_pos = -1
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]
         if op.type != 'v':
@@ -703,6 +711,9 @@ def compute_vars_longevity(inputargs, operations):
                 assert not isinstance(arg, Const)
                 if arg not in last_used:
                     last_used[arg] = i
+        if op.is_call():
+            last_call_pos = i
+        dist_to_next_call[i] = last_call_pos - i
     #
     longevity = {}
     for i, arg in enumerate(operations):
@@ -729,8 +740,8 @@ def compute_vars_longevity(inputargs, operations):
                 if not isinstance(arg, Const):
                     assert arg in produced
             produced[op] = None
-    
-    return longevity, last_real_usage
+
+    return LiveRanges(longevity, last_real_usage, dist_to_next_call)
 
 def is_comparison_or_ovf_op(opnum):
     from rpython.jit.metainterp.resoperation import opclasses

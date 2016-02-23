@@ -141,8 +141,9 @@ class TestRegalloc(object):
         FPTR = lltype.Ptr(lltype.FuncType([rffi.UINT], rffi.UINT))
         func_ptr = llhelper(FPTR, x)
         calldescr = cpu.calldescrof(FPTR.TO, FPTR.TO.ARGS, FPTR.TO.RESULT, EffectInfo.MOST_GENERAL)
+        targettoken = TargetToken()
 
-        ns = {'calldescr': calldescr}
+        ns = {'calldescr': calldescr, 'targettoken':targettoken}
         self.namespace = ns
 
     def test_allocate_register_into_jump_register(self):
@@ -187,3 +188,22 @@ class TestRegalloc(object):
         assert trace_alloc.initial_register(i2) != edx
         assert trace_alloc.move_count() == 1
 
+    def test_call_allocate_first_param_to_callee2(self):
+        tt, ops = parse_loop("""
+        [p0,i0]
+
+        label(p0,i0,descr=targettoken)
+
+        i1 = int_add(i0,i0)
+        i2 = int_add(i0,i1)
+        call_n(p0, i1, descr=calldescr)
+        guard_true(i2) []
+
+        jump(p0,i1,descr=targettoken)
+        """, namespace=self.namespace)
+        i1 = ops.operations[0]
+        i2 = ops.operations[1]
+        trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9], [eax, edx], tt)
+        assert trace_alloc.initial_register(i1) == edx
+        assert trace_alloc.initial_register(i2) != edx
+        assert trace_alloc.move_count() == 1

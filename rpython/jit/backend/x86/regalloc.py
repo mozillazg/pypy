@@ -7,7 +7,7 @@ from rpython.jit.backend.llsupport import symbolic
 from rpython.jit.backend.llsupport.descr import CallDescr, unpack_arraydescr
 from rpython.jit.backend.llsupport.gcmap import allocate_gcmap
 from rpython.jit.backend.llsupport.regalloc import (FrameManager, BaseRegalloc,
-     RegisterManager, TempVar, compute_vars_longevity, is_comparison_or_ovf_op,
+     RegisterManager, TempVar, compute_var_live_ranges, is_comparison_or_ovf_op,
      valid_addressing_size)
 from rpython.jit.backend.x86 import rx86
 from rpython.jit.backend.x86.arch import (WORD, JITFRAME_FIXED_SIZE, IS_X86_32,
@@ -164,10 +164,10 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
         operations = cpu.gc_ll_descr.rewrite_assembler(cpu, operations,
                                                        allgcrefs)
         # compute longevity of variables
-        longevity, last_real_usage = compute_vars_longevity(
-                                                    inputargs, operations)
-        self.longevity = longevity
-        self.last_real_usage = last_real_usage
+        live_ranges = compute_var_live_ranges(inputargs, operations)
+        self.live_ranges = live_ranges
+        self.longevity = live_ranges.longevity
+        self.last_real_usage = live_ranges.last_real_usage
         self.rm = gpr_reg_mgr_cls(self.longevity,
                                   frame_manager = self.fm,
                                   assembler = self.assembler)
