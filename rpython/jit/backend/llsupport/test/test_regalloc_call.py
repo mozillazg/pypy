@@ -99,7 +99,7 @@ class TraceAllocation(object):
     def __init__(self, trace, caller_saved, callee_saved, binding, tt):
         self.trace = trace
         self.regalloc = FakeRegAlloc(self, caller_saved, callee_saved)
-        self.initial_binding = { var: reg for var, reg in zip(trace.inputargs, binding) }
+        self.initial_binding = {var: reg for var, reg in zip(trace.inputargs, binding) }
         tt._x86_arglocs = binding
 
     def run_allocation(self, free_regs=None):
@@ -125,7 +125,8 @@ class TraceAllocation(object):
         # instead of having all machine registers, we want only to provide some
         fr = self.regalloc.free_regs
         if free_regs is None:
-            self.regalloc.rm.free_regs = [reg for reg in fr if reg not in binding]
+            self.regalloc.rm.free_regs = [reg for reg in fr
+                                          if reg not in self.initial_binding.values()]
         else:
             self.regalloc.rm.free_regs = free_regs
         self.regalloc.rm.all_regs = self.regalloc.all_regs
