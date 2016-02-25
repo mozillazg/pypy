@@ -58,7 +58,12 @@ class X86_64_RegisterManager(X86RegisterManager):
     all_regs = [ecx, eax, edx, ebx, esi, edi, r8, r9, r10, r12, r13, r14, r15]
 
     no_lower_byte_regs = []
-    save_around_call_regs = [eax, ecx, edx, esi, edi, r8, r9, r10]
+    abi_param_regs = [edi, esi, ecx, r8, r9]
+    save_around_call_regs = abi_param_regs + [eax, edx, r10]
+
+    def get_abi_param_register(self, i):
+        assert i >= 0 and i < len(self.abi_param_regs)
+        return self.abi_param_regs[i]
 
 class X86XMMRegisterManager(RegisterManager):
     box_types = [FLOAT, INT] # yes INT!

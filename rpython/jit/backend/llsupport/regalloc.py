@@ -276,6 +276,7 @@ class RegisterManager(object):
     save_around_call_regs = []
     frame_reg             = None
 
+    # TODO would be good to keep free_caller_regs sorted (according to the ABI)
     free_callee_regs      = []
     free_caller_regs      = []
     is_callee_lookup      = None
@@ -300,6 +301,16 @@ class RegisterManager(object):
         else:
             target_pool = self.free_caller_regs
             second_pool = self.free_callee_regs
+        if target_reg is not None:
+            # try to allocate this regsiter to a special register
+            for i,reg in enumerate(target_pool):
+                if reg is target_reg:
+                    del target_pool[i]
+                    return reg
+            for i,reg in enumerate(second_pool):
+                if reg is target_reg:
+                    del second_pool[i]
+                    return reg
         if target_pool:
             return target_pool.pop()
         if second_pool:
@@ -309,12 +320,25 @@ class RegisterManager(object):
     def has_free_registers(self):
         return self.free_callee_regs or self.free_caller_regs
 
+    def get_abi_param_register(self, i):
+        raise NotImplementedError
+
     def allocate_new(self, var):
         if self.live_ranges.exists(var) and self.live_ranges.survives_call(var, self.position):
             # we want a callee save register
             return self.get_free_register(var, callee=True)
         else:
-            return self.get_free_register(var, callee=False, target_reg=None)
+            # if survives_call indicates that the live range ends at the call site
+            # we would like to allocate the register directly to the parameter
+            # register
+
+            index = self.live_ranges.get_call_argument_index(var, self.position)
+            target_reg = None
+            if index != -1:
+                target_reg = self.get_abi_param_register(index)
+
+
+            return self.get_free_register(var, callee=False, target_reg=target_reg)
 
     def update_free_registers(self, regs_in_use):
         self._reinit_free_regs()
@@ -641,13 +665,20 @@ class RegisterManager(object):
         if self.live_ranges.last_use(v) > self.position:
             # we need to find a new place for variable v and
             # store result in the same place
-            loc = self.reg_bindings[v]
-            del self.reg_bindings[v]
-            if self.frame_manager.get(v) is None or self.has_free_registers():
-                self._move_variable_away(v, loc)
 
-            self.reg_bindings[result_v] = loc
+            loc = self.reg_bindings[v]
+            # only spill variable is allowed to reassign a new register to a live range
+            result_loc = self.force_allocate_reg(result_v, forbidden_vars=forbidden_vars)
+            self.assembler.regalloc_mov(loc, result_loc)
+            loc = result_loc
+
+            #del self.reg_bindings[v]
+            #if self.frame_manager.get(v) is None or self.has_free_registers():
+            #    self._move_variable_away(v, loc)
+
+            #self.reg_bindings[result_v] = loc
         else:
+            import pdb; pdb.set_trace()
             self._reallocate_from_to(v, result_v)
             loc = self.reg_bindings[result_v]
         return loc
@@ -756,10 +787,11 @@ class BaseRegalloc(object):
 
 
 class LiveRanges(object):
-    def __init__(self, longevity, last_real_usage, dist_to_next_call):
+    def __init__(self, longevity, last_real_usage, dist_to_next_call, operations):
         self.longevity = longevity
         self.last_real_usage = last_real_usage
         self.dist_to_next_call = dist_to_next_call
+        self.operations = operations
 
     def exists(self, var):
         return var in self.longevity
@@ -770,6 +802,14 @@ class LiveRanges(object):
     def new_live_range(self, var, start, end):
         self.longevity[var] = (start, end)
 
+    def get_call_argument_index(self, var, pos):
+        assert self.dist_to_next_call[pos] >= 0
+        op = self.operations[pos + self.dist_to_next_call[pos]]
+        for i,arg in enumerate(op.getarglist()):
+            if arg is var:
+                return i-1 # first parameter is the functionh
+        return -1
+
     def survives_call(self, var, position):
         if not we_are_translated():
             if self.dist_to_next_call is None:
@@ -777,8 +817,8 @@ class LiveRanges(object):
         start, end = self.longevity[var]
         dist = self.dist_to_next_call[position]
         assert end >= position
-        if end-position <= dist:
-            # it is 'live during a call' if it live range ends after the call
+        if end-position < dist:
+            # the variable is used after the call instr
             return True
         return False
 
@@ -796,6 +836,9 @@ def compute_var_live_ranges(inputargs, operations):
     last_call_pos = -1
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]
+        if op.is_call():
+            last_call_pos = i
+        dist_to_next_call[i] = last_call_pos - i
         if op.type != 'v':
             if op not in last_used and op.has_no_side_effect():
                 continue
@@ -816,9 +859,6 @@ def compute_var_live_ranges(inputargs, operations):
                 assert not isinstance(arg, Const)
                 if arg not in last_used:
                     last_used[arg] = i
-        if op.is_call():
-            last_call_pos = i
-        dist_to_next_call[i] = last_call_pos - i
     #
     longevity = {}
     for i, arg in enumerate(operations):
@@ -846,7 +886,9 @@ def compute_var_live_ranges(inputargs, operations):
                     assert arg in produced
             produced[op] = None
 
-    return LiveRanges(longevity, last_real_usage, dist_to_next_call)
+    lr = LiveRanges(longevity, last_real_usage,
+                    dist_to_next_call, operations)
+    return lr
 
 def is_comparison_or_ovf_op(opnum):
     from rpython.jit.metainterp.resoperation import opclasses
