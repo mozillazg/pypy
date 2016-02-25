@@ -643,9 +643,10 @@ class RegisterManager(object):
             self.assembler.regalloc_mov(prev_loc, loc)
 
     def force_result_in_reg(self, result_v, v, forbidden_vars=[]):
-        """ Make sure that result is in the same register as v.
-        The variable v is copied away if it's further used.  The meaning
-        of 'forbidden_vars' is the same as in 'force_allocate_reg'.
+        """ Allocate a register for result_v and copy the contents of v's
+        register to result_v's register. v will stay in the register it
+        was initially assigned to. The meaning of 'forbidden_vars' is the
+        same as in 'force_allocate_reg'.
         """
         self._check_type(result_v)
         self._check_type(v)
@@ -803,6 +804,9 @@ class LiveRanges(object):
         self.longevity[var] = (start, end)
 
     def get_call_argument_index(self, var, pos):
+        if not we_are_translated():  # tests
+            if self.dist_to_next_call is None:
+                return -1
         dist_to_call = self.dist_to_next_call[pos]
         if dist_to_call < 0:
             return -1
