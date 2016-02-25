@@ -281,8 +281,8 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
 
     def _update_bindings(self, arglocs, inputargs):
         # XXX this should probably go to llsupport/regalloc.py
-        used = set()
-        used_xmm = set()
+        used = {}
+        used_xmm = {}
         i = 0
         # manually set the register and frame bindings for
         # all inputargs (for a bridge)
@@ -294,13 +294,13 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
             if isinstance(loc, RegLoc):
                 if arg.type == FLOAT:
                     self.xrm.reg_bindings[arg] = loc
-                    used_xmm.add(loc)
+                    used_xmm[loc] = None
                 else:
                     if loc is ebp:
                         self.rm.bindings_to_frame_reg[arg] = None
                     else:
                         self.rm.reg_bindings[arg] = loc
-                        used.add(loc)
+                        used[loc] = None
             else:
                 self.fm.bind(arg, loc)
         #

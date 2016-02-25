@@ -374,8 +374,12 @@ class RegisterManager(object):
         self.save_in_callee_regs = [reg for reg in all_regs
                                     if reg not in save_around_call_regs]
         self._reinit_free_regs()
-        self.is_callee_lookup = [True] * max(
-            [r.value + 1 for r in self.all_regs])
+        if we_are_translated():
+            self.is_callee_lookup = [True] * len(self.all_regs)
+        else:
+            # in tests the len of all_regs can change
+            values = [r.value + 1 for r in self.all_regs]
+            self.is_callee_lookup = [True] * max(values)
         for reg in self.save_around_call_regs:
             self.is_callee_lookup[reg.value] = False
 
