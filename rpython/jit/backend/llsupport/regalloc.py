@@ -318,7 +318,7 @@ class RegisterManager(object):
 
     def update_free_registers(self, regs_in_use):
         # XXX: slow?
-        self._reset_free_regs()
+        self._reinit_free_regs()
         for r in regs_in_use:
             self.remove_free_register(r)
 
@@ -341,16 +341,22 @@ class RegisterManager(object):
         return reg in self.free_callee_regs or \
                reg in self.free_caller_regs
 
-    def _reset_free_regs(self):
+    def _reinit_free_regs(self):
         self.free_callee_regs = [reg for reg in self.all_regs
                                  if reg not in self.save_around_call_regs]
         self.free_caller_regs = self.save_around_call_regs[:]
 
-    def __init__(self, live_ranges, frame_manager=None, assembler=None):
-        self._reset_free_regs()
-        self.is_callee_lookup = [True] * len(self.all_regs)
-        for reg in self.save_around_call_regs:
+    def _change_regs(self, all_regs, save_around_call_regs):
+        self.all_regs = all_regs
+        self.save_around_call_regs = save_around_call_regs
+        self._reinit_free_regs()
+        self.is_callee_lookup = [True] * max(
+            [r.value + 1 for r in self.all_regs])
+        for reg in save_around_call_regs:
             self.is_callee_lookup[reg.value] = False
+
+    def __init__(self, live_ranges, frame_manager=None, assembler=None):
+        self._change_regs(self.all_regs, self.save_around_call_regs)
 
         self.live_ranges = live_ranges
         self.temp_boxes = []

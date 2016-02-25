@@ -117,15 +117,15 @@ class TraceAllocation(object):
             self.regalloc.rm.reg_bindings[var] = reg
 
         # instead of having all machine registers, we want only to provide some
-        fr = self.regalloc.free_regs
+        self.regalloc.rm._change_regs(self.regalloc.all_regs,
+                                      self.regalloc.caller_saved)
         if free_regs is None:
-            self.regalloc.rm.free_regs = [reg for reg in fr
-                                          if reg not in self.initial_binding.values()]
+            self.regalloc.rm.update_free_registers(
+                self.initial_binding.values())
         else:
-            self.regalloc.rm.free_regs = free_regs
-        self.regalloc.rm.all_regs = self.regalloc.all_regs
-        self.regalloc.rm.save_around_call_regs = self.regalloc.caller_saved
-
+            self.regalloc.rm.update_free_registers(
+                set(self.regalloc.all_regs) - set(free_regs))
+        self.regalloc.rm._check_invariants()
         # invoke the allocator!
         self.regalloc.walk_operations(inputargs, operations)
 
