@@ -203,6 +203,24 @@ class TestRegallocSimple(BaseTestRegalloc):
         lrs = compute_var_live_ranges(loop.inputargs, loop.operations)
         assert lrs.dist_to_next_call == [2, 1, 0, -4, -5]
 
+    def test_survives_call(self):
+        ops = '''
+        [p0,i0]
+        i1 = int_add(i0,i0)
+        i2 = int_sub(i0,i1)
+        call_n(p0, i1, descr=raising_calldescr)
+        i3 = int_mul(i2,i0)
+        guard_true(i3) []
+        i5 = int_mul(i2,i0)
+        jump(p0,i2)
+        '''
+        loop = self.parse(ops)
+        lrs = compute_var_live_ranges(loop.inputargs, loop.operations)
+        assert not lrs.survives_call(loop.operations[0], 0)
+        assert lrs.survives_call(loop.operations[1], 1)
+        assert not lrs.survives_call(loop.operations[3], 3)
+        assert not lrs.exists(loop.operations[5])
+
 
     def test_simple_loop(self):
         ops = '''

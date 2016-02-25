@@ -817,7 +817,7 @@ class LiveRanges(object):
         start, end = self.longevity[var]
         dist = self.dist_to_next_call[position]
         assert end >= position
-        if end-position < dist:
+        if dist >= 0 and position + dist < end:
             # the variable is used after the call instr
             return True
         return False
