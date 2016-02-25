@@ -201,7 +201,7 @@ class TestRegalloc(object):
         """, namespace=self.namespace)
         i1 = ops.operations[0]
         i2 = ops.operations[1]
-        trace_alloc = TraceAllocation(ops, [eax, edx, get_param(0)], [r8, r9, r12], [eax, r12], tt)
+        trace_alloc = TraceAllocation(ops, [r13, edx, get_param(0)], [r8, r9, r12], [r13, r12], tt)
         trace_alloc.run_allocation()
         # we force the allocation to immediately take the first call parameter register
         # the new regalloc will not shuffle register binding around (other than spilling)
@@ -209,7 +209,10 @@ class TestRegalloc(object):
         assert trace_alloc.initial_register(i1) == get_param(0)
         assert trace_alloc.is_caller_saved(i1)
         assert trace_alloc.is_callee_saved(i2)
-        assert trace_alloc.move_count() == 1
+        # two moves to preserve the live range -> register mapping (i0,i2)
+        # p0 is reloaded before the jump (because it is a gc pointer)
+        # i2 is not at the right location
+        assert trace_alloc.move_count() == 4
 
     def test_call_allocate_first_param_to_callee2(self):
         tt, ops = parse_loop("""
