@@ -276,7 +276,7 @@ class RegisterManager(object):
     save_around_call_regs = []
     frame_reg             = None
 
-    free_callee_regs = [reg for reg in all_reg if reg not in save_around_call_regs]
+    free_callee_regs = [reg for reg in all_regs if reg not in save_around_call_regs]
     free_caller_regs = save_around_call_regs[:]
     is_callee_lookup = [True] * len(all_regs)
     for reg in save_around_call_regs:
@@ -319,13 +319,13 @@ class RegisterManager(object):
             return self.get_free_register(var, callee=False, target_reg=None)
 
     def remove_free_register(self, reg):
-        if is_callee_lookup[reg.index]:
-            self.free_callee_regs = [fr for fr in self.free_callee_regs if fr is not r]
+        if self.is_callee_lookup[reg.index]:
+            self.free_callee_regs = [fr for fr in self.free_callee_regs if fr is not reg]
         else:
-            self.free_caller_regs = [fr for fr in self.free_caller_regs if fr is not r]
+            self.free_caller_regs = [fr for fr in self.free_caller_regs if fr is not reg]
 
     def put_back_register(self, reg):
-        if is_callee_lookup[reg.index]:
+        if self.is_callee_lookup[reg.index]:
             self.free_callee_regs.push(reg)
         else:
             self.free_caller_regs.push(reg)
@@ -752,7 +752,7 @@ class LiveRanges(object):
          if end-position <= dist:
              # it is 'live during a call' if it live range ends after the call
              return True
-        return False
+         return False
 
 def compute_var_live_ranges(inputargs, operations):
     # compute a dictionary that maps variables to index in
