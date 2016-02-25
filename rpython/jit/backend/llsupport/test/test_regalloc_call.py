@@ -200,8 +200,9 @@ class TestRegalloc(object):
         """, namespace=self.namespace)
         i1 = ops.operations[0]
         i2 = ops.operations[1]
-        trace_alloc = TraceAllocation(ops, [eax, edx], [r8, r9, r10], [eax, r10], tt)
-        trace_alloc.run_allocation([r8,r9,edx])
+        trace_alloc = TraceAllocation(ops, [eax, edx, get_param(0)],
+                                      [r8, r9, r10], [eax, r10], tt)
+        trace_alloc.run_allocation()
         # we force the allocation to immediately take the first call parameter register
         # the new regalloc will not shuffle register binding around (other than spilling)
         # in the best case this will reduce a lot of movement

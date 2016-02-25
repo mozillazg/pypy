@@ -796,6 +796,9 @@ def compute_var_live_ranges(inputargs, operations):
     last_call_pos = -1
     for i in range(len(operations)-1, -1, -1):
         op = operations[i]
+        if op.is_call():
+            last_call_pos = i
+        dist_to_next_call[i] = last_call_pos - i
         if op.type != 'v':
             if op not in last_used and op.has_no_side_effect():
                 continue
@@ -816,9 +819,6 @@ def compute_var_live_ranges(inputargs, operations):
                 assert not isinstance(arg, Const)
                 if arg not in last_used:
                     last_used[arg] = i
-        if op.is_call():
-            last_call_pos = i
-        dist_to_next_call[i] = last_call_pos - i
     #
     longevity = {}
     for i, arg in enumerate(operations):

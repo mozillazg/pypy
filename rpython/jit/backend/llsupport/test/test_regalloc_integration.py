@@ -190,6 +190,20 @@ class TestRegallocSimple(BaseTestRegalloc):
         assert lrs.dist_to_next_call == [3, 2, 1, 0, 1, 0, -7, -8]
 
 
+    def test_compute_call_distances2(self):
+        ops = '''
+        [p0,i0]
+        i1 = int_add(i0,i0)
+        i2 = int_sub(i0,i1)
+        call_n(p0, i1, descr=raising_calldescr)
+        i3 = int_mul(i2,i0)
+        jump(p0,i2)
+        '''
+        loop = self.parse(ops)
+        lrs = compute_var_live_ranges(loop.inputargs, loop.operations)
+        assert lrs.dist_to_next_call == [2, 1, 0, -4, -5]
+
+
     def test_simple_loop(self):
         ops = '''
         [i0]
