@@ -130,6 +130,10 @@ class FrameLoc(RawEbpLoc):
 
 class RegLoc(AssemblerLocation):
     _immutable_ = True
+
+    # indicates if the register is caller-save:
+    save_around_calls = True
+
     def __init__(self, regnum, is_xmm):
         assert regnum >= 0
         self.value = regnum

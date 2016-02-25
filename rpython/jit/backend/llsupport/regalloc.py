@@ -279,7 +279,6 @@ class RegisterManager(object):
     # TODO would be good to keep free_caller_regs sorted (according to the ABI)
     free_callee_regs      = []
     free_caller_regs      = []
-    is_callee_lookup      = None
 
     def get_lower_byte_free_register(self, reg):
         # try to return a volatile register first!
@@ -346,13 +345,13 @@ class RegisterManager(object):
             self.remove_free_register(r)
 
     def remove_free_register(self, reg):
-        if self.is_callee_lookup[reg.value]:
+        if not reg.save_around_calls:
             self.free_callee_regs = [fr for fr in self.free_callee_regs if fr is not reg]
         else:
             self.free_caller_regs = [fr for fr in self.free_caller_regs if fr is not reg]
 
     def put_back_register(self, reg):
-        if self.is_callee_lookup[reg.value]:
+        if not reg.save_around_calls:
             self.free_callee_regs.append(reg)
         else:
             self.free_caller_regs.append(reg)
@@ -374,14 +373,10 @@ class RegisterManager(object):
         self.save_in_callee_regs = [reg for reg in all_regs
                                     if reg not in save_around_call_regs]
         self._reinit_free_regs()
-        if we_are_translated():
-            self.is_callee_lookup = [True] * len(self.all_regs)
-        else:
-            # in tests the len of all_regs can change
-            values = [r.value + 1 for r in self.all_regs]
-            self.is_callee_lookup = [True] * max(values)
-        for reg in self.save_around_call_regs:
-            self.is_callee_lookup[reg.value] = False
+        if not we_are_translated():
+            # in tests we need to update regloc.save_around_calls
+            for r in self.all_regs:
+                r.save_around_calls = r in save_around_call_regs
 
     def __init__(self, live_ranges, frame_manager=None, assembler=None):
         self._change_regs(self.all_regs, self.save_around_call_regs)

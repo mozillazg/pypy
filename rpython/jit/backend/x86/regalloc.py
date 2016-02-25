@@ -39,6 +39,8 @@ class X86RegisterManager(RegisterManager):
     no_lower_byte_regs = [esi, edi]
     save_around_call_regs = [eax, edx, ecx]
     frame_reg = ebp
+    for r in all_regs:
+        r.save_around_calls = r in save_around_call_regs
 
     def call_result_location(self, v):
         return eax
@@ -60,6 +62,9 @@ class X86_64_RegisterManager(X86RegisterManager):
     no_lower_byte_regs = []
     abi_param_regs = [edi, esi, ecx, r8, r9]
     save_around_call_regs = abi_param_regs + [eax, edx, r10]
+
+    for r in all_regs:
+        r.save_around_calls = r in save_around_call_regs
 
     def get_abi_param_register(self, i):
         if not IS_X86_32 and 0 <= i < len(self.abi_param_regs):
