@@ -276,6 +276,64 @@ class RegisterManager(object):
     save_around_call_regs = []
     frame_reg             = None
 
+    free_callee_regs = [reg for reg in all_reg if reg not in save_around_call_regs]
+    free_caller_regs = save_around_call_regs[:]
+    is_callee_lookup = [True] * len(all_regs)
+    for reg in save_around_call_regs:
+        is_callee_lookup[reg.index] = False
+
+    def get_lower_byte_free_register(self, reg):
+        # try to return a volatile register first!
+        for i, caller in enumerate(self.free_caller_regs):
+            if caller not in self.no_lower_byte_regs:
+                del self.free_caller_regs[i]
+                return caller
+        # in any case, we might want to try callee ones as well
+        for i, callee in enumerate(self.free_callee_regs):
+            if callee not in self.no_lower_byte_regs:
+                del self.free_callee_regs[i]
+                return callee
+        return None
+
+    def get_free_register(self, var, callee=False, target_reg=None):
+        if callee:
+            target_pool = self.free_callee_regs
+            second_pool = self.free_caller_regs
+        else:
+            target_pool = self.free_caller_regs
+            second_pool = self.free_callee_regs
+        if target_pool:
+            return target_pool.pop()
+        if second_pool:
+            return second_pool.pop()
+        assert 0, "not free register, check this before calling"
+
+    def has_free_registers(self):
+        return self.free_callee_regs or self.free_caller_regs
+
+    def allocate_new(self, var):
+        if self.live_ranges.survives_call(var, self.position):
+            # we want a callee save register
+            return self.get_free_register(var, callee=True)
+        else:
+            return self.get_free_register(var, callee=False, target_reg=None)
+
+    def remove_free_register(self, reg):
+        if is_callee_lookup[reg.index]:
+            self.free_callee_regs = [fr for fr in self.free_callee_regs if fr is not r]
+        else:
+            self.free_caller_regs = [fr for fr in self.free_caller_regs if fr is not r]
+
+    def put_back_register(self, reg):
+        if is_callee_lookup[reg.index]:
+            self.free_callee_regs.push(reg)
+        else:
+            self.free_caller_regs.push(reg)
+
+    def is_free(self, reg):
+        return reg in self.free_callee_regs or \
+               reg in self.free_caller_regs
+
     def __init__(self, live_ranges, frame_manager=None, assembler=None):
         self.free_regs = self.all_regs[:]
         self.free_regs.reverse()
@@ -317,7 +375,7 @@ class RegisterManager(object):
             return
         if not self.live_ranges.exists(v) or self.live_ranges.last_use(v) <= self.position:
             if v in self.reg_bindings:
-                self.free_regs.append(self.reg_bindings[v])
+                self.put_back_register(self.reg_bindings[v])
                 del self.reg_bindings[v]
             if self.frame_manager is not None:
                 self.frame_manager.mark_as_free(v)
@@ -337,17 +395,20 @@ class RegisterManager(object):
         self.temp_boxes = []
 
     def _check_invariants(self):
+        free_count = len(self.free_callee_regs) + len(self.free_caller_regs)
         if not we_are_translated():
             # make sure no duplicates
             assert len(dict.fromkeys(self.reg_bindings.values())) == len(self.reg_bindings)
             rev_regs = dict.fromkeys(self.reg_bindings.values())
-            for reg in self.free_regs:
+            for reg in self.free_caller_regs:
                 assert reg not in rev_regs
-            assert len(rev_regs) + len(self.free_regs) == len(self.all_regs)
+            for reg in self.free_callee_regs:
+                assert reg not in rev_regs
+            assert len(rev_regs) + free_count == len(self.all_regs)
         else:
-            assert len(self.reg_bindings) + len(self.free_regs) == len(self.all_regs)
+            assert len(self.reg_bindings) + free_count == len(self.all_regs)
         assert len(self.temp_boxes) == 0
-        if self.live_ranges:
+        if self.live_ranges.longevity:
             for v in self.reg_bindings:
                 assert self.live_ranges.last_use(v) > self.position
 
@@ -368,32 +429,30 @@ class RegisterManager(object):
                     return res
                 else:
                     del self.reg_bindings[v]
-                    self.free_regs.append(res)
-            if selected_reg in self.free_regs:
-                self.free_regs = [reg for reg in self.free_regs
-                                  if reg is not selected_reg]
+                    self.put_back_register(res)
+            if self.is_free(selected_reg):
+                self.remove_free_register(selected_reg)
                 self.reg_bindings[v] = selected_reg
                 return selected_reg
             return None
+
         if need_lower_byte:
             loc = self.reg_bindings.get(v, None)
             if loc is not None and loc not in self.no_lower_byte_regs:
+                # yes, this location is a no_lower_byte_register
                 return loc
-            for i in range(len(self.free_regs) - 1, -1, -1):
-                reg = self.free_regs[i]
-                if reg not in self.no_lower_byte_regs:
-                    if loc is not None:
-                        self.free_regs[i] = loc
-                    else:
-                        del self.free_regs[i]
-                    self.reg_bindings[v] = reg
-                    return reg
-            return None
+            # find a free register that is also a lower byte register
+            if loc:
+                self.put_back_register(loc)
+            reg = self.get_lower_byte_free_register(v)
+            self.reg_bindings[v] = reg
+            return reg
+
         try:
             return self.reg_bindings[v]
         except KeyError:
-            if self.free_regs:
-                loc = self.free_regs.pop()
+            if self.has_free_registers():
+                loc = self.allocate_new(v)
                 self.reg_bindings[v] = loc
                 return loc
 
@@ -453,7 +512,7 @@ class RegisterManager(object):
                               need_lower_byte=need_lower_byte)
         prev_loc = self.reg_bindings.get(v, None)
         if prev_loc is not None:
-            self.free_regs.append(prev_loc)
+            self.put_back_register(prev_loc)
         self.reg_bindings[v] = loc
         return loc
 
@@ -466,7 +525,7 @@ class RegisterManager(object):
         try:
             loc = self.reg_bindings[var]
             del self.reg_bindings[var]
-            self.free_regs.append(loc)
+            self.put_back_register(loc)
         except KeyError:
             pass   # 'var' is already not in a register
 
@@ -493,11 +552,11 @@ class RegisterManager(object):
         assert isinstance(v, Const)
         immloc = self.convert_to_imm(v)
         if selected_reg:
-            if selected_reg in self.free_regs:
+            if self.is_free(selected_reg):
                 self.assembler.regalloc_mov(immloc, selected_reg)
                 return selected_reg
             loc = self._spill_var(v, forbidden_vars, selected_reg)
-            self.free_regs.append(loc)
+            self.put_back_register(loc)
             self.assembler.regalloc_mov(immloc, loc)
             return loc
         return immloc
@@ -526,8 +585,8 @@ class RegisterManager(object):
         self.reg_bindings[to_v] = reg
 
     def _move_variable_away(self, v, prev_loc):
-        if self.free_regs:
-            loc = self.free_regs.pop()
+        if self.has_free_registers():
+            loc = self.allocate_new(v)
             self.reg_bindings[v] = loc
             self.assembler.regalloc_mov(prev_loc, loc)
         else:
@@ -542,8 +601,8 @@ class RegisterManager(object):
         self._check_type(result_v)
         self._check_type(v)
         if isinstance(v, Const):
-            if self.free_regs:
-                loc = self.free_regs.pop()
+            if self.has_free_registers():
+                loc = self.allocate_new(v)
             else:
                 loc = self._spill_var(v, forbidden_vars, None)
             self.assembler.regalloc_mov(self.convert_to_imm(v), loc)
@@ -559,7 +618,7 @@ class RegisterManager(object):
             # store result in the same place
             loc = self.reg_bindings[v]
             del self.reg_bindings[v]
-            if self.frame_manager.get(v) is None or self.free_regs:
+            if self.frame_manager.get(v) is None or self.has_free_registers():
                 self._move_variable_away(v, loc)
 
             self.reg_bindings[result_v] = loc
@@ -586,7 +645,7 @@ class RegisterManager(object):
             if v not in force_store and self.live_ranges.last_use(v) <= self.position:
                 # variable dies
                 del self.reg_bindings[v]
-                self.free_regs.append(reg)
+                self.put_back_register(reg)
                 continue
             if save_all_regs != 1 and reg not in self.save_around_call_regs:
                 if save_all_regs == 0:
@@ -595,7 +654,7 @@ class RegisterManager(object):
                     continue    # only save GC pointers
             self._sync_var(v)
             del self.reg_bindings[v]
-            self.free_regs.append(reg)
+            self.put_back_register(reg)
 
     def after_call(self, v):
         """ Adjust registers according to the result of the call,
@@ -606,7 +665,7 @@ class RegisterManager(object):
         if not we_are_translated():
             assert r not in self.reg_bindings.values()
         self.reg_bindings[v] = r
-        self.free_regs = [fr for fr in self.free_regs if fr is not r]
+        self.remove_free_register(r)
         return r
 
     # abstract methods, override
@@ -638,8 +697,7 @@ class BaseRegalloc(object):
             assert not isinstance(box, Const)
             loc = self.fm.get_new_loc(box)
             locs.append(loc.value - base_ofs)
-        if looptoken.compiled_loop_token is not None:
-            # for tests
+        if looptoken.compiled_loop_token is not None:   # <- for tests
             looptoken.compiled_loop_token._ll_initial_locs = locs
 
     def next_op_can_accept_cc(self, operations, i):
@@ -686,6 +744,15 @@ class LiveRanges(object):
 
     def new_live_range(self, var, start, end):
          self.longevity[var] = (start, end)
+
+    def survives_call(self, var, position):
+         start, end = self.longevity[var]
+         dist = self.dist_to_next_call[position]
+         assert end >= position
+         if end-position <= dist:
+             # it is 'live during a call' if it live range ends after the call
+             return True
+        return False
 
 def compute_var_live_ranges(inputargs, operations):
     # compute a dictionary that maps variables to index in
