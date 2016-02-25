@@ -672,13 +672,13 @@ class RegisterManager(object):
             self.assembler.regalloc_mov(loc, result_loc)
             loc = result_loc
 
+
             #del self.reg_bindings[v]
             #if self.frame_manager.get(v) is None or self.has_free_registers():
             #    self._move_variable_away(v, loc)
 
             #self.reg_bindings[result_v] = loc
         else:
-            import pdb; pdb.set_trace()
             self._reallocate_from_to(v, result_v)
             loc = self.reg_bindings[result_v]
         return loc
@@ -804,7 +804,10 @@ class LiveRanges(object):
 
     def get_call_argument_index(self, var, pos):
         assert self.dist_to_next_call[pos] >= 0
-        op = self.operations[pos + self.dist_to_next_call[pos]]
+        dist_to_call = self.dist_to_next_call[pos]
+        if dist_to_call < 0:
+            return -1
+        op = self.operations[pos + dist_to_call]
         for i,arg in enumerate(op.getarglist()):
             if arg is var:
                 return i-1 # first parameter is the functionh
@@ -817,7 +820,7 @@ class LiveRanges(object):
         start, end = self.longevity[var]
         dist = self.dist_to_next_call[position]
         assert end >= position
-        if dist >= 0 and position + dist < end:
+        if dist >= 0 and position+dist < end:
             # the variable is used after the call instr
             return True
         return False
