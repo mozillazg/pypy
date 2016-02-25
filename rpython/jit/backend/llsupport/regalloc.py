@@ -803,7 +803,6 @@ class LiveRanges(object):
         self.longevity[var] = (start, end)
 
     def get_call_argument_index(self, var, pos):
-        assert self.dist_to_next_call[pos] >= 0
         dist_to_call = self.dist_to_next_call[pos]
         if dist_to_call < 0:
             return -1
