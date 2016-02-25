@@ -23,9 +23,9 @@ def boxes_and_longevity(num):
 
 class FakeReg(object):
     def __init__(self, i):
-        self.n = i
+        self.index = i
     def __repr__(self):
-        return 'r%d' % self.n
+        return 'r%d' % self.index
 
 r0, r1, r2, r3 = [FakeReg(i) for i in range(4)]
 regs = [r0, r1, r2, r3]
@@ -83,22 +83,22 @@ class TestRegalloc(object):
         for b in b0, b1, b2:
             rm.try_allocate_reg(b)
         rm._check_invariants()
-        assert len(rm.free_regs) == 1
+        assert rm.free_register_count() == 1
         assert len(rm.reg_bindings) == 3
         rm.possibly_free_vars([b0, b1, b2])
-        assert len(rm.free_regs) == 1
+        assert rm.free_register_count() == 1
         assert len(rm.reg_bindings) == 3
         rm._check_invariants()
         rm.next_instruction()
         rm.possibly_free_vars([b0, b1, b2])
         rm._check_invariants()
-        assert len(rm.free_regs) == 2
+        assert rm.free_register_count() == 2
         assert len(rm.reg_bindings) == 2
         rm._check_invariants()
         rm.next_instruction()
         rm.possibly_free_vars([b0, b1, b2])
         rm._check_invariants()
-        assert len(rm.free_regs) == 4
+        assert rm.free_register_count() == 4
         assert len(rm.reg_bindings) == 0
         
     def test_register_exhaustion(self):
@@ -230,7 +230,7 @@ class TestRegalloc(object):
         rm.next_instruction()
         for b in b0, b1, b2, b3:
             rm.force_allocate_reg(b)
-        assert not len(rm.free_regs)
+        assert not rm.has_free_registers()
         rm._check_invariants()
         rm.next_instruction()
         rm.force_result_in_reg(b4, b0)
@@ -259,8 +259,8 @@ class TestRegalloc(object):
         fm = TFrameManager()
         asm = MockAsm()
         rm = RegisterManager(LiveRanges(longevity, None, None), frame_manager=fm, assembler=asm)
-        rm.free_regs = rm.free_regs[:1]
-        rm.all_regs = rm.free_regs[:]
+        rm.free_callee_regs = rm.free_callee_regs[:1]
+        rm.all_regs = rm.free_callee_regs[:]
         rm.next_instruction()
         fm.loc(b0)
         rm.force_result_in_reg(b1, b0)
@@ -388,7 +388,7 @@ class TestRegalloc(object):
         rm.next_instruction()
         for b in b0, b1, b2, b3:
             rm.force_allocate_reg(b)
-        assert len(rm.free_regs) == 0
+        assert not rm.has_free_registers()
         rm.next_instruction()
         loc = rm.loc(b3)
         spilled = rm.force_allocate_reg(b4)

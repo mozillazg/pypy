@@ -276,11 +276,9 @@ class RegisterManager(object):
     save_around_call_regs = []
     frame_reg             = None
 
-    free_callee_regs = [reg for reg in all_regs if reg not in save_around_call_regs]
-    free_caller_regs = save_around_call_regs[:]
-    is_callee_lookup = [True] * len(all_regs)
-    for reg in save_around_call_regs:
-        is_callee_lookup[reg.index] = False
+    free_callee_regs      = []
+    free_caller_regs      = []
+    is_callee_lookup      = None
 
     def get_lower_byte_free_register(self, reg):
         # try to return a volatile register first!
@@ -326,17 +324,24 @@ class RegisterManager(object):
 
     def put_back_register(self, reg):
         if self.is_callee_lookup[reg.index]:
-            self.free_callee_regs.push(reg)
+            self.free_callee_regs.append(reg)
         else:
-            self.free_caller_regs.push(reg)
+            self.free_caller_regs.append(reg)
+
+    def free_register_count(self):
+        return len(self.free_callee_regs) + len(self.free_caller_regs)
 
     def is_free(self, reg):
         return reg in self.free_callee_regs or \
                reg in self.free_caller_regs
 
     def __init__(self, live_ranges, frame_manager=None, assembler=None):
-        self.free_regs = self.all_regs[:]
-        self.free_regs.reverse()
+        self.free_callee_regs = [reg for reg in self.all_regs if reg not in self.save_around_call_regs]
+        self.free_caller_regs = self.save_around_call_regs[:]
+        self.is_callee_lookup = [True] * len(self.all_regs)
+        for reg in self.save_around_call_regs:
+            self.is_callee_lookup[reg.index] = False
+
         self.live_ranges = live_ranges
         self.temp_boxes = []
         if not we_are_translated():
@@ -395,7 +400,7 @@ class RegisterManager(object):
         self.temp_boxes = []
 
     def _check_invariants(self):
-        free_count = len(self.free_callee_regs) + len(self.free_caller_regs)
+        free_count = self.free_register_count()
         if not we_are_translated():
             # make sure no duplicates
             assert len(dict.fromkeys(self.reg_bindings.values())) == len(self.reg_bindings)
@@ -442,11 +447,15 @@ class RegisterManager(object):
                 # yes, this location is a no_lower_byte_register
                 return loc
             # find a free register that is also a lower byte register
-            if loc:
-                self.put_back_register(loc)
+            if not self.has_free_registers():
+                return None
             reg = self.get_lower_byte_free_register(v)
-            self.reg_bindings[v] = reg
-            return reg
+            if reg is not None:
+                if loc:
+                    self.put_back_register(loc)
+                self.reg_bindings[v] = reg
+                return reg
+            return None
 
         try:
             return self.reg_bindings[v]
@@ -737,22 +746,25 @@ class LiveRanges(object):
         self.dist_to_next_call = dist_to_next_call
 
     def exists(self, var):
-         return var in self.longevity
+        return var in self.longevity
 
     def last_use(self, var):
-         return self.longevity[var][1]
+        return self.longevity[var][1]
 
     def new_live_range(self, var, start, end):
-         self.longevity[var] = (start, end)
+        self.longevity[var] = (start, end)
 
     def survives_call(self, var, position):
-         start, end = self.longevity[var]
-         dist = self.dist_to_next_call[position]
-         assert end >= position
-         if end-position <= dist:
-             # it is 'live during a call' if it live range ends after the call
-             return True
-         return False
+        if not we_are_translated():
+            if self.dist_to_next_call is None:
+                return False
+        start, end = self.longevity[var]
+        dist = self.dist_to_next_call[position]
+        assert end >= position
+        if end-position <= dist:
+            # it is 'live during a call' if it live range ends after the call
+            return True
+        return False
 
 def compute_var_live_ranges(inputargs, operations):
     # compute a dictionary that maps variables to index in
