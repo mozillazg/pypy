@@ -317,13 +317,13 @@ class RegisterManager(object):
             return self.get_free_register(var, callee=False, target_reg=None)
 
     def remove_free_register(self, reg):
-        if self.is_callee_lookup[reg.index]:
+        if self.is_callee_lookup[reg.value]:
             self.free_callee_regs = [fr for fr in self.free_callee_regs if fr is not reg]
         else:
             self.free_caller_regs = [fr for fr in self.free_caller_regs if fr is not reg]
 
     def put_back_register(self, reg):
-        if self.is_callee_lookup[reg.index]:
+        if self.is_callee_lookup[reg.value]:
             self.free_callee_regs.append(reg)
         else:
             self.free_caller_regs.append(reg)
@@ -340,7 +340,7 @@ class RegisterManager(object):
         self.free_caller_regs = self.save_around_call_regs[:]
         self.is_callee_lookup = [True] * len(self.all_regs)
         for reg in self.save_around_call_regs:
-            self.is_callee_lookup[reg.index] = False
+            self.is_callee_lookup[reg.value] = False
 
         self.live_ranges = live_ranges
         self.temp_boxes = []

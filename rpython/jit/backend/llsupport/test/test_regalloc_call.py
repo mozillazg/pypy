@@ -11,12 +11,6 @@ from rpython.rtyper.lltypesystem import rffi
 from rpython.rtyper.annlowlevel import llhelper
 from rpython.jit.codewriter.effectinfo import EffectInfo
 
-class FakeReg(object):
-    def __init__(self, i):
-        self.n = i
-    def __repr__(self):
-        return 'r%d' % self.n
-
 eax, ecx, edx, ebx, esp, ebp, esi, edi, r8, r9, r10, r11, r12, r13, r14, r15 = REGLOCS
 caller_saved = []
 callee_saved = []
