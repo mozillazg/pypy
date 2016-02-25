@@ -266,11 +266,13 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
         else:
             return self.xrm.make_sure_var_in_reg(var, forbidden_vars)
 
-    def _update_bindings(self, locs, inputargs):
+    def _update_bindings(self, arglocs, inputargs):
         # XXX this should probably go to llsupport/regalloc.py
-        used = {}
+        used = set()
         i = 0
-        for loc in locs:
+        # manually set the register and frame bindings for
+        # all inputargs (for a bridge)
+        for loc in arglocs:
             if loc is None: # xxx bit kludgy
                 loc = ebp
             arg = inputargs[i]
@@ -278,23 +280,18 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
             if isinstance(loc, RegLoc):
                 if arg.type == FLOAT:
                     self.xrm.reg_bindings[arg] = loc
-                    used[loc] = None
+                    used.add(loc)
                 else:
                     if loc is ebp:
                         self.rm.bindings_to_frame_reg[arg] = None
                     else:
                         self.rm.reg_bindings[arg] = loc
-                        used[loc] = None
+                        used.add(loc)
             else:
                 self.fm.bind(arg, loc)
-        self.rm.free_regs = []
-        for reg in self.rm.all_regs:
-            if reg not in used:
-                self.rm.free_regs.append(reg)
-        self.xrm.free_regs = []
-        for reg in self.xrm.all_regs:
-            if reg not in used:
-                self.xrm.free_regs.append(reg)
+        #
+        self.rm.update_free_registers(used)
+        self.xrm.update_free_registers(used)
         self.possibly_free_vars(list(inputargs))
         self.fm.finish_binding()
         self.rm._check_invariants()

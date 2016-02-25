@@ -310,11 +310,17 @@ class RegisterManager(object):
         return self.free_callee_regs or self.free_caller_regs
 
     def allocate_new(self, var):
-        if self.live_ranges.survives_call(var, self.position):
+        if self.live_ranges.exists(var) and self.live_ranges.survives_call(var, self.position):
             # we want a callee save register
             return self.get_free_register(var, callee=True)
         else:
             return self.get_free_register(var, callee=False, target_reg=None)
+
+    def update_free_registers(self, regs_in_use):
+        # XXX: slow?
+        self._reset_free_regs()
+        for r in regs_in_use:
+            self.remove_free_register(r)
 
     def remove_free_register(self, reg):
         if self.is_callee_lookup[reg.value]:
@@ -335,9 +341,13 @@ class RegisterManager(object):
         return reg in self.free_callee_regs or \
                reg in self.free_caller_regs
 
-    def __init__(self, live_ranges, frame_manager=None, assembler=None):
-        self.free_callee_regs = [reg for reg in self.all_regs if reg not in self.save_around_call_regs]
+    def _reset_free_regs(self):
+        self.free_callee_regs = [reg for reg in self.all_regs
+                                 if reg not in self.save_around_call_regs]
         self.free_caller_regs = self.save_around_call_regs[:]
+
+    def __init__(self, live_ranges, frame_manager=None, assembler=None):
+        self._reset_free_regs()
         self.is_callee_lookup = [True] * len(self.all_regs)
         for reg in self.save_around_call_regs:
             self.is_callee_lookup[reg.value] = False

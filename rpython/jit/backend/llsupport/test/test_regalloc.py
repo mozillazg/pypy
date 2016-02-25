@@ -23,9 +23,9 @@ def boxes_and_longevity(num):
 
 class FakeReg(object):
     def __init__(self, i):
-        self.index = i
+        self.value = i
     def __repr__(self):
-        return 'r%d' % self.index
+        return 'r%d' % self.value
 
 r0, r1, r2, r3 = [FakeReg(i) for i in range(4)]
 regs = [r0, r1, r2, r3]
