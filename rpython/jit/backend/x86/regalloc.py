@@ -62,14 +62,22 @@ class X86_64_RegisterManager(X86RegisterManager):
     save_around_call_regs = abi_param_regs + [eax, edx, r10]
 
     def get_abi_param_register(self, i):
-        assert i >= 0 and i < len(self.abi_param_regs)
-        return self.abi_param_regs[i]
+        if not IS_X86_32 and 0 <= i < len(self.abi_param_regs):
+            return self.abi_param_regs[i]
+        return None
+
 
 class X86XMMRegisterManager(RegisterManager):
     box_types = [FLOAT, INT] # yes INT!
     all_regs = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
     # we never need lower byte I hope
     save_around_call_regs = all_regs
+    abi_param_regs = all_regs
+
+    def get_abi_param_register(self, i):
+        if not IS_X86_32 and 0 <= i < len(self.abi_param_regs):
+            return self.abi_param_regs[i]
+        return None
 
     def convert_to_imm(self, c):
         adr = self.assembler.datablockwrapper.malloc_aligned(8, 8)

@@ -667,11 +667,22 @@ class RegisterManager(object):
             # we need to find a new place for variable v and
             # store result in the same place
 
-            loc = self.reg_bindings[v]
-            # only spill variable is allowed to reassign a new register to a live range
-            result_loc = self.force_allocate_reg(result_v, forbidden_vars=forbidden_vars)
-            self.assembler.regalloc_mov(loc, result_loc)
-            loc = result_loc
+            if (not self.has_free_registers()
+                and self._pick_variable_to_spill(None, forbidden_vars) is v):
+                # if we would be chosen for spilling, we give up our register
+                # for result_v (and move us away onto the frame) instead of
+                # forcing a spill of some other variable.
+                loc = self.reg_bindings[v]
+                del self.reg_bindings[v]
+                if self.frame_manager.get(v) is None:
+                    self._move_variable_away(v, loc)
+                self.reg_bindings[result_v] = loc
+            else:
+                loc = self.reg_bindings[v]
+                # only spill variable is allowed to reassign a new register to a live range
+                result_loc = self.force_allocate_reg(result_v, forbidden_vars=forbidden_vars)
+                self.assembler.regalloc_mov(loc, result_loc)
+                loc = result_loc
 
 
             #del self.reg_bindings[v]
