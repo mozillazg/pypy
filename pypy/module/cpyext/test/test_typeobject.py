@@ -374,6 +374,11 @@ class AppTestSlots(AppTestCpythonExtensionBase):
         module = self.import_extension('foo', [
             ("test_type", "METH_O",
              '''
+                 /* "args->ob_type" is a strange way to get at 'type',
+                    which should have a different tp_getattro/tp_setattro
+                    than its tp_base, which is 'object'.
+                  */
+                  
                  if (!args->ob_type->tp_setattro)
                  {
                      PyErr_SetString(PyExc_ValueError, "missing tp_setattro");
@@ -382,8 +387,12 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                  if (args->ob_type->tp_setattro ==
                      args->ob_type->tp_base->tp_setattro)
                  {
-                     PyErr_SetString(PyExc_ValueError, "recursive tp_setattro");
-                     return NULL;
+                     /* Note that unlike CPython, in PyPy 'type.tp_setattro'
+                        is the same function as 'object.tp_setattro'.  This
+                        test used to check that it was not, but that was an
+                        artifact of the bootstrap logic only---in the final
+                        C sources I checked and they are indeed the same.
+                        So we ignore this problem here. */
                  }
                  if (!args->ob_type->tp_getattro)
                  {
@@ -735,3 +744,25 @@ class AppTestSlots(AppTestCpythonExtensionBase):
         module = self.import_module(name='foo3')
         print('calling module.Type()...')
         module.Type("X", (object,), {})
+
+    def test_app_subclass_of_c_type(self):
+        module = self.import_module(name='foo')
+        size = module.size_of_instances(module.fooType)
+        class f1(object):
+            pass
+        class f2(module.fooType):
+            pass
+        class bar(f1, f2):
+            pass
+        assert bar.__base__ is f2
+        assert module.size_of_instances(bar) == size
+
+    def test_app_cant_subclass_two_types(self):
+        module = self.import_module(name='foo')
+        try:
+            class bar(module.fooType, module.Property):
+                pass
+        except TypeError as e:
+            assert str(e) == 'instance layout conflicts in multiple inheritance'
+        else:
+            raise AssertionError("did not get TypeError!")

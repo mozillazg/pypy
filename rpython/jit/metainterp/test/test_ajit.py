@@ -320,7 +320,7 @@ class BasicTests:
         assert res == 252
         self.check_trace_count(1)
         self.check_resops({'jump': 1, 'int_gt': 2, 'int_add': 2,
-                           'getfield_gc_pure_i': 1, 'int_mul': 1,
+                           'getfield_gc_i': 1, 'int_mul': 1,
                            'guard_true': 2, 'int_sub': 2})
 
     def test_loops_are_transient(self):
@@ -1199,6 +1199,31 @@ class BasicTests:
                        (-sys.maxint-1) // (-6) +
                        100 * 8)
 
+    def test_overflow_fold_if_divisor_constant(self):
+        import sys
+        from rpython.rtyper.lltypesystem.lloperation import llop
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])
+        def f(x, y):
+            res = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res)
+                try:
+                    res += llop.int_floordiv_ovf(lltype.Signed,
+                                                 x, 2)
+                    res += llop.int_mod_ovf(lltype.Signed,
+                                                 x, 2)
+                    x += 5
+                except OverflowError:
+                    res += 100
+                y -= 1
+            return res
+        res = self.meta_interp(f, [-41, 8])
+        # the guard_true are for the loop condition
+        # the guard_false needed to check whether an overflow can occur have
+        # been folded away
+        self.check_resops(guard_true=2, guard_false=0)
+
     def test_isinstance(self):
         class A:
             pass
@@ -1405,7 +1430,7 @@ class BasicTests:
             return tup[1]
         res = self.interp_operations(f, [3, 5])
         assert res == 5
-        self.check_operations_history(setfield_gc=2, getfield_gc_pure_i=0)
+        self.check_operations_history(setfield_gc=2, getfield_gc_i=0)
 
     def test_oosend_look_inside_only_one(self):
         class A:
@@ -2522,7 +2547,7 @@ class BasicTests:
                 if counter > 10:
                     return 7
         assert self.meta_interp(build, []) == 7
-        self.check_resops(getfield_gc_pure_r=2)
+        self.check_resops(getfield_gc_r=2)
 
     def test_args_becomming_equal(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'i', 'sa', 'a', 'b'])
