@@ -54,7 +54,8 @@ and read on.
 It is quite common nowadays that xyz is available on PyPI_ and
 installable with ``pip install xyz``.  The simplest solution is to `use
 virtualenv (as documented here)`_.  Then enter (activate) the virtualenv
-and type: ``pip install xyz``.
+and type: ``pip install xyz``.  If you don't know or don't want virtualenv,
+you can also install ``pip`` globally by saying ``pypy -m ensurepip``.
 
 If you get errors from the C compiler, the module is a CPython C
 Extension module using unsupported features.  `See below.`_
@@ -67,7 +68,21 @@ you may need to run the command with `sudo` for a global installation.
 The other commands of ``setup.py`` are available too, like ``build``.
 
 .. _PyPI: https://pypi.python.org/pypi
-.. _`use virtualenv (as documented here)`: getting-started.html#installing-using-virtualenv
+.. _`use virtualenv (as documented here)`: install.html#installing-using-virtualenv
+
+
+Module xyz does not work in the sandboxed PyPy?
+-----------------------------------------------
+
+You cannot import *any* extension module in a `sandboxed PyPy`_,
+sorry.  Even the built-in modules available are very limited.
+Sandboxing in PyPy is a good proof of concept, really safe IMHO, but
+it is only a proof of concept.  It seriously requires someone working
+on it.  Before this occurs, it can only be used it for "pure Python"
+examples: programs that import mostly nothing (or only pure Python
+modules, recursively).
+
+.. _`sandboxed PyPy`: sandbox.html
 
 
 .. _`See below.`:

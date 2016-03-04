@@ -133,7 +133,7 @@ class TestParseCommandLine:
         self.check(['-S', '-tO', '--info'], {}, output_contains='translation')
         self.check(['-S', '-tO', '--version'], {}, output_contains='Python')
         self.check(['-S', '-tOV'], {}, output_contains='Python')
-        self.check(['--jit', 'foobar', '-S'], {}, sys_argv=[''],
+        self.check(['--jit', 'off', '-S'], {}, sys_argv=[''],
                    run_stdin=True, no_site=1)
         self.check(['-c', 'pass'], {}, sys_argv=['-c'], run_command='pass')
         self.check(['-cpass'], {}, sys_argv=['-c'], run_command='pass')
@@ -167,6 +167,11 @@ class TestParseCommandLine:
         self.check([], {'PYTHONNOUSERSITE': '1'}, sys_argv=[''], run_stdin=True, no_user_site=1)
         self.check([], {'PYTHONUNBUFFERED': '1'}, sys_argv=[''], run_stdin=True, unbuffered=1)
         self.check([], {'PYTHONVERBOSE': '1'}, sys_argv=[''], run_stdin=True, verbose=1)
+        self.check([], {'PYTHONOPTIMIZE': '1'}, sys_argv=[''], run_stdin=True, optimize=1)
+        self.check([], {'PYTHONOPTIMIZE': '0'}, sys_argv=[''], run_stdin=True, optimize=1)
+        self.check([], {'PYTHONOPTIMIZE': '10'}, sys_argv=[''], run_stdin=True, optimize=10)
+        self.check(['-O'], {'PYTHONOPTIMIZE': '10'}, sys_argv=[''], run_stdin=True, optimize=10)
+        self.check(['-OOO'], {'PYTHONOPTIMIZE': 'abc'}, sys_argv=[''], run_stdin=True, optimize=3)
 
     def test_sysflags(self):
         flags = (

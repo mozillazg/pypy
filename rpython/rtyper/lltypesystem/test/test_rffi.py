@@ -102,24 +102,19 @@ class BaseTestRffi:
         #include <string.h>
         #include <src/mem.h>
 
-        char *f(char* arg)
+        void f(char *target, char* arg)
         {
-            char *ret;
-            /* lltype.free uses OP_RAW_FREE, we must allocate
-             * with the matching function
-             */
-            OP_RAW_MALLOC(strlen(arg) + 1, ret, char*)
-            strcpy(ret, arg);
-            return ret;
+            strcpy(target, arg);
         }
         """)
         eci = ExternalCompilationInfo(separate_module_sources=[c_source],
-                                      post_include_bits=['char *f(char*);'])
-        z = llexternal('f', [CCHARP], CCHARP, compilation_info=eci)
+                                     post_include_bits=['void f(char*,char*);'])
+        z = llexternal('f', [CCHARP, CCHARP], lltype.Void, compilation_info=eci)
 
         def f():
             s = str2charp("xxx")
-            l_res = z(s)
+            l_res = lltype.malloc(CCHARP.TO, 10, flavor='raw')
+            z(l_res, s)
             res = charp2str(l_res)
             lltype.free(l_res, flavor='raw')
             free_charp(s)
@@ -676,41 +671,22 @@ class TestRffiInternals:
 
         assert interpret(f, [], backendopt=True) == 43
 
-    def test_around_extcall(self):
-        if sys.platform == "win32":
-            py.test.skip('No pipes on windows')
-        import os
-        from rpython.annotator import model as annmodel
-        from rpython.rlib.objectmodel import invoke_around_extcall
-        from rpython.rtyper.extfuncregistry import register_external
-        read_fd, write_fd = os.pipe()
-        try:
-            # we need an external function that is not going to get wrapped around
-            # before()/after() calls, in order to call it from before()/after()...
-            def mywrite(s):
-                os.write(write_fd, s)
-            def llimpl(s):
-                s = ''.join(s.chars)
-                os.write(write_fd, s)
-            register_external(mywrite, [str], annmodel.s_None, 'll_mywrite',
-                              llfakeimpl=llimpl, sandboxsafe=True)
+    def test_str2chararray(self):
+        eci = ExternalCompilationInfo(includes=['string.h'])
+        strlen = llexternal('strlen', [CCHARP], SIZE_T,
+                            compilation_info=eci)
+        def f():
+            raw = str2charp("XxxZy")
+            n = str2chararray("abcdef", raw, 4)
+            assert raw[0] == 'a'
+            assert raw[1] == 'b'
+            assert raw[2] == 'c'
+            assert raw[3] == 'd'
+            assert raw[4] == 'y'
+            lltype.free(raw, flavor='raw')
+            return n
 
-            def before():
-                mywrite("B")
-            def after():
-                mywrite("A")
-            def f():
-                os.write(write_fd, "-")
-                invoke_around_extcall(before, after)
-                os.write(write_fd, "E")
-
-            interpret(f, [])
-            data = os.read(read_fd, 99)
-            assert data == "-BEA"
-
-        finally:
-            os.close(write_fd)
-            os.close(read_fd)
+        assert interpret(f, []) == 4
 
     def test_external_callable(self):
         """ Try to call some llexternal function with llinterp

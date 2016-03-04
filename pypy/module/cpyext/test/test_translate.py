@@ -11,7 +11,7 @@ def test_llhelper(monkeypatch):
     FT = lltype.FuncType([], lltype.Signed)
     FTPTR = lltype.Ptr(FT)
 
-    def make_wrapper(space, func):
+    def make_wrapper(space, func, gil=None):
         def wrapper():
             return func(space)
         return wrapper
@@ -19,7 +19,7 @@ def test_llhelper(monkeypatch):
 
     @specialize.memo()
     def get_tp_function(space, typedef):
-        @cpython_api([], lltype.Signed, error=-1, external=False)
+        @cpython_api([], lltype.Signed, error=-1, header=None)
         def slot_tp_function(space):
             return typedef.value
 

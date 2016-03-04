@@ -597,6 +597,9 @@ def op_debug_flush():
 def op_have_debug_prints():
     return debug.have_debug_prints()
 
+def op_have_debug_prints_for(prefix):
+    return True
+
 def op_debug_nonnull_pointer(x):
     assert x
 
@@ -615,10 +618,16 @@ def op_jit_is_virtual(x):
 def op_jit_force_quasi_immutable(*args):
     pass
 
-def op_jit_record_known_class(x, y):
+def op_jit_record_exact_class(x, y):
     pass
 
 def op_jit_ffi_save_result(*args):
+    pass
+
+def op_jit_enter_portal_frame(x):
+    pass
+
+def op_jit_leave_portal_frame():
     pass
 
 def op_get_group_member(TYPE, grpptr, memberoffset):
@@ -698,6 +707,17 @@ def op_raw_load(TVAL, p, ofs):
     p = rffi.cast(rffi.CArrayPtr(TVAL), p + ofs)
     return p[0]
 op_raw_load.need_result_type = True
+
+def op_gc_load_indexed(TVAL, p, index, scale, base_ofs):
+    # 'base_ofs' should be a CompositeOffset(..., ArrayItemsOffset).
+    # 'scale' should be a llmemory.sizeof().
+    from rpython.rtyper.lltypesystem import rffi
+    ofs = base_ofs + scale * index
+    if isinstance(ofs, int):
+        return op_raw_load(TVAL, p, ofs)
+    p = rffi.cast(rffi.CArrayPtr(TVAL), llmemory.cast_ptr_to_adr(p) + ofs)
+    return p[0]
+op_gc_load_indexed.need_result_type = True
 
 def op_likely(x):
     assert isinstance(x, bool)

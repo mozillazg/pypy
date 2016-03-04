@@ -64,10 +64,9 @@ class Module(MixedModule):
         'call_tracing'          : 'vm.call_tracing',
         'getsizeof'             : 'vm.getsizeof',
 
-        'executable'            : 'space.wrap("py.py")',
         'api_version'           : 'version.get_api_version(space)',
         'version_info'          : 'version.get_version_info(space)',
-        'version'               : 'version.get_version(space)',
+        #'version'              : set in startup()
         'pypy_version_info'     : 'version.get_pypy_version_info(space)',
         'subversion'            : 'version.get_subversion_info(space)',
         '_mercurial'            : 'version.get_repo_info(space)',
@@ -78,7 +77,7 @@ class Module(MixedModule):
         'meta_path'             : 'space.wrap([])',
         'path_hooks'            : 'space.wrap([])',
         'path_importer_cache'   : 'space.wrap({})',
-        'dont_write_bytecode'   : 'space.w_False',
+        'dont_write_bytecode'   : 'space.wrap(space.config.translation.sandbox)',
 
         'getdefaultencoding'    : 'interp_encoding.getdefaultencoding',
         'setdefaultencoding'    : 'interp_encoding.setdefaultencoding',
@@ -109,6 +108,9 @@ class Module(MixedModule):
             assert self.filesystemencoding is None
 
         else:
+            from pypy.module.sys import version
+            space.setitem(self.w_dict, space.wrap("version"),
+                          space.wrap(version.get_version(space)))
             if _WIN:
                 from pypy.module.sys import vm
                 w_handle = vm.get_dllhandle(space)

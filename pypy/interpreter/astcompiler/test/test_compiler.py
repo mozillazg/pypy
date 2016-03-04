@@ -759,6 +759,73 @@ class TestCompiler:
         """
         self.simple_test(source, 'l', [1, 2])
 
+    def test_unpack_wrong_stackeffect(self):
+        source = """if 1:
+        l = [1, 2]
+        a, b = l
+        a, b = l
+        a, b = l
+        a, b = l
+        a, b = l
+        a, b = l
+        """
+        code = compile_with_astcompiler(source, 'exec', self.space)
+        assert code.co_stacksize == 2
+
+    def test_stackeffect_bug3(self):
+        source = """if 1:
+        try: pass
+        finally: pass
+        try: pass
+        finally: pass
+        try: pass
+        finally: pass
+        try: pass
+        finally: pass
+        try: pass
+        finally: pass
+        try: pass
+        finally: pass
+        """
+        code = compile_with_astcompiler(source, 'exec', self.space)
+        assert code.co_stacksize == 3
+
+    def test_stackeffect_bug4(self):
+        source = """if 1:
+        with a: pass
+        with a: pass
+        with a: pass
+        with a: pass
+        with a: pass
+        with a: pass
+        """
+        code = compile_with_astcompiler(source, 'exec', self.space)
+        assert code.co_stacksize == 4
+
+    def test_stackeffect_bug5(self):
+        source = """if 1:
+        a[:]; a[:]; a[:]; a[:]; a[:]; a[:]
+        a[1:]; a[1:]; a[1:]; a[1:]; a[1:]; a[1:]
+        a[:2]; a[:2]; a[:2]; a[:2]; a[:2]; a[:2]
+        a[1:2]; a[1:2]; a[1:2]; a[1:2]; a[1:2]; a[1:2]
+        """
+        code = compile_with_astcompiler(source, 'exec', self.space)
+        assert code.co_stacksize == 3
+
+    def test_stackeffect_bug6(self):
+        source = """if 1:
+        {1}; {1}; {1}; {1}; {1}; {1}; {1}
+        """
+        code = compile_with_astcompiler(source, 'exec', self.space)
+        assert code.co_stacksize == 1
+
+    def test_stackeffect_bug7(self):
+        source = '''def f():
+            for i in a:
+                return
+        '''
+        code = compile_with_astcompiler(source, 'exec', self.space)
+
     def test_lambda(self):
         yield self.st, "y = lambda x: x", "y(4)", 4
 
@@ -863,6 +930,11 @@ class TestCompiler:
             self.run(source)
         finally:
             space.call_function(w_set_debug, space.w_True)
+
+    def test_dont_fold_equal_code_objects(self):
+        yield self.st, "f=lambda:1;g=lambda:1.0;x=g()", 'type(x)', float
+        yield (self.st, "x=(lambda: (-0.0, 0.0), lambda: (0.0, -0.0))[1]()",
+                        'repr(x)', '(0.0, -0.0)')
 
 
 class AppTestCompiler:

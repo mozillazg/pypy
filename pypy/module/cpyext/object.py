@@ -6,7 +6,7 @@ from pypy.module.cpyext.api import (
     Py_GE, CONST_STRING, FILEP, fwrite)
 from pypy.module.cpyext.pyobject import (
     PyObject, PyObjectP, create_ref, from_ref, Py_IncRef, Py_DecRef,
-    track_reference, get_typedescr, _Py_NewReference, RefcountState)
+    get_typedescr, _Py_NewReference)
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr
 from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
 from pypy.objspace.std.typeobject import W_TypeObject
@@ -31,9 +31,9 @@ def _PyObject_New(space, type):
 def _PyObject_NewVar(space, type, itemcount):
     w_type = from_ref(space, rffi.cast(PyObject, type))
     assert isinstance(w_type, W_TypeObject)
-    typedescr = get_typedescr(w_type.instancetypedef)
+    typedescr = get_typedescr(w_type.layout.typedef)
     py_obj = typedescr.allocate(space, w_type, itemcount=itemcount)
-    py_obj.c_ob_refcnt = 0
+    #py_obj.c_ob_refcnt = 0 --- will be set to 1 again by PyObject_Init{Var}
     if type.c_tp_itemsize == 0:
         w_obj = PyObject_Init(space, py_obj, type)
     else:
@@ -339,7 +339,7 @@ def PyObject_IsInstance(space, w_inst, w_cls):
     of the value of that attribute with cls will be used to determine the result
     of this function."""
     from pypy.module.__builtin__.abstractinst import abstract_isinstance_w
-    return abstract_isinstance_w(space, w_inst, w_cls)
+    return abstract_isinstance_w(space, w_inst, w_cls, allow_override=True)
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyObject_IsSubclass(space, w_derived, w_cls):
@@ -350,7 +350,7 @@ def PyObject_IsSubclass(space, w_derived, w_cls):
     0. If either derived or cls is not an actual class object (or tuple),
     this function uses the generic algorithm described above."""
     from pypy.module.__builtin__.abstractinst import abstract_issubclass_w
-    return abstract_issubclass_w(space, w_derived, w_cls)
+    return abstract_issubclass_w(space, w_derived, w_cls, allow_override=True)
 
 @cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyObject_AsFileDescriptor(space, w_obj):

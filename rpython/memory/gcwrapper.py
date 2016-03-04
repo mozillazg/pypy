@@ -74,6 +74,9 @@ class GCManagedHeap(object):
             return lltype.malloc(TYPE, n, flavor=flavor, zero=zero,
                                  track_allocation=track_allocation)
 
+    def gettypeid(self, obj):
+        return self.get_type_id(lltype.typeOf(obj).TO)
+
     def add_memory_pressure(self, size):
         if hasattr(self.gc, 'raw_malloc_memory_pressure'):
             self.gc.raw_malloc_memory_pressure(size)
@@ -181,6 +184,9 @@ class GCManagedHeap(object):
                 hdr.tid |= self.gc.gcflag_extra
         return (hdr.tid & self.gc.gcflag_extra) != 0
 
+    def thread_run(self):
+        pass
+
 # ____________________________________________________________
 
 class LLInterpRootWalker:
@@ -191,7 +197,8 @@ class LLInterpRootWalker:
 
     def walk_roots(self, collect_stack_root,
                    collect_static_in_prebuilt_nongc,
-                   collect_static_in_prebuilt_gc):
+                   collect_static_in_prebuilt_gc,
+                   is_minor=False):
         gcheap = self.gcheap
         gc = gcheap.gc
         if collect_static_in_prebuilt_gc:
@@ -203,7 +210,7 @@ class LLInterpRootWalker:
                 if self.gcheap.gc.points_to_valid_gc_object(addrofaddr):
                     collect_static_in_prebuilt_nongc(gc, addrofaddr)
         if collect_stack_root:
-            for addrofaddr in gcheap.llinterp.find_roots():
+            for addrofaddr in gcheap.llinterp.find_roots(is_minor):
                 if self.gcheap.gc.points_to_valid_gc_object(addrofaddr):
                     collect_stack_root(gc, addrofaddr)
 

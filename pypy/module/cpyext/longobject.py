@@ -186,6 +186,17 @@ def PyLong_FromString(space, str, pend, base):
         pend[0] = rffi.ptradd(str, len(s))
     return space.call_function(space.w_long, w_str, w_base)
 
+@cpython_api([rffi.CWCHARP, Py_ssize_t, rffi.INT_real], PyObject)
+def PyLong_FromUnicode(space, u, length, base):
+    """Convert a sequence of Unicode digits to a Python long integer value.
+    The first parameter, u, points to the first character of the Unicode
+    string, length gives the number of characters, and base is the radix
+    for the conversion.  The radix must be in the range [2, 36]; if it is
+    out of range, ValueError will be raised."""
+    w_value = space.wrap(rffi.wcharpsize2unicode(u, length))
+    w_base = space.wrap(rffi.cast(lltype.Signed, base))
+    return space.call_function(space.w_long, w_value, w_base)
+
 @cpython_api([rffi.VOIDP], PyObject)
 def PyLong_FromVoidPtr(space, p):
     """Create a Python integer or long integer from the pointer p. The pointer value
@@ -217,26 +228,11 @@ UCHARP = rffi.CArrayPtr(rffi.UCHAR)
 def _PyLong_FromByteArray(space, bytes, n, little_endian, signed):
     little_endian = rffi.cast(lltype.Signed, little_endian)
     signed = rffi.cast(lltype.Signed, signed)
-
-    result = rbigint()
-    negative = False
-
-    for i in range(0, n):
-        if little_endian:
-            c = intmask(bytes[i])
-        else:
-            c = intmask(bytes[n - i - 1])
-        if i == 0 and signed and c & 0x80:
-            negative = True
-        if negative:
-            c = c ^ 0xFF
-        digit = rbigint.fromint(c)
-
-        result = result.lshift(8)
-        result = result.add(digit)
-
-    if negative:
-        result = result.neg()
-
+    s = rffi.charpsize2str(rffi.cast(rffi.CCHARP, bytes),
+                           rffi.cast(lltype.Signed, n))
+    if little_endian:
+        byteorder = 'little'
+    else:
+        byteorder = 'big'
+    result = rbigint.frombytes(s, byteorder, signed != 0)
     return space.newlong_from_rbigint(result)
-

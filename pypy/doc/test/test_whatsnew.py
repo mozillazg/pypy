@@ -38,7 +38,11 @@ def get_merged_branches(path, startrev, endrev, current_branch=None):
                                    current_branch, current_branch)
     cmd = r'hg log -R "%s" -r "%s" --template "{branches}\n"' % (path, revset)
     out = getoutput(cmd)
-    branches = set(map(str.strip, out.splitlines()))
+    branches = set()
+    for item in out.splitlines():
+        item = item.strip()
+        if not item.startswith('release-'):
+            branches.add(item)
     branches.discard("default")
     return branches, current_branch
 
@@ -97,3 +101,13 @@ def test_whatsnew():
     assert not not_documented
     if branch == 'default':
         assert not not_merged
+
+def test_startrev_on_default():
+    doc = ROOT.join('pypy', 'doc')
+    last_whatsnew = doc.join('whatsnew-head.rst').read()
+    startrev, documented = parse_doc(last_whatsnew)
+    errcode, wc_branch = getstatusoutput(
+        "hg log -r %s --template '{branch}'" % startrev)
+    if errcode != 0:
+        py.test.skip('no Mercurial repo')
+    assert wc_branch == 'default'

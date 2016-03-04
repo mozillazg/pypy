@@ -175,8 +175,37 @@ class AppTestLongObject(AppTestCpythonExtensionBase):
                                               little_endian, is_signed);
              """),
             ])
-        assert module.from_bytearray(True, False) == 0x9ABC
-        assert module.from_bytearray(True, True) == -0x6543
-        assert module.from_bytearray(False, False) == 0xBC9A
-        assert module.from_bytearray(False, True) == -0x4365
+        assert module.from_bytearray(True, False) == 0xBC9A
+        assert module.from_bytearray(True, True) == -0x4366
+        assert module.from_bytearray(False, False) == 0x9ABC
+        assert module.from_bytearray(False, True) == -0x6544
+
+    def test_frombytearray_2(self):
+        module = self.import_extension('foo', [
+            ("from_bytearray", "METH_VARARGS",
+             """
+                 int little_endian, is_signed;
+                 if (!PyArg_ParseTuple(args, "ii", &little_endian, &is_signed))
+                     return NULL;
+                 return _PyLong_FromByteArray("\x9A\xBC\x41", 3,
+                                              little_endian, is_signed);
+             """),
+            ])
+        assert module.from_bytearray(True, False) == 0x41BC9A
+        assert module.from_bytearray(True, True) == 0x41BC9A
+        assert module.from_bytearray(False, False) == 0x9ABC41
+        assert module.from_bytearray(False, True) == -0x6543BF
+
+    def test_fromunicode(self):
+        module = self.import_extension('foo', [
+            ("from_unicode", "METH_O",
+             """
+                 Py_UNICODE* u = PyUnicode_AsUnicode(args);
+                 return Py_BuildValue("NN",
+                     PyLong_FromUnicode(u, 6, 10),
+                     PyLong_FromUnicode(u, 6, 16));
+             """),
+            ])
+        # A string with arabic digits. 'BAD' is after the 6th character.
+        assert module.from_unicode(u'  1\u0662\u0663\u0664BAD') == (1234, 4660)
 

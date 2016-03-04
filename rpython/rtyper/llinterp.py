@@ -5,8 +5,7 @@ import traceback
 
 import py
 
-from rpython.flowspace.model import (FunctionGraph, Constant, Variable,
-    c_last_exception)
+from rpython.flowspace.model import (FunctionGraph, Constant, Variable)
 from rpython.rlib import rstackovf
 from rpython.rlib.objectmodel import (ComputedIntSymbolic, CDefinedIntSymbolic,
     Symbolic)
@@ -41,6 +40,10 @@ class LLException(Exception):
 class LLFatalError(Exception):
     def __str__(self):
         return ': '.join([str(x) for x in self.args])
+
+class LLAssertFailure(Exception):
+    pass
+
 
 def type_name(etype):
     return ''.join(etype.name.chars)
@@ -146,13 +149,21 @@ class LLInterpreter(object):
                            }
             return self._tlobj
 
-    def find_roots(self):
+    def find_roots(self, is_minor=False):
         """Return a list of the addresses of the roots."""
         #log.findroots("starting")
         roots = []
-        for frame in self.frame_stack:
+        for frame in reversed(self.frame_stack):
             #log.findroots("graph", frame.graph.name)
             frame.find_roots(roots)
+            # If a call is done with 'is_minor=True', we can stop after the
+            # first frame in the stack that was already seen by the previous
+            # call with 'is_minor=True'.  (We still need to trace that frame,
+            # but not its callers.)
+            if is_minor:
+                if getattr(frame, '_find_roots_already_seen', False):
+                    break
+                frame._find_roots_already_seen = True
         return roots
 
     def find_exception(self, exc):
@@ -284,7 +295,6 @@ class LLFrame(object):
             is None, values is the concrete return value.
         """
         self.curr_block = block
-        catch_exception = block.exitswitch == c_last_exception
         e = None
 
         try:
@@ -292,7 +302,7 @@ class LLFrame(object):
                 self.curr_operation_index = i
                 self.eval_operation(op)
         except LLException, e:
-            if not (catch_exception and op is block.operations[-1]):
+            if op is not block.raising_op:
                 raise
         except RuntimeError, e:
             rstackovf.check_stack_overflow()
@@ -304,7 +314,7 @@ class LLFrame(object):
             evalue = exdata.get_standard_ll_exc_instance(rtyper, classdef)
             etype = exdata.fn_type_of_exc_inst(evalue)
             e = LLException(etype, evalue)
-            if not (catch_exception and op is block.operations[-1]):
+            if op is not block.raising_op:
                 raise e
 
         # determine nextblock and/or return value
@@ -346,7 +356,7 @@ class LLFrame(object):
             # single-exit block
             assert len(block.exits) == 1
             link = block.exits[0]
-        elif catch_exception:
+        elif block.canraise:
             link = block.exits[0]
             if e:
                 exdata = self.llinterpreter.typer.exceptiondata
@@ -460,7 +470,7 @@ class LLFrame(object):
         raise LLException(etype, evalue, *extraargs)
 
     def invoke_callable_with_pyexceptions(self, fptr, *args):
-        obj = self.llinterpreter.typer.type_system.deref(fptr)
+        obj = fptr._obj
         try:
             return obj._callable(*args)
         except LLException, e:
@@ -502,7 +512,8 @@ class LLFrame(object):
         track(*ll_objects)
 
     def op_debug_assert(self, x, msg):
-        assert x, msg
+        if not x:
+            raise LLAssertFailure(msg)
 
     def op_debug_fatalerror(self, ll_msg, ll_exc=None):
         msg = ''.join(ll_msg.chars)
@@ -517,6 +528,9 @@ class LLFrame(object):
             return pythonfunction(*args_ll)
         except:
             self.make_llexception()
+
+    def op_debug_forked(self, *args):
+        raise NotImplementedError
 
     def op_debug_start_traceback(self, *args):
         pass    # xxx write debugging code here?
@@ -536,7 +550,7 @@ class LLFrame(object):
     def op_jit_marker(self, *args):
         pass
 
-    def op_jit_record_known_class(self, *args):
+    def op_jit_record_exact_class(self, *args):
         pass
 
     def op_jit_conditional_call(self, *args):
@@ -635,7 +649,7 @@ class LLFrame(object):
             array[index] = item
 
     def perform_call(self, f, ARGS, args):
-        fobj = self.llinterpreter.typer.type_system.deref(f)
+        fobj = f._obj
         has_callable = getattr(fobj, '_callable', None) is not None
         if hasattr(fobj, 'graph'):
             graph = fobj.graph
@@ -660,7 +674,7 @@ class LLFrame(object):
         graphs = args[-1]
         args = args[:-1]
         if graphs is not None:
-            obj = self.llinterpreter.typer.type_system.deref(f)
+            obj = f._obj
             if hasattr(obj, 'graph'):
                 assert obj.graph in graphs
         else:
@@ -699,6 +713,9 @@ class LLFrame(object):
 
     def op_gc_add_memory_pressure(self, size):
         self.heap.add_memory_pressure(size)
+
+    def op_gc_gettypeid(self, obj):
+        return lloperation.llop.combine_ushort(lltype.Signed, self.heap.gettypeid(obj), 0)
 
     def op_shrink_array(self, obj, smallersize):
         return self.heap.shrink_array(obj, smallersize)
@@ -878,19 +895,6 @@ class LLFrame(object):
     def op_gc_reattach_callback_pieces(self):
         raise NotImplementedError("gc_reattach_callback_pieces")
 
-    def op_gc_shadowstackref_new(self):   # stacklet+shadowstack
-        raise NotImplementedError("gc_shadowstackref_new")
-    def op_gc_shadowstackref_context(self):
-        raise NotImplementedError("gc_shadowstackref_context")
-    def op_gc_save_current_state_away(self):
-        raise NotImplementedError("gc_save_current_state_away")
-    def op_gc_forget_current_state(self):
-        raise NotImplementedError("gc_forget_current_state")
-    def op_gc_restore_state_from(self):
-        raise NotImplementedError("gc_restore_state_from")
-    def op_gc_start_fresh_new_state(self):
-        raise NotImplementedError("gc_start_fresh_new_state")
-
     def op_gc_get_type_info_group(self):
         raise NotImplementedError("gc_get_type_info_group")
 
@@ -921,6 +925,21 @@ class LLFrame(object):
     def op_gc_gcflag_extra(self, subopnum, *args):
         return self.heap.gcflag_extra(subopnum, *args)
 
+    def op_gc_rawrefcount_init(self, *args):
+        raise NotImplementedError("gc_rawrefcount_init")
+
+    def op_gc_rawrefcount_to_obj(self, *args):
+        raise NotImplementedError("gc_rawrefcount_to_obj")
+
+    def op_gc_rawrefcount_from_obj(self, *args):
+        raise NotImplementedError("gc_rawrefcount_from_obj")
+
+    def op_gc_rawrefcount_create_link_pyobj(self, *args):
+        raise NotImplementedError("gc_rawrefcount_create_link_pyobj")
+
+    def op_gc_rawrefcount_create_link_pypy(self, *args):
+        raise NotImplementedError("gc_rawrefcount_create_link_pypy")
+
     def op_do_malloc_fixedsize(self):
         raise NotImplementedError("do_malloc_fixedsize")
     def op_do_malloc_fixedsize_clear(self):
@@ -945,6 +964,13 @@ class LLFrame(object):
     def op_threadlocalref_get(self, RESTYPE, offset):
         return self.op_raw_load(RESTYPE, _address_of_thread_local(), offset)
     op_threadlocalref_get.need_result_type = True
+
+    def op_threadlocalref_acquire(self, prev):
+        raise NotImplementedError
+    def op_threadlocalref_release(self, prev):
+        raise NotImplementedError
+    def op_threadlocalref_enum(self, prev):
+        raise NotImplementedError
 
     # __________________________________________________________
     # operations on addresses

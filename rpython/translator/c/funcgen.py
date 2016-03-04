@@ -1,10 +1,8 @@
 import sys
-from rpython.translator.c.support import USESLOTS # set to False if necessary while refactoring
 from rpython.translator.c.support import cdecl
 from rpython.translator.c.support import llvalue_from_constant, gen_assignments
 from rpython.translator.c.support import c_string_constant, barebonearray
 from rpython.flowspace.model import Variable, Constant
-from rpython.flowspace.model import c_last_exception, copygraph
 from rpython.rtyper.lltypesystem.lltype import (Ptr, Void, Bool, Signed, Unsigned,
     SignedLongLong, Float, UnsignedLongLong, Char, UniChar, ContainerType,
     Array, FixedSizeArray, ForwardReference, FuncType)
@@ -20,39 +18,30 @@ LOCALVAR = 'l_%s'
 
 KEEP_INLINED_GRAPHS = False
 
+def make_funcgen(graph, db, exception_policy, functionname):
+    graph._seen_by_the_backend = True
+    # apply the exception transformation
+    if db.exctransformer:
+        db.exctransformer.create_exception_handling(graph)
+    # apply the gc transformation
+    if db.gctransformer:
+        db.gctransformer.transform_graph(graph)
+    return FunctionCodeGenerator(graph, db, exception_policy, functionname)
+
 class FunctionCodeGenerator(object):
     """
     Collects information about a function which we have to generate
     from a flow graph.
     """
 
-    if USESLOTS:
-        __slots__ = """graph db gcpolicy
-                       exception_policy
-                       more_ll_values
-                       vars all_cached_consts
-                       illtypes
-                       functionname
-                       blocknum
-                       innerloops
-                       oldgraph""".split()
-
-    def __init__(self, graph, db, exception_policy=None, functionname=None):
-        graph._seen_by_the_backend = True
+    def __init__(self, graph, db, exception_policy, functionname):
         self.graph = graph
         self.db = db
         self.gcpolicy = db.gcpolicy
         self.exception_policy = exception_policy
         self.functionname = functionname
-        # apply the exception transformation
-        if self.db.exctransformer:
-            self.db.exctransformer.create_exception_handling(self.graph)
-        # apply the gc transformation
-        if self.db.gctransformer:
-            self.db.gctransformer.transform_graph(self.graph)
-        #self.graph.show()
-        self.collect_var_and_types()
 
+        self.collect_var_and_types()
         for v in self.vars:
             T = v.concretetype
             # obscure: skip forward references and hope for the best
@@ -85,12 +74,6 @@ class FunctionCodeGenerator(object):
                     self.more_ll_values.append(link.llexitcase)
                 elif link.exitcase is not None:
                     mix.append(Constant(link.exitcase))
-        if self.exception_policy == "CPython":
-            v, exc_cleanup_ops = self.graph.exc_cleanup
-            mix.append(v)
-            for cleanupop in exc_cleanup_ops:
-                mix.extend(cleanupop.args)
-                mix.append(cleanupop.result)
 
         uniquemix = []
         seen = identity_dict()
@@ -100,20 +83,7 @@ class FunctionCodeGenerator(object):
                 seen[v] = True
         self.vars = uniquemix
 
-    def name(self, cname):  #virtual
-        return cname
-
-    def patch_graph(self, copy_graph):
-        graph = self.graph
-        if self.db.gctransformer and self.db.gctransformer.inline:
-            if copy_graph:
-                graph = copygraph(graph, shallow=True)
-            self.db.gctransformer.inline_helpers(graph)
-        return graph
-
     def implementation_begin(self):
-        self.oldgraph = self.graph
-        self.graph = self.patch_graph(copy_graph=True)
         SSI_to_SSA(self.graph)
         self.collect_var_and_types()
         self.blocknum = {}
@@ -139,8 +109,6 @@ class FunctionCodeGenerator(object):
         self.vars = None
         self.blocknum = None
         self.innerloops = None
-        self.graph = self.oldgraph
-        del self.oldgraph
 
     def argnames(self):
         return [LOCALVAR % v.name for v in self.graph.getargs()]
@@ -233,7 +201,7 @@ class FunctionCodeGenerator(object):
                 for op in self.gen_link(block.exits[0]):
                     yield op
             else:
-                assert block.exitswitch != c_last_exception
+                assert not block.canraise
                 # block ending in a switch on a value
                 TYPE = self.lltypemap(block.exitswitch)
                 if TYPE == Bool:
@@ -248,8 +216,6 @@ class FunctionCodeGenerator(object):
                         yield '}'
                     link = block.exits[0]
                     assert link.exitcase in (False, True)
-                    #yield 'assert(%s == %s);' % (self.expr(block.exitswitch),
-                    #                       self.genc.nameofvalue(link.exitcase, ct))
                     for op in self.gen_link(link):
                         yield op
                 elif TYPE in (Signed, Unsigned, SignedLongLong,
@@ -300,7 +266,7 @@ class FunctionCodeGenerator(object):
     def gen_op(self, op):
         macro = 'OP_%s' % op.opname.upper()
         line = None
-        if op.opname.startswith('gc_'):
+        if op.opname.startswith('gc_') and op.opname != 'gc_load_indexed':
             meth = getattr(self.gcpolicy, macro, None)
             if meth:
                 line = meth(self, op)
@@ -710,6 +676,19 @@ class FunctionCodeGenerator(object):
           "%(result)s = ((%(typename)s) (((char *)%(addr)s) + %(offset)s))[0];"
           % locals())
 
+    def OP_GC_LOAD_INDEXED(self, op):
+        addr = self.expr(op.args[0])
+        index = self.expr(op.args[1])
+        scale = self.expr(op.args[2])
+        base_ofs = self.expr(op.args[3])
+        result = self.expr(op.result)
+        TYPE = op.result.concretetype
+        typename = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
+        return (
+          "%(result)s = ((%(typename)s) (((char *)%(addr)s) + "
+          "%(base_ofs)s + %(scale)s * %(index)s))[0];"
+          % locals())
+
     def OP_CAST_PRIMITIVE(self, op):
         TYPE = self.lltypemap(op.result)
         val =  self.expr(op.args[0])
@@ -797,6 +776,13 @@ class FunctionCodeGenerator(object):
     def OP_DEBUG_STOP(self, op):
         return self._op_debug('PYPY_DEBUG_STOP', op.args[0])
 
+    def OP_HAVE_DEBUG_PRINTS_FOR(self, op):
+        arg = op.args[0]
+        assert isinstance(arg, Constant) and isinstance(arg.value, str)
+        string_literal = c_string_constant(arg.value)
+        return '%s = pypy_have_debug_prints_for(%s);' % (
+            self.expr(op.result), string_literal)
+
     def OP_DEBUG_ASSERT(self, op):
         return 'RPyAssert(%s, %s);' % (self.expr(op.args[0]),
                                        c_string_constant(op.args[1].value))
@@ -856,6 +842,12 @@ class FunctionCodeGenerator(object):
     def OP_JIT_FFI_SAVE_RESULT(self, op):
         return '/* JIT_FFI_SAVE_RESULT %s */' % op
 
+    def OP_JIT_ENTER_PORTAL_FRAME(self, op):
+        return '/* JIT_ENTER_PORTAL_FRAME %s */' % op
+
+    def OP_JIT_LEAVE_PORTAL_FRAME(self, op):
+        return '/* JIT_LEAVE_PORTAL_FRAME %s */' % op
+
     def OP_GET_GROUP_MEMBER(self, op):
         typename = self.db.gettype(op.result.concretetype)
         return '%s = (%s)_OP_GET_GROUP_MEMBER(%s, %s);' % (
@@ -875,14 +867,11 @@ class FunctionCodeGenerator(object):
 
     def getdebugfunctionname(self):
         name = self.functionname
-        if not name:
-            return "?"
         if name.startswith('pypy_g_'):
             name = name[7:]
         return name
 
     def OP_DEBUG_RECORD_TRACEBACK(self, op):
-        #if self.functionname is None, we print "?" as the argument */
         return 'PYPY_DEBUG_RECORD_TRACEBACK("%s");' % (
             self.getdebugfunctionname(),)
 
@@ -922,5 +911,3 @@ class FunctionCodeGenerator(object):
                 cdecl(typename, ''),
                 self.expr(op.args[0]),
                 self.expr(op.result))
-
-assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)

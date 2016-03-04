@@ -19,7 +19,9 @@ like this:
 
 * Clone this new repo (i.e. the fork) to your local machine with the command 
   ``hg clone ssh://hg@bitbucket.org/yourname/pypy``.  It is a very slow
-  operation but only ever needs to be done once.  If you already cloned
+  operation but only ever needs to be done once.  See also 
+  http://pypy.org/download.html#building-from-source .
+  If you already cloned
   ``https://bitbucket.org/pypy/pypy`` before, even if some time ago,
   then you can reuse the same clone by editing the file ``.hg/hgrc`` in
   your clone to contain the line ``default =
@@ -188,6 +190,10 @@ Note that the prompt of the interpreter-level console is only '>>>' since
 it runs on CPython level. If you want to return to PyPy, press <Ctrl-D> (under
 Linux) or <Ctrl-Z>, <Enter> (under Windows).
 
+Also note that not all modules are available by default in this mode (for
+example: ``_continuation`` needed by ``greenlet``) , you may need to use one of
+``--withmod-...`` command line options.
+
 You may be interested in reading more about the distinction between
 :ref:`interpreter-level and app-level <interpreter-level>`.
 
@@ -203,12 +209,17 @@ pyinteractive.py supports most of the options that CPython supports too (in addi
 large amount of options that can be used to customize pyinteractive.py).
 As an example of using PyPy from the command line, you could type::
 
-    python pyinteractive.py -c "from test import pystone; pystone.main(10)"
+    python pyinteractive.py --withmod-time -c "from test import pystone; pystone.main(10)"
 
 Alternatively, as with regular Python, you can simply give a
 script name on the command line::
 
-    python pyinteractive.py ../../lib-python/2.7/test/pystone.py 10
+    python pyinteractive.py --withmod-time ../../lib-python/2.7/test/pystone.py 10
+
+The ``--withmod-xxx`` option enables the built-in module ``xxx``.  By
+default almost none of them are, because initializing them takes time.
+If you want anyway to enable all built-in modules, you can use
+``--allworkingmodules``.
 
 See our :doc:`configuration sections <config/index>` for details about what all the commandline
 options do.

@@ -98,8 +98,9 @@ def autodetect_jit_markers_redvars(graph):
             op.args.extend(reds_v)
             if jitdriver.numreds is None:
                 jitdriver.numreds = len(reds_v)
-            else:
-                assert jitdriver.numreds == len(reds_v), 'inconsistent number of reds_v'
+            elif jitdriver.numreds != len(reds_v):
+                raise AssertionError("there are multiple jit_merge_points "
+                                     "with the same jitdriver")
 
 def split_before_jit_merge_point(graph, portalblock, portalopindex):
     """Split the block just before the 'jit_merge_point',
@@ -107,7 +108,7 @@ def split_before_jit_merge_point(graph, portalblock, portalopindex):
     """
     # split the block just before the jit_merge_point()
     if portalopindex > 0:
-        link = split_block(None, portalblock, portalopindex)
+        link = split_block(portalblock, portalopindex)
         portalblock = link.target
     portalop = portalblock.operations[0]
     # split again, this time enforcing the order of the live vars
@@ -115,7 +116,7 @@ def split_before_jit_merge_point(graph, portalblock, portalopindex):
     assert portalop.opname == 'jit_marker'
     assert portalop.args[0].value == 'jit_merge_point'
     greens_v, reds_v = decode_hp_hint_args(portalop)
-    link = split_block(None, portalblock, 0, greens_v + reds_v)
+    link = split_block(portalblock, 0, greens_v + reds_v)
     return link.target
 
 def sort_vars(args_v):
@@ -245,12 +246,12 @@ def _ll_1_jit_force_virtual(inst):
 def _ll_2_int_floordiv_ovf_zer(x, y):
     if y == 0:
         raise ZeroDivisionError
-    if x == -sys.maxint - 1 and y == -1:
-        raise OverflowError
-    return llop.int_floordiv(lltype.Signed, x, y)
+    return _ll_2_int_floordiv_ovf(x, y)
 
 def _ll_2_int_floordiv_ovf(x, y):
-    if x == -sys.maxint - 1 and y == -1:
+    # intentionally not short-circuited to produce only one guard
+    # and to remove the check fully if one of the arguments is known
+    if (x == -sys.maxint - 1) & (y == -1):
         raise OverflowError
     return llop.int_floordiv(lltype.Signed, x, y)
 
@@ -262,12 +263,11 @@ def _ll_2_int_floordiv_zer(x, y):
 def _ll_2_int_mod_ovf_zer(x, y):
     if y == 0:
         raise ZeroDivisionError
-    if x == -sys.maxint - 1 and y == -1:
-        raise OverflowError
-    return llop.int_mod(lltype.Signed, x, y)
+    return _ll_2_int_mod_ovf(x, y)
 
 def _ll_2_int_mod_ovf(x, y):
-    if x == -sys.maxint - 1 and y == -1:
+    #see comment in _ll_2_int_floordiv_ovf
+    if (x == -sys.maxint - 1) & (y == -1):
         raise OverflowError
     return llop.int_mod(lltype.Signed, x, y)
 

@@ -9,13 +9,17 @@ import os
 from subprocess import PIPE, Popen
 
 def run_subprocess(executable, args, env=None, cwd=None):
+    if isinstance(args, list):
+        args = [a.encode('latin1') for a in args]
     return _run(executable, args, env, cwd)
 
 shell_default = False
 if sys.platform == 'win32':
     shell_default = True
 
-def _run(executable, args, env, cwd):   # unless overridden below
+def _run(executable, args, env, cwd):
+    # note that this function can be *overridden* below
+    # in some cases!
     if isinstance(args, str):
         args = str(executable) + ' ' + args
         shell = True

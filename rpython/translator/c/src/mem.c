@@ -15,6 +15,7 @@ struct pypy_debug_alloc_s {
 
 static struct pypy_debug_alloc_s *pypy_debug_alloc_list = NULL;
 
+RPY_EXTERN
 void pypy_debug_alloc_start(void *addr, const char *funcname)
 {
   struct pypy_debug_alloc_s *p = malloc(sizeof(struct pypy_debug_alloc_s));
@@ -25,9 +26,12 @@ void pypy_debug_alloc_start(void *addr, const char *funcname)
   pypy_debug_alloc_list = p;
 }
 
+RPY_EXTERN
 void pypy_debug_alloc_stop(void *addr)
 {
   struct pypy_debug_alloc_s **p;
+  if (!addr)
+	return;
   for (p = &pypy_debug_alloc_list; *p; p = &((*p)->next))
     if ((*p)->addr == addr)
       {
@@ -40,6 +44,7 @@ void pypy_debug_alloc_stop(void *addr)
   RPyAssert(0, "free() of a never-malloc()ed object");
 }
 
+RPY_EXTERN
 void pypy_debug_alloc_results(void)
 {
   long count = 0;
@@ -115,11 +120,8 @@ void pypy_check_stack_count(void)
         got += 1;
         fd = ((void* *) (((char *)fd) + sizeof(void*)))[0];
     }
-    if (rpy_fastgil != 1) {
-        RPyAssert(rpy_fastgil != 0,
-                          "pypy_check_stack_count doesn't have the GIL");
-        got++;  /* <= the extra one currently stored in rpy_fastgil */
-    }
+    RPyAssert(rpy_fastgil == 1,
+              "pypy_check_stack_count doesn't have the GIL");
     RPyAssert(got == stacks_counter - 1,
               "bad stacks_counter or non-closed stacks around");
 # endif

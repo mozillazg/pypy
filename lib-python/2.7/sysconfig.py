@@ -290,17 +290,21 @@ def _parse_makefile(filename, vars=None):
     return vars
 
 
-def _get_makefile_filename():
+def get_makefile_filename():
+    """Return the path of the Makefile."""
     if _PYTHON_BUILD:
         return os.path.join(_PROJECT_BASE, "Makefile")
     return os.path.join(get_path('platstdlib'), "config", "Makefile")
+
+# Issue #22199: retain undocumented private name for compatibility
+_get_makefile_filename = get_makefile_filename
 
 def _generate_posix_vars():
     """Generate the Python module containing build-time variables."""
     import pprint
     vars = {}
     # load the installed Makefile:
-    makefile = _get_makefile_filename()
+    makefile = get_makefile_filename()
     try:
         _parse_makefile(makefile, vars)
     except IOError, e:
@@ -519,6 +523,13 @@ def get_config_vars(*args):
         if sys.platform == 'darwin':
             import _osx_support
             _osx_support.customize_config_vars(_CONFIG_VARS)
+
+        # PyPy:
+        import imp
+        for suffix, mode, type_ in imp.get_suffixes():
+            if type_ == imp.C_EXTENSION:
+                _CONFIG_VARS['SOABI'] = suffix.split('.')[1]
+                break
 
     if args:
         vals = []

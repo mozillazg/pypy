@@ -72,6 +72,10 @@ class W_MyType(W_MyObject):
     def get_module(self):
         return w_some_obj()
 
+
+    def getname(self, space):
+        return self.name
+
 def w_some_obj():
     if NonConstant(False):
         return W_Root()
@@ -113,7 +117,7 @@ class Entry(ExtRegistryEntry):
 
 BUILTIN_TYPES = ['int', 'str', 'float', 'long', 'tuple', 'list', 'dict',
                  'unicode', 'complex', 'slice', 'bool', 'basestring', 'object',
-                 'bytearray', 'buffer']
+                 'bytearray', 'buffer', 'set', 'frozenset']
 
 class FakeObjSpace(ObjSpace):
     def __init__(self, config=None):
@@ -143,6 +147,12 @@ class FakeObjSpace(ObjSpace):
     def newtuple(self, list_w):
         for w_x in list_w:
             is_root(w_x)
+        return w_some_obj()
+
+    def newset(self, list_w=None):
+        if list_w is not None:
+            for w_x in list_w:
+                is_root(w_x)
         return w_some_obj()
 
     def newlist(self, list_w):
@@ -181,6 +191,9 @@ class FakeObjSpace(ObjSpace):
     def marshal_w(self, w_obj):
         "NOT_RPYTHON"
         raise NotImplementedError
+
+    def wrapbytes(self, x):
+        return w_some_obj()
 
     def wrap(self, x):
         if not we_are_translated():
@@ -305,6 +318,9 @@ class FakeObjSpace(ObjSpace):
     def unicode_from_object(self, w_obj):
         return w_some_obj()
 
+    def _try_fetch_pycode(self, w_func):
+        return None
+
     # ----------
 
     def translates(self, func=None, argtypes=None, seeobj_w=[], **kwds):
@@ -381,8 +397,13 @@ def see_typedef(space, typedef):
             space.wrap(value)
 
 class FakeCompiler(object):
-    pass
+    def compile(self, code, name, mode, flags):
+        return FakePyCode()
 FakeObjSpace.default_compiler = FakeCompiler()
+
+class FakePyCode(W_Root):
+    def exec_code(self, space, w_globals, w_locals):
+        return W_Root()
 
 
 class FakeModule(W_Root):

@@ -4,7 +4,7 @@ from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import unwrap_spec
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rlib.rarithmetic import intmask
-from rpython.rlib import rposix
+from rpython.rlib import rposix, rtime
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 import os
 import sys
@@ -168,7 +168,6 @@ glob_buf = lltype.malloc(tm, flavor='raw', zero=True, immortal=True)
 if cConfig.has_gettimeofday:
     c_gettimeofday = external('gettimeofday', [rffi.VOIDP, rffi.VOIDP], rffi.INT)
 TM_P = lltype.Ptr(tm)
-c_clock = external('clock', [rffi.TIME_TP], clock_t)
 c_time = external('time', [rffi.TIME_TP], rffi.TIME_T)
 c_ctime = external('ctime', [rffi.TIME_TP], rffi.CCHARP)
 c_gmtime = external('gmtime', [rffi.TIME_TP], TM_P,
@@ -317,13 +316,13 @@ if sys.platform != 'win32':
         if secs < 0:
             raise OperationError(space.w_IOError,
                                  space.wrap("Invalid argument: negative time in sleep"))
-        pytime.sleep(secs)
+        rtime.sleep(secs)
 else:
     from rpython.rlib import rwin32
     from errno import EINTR
     def _simple_sleep(space, secs, interruptible):
         if secs == 0.0 or not interruptible:
-            pytime.sleep(secs)
+            rtime.sleep(secs)
         else:
             millisecs = int(secs * 1000)
             interrupt_event = space.fromcache(State).get_interrupt_event()
@@ -332,7 +331,7 @@ else:
             if rc == rwin32.WAIT_OBJECT_0:
                 # Yield to make sure real Python signal handler
                 # called.
-                pytime.sleep(0.001)
+                rtime.sleep(0.001)
                 raise wrap_oserror(space,
                                    OSError(EINTR, "sleep() interrupted"))
     @unwrap_spec(secs=float)
@@ -482,13 +481,6 @@ def time(space):
 
     secs = pytime.time()
     return space.wrap(secs)
-
-if _WIN:
-    class PCCache:
-        pass
-    pccache = PCCache()
-    pccache.divisor = 0.0
-    pccache.ctrStart = 0
 
 def clock(space):
     """clock() -> floating point number

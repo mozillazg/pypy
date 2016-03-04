@@ -1,3 +1,4 @@
+import os
 import sys
 
 import py
@@ -22,21 +23,29 @@ default_modules = essential_modules.copy()
 default_modules.update([
     "_codecs", "gc", "_weakref", "marshal", "errno", "imp", "math", "cmath",
     "_sre", "_pickle_support", "operator", "parser", "symbol", "token", "_ast",
-    "_io", "_random", "__pypy__", "_testing"
+    "_io", "_random", "__pypy__", "_testing", "time"
 ])
 
 
 # --allworkingmodules
 working_modules = default_modules.copy()
 working_modules.update([
-    "_socket", "unicodedata", "mmap", "fcntl", "_locale", "pwd", "time" ,
+    "_socket", "unicodedata", "mmap", "fcntl", "_locale", "pwd",
     "select", "zipimport", "_lsprof", "crypt", "signal", "_rawffi", "termios",
     "zlib", "bz2", "struct", "_hashlib", "_md5", "_sha", "_minimal_curses",
     "cStringIO", "thread", "itertools", "pyexpat", "_ssl", "cpyext", "array",
     "binascii", "_multiprocessing", '_warnings', "_collections",
     "_multibytecodec", "micronumpy", "_continuation", "_cffi_backend",
-    "_csv", "cppyy", "_pypyjson"
+    "_csv", "cppyy", "_pypyjson",
 ])
+
+from rpython.jit.backend import detect_cpu
+try:
+    if detect_cpu.autodetect().startswith('x86'):
+        working_modules.add('_vmprof')
+except detect_cpu.ProcessorAutodetectError:
+    pass
+
 
 translation_modules = default_modules.copy()
 translation_modules.update([
@@ -70,6 +79,11 @@ if sys.platform == "sunos5":
     if "cppyy" in working_modules:
         working_modules.remove("cppyy")  # depends on ctypes
 
+#if sys.platform.startswith("linux"):
+#    _mach = os.popen('uname -m', 'r').read().strip()
+#    if _mach.startswith(...):
+#        working_modules.remove("_continuation")
+
 
 module_dependencies = {
     '_multiprocessing': [('objspace.usemodules.time', True),
@@ -87,6 +101,8 @@ module_suggests = {
 if sys.platform == "win32":
     module_suggests["cpyext"].append(("translation.shared", True))
 
+
+# NOTE: this dictionary is not used any more
 module_import_dependencies = {
     # no _rawffi if importing rpython.rlib.clibffi raises ImportError
     # or CompilationError or py.test.skip.Exception
@@ -99,9 +115,11 @@ module_import_dependencies = {
     "_hashlib"  : ["pypy.module._ssl.interp_ssl"],
     "_minimal_curses": ["pypy.module._minimal_curses.fficurses"],
     "_continuation": ["rpython.rlib.rstacklet"],
+    "_vmprof" : ["pypy.module._vmprof.interp_vmprof"],
     }
 
 def get_module_validator(modname):
+    # NOTE: this function is not used any more
     if modname in module_import_dependencies:
         modlist = module_import_dependencies[modname]
         def validator(config):
@@ -152,12 +170,8 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                cmdline="--translationmodules",
                suggests=[("objspace.allworkingmodules", False)]),
 
-    BoolOption("usepycfiles", "Write and read pyc files when importing",
-               default=True),
-
     BoolOption("lonepycfiles", "Import pyc files with no matching py file",
-               default=False,
-               requires=[("objspace.usepycfiles", True)]),
+               default=False),
 
     StrOption("soabi",
               "Tag to differentiate extension modules built for different Python interpreters",
@@ -317,7 +331,7 @@ def set_pypy_opt_level(config, level):
 
 
 def enable_allworkingmodules(config):
-    modules = working_modules
+    modules = working_modules.copy()
     if config.translation.sandbox:
         modules = default_modules
     # ignore names from 'essential_modules', notably 'exceptions', which

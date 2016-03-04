@@ -33,6 +33,12 @@ class CodeCheckerMixin(object):
     def done(self):
         assert len(self.expected) == self.index
 
+    def stack_frame_size_delta(self, delta):
+        pass   # ignored
+
+    def check_stack_size_at_ret(self):
+        pass   # ignored
+
 def hexdump(s):
     return ' '.join(["%02X" % ord(c) for c in s])
 
@@ -190,6 +196,8 @@ class TestRx86_32(object):
                 instrname = 'MOVD'
             if argmodes == 'xb':
                 py.test.skip('"as" uses an undocumented alternate encoding??')
+            if argmodes == 'xx' and self.WORD != 8:
+                instrname = 'MOVQ'
         #
         for args in args_lists:
             suffix = ""
@@ -317,9 +325,21 @@ class TestRx86_32(object):
                 # CALL_j is actually relative, so tricky to test
                 (instrname == 'CALL' and argmodes == 'j') or
                 # SET_ir must be tested manually
-                (instrname == 'SET' and argmodes == 'ir')
+                (instrname == 'SET' and argmodes == 'ir') or
+                # MULTIBYTE_NOPs can't easily be tested the same way
+                (instrname == 'MULTIBYTE')
         )
 
+    def should_skip_instruction_bit32(self, instrname, argmodes):
+        if self.WORD != 8:
+            # those are tested in the 64 bit test case
+            return (
+                # the test suite uses 64 bit registers instead of 32 bit...
+                (instrname == 'PEXTRQ') or
+                (instrname == 'PINSRQ')
+            )
+
+        return False
 
 
     def complete_test(self, methname):
@@ -328,7 +348,8 @@ class TestRx86_32(object):
         else:
             instrname, argmodes = methname, ''
 
-        if self.should_skip_instruction(instrname, argmodes):
+        if self.should_skip_instruction(instrname, argmodes) or \
+           self.should_skip_instruction_bit32(instrname, argmodes):
             print "Skipping %s" % methname
             return
 
@@ -361,6 +382,21 @@ class TestRx86_32(object):
             instr_suffix = suffixes[self.WORD] + ' *'
         else:
             instr_suffix = None
+
+        if instrname.find('EXTR') != -1 or \
+           instrname.find('INSR') != -1 or \
+           instrname.find('INSERT') != -1 or \
+           instrname.find('EXTRACT') != -1 or \
+           instrname.find('SRLDQ') != -1 or \
+           instrname.find('SHUF') != -1 or \
+           instrname.find('PBLEND') != -1 or \
+           instrname.find('CMPP') != -1:
+            realargmodes = []
+            for mode in argmodes:
+                if mode == 'i':
+                    mode = 'i8'
+                realargmodes.append(mode)
+            argmodes = realargmodes
 
         print "Testing %s with argmodes=%r" % (instrname, argmodes)
         self.methname = methname

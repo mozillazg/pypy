@@ -24,9 +24,18 @@ RPY_EXTERN
 RPyLockStatus RPyThreadAcquireLockTimed(struct RPyOpaque_ThreadLock *lock,
 					RPY_TIMEOUT_T timeout, int intr_flag);
 RPY_EXTERN
-void RPyThreadReleaseLock(struct RPyOpaque_ThreadLock *lock);
+long RPyThreadReleaseLock(struct RPyOpaque_ThreadLock *lock);
 RPY_EXTERN
 long RPyThreadGetStackSize(void);
 RPY_EXTERN
 long RPyThreadSetStackSize(long);
 #endif
+
+
+#ifdef _M_IA64
+/* On Itanium, use 'acquire' memory ordering semantics */
+#define lock_test_and_set(ptr, value)  InterlockedExchangeAcquire(ptr, value)
+#else
+#define lock_test_and_set(ptr, value)  InterlockedExchange(ptr, value)
+#endif
+#define lock_release(ptr)              (*((volatile long *)ptr) = 0)

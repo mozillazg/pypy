@@ -10,7 +10,6 @@ from rpython.rlib import objectmodel
 from rpython.conftest import option
 
 class TestMallocRemoval(object):
-    type_system = 'lltype'
     MallocRemover = LLTypeMallocRemover
 
     def check_malloc_removed(cls, graph):
@@ -160,7 +159,7 @@ class TestMallocRemoval(object):
 
             def __del__(self):
                 delcalls[0] += 1
-                os.write(1, "__del__\n")
+                #os.write(1, "__del__\n")
 
         def f(x=int):
             a = A()

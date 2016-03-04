@@ -1,6 +1,6 @@
 from rpython.rtyper.lltypesystem import lltype, llmemory
-from rpython.flowspace.model import SpaceOperation, Variable, Constant, \
-     c_last_exception, checkgraph
+from rpython.flowspace.model import (
+    SpaceOperation, Variable, Constant, checkgraph)
 from rpython.translator.unsimplify import insert_empty_block
 from rpython.translator.unsimplify import insert_empty_startblock
 from rpython.translator.unsimplify import starts_with_empty_block
@@ -83,6 +83,7 @@ class GcHighLevelOp(object):
 
 class BaseGCTransformer(object):
     finished_helpers = False
+    curr_block = None
 
     def __init__(self, translator, inline=False):
         self.translator = translator
@@ -112,21 +113,14 @@ class BaseGCTransformer(object):
         self.seen_graphs.add(graph)
         self.minimal_transform.add(graph)
 
-    def prepare_inline_helpers(self, graphs):
+    def inline_helpers(self, graphs):
         from rpython.translator.backendopt.inline import iter_callsites
+        raise_analyzer = RaiseAnalyzer(self.translator)
         for graph in graphs:
-            self.graph_dependencies[graph] = {}
+            to_enum = []
             for called, block, i in iter_callsites(graph, None):
                 if called in self.graphs_to_inline:
-                    self.graph_dependencies[graph][called] = True
-        self.prepared = True
-
-    def inline_helpers(self, graph):
-        if not self.prepared:
-            raise Exception("Need to call prepare_inline_helpers first")
-        if self.inline:
-            raise_analyzer = RaiseAnalyzer(self.translator)
-            to_enum = self.graph_dependencies.get(graph, self.graphs_to_inline)
+                    to_enum.append(called)
             must_constfold = False
             for inline_graph in to_enum:
                 try:
@@ -159,7 +153,7 @@ class BaseGCTransformer(object):
 
     def transform_block(self, block, is_borrowed):
         llops = LowLevelOpList()
-        #self.curr_block = block
+        self.curr_block = block
         self.livevars = [var for var in block.inputargs
                     if var_needsgc(var) and not is_borrowed(var)]
         allvars = [var for var in block.getvariables() if var_needsgc(var)]
@@ -180,7 +174,7 @@ class BaseGCTransformer(object):
             hop.dispatch()
 
         if len(block.exits) != 0: # i.e not the return block
-            assert block.exitswitch is not c_last_exception
+            assert not block.canraise
 
             deadinallexits = set(self.livevars)
             for link in block.exits:
@@ -205,6 +199,7 @@ class BaseGCTransformer(object):
             block.operations[:] = llops
         self.livevars = None
         self.var_last_needed_in = None
+        self.curr_block = None
 
     def transform_graph(self, graph):
         if graph in self.minimal_transform:
@@ -221,7 +216,7 @@ class BaseGCTransformer(object):
         # for sanity, we need an empty block at the start of the graph
         inserted_empty_startblock = False
         if not starts_with_empty_block(graph):
-            insert_empty_startblock(self.translator.annotator, graph)
+            insert_empty_startblock(graph)
             inserted_empty_startblock = True
         is_borrowed = self.compute_borrowed_vars(graph)
 
@@ -239,7 +234,7 @@ class BaseGCTransformer(object):
                 if link.prevblock.exitswitch is None:
                     link.prevblock.operations.extend(llops)
                 else:
-                    insert_empty_block(self.translator.annotator, link, llops)
+                    insert_empty_block(link, llops)
 
         # remove the empty block at the start of the graph, which should
         # still be empty (but let's check)
@@ -375,6 +370,10 @@ class BaseGCTransformer(object):
 
         return hop.cast_result(rmodel.inputconst(lltype.Ptr(ARRAY_TYPEID_MAP),
                                         lltype.nullptr(ARRAY_TYPEID_MAP)))
+
+    def get_prebuilt_hash(self, obj):
+        return None
+
 
 class MinimalGCTransformer(BaseGCTransformer):
     def __init__(self, parenttransformer):

@@ -24,6 +24,9 @@ class AbstractX86CPU(AbstractLLCPU):
     with_threads = False
     frame_reg = regloc.ebp
 
+    # can an ISA instruction handle a factor to the offset?
+    load_supported_factors = (1,2,4,8)
+
     from rpython.jit.backend.x86.arch import JITFRAME_FIXED_SIZE
     all_reg_indexes = gpr_reg_mgr_cls.all_reg_indexes
     gen_regs = gpr_reg_mgr_cls.all_regs
@@ -49,12 +52,6 @@ class AbstractX86CPU(AbstractLLCPU):
     def set_debug(self, flag):
         return self.assembler.set_debug(flag)
 
-    def get_failargs_limit(self):
-        if self.opts is not None:
-            return self.opts.failargs_limit
-        else:
-            return 1000
-
     def setup(self):
         self.assembler = Assembler386(self, self.translate_support_code)
 
@@ -67,6 +64,8 @@ class AbstractX86CPU(AbstractLLCPU):
     @rgc.no_release_gil
     def setup_once(self):
         self.profile_agent.startup()
+        if self.HAS_CODEMAP:
+            self.codemap.setup()
         self.assembler.setup_once()
 
     @rgc.no_release_gil
@@ -91,23 +90,12 @@ class AbstractX86CPU(AbstractLLCPU):
         lines = machine_code_dump(data, addr, self.backend_name, label_list)
         print ''.join(lines)
 
-    def compile_loop(self, inputargs, operations, looptoken, log=True,
-                     name='', logger=None):
-        return self.assembler.assemble_loop(inputargs, operations, looptoken, log,
-                                            name, logger)
-
     def compile_bridge(self, faildescr, inputargs, operations,
                        original_loop_token, log=True, logger=None):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
         return self.assembler.assemble_bridge(faildescr, inputargs, operations,
                                               original_loop_token, log, logger)
-
-    def clear_latest_values(self, count):
-        setitem = self.assembler.fail_boxes_ptr.setitem
-        null = lltype.nullptr(llmemory.GCREF.TO)
-        for index in range(count):
-            setitem(index, null)
 
     def cast_ptr_to_int(x):
         adr = llmemory.cast_ptr_to_adr(x)
@@ -162,5 +150,11 @@ class CPU_X86_64(AbstractX86CPU):
     CALLEE_SAVE_REGISTERS = [regloc.ebx, regloc.r12, regloc.r13, regloc.r14, regloc.r15]
 
     IS_64_BIT = True
+    HAS_CODEMAP = True
+
+class CPU_X86_64_SSE4(CPU_X86_64):
+    vector_extension = True
+    vector_register_size = 16
+    vector_horizontal_operations = True
 
 CPU = CPU386

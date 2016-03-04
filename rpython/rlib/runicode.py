@@ -4,6 +4,7 @@ from rpython.rlib.rstring import StringBuilder, UnicodeBuilder
 from rpython.rlib.rarithmetic import r_uint, intmask
 from rpython.rlib.unicodedata import unicodedb
 from rpython.rtyper.lltypesystem import lltype, rffi
+from rpython.rlib import jit
 
 
 if rffi.sizeof(lltype.UniChar) == 4:
@@ -1008,6 +1009,16 @@ def str_decode_ascii(s, size, errors, final=False,
             result.append(r)
     return result.build(), pos
 
+# An elidable version, for a subset of the cases
+@jit.elidable
+def fast_str_decode_ascii(s):
+    result = UnicodeBuilder(len(s))
+    for c in s:
+        if ord(c) >= 128:
+            raise ValueError
+        result.append(unichr(ord(c)))
+    return result.build()
+
 
 # Specialize on the errorhandler when it's a constant
 @specialize.arg_or_var(3)
@@ -1053,10 +1064,12 @@ def unicode_encode_ucs1_helper(p, size, errors,
 
     return result.build()
 
+@specialize.arg_or_var(3)
 def unicode_encode_latin_1(p, size, errors, errorhandler=None):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 256)
     return res
 
+@specialize.arg_or_var(3)
 def unicode_encode_ascii(p, size, errors, errorhandler=None):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 128)
     return res
@@ -1114,9 +1127,13 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
 
         c = mapping.get(ch, '')
         if len(c) == 0:
+            # collect all unencodable chars. Important for narrow builds.
+            collend = pos + 1
+            while collend < size and mapping.get(s[collend], '') == '':
+                collend += 1
             ru, rs, pos = errorhandler(errors, "charmap",
                                        "character maps to <undefined>",
-                                       s, pos, pos + 1)
+                                       s, pos, collend)
             if rs is not None:
                 # py3k only
                 result.append(rs)
@@ -1258,16 +1275,9 @@ def str_decode_unicode_escape(s, size, errors, final=False,
                             "unicodeescape", errorhandler, message, errors)
 
         # \N{name}
-        elif ch == 'N':
+        elif ch == 'N' and unicodedata_handler is not None:
             message = "malformed \\N character escape"
             look = pos
-            if unicodedata_handler is None:
-                message = ("\\N escapes not supported "
-                           "(can't load unicodedata module)")
-                res, pos = errorhandler(errors, "unicodeescape",
-                                        message, s, pos-1, size)
-                builder.append(res)
-                continue
 
             if look < size and s[look] == '{':
                 # look for the closing brace
@@ -1393,11 +1403,10 @@ def make_unicode_escape_function(pass_printable=False, unicode_output=False,
             result.append(CHR(quote))
         return result.build()
 
+    TABLE = STR('0123456789abcdef')
+
     def char_escape_helper(result, char):
-        num = hex(char)
-        if STR is unicode:
-            num = num.decode('ascii')
-        if char >= 0x10000:
+        if char >= 0x10000 or char < 0:
             result.append(STR("\\U"))
             zeros = 8
         elif char >= 0x100:
@@ -1406,11 +1415,8 @@ def make_unicode_escape_function(pass_printable=False, unicode_output=False,
         else:
             result.append(STR("\\x"))
             zeros = 2
-        lnum = len(num)
-        nb = zeros + 2 - lnum # num starts with '0x'
-        if nb > 0:
-            result.append_multiple_char(STR('0'), nb)
-        result.append_slice(num, 2, lnum)
+        for i in range(zeros-1, -1, -1):
+            result.append(TABLE[(char >> (4 * i)) & 0x0f])
 
     return unicode_escape, char_escape_helper
 
@@ -1703,7 +1709,9 @@ if sys.platform == 'win32':
                         rffi.cast(lltype.Bool, used_default_p[0])):
                         errorhandler('strict', 'mbcs', "invalid character",
                                      s, 0, 0)
-                    return buf.str(mbcssize)
+                    result = buf.str(mbcssize)
+                    assert result is not None
+                    return result
         finally:
             if used_default_p:
                 lltype.free(used_default_p, flavor='raw')
