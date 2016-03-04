@@ -190,10 +190,10 @@ def init_celldict_cache(pycode):
     pycode._celldict_cache = [INVALID_CACHE_ENTRY] * num_entries
 
 def _finditem_with_cache(space, frame, nameindex, pycode, w_dict, entry_version, entry_value, builtin=False):
-    from pypy.objspace.std.dictmultiobject import W_DictMultiObject
-    if (isinstance(w_dict, W_DictMultiObject) and
+    from pypy.objspace.std.dictmultiobject import W_ModuleDictObject
+    if (isinstance(w_dict, W_ModuleDictObject) and
             not w_dict.user_overridden_class):
-        strategy = w_dict.strategy
+        strategy = w_dict.mstrategy
         if isinstance(strategy, ModuleDictStrategy):
             # it's enough to check that the version is the same
             # if the version is the same, that means that both the same globals
@@ -220,7 +220,7 @@ def _finditem_with_cache(space, frame, nameindex, pycode, w_dict, entry_version,
 def LOAD_GLOBAL_celldict(space, frame, nameindex):
     from pypy.interpreter.mixedmodule import MixedModule
     pycode = frame.getcode()
-    w_globals = frame.w_globals
+    w_globals = frame.get_w_globals()
     entry = pycode._celldict_cache[nameindex]
     cell = _finditem_with_cache(space, frame, nameindex, pycode, w_globals,
                                   entry.version, entry.value)

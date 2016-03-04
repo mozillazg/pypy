@@ -71,7 +71,7 @@ class TestCellDict(object):
 
         strategy = ModuleDictStrategy(space)
         storage = strategy.get_empty_storage()
-        d = W_DictMultiObject(space, strategy, storage)
+        d = W_ModuleDictObject(space, strategy, storage)
 
         v1 = strategy.version
 
@@ -114,13 +114,13 @@ class TestCellDict(object):
         v4 = strategy.version
         assert v3 is v4
         assert d.getitem(w_key) == 3
-        assert d.strategy.getdictvalue_no_unwrapping(d, key).w_value == 3
+        assert d.mstrategy.getdictvalue_no_unwrapping(d, key).w_value == 3
 
         d.delitem(w_key)
         v5 = strategy.version
         assert v5 is not v4
         assert d.getitem(w_key) is None
-        assert d.strategy.getdictvalue_no_unwrapping(d, key) is None
+        assert d.mstrategy.getdictvalue_no_unwrapping(d, key) is None
 
 
 class AppTestModuleDict(object):

@@ -880,7 +880,7 @@ class __extend__(pyframe.PyFrame):
 
     def STORE_GLOBAL(self, nameindex, next_instr):
         w_newvalue = self.popvalue()
-        if self.space.config.objspace.std.withcelldict and jit.we_are_jitted():
+        if self.space.config.objspace.std.withcelldict and not jit.we_are_jitted():
             from pypy.objspace.std.celldict import STORE_GLOBAL_celldict
             STORE_GLOBAL_celldict(self.space, self, nameindex, w_newvalue)
             return
@@ -917,7 +917,7 @@ class __extend__(pyframe.PyFrame):
     _load_global_failed._dont_inline_ = True
 
     def LOAD_GLOBAL(self, nameindex, next_instr):
-        if self.space.config.objspace.std.withcelldict and jit.we_are_jitted():
+        if self.space.config.objspace.std.withcelldict and not jit.we_are_jitted():
             from pypy.objspace.std.celldict import LOAD_GLOBAL_celldict
             w_result = LOAD_GLOBAL_celldict(self.space, self, nameindex)
         else:
