@@ -244,7 +244,7 @@ def LOAD_GLOBAL_celldict(space, frame, nameindex):
 
 def STORE_GLOBAL_celldict(space, frame, nameindex, w_value):
     pycode = frame.getcode()
-    w_globals = frame.w_globals
+    w_globals = frame.get_w_globals()
     entry = pycode._celldict_cache[nameindex]
     cell = _finditem_with_cache(space, frame, nameindex, pycode, w_globals,
                                 entry.version, entry.value)
