@@ -1024,7 +1024,7 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
         self.rm.possibly_free_var(length_box)
         #
         itemsize = op.getarg(1).getint()
-        maxlength = (gc_ll_descr.max_size_of_young_obj - WORD * 2) / itemsize
+        maxlength = (gc_ll_descr.max_size_of_young_obj - WORD * 2)
         self.assembler.malloc_cond_varsize(
             op.getarg(0).getint(),
             gc_ll_descr.get_nursery_free_addr(),
@@ -1404,21 +1404,39 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
     def consider_keepalive(self, op):
         pass
 
-    def consider_zero_array(self, op):
-        itemsize, baseofs, _ = unpack_arraydescr(op.getdescr())
-        length_box = op.getarg(2)
-        if isinstance(length_box, ConstInt):
-            constbytes = length_box.getint() * itemsize
-            if constbytes == 0:
-                return    # nothing to do
+    def _scaled_addr(self, index_loc, itemsize_loc,
+                                base_loc, ofs_loc):
+        assert isinstance(itemsize_loc, ImmedLoc)
+        itemsize = itemsize_loc.value
+        if isinstance(index_loc, ImmedLoc):
+            temp_loc = imm(index_loc.value * itemsize)
+            shift = 0
         else:
+            assert valid_addressing_size(itemsize), "rewrite did not correctly handle shift/mul!"
+            temp_loc = index_loc
+            shift = get_scale(itemsize)
+        assert isinstance(ofs_loc, ImmedLoc)
+        return AddressLoc(base_loc, temp_loc, shift, ofs_loc.value)
+
+    def consider_zero_array(self, op):
+        _, baseofs, _ = unpack_arraydescr(op.getdescr())
+        length_box = op.getarg(2)
+
+        scale_box = op.getarg(3)
+        assert isinstance(scale_box, ConstInt)
+        start_itemsize = scale_box.value
+
+        len_scale_box = op.getarg(4)
+        assert isinstance(len_scale_box, ConstInt)
+        len_itemsize = len_scale_box.value
+        # rewrite handles the mul of a constant length box
             constbytes = -1
+        if isinstance(length_box, ConstInt):
+            constbytes = length_box.getint()
         args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(args[0], args)
         startindex_loc = self.rm.make_sure_var_in_reg(args[1], args)
-        if 0 <= constbytes <= 16 * 8 and (
-                valid_addressing_size(itemsize) or
-                isinstance(startindex_loc, ImmedLoc)):
+        if 0 <= constbytes <= 16 * 8:
             if IS_X86_64:
                 null_loc = X86_64_XMM_SCRATCH_REG
             else:
@@ -1426,7 +1444,7 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
                 null_loc = self.xrm.force_allocate_reg(null_box)
                 self.xrm.possibly_free_var(null_box)
             self.perform_discard(op, [base_loc, startindex_loc,
-                                      imm(constbytes), imm(itemsize),
+                                      imm(constbytes), imm(start_itemsize),
                                       imm(baseofs), null_loc])
         else:
             # base_loc and startindex_loc are in two regs here (or they are
@@ -1436,9 +1454,8 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
             # args[2], because we're still needing the latter.
             dstaddr_box = TempVar()
             dstaddr_loc = self.rm.force_allocate_reg(dstaddr_box, [args[2]])
-            itemsize_loc = imm(itemsize)
-            dst_addr = self.assembler._get_interiorfield_addr(
-                dstaddr_loc, startindex_loc, itemsize_loc,
+            itemsize_loc = imm(start_itemsize)
+            dst_addr = self._scaled_addr(startindex_loc, itemsize_loc,
                 base_loc, imm(baseofs))
             self.assembler.mc.LEA(dstaddr_loc, dst_addr)
             #
@@ -1448,15 +1465,15 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
                 # load length_loc in a register different than dstaddr_loc
                 length_loc = self.rm.make_sure_var_in_reg(length_box,
                                                           [dstaddr_box])
-                if itemsize > 1:
+                if len_itemsize > 1:
                     # we need a register that is different from dstaddr_loc,
                     # but which can be identical to length_loc (as usual,
                     # only if the length_box is not used by future operations)
                     bytes_box = TempVar()
                     bytes_loc = self.rm.force_allocate_reg(bytes_box,
                                                            [dstaddr_box])
-                    b_adr = self.assembler._get_interiorfield_addr(
-                        bytes_loc, length_loc, itemsize_loc, imm0, imm0)
+                    len_itemsize_loc = imm(len_itemsize)
+                    b_adr = self._scaled_addr(length_loc, len_itemsize_loc, imm0, imm0)
                     self.assembler.mc.LEA(bytes_loc, b_adr)
                     length_box = bytes_box
                     length_loc = bytes_loc
