@@ -76,7 +76,7 @@ class W_FlatIterator(W_NDimArray):
                                          base.get_order(), w_instance=base)
             return loop.flatiter_getitem(res, self.iter, state, step)
         finally:
-            self.iter.reset(self.state, mutate=True)
+            self.reset()
 
     def descr_setitem(self, space, w_idx, w_value):
         if not (space.isinstance_w(w_idx, space.w_int) or
@@ -96,10 +96,13 @@ class W_FlatIterator(W_NDimArray):
             arr = convert_to_array(space, w_value)
             loop.flatiter_setitem(space, dtype, arr, self.iter, state, step, length)
         finally:
-            self.iter.reset(self.state, mutate=True)
+            self.reset()
 
     def descr___array_wrap__(self, space, obj, w_context=None):
         return obj
+
+    def reset(self):
+        self.iter.reset(self.state, mutate=True)
 
 W_FlatIterator.typedef = TypeDef("numpy.flatiter",
     base = GetSetProperty(W_FlatIterator.descr_base),

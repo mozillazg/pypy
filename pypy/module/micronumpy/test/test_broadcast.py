@@ -123,3 +123,15 @@ class AppTestArrayBroadcast(BaseNumpyAppTest):
         assert step_in_y == y[0, 0]  # == 3
         assert step_in_broadcast == (1, 3)
         assert step2_in_y == y[1, 0]  # == 4
+
+    def test_broadcast_reset(self):
+        import numpy as np
+        x = np.array([1, 2, 3])
+        y = np.array([[4], [5], [6]])
+
+        b = np.broadcast(x, y)
+        b.next(), b.next(), b.next()
+        b.reset()
+
+        assert b.index == 0
+        assert b.next() == (1, 4)

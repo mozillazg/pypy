@@ -75,6 +75,11 @@ class W_Broadcast(W_NumpyObject):
             return res[0]
         return space.newtuple(res)
 
+    def descr_reset(self, space):
+        self.index = 0
+        self.done = False
+        for it in self.list_iter_state:
+            it.reset()
 
 W_Broadcast.typedef = TypeDef("numpy.broadcast",
                               __new__=interp2app(descr_new_broadcast),
@@ -86,4 +91,5 @@ W_Broadcast.typedef = TypeDef("numpy.broadcast",
                               numiter=GetSetProperty(W_Broadcast.descr_get_numiter),
                               nd=GetSetProperty(W_Broadcast.descr_get_number_of_dimensions),
                               iters=GetSetProperty(W_Broadcast.descr_get_iters),
+                              reset=interp2app(W_Broadcast.descr_reset),
                               )
