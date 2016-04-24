@@ -69,7 +69,7 @@ class W_Broadcast(W_NumpyObject):
             self.done = True
             raise OperationError(space.w_StopIteration, space.w_None)
         self.index += 1
-        res = [it.descr_next(space) for it in self.list_iter_state]
+        res = [space.call_method(it, 'next') for it in self.list_iter_state]
 
         if len(res) < 2:
             return res[0]
