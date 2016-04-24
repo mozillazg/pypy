@@ -1,12 +1,12 @@
 import pypy.module.micronumpy.constants as NPY
-from nditer import ConcreteIter, parse_op_flag, parse_op_arg
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.micronumpy import support
-from pypy.module.micronumpy.base import W_NDimArray, convert_to_array, W_NumpyObject
+from pypy.module.micronumpy.base import convert_to_array, W_NumpyObject
+from pypy.module.micronumpy.flatiter import W_FlatIterator
 from rpython.rlib import jit
-from strides import calculate_broadcast_strides, shape_agreement_multiple
+from strides import shape_agreement_multiple
 
 def descr_new_broadcast(space, w_subtype, __args__):
     return W_Broadcast(space, __args__.arguments_w)
@@ -26,45 +26,21 @@ class W_Broadcast(W_NumpyObject):
         self.seq = [convert_to_array(space, w_elem)
                     for w_elem in args]
 
-        self.op_flags = parse_op_arg(space, 'op_flags', space.w_None,
-                                     len(self.seq), parse_op_flag)
-
         self.shape = shape_agreement_multiple(space, self.seq, shape=None)
         self.order = NPY.CORDER
 
-        self.iters = []
+        self.list_iter_state = []
         self.index = 0
 
         try:
             self.size = support.product_check(self.shape)
         except OverflowError as e:
             raise oefmt(space.w_ValueError, "broadcast dimensions too large.")
-        for i in range(len(self.seq)):
-            it = self.get_iter(space, i)
-            it.contiguous = False
-            self.iters.append((it, it.reset()))
+
+        self.list_iter_state = [W_FlatIterator(arr, self.shape, arr.get_order() != self.order)
+                                for arr in self.seq]
 
         self.done = False
-        pass
-
-    def get_iter(self, space, i):
-        arr = self.seq[i]
-        imp = arr.implementation
-        if arr.is_scalar():
-            return ConcreteIter(imp, 1, [], [], [], self.op_flags[i], self)
-        shape = self.shape
-
-        backward = imp.order != self.order
-
-        r = calculate_broadcast_strides(imp.strides, imp.backstrides, imp.shape,
-                                        shape, backward)
-
-        iter_shape = shape
-        if len(shape) != len(r[0]):
-            # shape can be shorter when using an external loop, just return a view
-            iter_shape = imp.shape
-        return ConcreteIter(imp, imp.get_size(), iter_shape, r[0], r[1],
-                            self.op_flags[i], self)
 
     def descr_iter(self, space):
         return space.wrap(self)
@@ -79,10 +55,13 @@ class W_Broadcast(W_NumpyObject):
         return space.wrap(self.index)
 
     def descr_get_numiter(self, space):
-        return space.wrap(len(self.iters))
+        return space.wrap(len(self.list_iter_state))
 
     def descr_get_number_of_dimensions(self, space):
         return space.wrap(len(self.shape))
+
+    def descr_get_iters(self, space):
+        return space.newtuple(self.list_iter_state)
 
     @jit.unroll_safe
     def descr_next(self, space):
@@ -90,16 +69,11 @@ class W_Broadcast(W_NumpyObject):
             self.done = True
             raise OperationError(space.w_StopIteration, space.w_None)
         self.index += 1
-        res = []
-        for i, (it, st) in enumerate(self.iters):
-            res.append(self._get_item(it, st))
-            self.iters[i] = (it, it.next(st))
+        res = [it.descr_next(space) for it in self.list_iter_state]
+
         if len(res) < 2:
             return res[0]
         return space.newtuple(res)
-
-    def _get_item(self, it, st):
-        return W_NDimArray(it.getoperand(st))
 
 
 W_Broadcast.typedef = TypeDef("numpy.broadcast",
@@ -111,4 +85,5 @@ W_Broadcast.typedef = TypeDef("numpy.broadcast",
                               index=GetSetProperty(W_Broadcast.descr_get_index),
                               numiter=GetSetProperty(W_Broadcast.descr_get_numiter),
                               nd=GetSetProperty(W_Broadcast.descr_get_number_of_dimensions),
+                              iters=GetSetProperty(W_Broadcast.descr_get_iters),
                               )

@@ -33,9 +33,9 @@ class FakeArrayImplementation(BaseConcreteArray):
 
 
 class W_FlatIterator(W_NDimArray):
-    def __init__(self, arr):
+    def __init__(self, arr, shape=None, backward_broadcast=False):
         self.base = arr
-        self.iter, self.state = arr.create_iter()
+        self.iter, self.state = arr.create_iter(shape=shape, backward_broadcast=backward_broadcast)
         # this is needed to support W_NDimArray interface
         self.implementation = FakeArrayImplementation(self.base)
 

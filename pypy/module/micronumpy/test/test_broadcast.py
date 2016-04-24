@@ -102,3 +102,24 @@ class AppTestArrayBroadcast(BaseNumpyAppTest):
 
         assert hasattr(b, 'nd')
         assert b.nd == 3
+
+    def test_broadcast_iters(self):
+        import numpy as np
+        x = np.array([[[1, 2]]])
+        y = np.array([[3], [4], [5]])
+
+        b = np.broadcast(x, y)
+        iters = b.iters
+
+        # iters has right shape
+        assert len(iters) == 2
+        assert isinstance(iters, tuple)
+
+        step_in_y = iters[1].next()
+        step_in_broadcast = b.next()
+        step2_in_y = iters[1].next()
+
+        # iters should not interfere with iteration in broadcast
+        assert step_in_y == y[0, 0]  # == 3
+        assert step_in_broadcast == (1, 3)
+        assert step2_in_y == y[1, 0]  # == 4
