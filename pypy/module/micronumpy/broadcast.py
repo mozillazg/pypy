@@ -81,6 +81,9 @@ class W_Broadcast(W_NumpyObject):
     def descr_get_numiter(self, space):
         return space.wrap(len(self.iters))
 
+    def descr_get_number_of_dimensions(self, space):
+        return space.wrap(len(self.shape))
+
     @jit.unroll_safe
     def descr_next(self, space):
         if self.index >= self.size:
@@ -107,4 +110,5 @@ W_Broadcast.typedef = TypeDef("numpy.broadcast",
                               size=GetSetProperty(W_Broadcast.descr_get_size),
                               index=GetSetProperty(W_Broadcast.descr_get_index),
                               numiter=GetSetProperty(W_Broadcast.descr_get_numiter),
+                              nd=GetSetProperty(W_Broadcast.descr_get_number_of_dimensions),
                               )

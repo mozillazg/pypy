@@ -57,7 +57,6 @@ class AppTestArrayBroadcast(BaseNumpyAppTest):
 
     def test_broadcast_failures(self):
         import numpy as np
-        import sys
         x = np.array([1, 2, 3])
         y = np.array([4, 5])
         raises(ValueError, np.broadcast, x, y)
@@ -95,3 +94,11 @@ class AppTestArrayBroadcast(BaseNumpyAppTest):
             else:
                 mit = np.broadcast(*arrs)
                 assert mit.numiter == j
+
+    def test_broadcast_nd(self):
+        import numpy as np
+        arg1, arg2 = np.empty((6, 7)), np.empty((5, 6, 1))
+        b = np.broadcast(arg1, arg2)
+
+        assert hasattr(b, 'nd')
+        assert b.nd == 3
