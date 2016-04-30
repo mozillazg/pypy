@@ -136,4 +136,19 @@ class AppTestArrayBroadcast(BaseNumpyAppTest):
         assert b.index == 0
         assert b.next() == (1, 4)
 
-
+    def test_broadcast_in_args(self):
+        # gh-5881
+        import numpy as np
+        arrs = [np.empty((6, 7)), np.empty((5, 6, 1)), np.empty((7,)),
+                np.empty((5, 1, 7))]
+        mits = [np.broadcast(*arrs),
+                np.broadcast(np.broadcast(*arrs[:2]), np.broadcast(*arrs[2:])),
+                np.broadcast(arrs[0], np.broadcast(*arrs[1:-1]), arrs[-1])]
+        print [mit.shape for mit in mits]
+        for mit in mits:
+            assert mit.shape == (5, 6, 7)
+            assert mit.nd == 3
+            assert mit.numiter == 4
+            for a, ia in zip(arrs, mit.iters):
+                assert a is ia.base
+ 
