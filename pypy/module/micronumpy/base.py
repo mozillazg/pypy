@@ -169,6 +169,6 @@ class W_NDimArray(W_NumpyObject):
 
 def convert_to_array(space, w_obj):
     from pypy.module.micronumpy.ctors import array
-    if isinstance(w_obj, W_NDimArray):
+    if isinstance(w_obj, W_NumpyObject) and not w_obj.is_scalar():
         return w_obj
     return array(space, w_obj)

@@ -42,6 +42,21 @@ class W_Broadcast(W_NumpyObject):
 
         self.done = False
 
+    def get_shape(self):
+        return self.shape
+
+    def get_order(self):
+        return self.order
+
+    def get_dtype(self):
+        return self.seq[0].get_dtype() #XXX Fixme
+
+    def get_size(self):
+        return 0  #XXX Fixme
+
+    def create_iter(self, shape=None, backward_broadcast=False):
+        return self, self.list_iter_state # XXX Fixme
+
     def descr_iter(self, space):
         return space.wrap(self)
 

@@ -1,7 +1,7 @@
 from pypy.interpreter.error import OperationError, oefmt
 from rpython.rlib import jit
 from pypy.module.micronumpy import support, constants as NPY
-from pypy.module.micronumpy.base import W_NDimArray
+from pypy.module.micronumpy.base import W_NDimArray, W_NumpyObject
 
 
 # structures to describe slicing
@@ -218,7 +218,7 @@ def calculate_broadcast_strides(strides, backstrides, orig_shape, res_shape, bac
 def shape_agreement(space, shape1, w_arr2, broadcast_down=True):
     if w_arr2 is None:
         return shape1
-    assert isinstance(w_arr2, W_NDimArray)
+    assert isinstance(w_arr2, W_NumpyObject)
     shape2 = w_arr2.get_shape()
     ret = _shape_agreement(shape1, shape2)
     if len(ret) < max(len(shape1), len(shape2)):
