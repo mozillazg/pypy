@@ -37,10 +37,21 @@ class W_Broadcast(W_NumpyObject):
         except OverflowError as e:
             raise oefmt(space.w_ValueError, "broadcast dimensions too large.")
 
-        self.list_iter_state = [W_FlatIterator(arr, self.shape, arr.get_order() != self.order)
-                                for arr in self.seq]
+        self.list_iter_state = self._prepare_iterators()
 
         self.done = False
+
+    def _prepare_iterators(self):
+        res = []
+        for arr in self.seq:
+            if isinstance(arr, W_Broadcast):
+                res.extend([self._create_iterator(it.base) for it in arr.list_iter_state])
+            else:
+                res.append(self._create_iterator(arr))
+        return res
+
+    def _create_iterator(self, arr):
+        return W_FlatIterator(arr, self.shape, arr.get_order() != self.order)
 
     def get_shape(self):
         return self.shape
@@ -49,10 +60,17 @@ class W_Broadcast(W_NumpyObject):
         return self.order
 
     def get_dtype(self):
-        return self.seq[0].get_dtype() #XXX Fixme
+        return self.seq[0].get_dtype()  # XXX Fixme
 
     def get_size(self):
-        return 0  #XXX Fixme
+        return self.size
+
+    def is_scalar(self):
+        return self.ndims() == 0
+
+    def ndims(self):
+        return len(self.get_shape())
+    ndims._always_inline_ = True
 
     def create_iter(self, shape=None, backward_broadcast=False):
         return self, self.list_iter_state # XXX Fixme
