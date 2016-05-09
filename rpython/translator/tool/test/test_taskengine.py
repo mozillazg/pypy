@@ -148,3 +148,29 @@ def test_driver():
     assert drv._plan(['D', 'T', 'R']) == ['A', 'R', 'b', 'H', 'T', 'B', 'D']
     assert drv._plan(['D', 'T']) == ['A', 'R', 'b', 'H', 'T', 'B', 'D']
     assert drv._plan(['D', 'T'], skip=['B']) == ['A', 'R', 'b', 'H', 'T', 'D']
+
+
+def test_can_be_optional():
+    class Drv(SimpleTaskEngine):
+        def task_A():
+            pass
+
+        def task_B():
+            pass
+
+        task_B.task_deps = ['??A']
+
+        def task_C():
+            pass
+
+        task_C.task_deps = ['??B']
+
+        def task_D():
+            pass
+
+        task_D.task_deps = ['B', 'C']
+
+    drv = Drv()
+    assert drv._plan(['D']) == ['B', 'C', 'D']
+    assert drv._plan(['B', 'D']) == ['B', 'C', 'D']
+    assert drv._plan(['A', 'D']) == ['A', 'B', 'C', 'D']
