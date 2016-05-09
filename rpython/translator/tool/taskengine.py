@@ -22,44 +22,57 @@ class SimpleTaskEngine(object):
         except KeyError:
             pass
 
+        optionality = dict((goal.lstrip('?'), goal.count('?'))
+                           for goal in goals)
+        task_deps = {}
+
+        def will_do(task):
+            priority = optionality[task]
+            if priority < 1:
+                return True
+            return priority == 1 and task not in skip
+
+        goal_walker = list(goals[::-1])
+        while goal_walker:
+            goal = goal_walker.pop()
+            qs = optionality.get(goal, 0)
+            if goal not in task_deps:
+                task_deps[goal] = deps = set()
+                for dep in self.tasks[goal][1]:
+                    deps.add(dep.lstrip('?'))
+            for dep in self.tasks[goal][1]:
+                depname = dep.lstrip('?')
+                def_optionality = optionality.get(depname, 5)
+                dep_qs = max(qs, dep.count('?'))
+                if dep_qs < def_optionality:
+                    optionality[depname] = dep_qs
+                    goal_walker.append(depname)
+
+        for task, deps in list(task_deps.iteritems()):
+            if not will_do(task):
+                del task_deps[task]
+            else:
+                if task in deps:
+                    deps.remove(task)
+                for dep in list(deps):
+                    if not will_do(dep):
+                        deps.remove(dep)
+
         plan = []
-        goal_walker = goals[::-1]
-        flattened_goals = []
-        for base_goal in goals[::-1]:
-            goal_walker = [base_goal]
-            dep_walker = [iter(self.tasks[base_goal.lstrip('?')][1])]
-            while goal_walker:
-                for subgoal in dep_walker[-1]:
-                    break
+        seen = set()
+        tasks = list(task_deps)
+        while tasks:
+            remaining = []
+            for task in tasks:
+                if task_deps[task] - seen:
+                    remaining.append(task)
                 else:
-                    # all dependencies are in flattened_goals. record
-                    # this goal.
-                    dep_walker.pop()
-                    goal = goal_walker.pop()
-                    if goal not in flattened_goals:
-                        flattened_goals.append(goal)
-                    continue
-                if subgoal in goal_walker:
-                    raise RuntimeException('circular dependency')
+                    plan.append(task)
+                    seen.add(task)
+            if len(remaining) == len(tasks):
+                raise RuntimeException('circular dependency')
+            tasks = remaining
 
-                # subgoal must be at least as optional as its parent
-                qs = goal_walker[-1].count('?')
-                if subgoal.count('?') < qs:
-                    subgoal = '?' * qs + subgoal.lstrip('?')
-
-                # we'll add this goal once we have its dependencies.
-                goal_walker.append(subgoal)
-                dep_walker.append(iter(self.tasks[subgoal.lstrip('?')][1]))
-
-        plan = []
-        for name in flattened_goals:
-            name = name.lstrip('?')
-            if name in plan:
-                continue
-            will_run = name in flattened_goals or (
-                        '?' + name in flattened_goals and name not in skip)
-            if will_run:
-                plan.append(name)
         self._plan_cache[key] = plan
         return plan
 
