@@ -34,3 +34,25 @@ class TestWeakReference(BaseApiTest):
         del w_obj
         import gc; gc.collect()
         assert space.is_w(api.PyWeakref_LockObject(w_ref), space.w_None)
+
+
+class AppTestWeakReference(AppTestCpythonExtensionBase):
+
+    def test_weakref_macro(self):
+        module = self.import_extension('foo', [
+            ("test_macro_cast", "METH_NOARGS",
+             """
+             // PyExc_Warning is some weak-reffable PyObject*.
+             PyObject* weakref_obj = PyWeakref_NewRef(PyExc_Warning, NULL);
+             if (!weakref_obj) return weakref_obj;
+             // No public PyWeakReference type.
+             char* dumb_pointer = (char*) weakref_obj;
+
+             PyWeakref_GET_OBJECT(weakref_obj);
+             PyWeakref_GET_OBJECT(dumb_pointer);
+
+             return weakref_obj;
+             """
+            )
+        ])
+        module.test_macro_cast()
