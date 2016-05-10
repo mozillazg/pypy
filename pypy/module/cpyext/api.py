@@ -301,7 +301,7 @@ class ApiFunction:
 
 DEFAULT_HEADER = 'pypy_decl.h'
 def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, header=DEFAULT_HEADER,
-                gil=None, result_borrowed=False, result_is_ll=False):
+                gil=None, result_borrowed=False, result_is_ll=False, cast=False):
     """
     Declares a function to be exported.
     - `argtypes`, `restype` are lltypes and describe the function signature.
@@ -313,6 +313,8 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, header=DEFAULT_HEADER,
       a C function pointer, but not exported by the API headers.
     - set `gil` to "acquire", "release" or "around" to acquire the GIL,
       release the GIL, or both
+    - 'cast' if True will create an UPPER CASE macro definition that casts
+      the first argument to the proper PyObject* type
     """
     if isinstance(restype, lltype.Typedef):
         real_restype = restype.OF
@@ -433,6 +435,8 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, header=DEFAULT_HEADER,
             if header == DEFAULT_HEADER:
                 FUNCTIONS[func_name] = api_function
             FUNCTIONS_BY_HEADER.setdefault(header, {})[func_name] = api_function
+            if cast:
+                CASTS.setdefault(header, {})[func_name] = api_function
         INTERPLEVEL_API[func_name] = unwrapper_catch # used in tests
         return unwrapper_raise # used in 'normal' RPython code.
     return decorate
@@ -451,6 +455,7 @@ def cpython_struct(name, fields, forward=None, level=1):
 
 INTERPLEVEL_API = {}
 FUNCTIONS = {}
+CASTS = {}
 FUNCTIONS_BY_HEADER = {}
 
 # These are C symbols which cpyext will export, but which are defined in .c
@@ -995,7 +1000,6 @@ def c_function_signature(db, func):
             arg = db.gettype(argtype)
         arg = arg.replace('@', 'arg%d' % (i,)).strip()
         args.append(arg)
-    args = ', '.join(args) or "void"
     return restype, args
 
 #_____________________________________________________
@@ -1023,6 +1027,7 @@ def build_bridge(space):
                 # added only for the macro, not the decl
                 continue
             restype, args = c_function_signature(db, func)
+            args = ', '.join(args) or "void"
             members.append('%s (*%s)(%s);' % (restype, name, args))
             structindex[name] = len(structindex)
     structmembers = '\n'.join(members)
@@ -1254,6 +1259,25 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, prefix='')
     for decl in FORWARD_DECLS:
         pypy_decls.append("%s;" % (decl,))
 
+    casts = []
+    for header_name, header_functions in CASTS.iteritems():
+        header = decls[header_name]
+        for name, func in sorted(header_functions.iteritems()):
+            # create define casts like
+            # #define PyInt_AS_LONG(a1) PyPyInt_AS_LONG(PyObject *)a1)
+            if not func:
+                continue
+            casts.append(name)
+            _name = mangle_name(prefix, name)
+            assert _name is not None, 'error converting %s' % name
+            restype, args = c_function_signature(db, func)
+            l_args = ', '.join(['a%d' % i for i in xrange(len(args))])
+            r_args = ', '.join(['(%s)a%d' % (a.split('arg')[0], i) 
+                                                    for i,a in enumerate(args)])
+            _name = mangle_name(prefix, name)
+            header.append("#define %s(%s)  %s(%s)" % (name, l_args, _name, r_args))
+    print casts
+    xxxx
     for header_name, header_functions in FUNCTIONS_BY_HEADER.iteritems():
         if header_name not in decls:
             header = decls[header_name] = []
@@ -1265,14 +1289,12 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, prefix='')
         for name, func in sorted(header_functions.iteritems()):
             if not func:
                 continue
-            if header == DEFAULT_HEADER:
-                _name = name
-            else:
-                # this name is not included in pypy_macros.h
+            if name not in casts:
                 _name = mangle_name(prefix, name)
                 assert _name is not None, 'error converting %s' % name
                 header.append("#define %s %s" % (name, _name))
             restype, args = c_function_signature(db, func)
+            args = ', '.join(args) or "void"
             header.append("PyAPI_FUNC(%s) %s(%s);" % (restype, _name, args))
             if api_struct:
                 callargs = ', '.join('arg%d' % (i,)
@@ -1408,7 +1430,7 @@ def setup_micronumpy(space):
 def setup_library(space):
     "NOT_RPYTHON"
     use_micronumpy = setup_micronumpy(space)
-    export_symbols = sorted(FUNCTIONS) + sorted(SYMBOLS_C) + sorted(GLOBALS)
+    export_symbols = sorted(FUNCTIONS) + sorted(SYMBOLS_C) + sorted(GLOBALS) # dict -> list
     from rpython.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
     prefix = 'PyPy'
