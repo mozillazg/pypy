@@ -1027,8 +1027,8 @@ def build_bridge(space):
                 # added only for the macro, not the decl
                 continue
             restype, args = c_function_signature(db, func)
-            args = ', '.join(args) or "void"
-            members.append('%s (*%s)(%s);' % (restype, name, args))
+            args_str = ', '.join(args) or "void"
+            members.append('%s (*%s)(%s);' % (restype, name, args_str))
             structindex[name] = len(structindex)
     structmembers = '\n'.join(members)
     struct_declaration_code = """\
@@ -1268,16 +1268,14 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, prefix='')
             if not func:
                 continue
             casts.append(name)
-            _name = mangle_name(prefix, name)
-            assert _name is not None, 'error converting %s' % name
-            restype, args = c_function_signature(db, func)
-            l_args = ', '.join(['a%d' % i for i in xrange(len(args))])
-            r_args = ', '.join(['(%s)a%d' % (a.split('arg')[0], i) 
+            if not api_struct:
+                _name = mangle_name(prefix, name)
+                assert _name is not None, 'error converting %s' % name
+                restype, args = c_function_signature(db, func)
+                l_args = ', '.join(['a%d' % i for i in xrange(len(args))])
+                r_args = ', '.join(['(%s)a%d' % (a.split('arg')[0], i) 
                                                     for i,a in enumerate(args)])
-            _name = mangle_name(prefix, name)
-            header.append("#define %s(%s)  %s(%s)" % (name, l_args, _name, r_args))
-    print casts
-    xxxx
+                header.append("#define %s(%s)  %s(%s)" % (name, l_args, _name, r_args))
     for header_name, header_functions in FUNCTIONS_BY_HEADER.iteritems():
         if header_name not in decls:
             header = decls[header_name] = []
@@ -1289,13 +1287,13 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, prefix='')
         for name, func in sorted(header_functions.iteritems()):
             if not func:
                 continue
+            _name = mangle_name(prefix, name)
+            assert _name is not None, 'error converting %s' % name
             if name not in casts:
-                _name = mangle_name(prefix, name)
-                assert _name is not None, 'error converting %s' % name
                 header.append("#define %s %s" % (name, _name))
             restype, args = c_function_signature(db, func)
-            args = ', '.join(args) or "void"
-            header.append("PyAPI_FUNC(%s) %s(%s);" % (restype, _name, args))
+            args_str = ', '.join(args) or "void"
+            header.append("PyAPI_FUNC(%s) %s(%s);" % (restype, _name, args_str))
             if api_struct:
                 callargs = ', '.join('arg%d' % (i,)
                                     for i in range(len(func.argtypes)))
@@ -1303,7 +1301,7 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, prefix='')
                     body = "{ _pypyAPI.%s(%s); }" % (_name, callargs)
                 else:
                     body = "{ return _pypyAPI.%s(%s); }" % (_name, callargs)
-                functions.append('%s %s(%s)\n%s' % (restype, name, args, body))
+                functions.append('%s %s(%s)\n%s' % (restype, name, args_str, body))
     for name in VA_TP_LIST:
         name_no_star = process_va_name(name)
         header = ('%s pypy_va_get_%s(va_list* vp)' %
