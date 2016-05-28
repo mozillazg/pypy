@@ -51,6 +51,8 @@ def single_byte(value):
 def fits_in_32bits(value):
     return -2147483648 <= value <= 2147483647
 
+_SCRATCH_REG = R.r11
+
 # ____________________________________________________________
 # Emit a single char
 
@@ -74,6 +76,12 @@ def encode_register(mc, reg, factor, orbyte):
     return orbyte | (reg_number_3bits(mc, reg) * factor)
 
 @specialize.arg(2)
+def encode_register_out(mc, reg, factor, orbyte):
+    if reg != _SCRATCH_REG:
+        mc._dont_clobber_scratch_reg += 1
+    return encode_register(mc, reg, factor, orbyte)
+
+@specialize.arg(2)
 def rex_register(mc, reg, factor):
     if reg >= 8:
         if factor == 1:
@@ -88,6 +96,12 @@ def register(argnum, factor=1):
     assert factor in (1, 8)
     return encode_register, argnum, factor, rex_register
 
+def reg_out(argnum, factor=1):
+    # only for instructions that are not jump/calls, and that emit only
+    # their output in this register (plus optionally some flags).
+    assert factor in (1, 8)
+    return encode_register_out, argnum, factor, rex_register
+
 @specialize.arg(2)
 def rex_byte_register(mc, reg, factor):
     assert reg & BYTE_REG_FLAG
@@ -98,10 +112,29 @@ def encode_byte_register(mc, reg, factor, orbyte):
     assert reg & BYTE_REG_FLAG
     return encode_register(mc, reg & ~BYTE_REG_FLAG, factor, orbyte)
 
+@specialize.arg(2)
+def encode_byte_register_out(mc, reg, factor, orbyte):
+    if reg != (_SCRATCH_REG | BYTE_REG_FLAG):
+        mc._dont_clobber_scratch_reg += 1
+    return encode_byte_register(mc, reg, factor, orbyte)
+
 def byte_register(argnum, factor=1):
     assert factor in (1, 8)
     return encode_byte_register, argnum, factor, rex_byte_register
 
+def byte_reg_out(argnum, factor=1):
+    assert factor in (1, 8)
+    return encode_byte_register_out, argnum, factor, rex_byte_register
+
+# ____________________________________________________________
+# Marker for instructions with no registers written and
+# that are not jumps/calls
+
+def encode_no_reg_out(mc, _1, _2, orbyte):
+    mc._dont_clobber_scratch_reg += 1
+    return orbyte
+
+no_reg_out = encode_no_reg_out, None, None, None
 
 # ____________________________________________________________
 # Encode a constant in the orbyte
@@ -362,12 +395,18 @@ def insn(*encoding):
                     rexbyte |= rex_step(mc, arg, extra)
         args = (rexbyte,) + args
         # emit the bytes of the instruction
+        mc._dont_clobber_scratch_reg = 0
         orbyte = 0
         for encode_step, arg, extra, rex_step in encoding_steps:
             if arg is not None:
                 arg = args[arg]
             orbyte = encode_step(mc, arg, extra, orbyte)
         assert orbyte == 0
+        if mc.WORD == 8:
+            if mc._dont_clobber_scratch_reg == 0:
+                mc.clobber_scratch_reg()
+            else:
+                assert mc._dont_clobber_scratch_reg == 1
 
     #
     encoding_steps = []
@@ -389,18 +428,21 @@ def xmminsn(*encoding):
 def common_modes(group):
     base = group * 8
     char = chr(0xC0 | base)
-    INSN_ri8 = insn(rex_w, '\x83', register(1), char, immediate(2,'b'))
-    INSN_ri32= insn(rex_w, '\x81', register(1), char, immediate(2))
-    INSN_rr = insn(rex_w, chr(base+1), register(2,8), register(1,1), '\xC0')
-    INSN_br = insn(rex_w, chr(base+1), register(2,8), stack_bp(1))
-    INSN_rb = insn(rex_w, chr(base+3), register(1,8), stack_bp(2))
-    INSN_rm = insn(rex_w, chr(base+3), register(1,8), mem_reg_plus_const(2))
-    INSN_rj = insn(rex_w, chr(base+3), register(1,8), abs_(2))
-    INSN_ji8 = insn(rex_w, '\x83', orbyte(base), abs_(1), immediate(2,'b'))
+    INSN_ri8 = insn(rex_w, '\x83', reg_out(1), char, immediate(2,'b'))
+    INSN_ri32= insn(rex_w, '\x81', reg_out(1), char, immediate(2))
+    INSN_rr = insn(rex_w, chr(base+1), register(2,8), reg_out(1,1), '\xC0')
+    INSN_br = insn(rex_w, chr(base+1), register(2,8), stack_bp(1), no_reg_out)
+    INSN_rb = insn(rex_w, chr(base+3), reg_out(1,8), stack_bp(2))
+    INSN_rm = insn(rex_w, chr(base+3), reg_out(1,8), mem_reg_plus_const(2))
+    INSN_rj = insn(rex_w, chr(base+3), reg_out(1,8), abs_(2))
+    INSN_ji8 = insn(rex_w, '\x83', orbyte(base), abs_(1),
+                    immediate(2,'b'), no_reg_out)
     INSN_mi8 = insn(rex_w, '\x83', orbyte(base), mem_reg_plus_const(1),
-                    immediate(2,'b'))
-    INSN_bi8 = insn(rex_w, '\x83', orbyte(base), stack_bp(1), immediate(2,'b'))
-    INSN_bi32= insn(rex_w, '\x81', orbyte(base), stack_bp(1), immediate(2))
+                    immediate(2,'b'), no_reg_out)
+    INSN_bi8 = insn(rex_w, '\x83', orbyte(base), stack_bp(1),
+                    immediate(2,'b'), no_reg_out)
+    INSN_bi32= insn(rex_w, '\x81', orbyte(base), stack_bp(1),
+                    immediate(2), no_reg_out)
 
     def INSN_ri(mc, reg, immed):
         if single_byte(immed):
@@ -432,9 +474,9 @@ def select_8_or_32_bit_immed(insn_8, insn_32):
 
 def shifts(mod_field):
     modrm = chr(0xC0 | (mod_field << 3))
-    shift_once = insn(rex_w, '\xD1', register(1), modrm)
-    shift_r_by_cl = insn(rex_w, '\xD3', register(1), modrm)
-    shift_ri8 = insn(rex_w, '\xC1', register(1), modrm, immediate(2, 'b'))
+    shift_once = insn(rex_w, '\xD1', reg_out(1), modrm)
+    shift_r_by_cl = insn(rex_w, '\xD3', reg_out(1), modrm)
+    shift_ri8 = insn(rex_w, '\xC1', reg_out(1), modrm, immediate(2, 'b'))
 
     def shift_ri(mc, reg, immed):
         if immed == 1:
@@ -505,13 +547,13 @@ class AbstractX86CodeBuilder(object):
 
     # ------------------------------ MOV ------------------------------
 
-    MOV_ri = insn(register(1), '\xB8', immediate(2))
-    MOV8_ri = insn(rex_fw, byte_register(1), '\xB0', immediate(2, 'b'))
+    MOV_ri = insn(reg_out(1), '\xB8', immediate(2))
+    MOV8_ri = insn(rex_fw, byte_reg_out(1), '\xB0', immediate(2, 'b'))
 
     # ------------------------------ Arithmetic ------------------------------
 
-    INC_m = insn(rex_w, '\xFF', orbyte(0), mem_reg_plus_const(1))
-    INC_j = insn(rex_w, '\xFF', orbyte(0), abs_(1))
+    INC_m = insn(rex_w, '\xFF', orbyte(0), mem_reg_plus_const(1), no_reg_out)
+    INC_j = insn(rex_w, '\xFF', orbyte(0), abs_(1), no_reg_out)
 
     AD1_ri,ADD_rr,ADD_rb,_,_,ADD_rm,ADD_rj,_,_ = common_modes(0)
     OR_ri, OR_rr, OR_rb, _,_,OR_rm, OR_rj, _,_ = common_modes(1)
@@ -531,29 +573,37 @@ class AbstractX86CodeBuilder(object):
         if reg == R.esp:
             self.stack_frame_size_delta(+immed)
 
-    CMP_mi8 = insn(rex_w, '\x83', orbyte(7<<3), mem_reg_plus_const(1), immediate(2, 'b'))
-    CMP_mi32 = insn(rex_w, '\x81', orbyte(7<<3), mem_reg_plus_const(1), immediate(2))
+    CMP_mi8 = insn(rex_w, '\x83', orbyte(7<<3), mem_reg_plus_const(1),
+                   immediate(2, 'b'), no_reg_out)
+    CMP_mi32 = insn(rex_w, '\x81', orbyte(7<<3), mem_reg_plus_const(1),
+                    immediate(2), no_reg_out)
     CMP_mi = select_8_or_32_bit_immed(CMP_mi8, CMP_mi32)
-    CMP_mr = insn(rex_w, '\x39', register(2, 8), mem_reg_plus_const(1))
+    CMP_mr = insn(rex_w, '\x39', register(2, 8), mem_reg_plus_const(1),
+                  no_reg_out)
 
-    CMP_ji8 = insn(rex_w, '\x83', orbyte(7<<3), abs_(1), immediate(2, 'b'))
-    CMP_ji32 = insn(rex_w, '\x81', orbyte(7<<3), abs_(1), immediate(2))
+    CMP_ji8 = insn(rex_w, '\x83', orbyte(7<<3), abs_(1), immediate(2, 'b'),
+                   no_reg_out)
+    CMP_ji32 = insn(rex_w, '\x81', orbyte(7<<3), abs_(1), immediate(2),
+                    no_reg_out)
     CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
-    CMP_jr = insn(rex_w, '\x39', register(2, 8), abs_(1))
+    CMP_jr = insn(rex_w, '\x39', register(2, 8), abs_(1), no_reg_out)
 
-    CMP32_mi = insn(rex_nw, '\x81', orbyte(7<<3), mem_reg_plus_const(1), immediate(2))
-    CMP16_mi = insn('\x66', rex_nw, '\x81', orbyte(7<<3), mem_reg_plus_const(1), immediate(2, 'h'))
-    CMP8_ri = insn(rex_fw, '\x80', byte_register(1), '\xF8', immediate(2, 'b'))
+    CMP32_mi = insn(rex_nw, '\x81', orbyte(7<<3), mem_reg_plus_const(1),
+                    immediate(2), no_reg_out)
+    CMP16_mi = insn('\x66', rex_nw, '\x81', orbyte(7<<3), mem_reg_plus_const(1),
+                    immediate(2, 'h'), no_reg_out)
+    CMP8_ri = insn(rex_fw, '\x80', byte_register(1), '\xF8',
+                   immediate(2, 'b'), no_reg_out)
 
-    AND8_rr = insn(rex_fw, '\x20', byte_register(1), byte_register(2,8), '\xC0')
+    AND8_rr = insn(rex_fw, '\x20', byte_reg_out(1), byte_register(2,8), '\xC0')
 
-    OR8_rr = insn(rex_fw, '\x08', byte_register(1), byte_register(2,8), '\xC0')
+    OR8_rr = insn(rex_fw, '\x08', byte_reg_out(1), byte_register(2,8), '\xC0')
     OR8_mi = insn(rex_nw, '\x80', orbyte(1<<3), mem_reg_plus_const(1),
-                  immediate(2, 'b'))
+                  immediate(2, 'b'), no_reg_out)
     OR8_ji = insn(rex_nw, '\x80', orbyte(1<<3), abs_(1),
-                  immediate(2, 'b'))
+                  immediate(2, 'b'), no_reg_out)
 
-    NEG_r = insn(rex_w, '\xF7', register(1), '\xD8')
+    NEG_r = insn(rex_w, '\xF7', reg_out(1), '\xD8')
 
     DIV_r = insn(rex_w, '\xF7', register(1), '\xF0')
     IDIV_r = insn(rex_w, '\xF7', register(1), '\xF8')
@@ -561,11 +611,11 @@ class AbstractX86CodeBuilder(object):
     MUL_r = insn(rex_w, '\xF7', orbyte(4<<3), register(1), '\xC0')
     MUL_b = insn(rex_w, '\xF7', orbyte(4<<3), stack_bp(1))
 
-    IMUL_rr = insn(rex_w, '\x0F\xAF', register(1, 8), register(2), '\xC0')
-    IMUL_rb = insn(rex_w, '\x0F\xAF', register(1, 8), stack_bp(2))
+    IMUL_rr = insn(rex_w, '\x0F\xAF', reg_out(1, 8), register(2), '\xC0')
+    IMUL_rb = insn(rex_w, '\x0F\xAF', reg_out(1, 8), stack_bp(2))
 
-    IMUL_rri8 = insn(rex_w, '\x6B', register(1, 8), register(2), '\xC0', immediate(3, 'b'))
-    IMUL_rri32 = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
+    IMUL_rri8 = insn(rex_w, '\x6B', reg_out(1, 8), register(2), '\xC0', immediate(3, 'b'))
+    IMUL_rri32 = insn(rex_w, '\x69', reg_out(1, 8), register(2), '\xC0', immediate(3))
     IMUL_rri = select_8_or_32_bit_immed(IMUL_rri8, IMUL_rri32)
 
     def IMUL_ri(self, reg, immed):
@@ -575,14 +625,14 @@ class AbstractX86CodeBuilder(object):
     SHR_ri, SHR_rr = shifts(5)
     SAR_ri, SAR_rr = shifts(7)
 
-    NOT_r = insn(rex_w, '\xF7', register(1), '\xD0')
-    NOT_b = insn(rex_w, '\xF7', orbyte(2<<3), stack_bp(1))
+    NOT_r = insn(rex_w, '\xF7', reg_out(1), '\xD0')
+    NOT_b = insn(rex_w, '\xF7', orbyte(2<<3), stack_bp(1), no_reg_out)
 
-    CMOVNS_rr = insn(rex_w, '\x0F\x49', register(1, 8), register(2), '\xC0')
+    CMOVNS_rr = insn(rex_w, '\x0F\x49', reg_out(1, 8), register(2), '\xC0')
 
     # ------------------------------ Misc stuff ------------------------------
 
-    NOP = insn('\x90')
+    NOP = insn('\x90', no_reg_out)
     RE1 = insn('\xC3')
     RE116_i = insn('\xC2', immediate(1, 'h'))
 
@@ -594,13 +644,14 @@ class AbstractX86CodeBuilder(object):
         self.check_stack_size_at_ret()
         self.RE116_i(immed)
 
-    PUS1_r = insn(rex_nw, register(1), '\x50')
-    PUS1_b = insn(rex_nw, '\xFF', orbyte(6<<3), stack_bp(1))
-    PUS1_m = insn(rex_nw, '\xFF', orbyte(6<<3), mem_reg_plus_const(1))
-    PUS1_j = insn(rex_nw, '\xFF', orbyte(6<<3), abs_(1))
-    PUS1_p = insn(rex_nw, '\xFF', orbyte(6<<3), rip_offset(1))
-    PUS1_i8 = insn('\x6A', immediate(1, 'b'))
-    PUS1_i32 = insn('\x68', immediate(1, 'i'))
+    PUS1_r = insn(rex_nw, register(1), '\x50', no_reg_out)
+    PUS1_b = insn(rex_nw, '\xFF', orbyte(6<<3), stack_bp(1), no_reg_out)
+    PUS1_m = insn(rex_nw, '\xFF', orbyte(6<<3), mem_reg_plus_const(1),
+                  no_reg_out)
+    PUS1_j = insn(rex_nw, '\xFF', orbyte(6<<3), abs_(1), no_reg_out)
+    PUS1_p = insn(rex_nw, '\xFF', orbyte(6<<3), rip_offset(1), no_reg_out)
+    PUS1_i8 = insn('\x6A', immediate(1, 'b'), no_reg_out)
+    PUS1_i32 = insn('\x68', immediate(1, 'i'), no_reg_out)
 
     def PUSH_r(self, reg):
         self.PUS1_r(reg)
@@ -629,8 +680,8 @@ class AbstractX86CodeBuilder(object):
         self.PUS1_p(rip_offset)
         self.stack_frame_size_delta(+self.WORD)
 
-    PO1_r = insn(rex_nw, register(1), '\x58')
-    PO1_b = insn(rex_nw, '\x8F', orbyte(0<<3), stack_bp(1))
+    PO1_r = insn(rex_nw, reg_out(1), '\x58')
+    PO1_b = insn(rex_nw, '\x8F', orbyte(0<<3), stack_bp(1), no_reg_out)
 
     def POP_r(self, reg):
         self.PO1_r(reg)
@@ -640,12 +691,12 @@ class AbstractX86CodeBuilder(object):
         self.PO1_b(ofs)
         self.stack_frame_size_delta(-self.WORD)
 
-    LEA_rb = insn(rex_w, '\x8D', register(1,8), stack_bp(2))
-    LE1_rs = insn(rex_w, '\x8D', register(1,8), stack_sp(2))
-    LEA32_rb = insn(rex_w, '\x8D', register(1,8),stack_bp(2,force_32bits=True))
-    LEA_ra = insn(rex_w, '\x8D', register(1, 8), mem_reg_plus_scaled_reg_plus_const(2))
-    LEA_rm = insn(rex_w, '\x8D', register(1, 8), mem_reg_plus_const(2))
-    LEA_rj = insn(rex_w, '\x8D', register(1, 8), abs_(2))
+    LEA_rb = insn(rex_w, '\x8D', reg_out(1,8), stack_bp(2))
+    LE1_rs = insn(rex_w, '\x8D', reg_out(1,8), stack_sp(2))
+    LEA32_rb = insn(rex_w, '\x8D', reg_out(1,8),stack_bp(2,force_32bits=True))
+    LEA_ra = insn(rex_w, '\x8D', reg_out(1, 8), mem_reg_plus_scaled_reg_plus_const(2))
+    LEA_rm = insn(rex_w, '\x8D', reg_out(1, 8), mem_reg_plus_const(2))
+    LEA_rj = insn(rex_w, '\x8D', reg_out(1, 8), abs_(2))
 
     def LEA_rs(self, reg, ofs):
         self.LE1_rs(reg, ofs)
@@ -686,29 +737,41 @@ class AbstractX86CodeBuilder(object):
         if not we_are_translated():
             self._frame_size = None
 
-    SET_ir = insn(rex_fw, '\x0F', immediate(1,'o'),'\x90', byte_register(2), '\xC0')
+    SET_ir = insn(rex_fw, '\x0F', immediate(1,'o'),'\x90', byte_reg_out(2), '\xC0')
 
     # The 64-bit version of this, CQO, is defined in X86_64_CodeBuilder
     CDQ = insn(rex_nw, '\x99')
 
-    TEST8_mi = insn(rex_nw, '\xF6', orbyte(0<<3), mem_reg_plus_const(1), immediate(2, 'b'))
-    TEST8_ai = insn(rex_nw, '\xF6', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2, 'b'))
-    TEST8_bi = insn(rex_nw, '\xF6', orbyte(0<<3), stack_bp(1), immediate(2, 'b'))
-    TEST8_ji = insn(rex_nw, '\xF6', orbyte(0<<3), abs_(1), immediate(2, 'b'))
-    TEST_rr = insn(rex_w, '\x85', register(2,8), register(1), '\xC0')
-    TEST_ai = insn(rex_w, '\xF7', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2))
-    TEST_mi = insn(rex_w, '\xF7', orbyte(0<<3), mem_reg_plus_const(1), immediate(2))
-    TEST_ji = insn(rex_w, '\xF7', orbyte(0<<3), abs_(1), immediate(2))
+    TEST8_mi = insn(rex_nw, '\xF6', orbyte(0<<3), mem_reg_plus_const(1),
+                    immediate(2, 'b'), no_reg_out)
+    TEST8_ai = insn(rex_nw, '\xF6', orbyte(0<<3),
+                    mem_reg_plus_scaled_reg_plus_const(1),
+                    immediate(2, 'b'), no_reg_out)
+    TEST8_bi = insn(rex_nw, '\xF6', orbyte(0<<3), stack_bp(1),
+                    immediate(2, 'b'), no_reg_out)
+    TEST8_ji = insn(rex_nw, '\xF6', orbyte(0<<3), abs_(1),
+                    immediate(2, 'b'), no_reg_out)
+    TEST_rr = insn(rex_w, '\x85', register(2,8), register(1), '\xC0',
+                   no_reg_out)
+    TEST_ai = insn(rex_w, '\xF7', orbyte(0<<3),
+                   mem_reg_plus_scaled_reg_plus_const(1),
+                   immediate(2), no_reg_out)
+    TEST_mi = insn(rex_w, '\xF7', orbyte(0<<3), mem_reg_plus_const(1),
+                   immediate(2), no_reg_out)
+    TEST_ji = insn(rex_w, '\xF7', orbyte(0<<3), abs_(1),
+                   immediate(2), no_reg_out)
 
-    BTS_mr = insn(rex_w, '\x0F\xAB', register(2,8), mem_reg_plus_const(1))
-    BTS_jr = insn(rex_w, '\x0F\xAB', register(2,8), abs_(1))
+    BTS_mr = insn(rex_w, '\x0F\xAB', register(2,8), mem_reg_plus_const(1),
+                  no_reg_out)
+    BTS_jr = insn(rex_w, '\x0F\xAB', register(2,8), abs_(1),
+                  no_reg_out)
 
     # x87 instructions
-    FSTPL_b = insn('\xDD', orbyte(3<<3), stack_bp(1)) # rffi.DOUBLE ('as' wants L??)
-    FSTPL_s = insn('\xDD', orbyte(3<<3), stack_sp(1)) # rffi.DOUBLE ('as' wants L??)
-    FSTPS_s = insn('\xD9', orbyte(3<<3), stack_sp(1)) # lltype.SingleFloat
-    FLDL_s  = insn('\xDD', orbyte(0<<3), stack_sp(1))
-    FLDS_s  = insn('\xD9', orbyte(0<<3), stack_sp(1))
+    FSTPL_b = insn('\xDD', orbyte(3<<3), stack_bp(1), no_reg_out) # rffi.DOUBLE ('as' wants L??)
+    FSTPL_s = insn('\xDD', orbyte(3<<3), stack_sp(1), no_reg_out) # rffi.DOUBLE ('as' wants L??)
+    FSTPS_s = insn('\xD9', orbyte(3<<3), stack_sp(1), no_reg_out) # lltype.SingleFloat
+    FLDL_s  = insn('\xDD', orbyte(0<<3), stack_sp(1), no_reg_out)
+    FLDS_s  = insn('\xD9', orbyte(0<<3), stack_sp(1), no_reg_out)
 
     # ------------------------------ Random mess -----------------------
     RDTSC = insn('\x0F\x31')
@@ -717,84 +780,84 @@ class AbstractX86CodeBuilder(object):
     UD2 = insn('\x0F\x0B')
 
     # a breakpoint
-    INT3 = insn('\xCC')
+    INT3 = insn('\xCC', no_reg_out)
 
     # ------------------------------ SSE2 ------------------------------
 
     # Conversion
-    CVTSI2SD_xr = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), register(2), '\xC0')
-    CVTSI2SD_xb = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), stack_bp(2))
+    CVTSI2SD_xr = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), register(2), '\xC0', no_reg_out)
+    CVTSI2SD_xb = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), stack_bp(2), no_reg_out)
 
-    CVTTSD2SI_rx = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), register(2), '\xC0')
-    CVTTSD2SI_rb = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), stack_bp(2))
+    CVTTSD2SI_rx = xmminsn('\xF2', rex_w, '\x0F\x2C', reg_out(1, 8), register(2), '\xC0')
+    CVTTSD2SI_rb = xmminsn('\xF2', rex_w, '\x0F\x2C', reg_out(1, 8), stack_bp(2))
 
-    CVTSD2SS_xx = xmminsn('\xF2', rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0')
-    CVTSD2SS_xb = xmminsn('\xF2', rex_nw, '\x0F\x5A', register(1, 8), stack_bp(2))
-    CVTSS2SD_xx = xmminsn('\xF3', rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0')
-    CVTSS2SD_xb = xmminsn('\xF3', rex_nw, '\x0F\x5A', register(1, 8), stack_bp(2))
+    CVTSD2SS_xx = xmminsn('\xF2', rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0', no_reg_out)
+    CVTSD2SS_xb = xmminsn('\xF2', rex_nw, '\x0F\x5A', register(1, 8), stack_bp(2), no_reg_out)
+    CVTSS2SD_xx = xmminsn('\xF3', rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0', no_reg_out)
+    CVTSS2SD_xb = xmminsn('\xF3', rex_nw, '\x0F\x5A', register(1, 8), stack_bp(2), no_reg_out)
 
-    CVTPD2PS_xx = xmminsn('\x66', rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0')
-    CVTPS2PD_xx = xmminsn(rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0')
-    CVTDQ2PD_xx = xmminsn('\xF3', rex_nw, '\x0F\xE6', register(1, 8), register(2), '\xC0')
-    CVTPD2DQ_xx = xmminsn('\xF2', rex_nw, '\x0F\xE6', register(1, 8), register(2), '\xC0')
+    CVTPD2PS_xx = xmminsn('\x66', rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0', no_reg_out)
+    CVTPS2PD_xx = xmminsn(rex_nw, '\x0F\x5A', register(1, 8), register(2), '\xC0', no_reg_out)
+    CVTDQ2PD_xx = xmminsn('\xF3', rex_nw, '\x0F\xE6', register(1, 8), register(2), '\xC0', no_reg_out)
+    CVTPD2DQ_xx = xmminsn('\xF2', rex_nw, '\x0F\xE6', register(1, 8), register(2), '\xC0', no_reg_out)
 
     # These work on machine sized registers, so "MOVDQ" is MOVD when running
     # on 32 bits and MOVQ when running on 64 bits.  "MOVD32" is always 32-bit.
     # Note a bug in the Intel documentation:
     # http://lists.gnu.org/archive/html/bug-binutils/2007-07/msg00095.html
-    MOVDQ_rx = xmminsn('\x66', rex_w, '\x0F\x7E', register(2, 8), register(1), '\xC0')
-    MOVDQ_xr = xmminsn('\x66', rex_w, '\x0F\x6E', register(1, 8), register(2), '\xC0')
-    MOVDQ_xb = xmminsn('\x66', rex_w, '\x0F\x6E', register(1, 8), stack_bp(2))
-    MOVDQ_xx = xmminsn('\xF3', rex_nw, '\x0F\x7E', register(1, 8), register(2), '\xC0')
+    MOVDQ_rx = xmminsn('\x66', rex_w, '\x0F\x7E', register(2, 8), reg_out(1), '\xC0')
+    MOVDQ_xr = xmminsn('\x66', rex_w, '\x0F\x6E', register(1, 8), register(2), '\xC0', no_reg_out)
+    MOVDQ_xb = xmminsn('\x66', rex_w, '\x0F\x6E', register(1, 8), stack_bp(2), no_reg_out)
+    MOVDQ_xx = xmminsn('\xF3', rex_nw, '\x0F\x7E', register(1, 8), register(2), '\xC0', no_reg_out)
 
-    MOVD32_rx = xmminsn('\x66', rex_nw, '\x0F\x7E', register(2, 8), register(1), '\xC0')
-    MOVD32_sx = xmminsn('\x66', rex_nw, '\x0F\x7E', register(2, 8), stack_sp(1))
-    MOVD32_xr = xmminsn('\x66', rex_nw, '\x0F\x6E', register(1, 8), register(2), '\xC0')
-    MOVD32_xb = xmminsn('\x66', rex_nw, '\x0F\x6E', register(1, 8), stack_bp(2))
-    MOVD32_xs = xmminsn('\x66', rex_nw, '\x0F\x6E', register(1, 8), stack_sp(2))
+    MOVD32_rx = xmminsn('\x66', rex_nw, '\x0F\x7E', register(2, 8), reg_out(1), '\xC0')
+    MOVD32_sx = xmminsn('\x66', rex_nw, '\x0F\x7E', register(2, 8), stack_sp(1), no_reg_out)
+    MOVD32_xr = xmminsn('\x66', rex_nw, '\x0F\x6E', register(1, 8), register(2), '\xC0', no_reg_out)
+    MOVD32_xb = xmminsn('\x66', rex_nw, '\x0F\x6E', register(1, 8), stack_bp(2), no_reg_out)
+    MOVD32_xs = xmminsn('\x66', rex_nw, '\x0F\x6E', register(1, 8), stack_sp(2), no_reg_out)
 
-    MOVSS_xx = xmminsn('\xF3', rex_nw, '\x0F\x10', register(1,8), register(2), '\xC0')
+    MOVSS_xx = xmminsn('\xF3', rex_nw, '\x0F\x10', register(1,8), register(2), '\xC0', no_reg_out)
 
-    PSRAD_xi = xmminsn('\x66', rex_nw, '\x0F\x72', register(1), '\xE0', immediate(2, 'b'))
-    PSRLDQ_xi = xmminsn('\x66', rex_nw, '\x0F\x73', register(1), 
-                        orbyte(0x3 << 3), '\xC0', immediate(2, 'b'))
-    UNPCKLPD_xx = xmminsn('\x66', rex_nw, '\x0F\x14', register(1, 8), register(2), '\xC0')
-    UNPCKHPD_xx = xmminsn('\x66', rex_nw, '\x0F\x15', register(1, 8), register(2), '\xC0')
-    UNPCKLPS_xx = xmminsn(        rex_nw, '\x0F\x14', register(1, 8), register(2), '\xC0')
-    UNPCKHPS_xx = xmminsn(        rex_nw, '\x0F\x15', register(1, 8), register(2), '\xC0')
-    MOVDDUP_xx = xmminsn('\xF2', rex_nw, '\x0F\x12', register(1, 8), register(2), '\xC0')
-    SHUFPS_xxi = xmminsn(rex_nw, '\x0F\xC6', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    SHUFPD_xxi = xmminsn('\x66', rex_nw, '\x0F\xC6', register(1,8), register(2), '\xC0', immediate(3, 'b'))
+    PSRAD_xi = xmminsn('\x66', rex_nw, '\x0F\x72', register(1), '\xE0', immediate(2, 'b'), no_reg_out)
+    PSRLDQ_xi = xmminsn('\x66', rex_nw, '\x0F\x73', register(1),
+                        orbyte(0x3 << 3), '\xC0', immediate(2, 'b'), no_reg_out)
+    UNPCKLPD_xx = xmminsn('\x66', rex_nw, '\x0F\x14', register(1, 8), register(2), '\xC0', no_reg_out)
+    UNPCKHPD_xx = xmminsn('\x66', rex_nw, '\x0F\x15', register(1, 8), register(2), '\xC0', no_reg_out)
+    UNPCKLPS_xx = xmminsn(        rex_nw, '\x0F\x14', register(1, 8), register(2), '\xC0', no_reg_out)
+    UNPCKHPS_xx = xmminsn(        rex_nw, '\x0F\x15', register(1, 8), register(2), '\xC0', no_reg_out)
+    MOVDDUP_xx = xmminsn('\xF2', rex_nw, '\x0F\x12', register(1, 8), register(2), '\xC0', no_reg_out)
+    SHUFPS_xxi = xmminsn(rex_nw, '\x0F\xC6', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    SHUFPD_xxi = xmminsn('\x66', rex_nw, '\x0F\xC6', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
 
-    PSHUFD_xxi = xmminsn('\x66', rex_nw, '\x0F\x70', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    PSHUFHW_xxi = xmminsn('\xF3', rex_nw, '\x0F\x70', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    PSHUFLW_xxi = xmminsn('\xF2', rex_nw, '\x0F\x70', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    PSHUFB_xx = xmminsn('\x66', rex_nw, '\x0F\x38\x00', register(1,8), register(2), '\xC0')
-    PSHUFB_xm = xmminsn('\x66', rex_nw, '\x0F\x38\x00', register(1,8), mem_reg_plus_const(2))
-    PSHUFB_xj = xmminsn('\x66', rex_nw, '\x0F\x38\x00', register(1,8), abs_(2))
+    PSHUFD_xxi = xmminsn('\x66', rex_nw, '\x0F\x70', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    PSHUFHW_xxi = xmminsn('\xF3', rex_nw, '\x0F\x70', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    PSHUFLW_xxi = xmminsn('\xF2', rex_nw, '\x0F\x70', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    PSHUFB_xx = xmminsn('\x66', rex_nw, '\x0F\x38\x00', register(1,8), register(2), '\xC0', no_reg_out)
+    PSHUFB_xm = xmminsn('\x66', rex_nw, '\x0F\x38\x00', register(1,8), mem_reg_plus_const(2), no_reg_out)
+    PSHUFB_xj = xmminsn('\x66', rex_nw, '\x0F\x38\x00', register(1,8), abs_(2), no_reg_out)
 
     # SSE3
-    HADDPD_xx = xmminsn('\x66', rex_nw, '\x0F\x7C', register(1,8), register(2), '\xC0')
-    HADDPS_xx = xmminsn('\xF2', rex_nw, '\x0F\x7C', register(1,8), register(2), '\xC0')
-    PHADDD_xx = xmminsn('\x66', rex_nw, '\x0F\x38\x02', register(1,8), register(2), '\xC0')
+    HADDPD_xx = xmminsn('\x66', rex_nw, '\x0F\x7C', register(1,8), register(2), '\xC0', no_reg_out)
+    HADDPS_xx = xmminsn('\xF2', rex_nw, '\x0F\x7C', register(1,8), register(2), '\xC0', no_reg_out)
+    PHADDD_xx = xmminsn('\x66', rex_nw, '\x0F\x38\x02', register(1,8), register(2), '\xC0', no_reg_out)
 
     # following require SSE4_1
-    PEXTRQ_rxi = xmminsn('\x66', rex_w, '\x0F\x3A\x16', register(1), register(2,8), '\xC0', immediate(3, 'b'))
-    PEXTRD_rxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x16', register(1), register(2,8), '\xC0', immediate(3, 'b'))
-    PEXTRW_rxi = xmminsn('\x66', rex_nw, '\x0F\xC5', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    PEXTRB_rxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x14', register(1), register(2,8), '\xC0', immediate(3, 'b'))
-    EXTRACTPS_rxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x17', register(1), register(2,8), '\xC0', immediate(3, 'b'))
-    
-    PINSRQ_xri = xmminsn('\x66', rex_w, '\x0F\x3A\x22', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    PINSRD_xri = xmminsn('\x66', rex_nw, '\x0F\x3A\x22', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    PINSRW_xri = xmminsn('\x66', rex_nw, '\x0F\xC4', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    PINSRB_xri = xmminsn('\x66', rex_nw, '\x0F\x3A\x20', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    INSERTPS_xxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x21', register(1,8), register(2), '\xC0', immediate(3, 'b'))
+    PEXTRQ_rxi = xmminsn('\x66', rex_w, '\x0F\x3A\x16', reg_out(1), register(2,8), '\xC0', immediate(3, 'b'))
+    PEXTRD_rxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x16', reg_out(1), register(2,8), '\xC0', immediate(3, 'b'))
+    PEXTRW_rxi = xmminsn('\x66', rex_nw, '\x0F\xC5', reg_out(1,8), register(2), '\xC0', immediate(3, 'b'))
+    PEXTRB_rxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x14', reg_out(1), register(2,8), '\xC0', immediate(3, 'b'))
+    EXTRACTPS_rxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x17', reg_out(1), register(2,8), '\xC0', immediate(3, 'b'))
 
-    PTEST_xx = xmminsn('\x66', rex_nw, '\x0F\x38\x17', register(1,8), register(2), '\xC0')
-    PBLENDW_xxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x0E', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    CMPPD_xxi = xmminsn('\x66', rex_nw, '\x0F\xC2', register(1,8), register(2), '\xC0', immediate(3, 'b'))
-    CMPPS_xxi = xmminsn(        rex_nw, '\x0F\xC2', register(1,8), register(2), '\xC0', immediate(3, 'b'))
+    PINSRQ_xri = xmminsn('\x66', rex_w, '\x0F\x3A\x22', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    PINSRD_xri = xmminsn('\x66', rex_nw, '\x0F\x3A\x22', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    PINSRW_xri = xmminsn('\x66', rex_nw, '\x0F\xC4', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    PINSRB_xri = xmminsn('\x66', rex_nw, '\x0F\x3A\x20', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    INSERTPS_xxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x21', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+
+    PTEST_xx = xmminsn('\x66', rex_nw, '\x0F\x38\x17', register(1,8), register(2), '\xC0', no_reg_out)
+    PBLENDW_xxi = xmminsn('\x66', rex_nw, '\x0F\x3A\x0E', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    CMPPD_xxi = xmminsn('\x66', rex_nw, '\x0F\xC2', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
+    CMPPS_xxi = xmminsn(        rex_nw, '\x0F\xC2', register(1,8), register(2), '\xC0', immediate(3, 'b'), no_reg_out)
 
     # ------------------------------------------------------------
 
@@ -825,7 +888,7 @@ def invert_condition(cond_num):
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 4
 
-    PMOVMSKB_rx = xmminsn('\x66', rex_nw, '\x0F\xD7', register(1, 8), register(2), '\xC0')
+    PMOVMSKB_rx = xmminsn('\x66', rex_nw, '\x0F\xD7', reg_out(1, 8), register(2), '\xC0')
 
     # multibyte nops, from 0 to 15 bytes
     MULTIBYTE_NOPs = [
@@ -871,9 +934,9 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
 
     # Three different encodings... following what gcc does.  From the
     # shortest encoding to the longest one.
-    MOV_riu32 = insn(rex_nw, register(1), '\xB8', immediate(2, 'i'))
-    MOV_ri32 = insn(rex_w, '\xC7', register(1), '\xC0', immediate(2, 'i'))
-    MOV_ri64 = insn(rex_w, register(1), '\xB8', immediate(2, 'q'))
+    MOV_riu32 = insn(rex_nw, reg_out(1), '\xB8', immediate(2, 'i'))
+    MOV_ri32 = insn(rex_w, '\xC7', reg_out(1), '\xC0', immediate(2, 'i'))
+    MOV_ri64 = insn(rex_w, reg_out(1), '\xB8', immediate(2, 'q'))
 
     def MOV_ri(self, reg, immed):
         if 0 <= immed <= 4294967295:
@@ -902,7 +965,8 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
          '\x84\x00\x00\x00\x00\x00' for _i in range(1, 7)])
 
 
-def define_modrm_modes(insnname_template, before_modrm, after_modrm=[], regtype='GPR'):
+def define_modrm_modes(insnname_template, before_modrm, after_modrm=[], regtype='GPR',
+                       output_star=False):
     def add_insn(code, *modrm):
         args = before_modrm + list(modrm)
         methname = insnname_template.replace('*', code)
@@ -922,89 +986,98 @@ def define_modrm_modes(insnname_template, before_modrm, after_modrm=[], regtype=
     modrm_argnum = insnname_template.split('_')[1].index('*')+1
 
     if regtype == 'GPR':
-        add_insn('r', register(modrm_argnum))
+        if output_star:
+            add_insn('r', reg_out(modrm_argnum))
+        else:
+            add_insn('r', register(modrm_argnum))
     elif regtype == 'BYTE':
-        add_insn('r', byte_register(modrm_argnum))
+        if output_star:
+            add_insn('r', byte_reg_out(modrm_argnum))
+        else:
+            add_insn('r', byte_register(modrm_argnum))
     elif regtype == 'XMM':
+        assert not output_star
         add_insn('x', register(modrm_argnum))
     else:
         raise AssertionError("Invalid type")
 
-    add_insn('b', stack_bp(modrm_argnum))
-    add_insn('s', stack_sp(modrm_argnum))
-    add_insn('m', mem_reg_plus_const(modrm_argnum))
-    add_insn('a', mem_reg_plus_scaled_reg_plus_const(modrm_argnum))
-    add_insn('j', abs_(modrm_argnum))
-    add_insn('p', rip_offset(modrm_argnum))
+    extra = (no_reg_out,) if output_star else ()
+    add_insn('b', stack_bp(modrm_argnum), *extra)
+    add_insn('s', stack_sp(modrm_argnum), *extra)
+    add_insn('m', mem_reg_plus_const(modrm_argnum), *extra)
+    add_insn('a', mem_reg_plus_scaled_reg_plus_const(modrm_argnum), *extra)
+    add_insn('j', abs_(modrm_argnum), *extra)
+    add_insn('p', rip_offset(modrm_argnum), *extra)
 
 # Define a regular MOV, and a variant MOV32 that only uses the low 4 bytes of a
 # register
 for insnname, rex_type in [('MOV', rex_w), ('MOV32', rex_nw)]:
-    define_modrm_modes(insnname + '_*r', [rex_type, '\x89', register(2, 8)])
-    define_modrm_modes(insnname + '_r*', [rex_type, '\x8B', register(1, 8)])
-    define_modrm_modes(insnname + '_*i', [rex_type, '\xC7', orbyte(0<<3)], [immediate(2)])
+    define_modrm_modes(insnname + '_*r', [rex_type, '\x89', register(2, 8)], output_star=True)
+    define_modrm_modes(insnname + '_r*', [rex_type, '\x8B', reg_out(1, 8)])
+    define_modrm_modes(insnname + '_*i', [rex_type, '\xC7', orbyte(0<<3)], [immediate(2)], output_star=True)
 
-define_modrm_modes('MOV8_*r', [rex_fw, '\x88', byte_register(2, 8)], regtype='BYTE')
-define_modrm_modes('MOV8_*i', [rex_fw, '\xC6', orbyte(0<<3)], [immediate(2, 'b')], regtype='BYTE')
-define_modrm_modes('MOV16_*r', ['\x66', rex_nw, '\x89', register(2, 8)])
-define_modrm_modes('MOV16_*i', ['\x66', rex_nw, '\xC7', orbyte(0<<3)], [immediate(2, 'h')])
+define_modrm_modes('MOV8_*r', [rex_fw, '\x88', byte_register(2, 8)], regtype='BYTE', output_star=True)
+define_modrm_modes('MOV8_*i', [rex_fw, '\xC6', orbyte(0<<3)], [immediate(2, 'b')], regtype='BYTE', output_star=True)
+define_modrm_modes('MOV16_*r', ['\x66', rex_nw, '\x89', register(2, 8)], output_star=True)
+define_modrm_modes('MOV16_*i', ['\x66', rex_nw, '\xC7', orbyte(0<<3)], [immediate(2, 'h')], output_star=True)
 
-define_modrm_modes('MOVZX8_r*', [rex_w, '\x0F\xB6', register(1, 8)], regtype='BYTE')
-define_modrm_modes('MOVSX8_r*', [rex_w, '\x0F\xBE', register(1, 8)], regtype='BYTE')
-define_modrm_modes('MOVZX16_r*', [rex_w, '\x0F\xB7', register(1, 8)])
-define_modrm_modes('MOVSX16_r*', [rex_w, '\x0F\xBF', register(1, 8)])
-define_modrm_modes('MOVSX32_r*', [rex_w, '\x63', register(1, 8)])
+define_modrm_modes('MOVZX8_r*', [rex_w, '\x0F\xB6', reg_out(1, 8)], regtype='BYTE')
+define_modrm_modes('MOVSX8_r*', [rex_w, '\x0F\xBE', reg_out(1, 8)], regtype='BYTE')
+define_modrm_modes('MOVZX16_r*', [rex_w, '\x0F\xB7', reg_out(1, 8)])
+define_modrm_modes('MOVSX16_r*', [rex_w, '\x0F\xBF', reg_out(1, 8)])
+define_modrm_modes('MOVSX32_r*', [rex_w, '\x63', reg_out(1, 8)])
 
-define_modrm_modes('MOVSD_x*', ['\xF2', rex_nw, '\x0F\x10', register(1,8)], regtype='XMM')
-define_modrm_modes('MOVSD_*x', ['\xF2', rex_nw, '\x0F\x11', register(2,8)], regtype='XMM')
-define_modrm_modes('MOVSS_x*', ['\xF3', rex_nw, '\x0F\x10', register(1,8)], regtype='XMM')
-define_modrm_modes('MOVSS_*x', ['\xF3', rex_nw, '\x0F\x11', register(2,8)], regtype='XMM')
-define_modrm_modes('MOVAPD_x*', ['\x66', rex_nw, '\x0F\x28', register(1,8)], regtype='XMM')
-define_modrm_modes('MOVAPD_*x', ['\x66', rex_nw, '\x0F\x29', register(2,8)], regtype='XMM')
-define_modrm_modes('MOVAPS_x*', [        rex_nw, '\x0F\x28', register(1,8)], regtype='XMM')
-define_modrm_modes('MOVAPS_*x', [        rex_nw, '\x0F\x29', register(2,8)], regtype='XMM')
+define_modrm_modes('MOVSD_x*', ['\xF2', rex_nw, '\x0F\x10', register(1,8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVSD_*x', ['\xF2', rex_nw, '\x0F\x11', register(2,8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVSS_x*', ['\xF3', rex_nw, '\x0F\x10', register(1,8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVSS_*x', ['\xF3', rex_nw, '\x0F\x11', register(2,8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVAPD_x*', ['\x66', rex_nw, '\x0F\x28', register(1,8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVAPD_*x', ['\x66', rex_nw, '\x0F\x29', register(2,8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVAPS_x*', [        rex_nw, '\x0F\x28', register(1,8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVAPS_*x', [        rex_nw, '\x0F\x29', register(2,8), no_reg_out], regtype='XMM')
 
-define_modrm_modes('MOVDQA_x*', ['\x66', rex_nw, '\x0F\x6F', register(1, 8)], regtype='XMM')
-define_modrm_modes('MOVDQA_*x', ['\x66', rex_nw, '\x0F\x7F', register(2, 8)], regtype='XMM')
-define_modrm_modes('MOVDQU_x*', ['\xF3', rex_nw, '\x0F\x6F', register(1, 8)], regtype='XMM')
-define_modrm_modes('MOVDQU_*x', ['\xF3', rex_nw, '\x0F\x7F', register(2, 8)], regtype='XMM')
-define_modrm_modes('MOVUPS_x*', [        rex_nw, '\x0F\x10', register(1, 8)], regtype='XMM')
-define_modrm_modes('MOVUPS_*x', [        rex_nw, '\x0F\x11', register(2, 8)], regtype='XMM')
-define_modrm_modes('MOVUPD_x*', ['\x66', rex_nw, '\x0F\x10', register(1, 8)], regtype='XMM')
-define_modrm_modes('MOVUPD_*x', ['\x66', rex_nw, '\x0F\x11', register(2, 8)], regtype='XMM')
+define_modrm_modes('MOVDQA_x*', ['\x66', rex_nw, '\x0F\x6F', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVDQA_*x', ['\x66', rex_nw, '\x0F\x7F', register(2, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVDQU_x*', ['\xF3', rex_nw, '\x0F\x6F', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVDQU_*x', ['\xF3', rex_nw, '\x0F\x7F', register(2, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVUPS_x*', [        rex_nw, '\x0F\x10', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVUPS_*x', [        rex_nw, '\x0F\x11', register(2, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVUPD_x*', ['\x66', rex_nw, '\x0F\x10', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MOVUPD_*x', ['\x66', rex_nw, '\x0F\x11', register(2, 8), no_reg_out], regtype='XMM')
 
-define_modrm_modes('SQRTSD_x*', ['\xF2', rex_nw, '\x0F\x51', register(1,8)], regtype='XMM')
+define_modrm_modes('SQRTSD_x*', ['\xF2', rex_nw, '\x0F\x51', register(1,8), no_reg_out], regtype='XMM')
 
 define_modrm_modes('XCHG_r*', [rex_w, '\x87', register(1, 8)])
 
-define_modrm_modes('ADDSD_x*', ['\xF2', rex_nw, '\x0F\x58', register(1, 8)], regtype='XMM')
-define_modrm_modes('ADDPD_x*', ['\x66', rex_nw, '\x0F\x58', register(1, 8)], regtype='XMM')
-define_modrm_modes('SUBSD_x*', ['\xF2', rex_nw, '\x0F\x5C', register(1, 8)], regtype='XMM')
-define_modrm_modes('MULSD_x*', ['\xF2', rex_nw, '\x0F\x59', register(1, 8)], regtype='XMM')
-define_modrm_modes('DIVSD_x*', ['\xF2', rex_nw, '\x0F\x5E', register(1, 8)], regtype='XMM')
-define_modrm_modes('UCOMISD_x*', ['\x66', rex_nw, '\x0F\x2E', register(1, 8)], regtype='XMM')
-define_modrm_modes('XORPD_x*', ['\x66', rex_nw, '\x0F\x57', register(1, 8)], regtype='XMM')
-define_modrm_modes('XORPS_x*', [        rex_nw, '\x0F\x57', register(1, 8)], regtype='XMM')
-define_modrm_modes('ANDPD_x*', ['\x66', rex_nw, '\x0F\x54', register(1, 8)], regtype='XMM')
-define_modrm_modes('ANDPS_x*', [        rex_nw, '\x0F\x54', register(1, 8)], regtype='XMM')
+define_modrm_modes('ADDSD_x*', ['\xF2', rex_nw, '\x0F\x58', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('ADDPD_x*', ['\x66', rex_nw, '\x0F\x58', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('SUBSD_x*', ['\xF2', rex_nw, '\x0F\x5C', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MULSD_x*', ['\xF2', rex_nw, '\x0F\x59', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('DIVSD_x*', ['\xF2', rex_nw, '\x0F\x5E', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('UCOMISD_x*', ['\x66', rex_nw, '\x0F\x2E', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('XORPD_x*', ['\x66', rex_nw, '\x0F\x57', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('XORPS_x*', [        rex_nw, '\x0F\x57', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('ANDPD_x*', ['\x66', rex_nw, '\x0F\x54', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('ANDPS_x*', [        rex_nw, '\x0F\x54', register(1, 8), no_reg_out], regtype='XMM')
 
 # floating point operations (single & double)
-define_modrm_modes('ADDPD_x*', ['\x66', rex_nw, '\x0F\x58', register(1, 8)], regtype='XMM')
-define_modrm_modes('ADDPS_x*', [        rex_nw, '\x0F\x58', register(1, 8)], regtype='XMM')
-define_modrm_modes('SUBPD_x*', ['\x66', rex_nw, '\x0F\x5C', register(1, 8)], regtype='XMM')
-define_modrm_modes('SUBPS_x*', [        rex_nw, '\x0F\x5C', register(1, 8)], regtype='XMM')
-define_modrm_modes('MULPD_x*', ['\x66', rex_nw, '\x0F\x59', register(1, 8)], regtype='XMM')
-define_modrm_modes('MULPS_x*', [        rex_nw, '\x0F\x59', register(1, 8)], regtype='XMM')
-define_modrm_modes('DIVPD_x*', ['\x66', rex_nw, '\x0F\x5E', register(1, 8)], regtype='XMM')
-define_modrm_modes('DIVPS_x*', [        rex_nw, '\x0F\x5E', register(1, 8)], regtype='XMM')
-define_modrm_modes('DIVPD_x*', ['\x66', rex_nw, '\x0F\x5E', register(1, 8)], regtype='XMM')
-define_modrm_modes('DIVPS_x*', [        rex_nw, '\x0F\x5E', register(1, 8)], regtype='XMM')
+define_modrm_modes('ADDPD_x*', ['\x66', rex_nw, '\x0F\x58', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('ADDPS_x*', [        rex_nw, '\x0F\x58', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('SUBPD_x*', ['\x66', rex_nw, '\x0F\x5C', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('SUBPS_x*', [        rex_nw, '\x0F\x5C', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MULPD_x*', ['\x66', rex_nw, '\x0F\x59', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('MULPS_x*', [        rex_nw, '\x0F\x59', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('DIVPD_x*', ['\x66', rex_nw, '\x0F\x5E', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('DIVPS_x*', [        rex_nw, '\x0F\x5E', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('DIVPD_x*', ['\x66', rex_nw, '\x0F\x5E', register(1, 8), no_reg_out], regtype='XMM')
+define_modrm_modes('DIVPS_x*', [        rex_nw, '\x0F\x5E', register(1, 8), no_reg_out], regtype='XMM')
 
 def define_pxmm_insn(insnname_template, insn_char):
+    # NOTE: these instructions are all "no_reg_out"
     def add_insn(char, *post):
         methname = insnname_template.replace('*', char)
         insn_func = xmminsn('\x66', rex_nw, '\x0F' + insn_char,
-                            register(1, 8), *post)
+                            register(1, 8), no_reg_out, *post)
         assert not hasattr(AbstractX86CodeBuilder, methname)
         setattr(AbstractX86CodeBuilder, methname, insn_func)
     #

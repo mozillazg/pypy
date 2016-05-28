@@ -6,7 +6,11 @@ from rpython.jit.backend.x86.test import test_rx86_32_auto_encoding
 class TestRx86_64(test_rx86_32_auto_encoding.TestRx86_32):
     WORD = 8
     TESTDIR = 'rx86_64'
-    X86_CodeBuilder = rx86.X86_64_CodeBuilder
+
+    class X86_CodeBuilder(rx86.X86_64_CodeBuilder):
+        def clobber_scratch_reg(self):
+            pass
+
     REGNAMES = ['%rax', '%rcx', '%rdx', '%rbx', '%rsp', '%rbp', '%rsi', '%rdi',
                 '%r8', '%r9', '%r10', '%r11', '%r12', '%r13', '%r14', '%r15']
     REGNAMES8 = ['%al', '%cl', '%dl', '%bl', '%spl', '%bpl', '%sil', '%dil',

@@ -242,3 +242,21 @@ def test_multibyte_nops():
         assert len(cls.MULTIBYTE_NOPs) == 16
         for i in range(16):
             assert len(cls.MULTIBYTE_NOPs[i]) == i
+
+def test_clobber_scratch_reg():
+    class CodeBuilder64Clobber(CodeBuilder64):
+        called = 0
+        def clobber_scratch_reg(self):
+            self.called += 1
+    s = CodeBuilder64Clobber()
+    for r in [eax, ebx, ecx, edx]:
+        s.MOV_rm(r, (edi, 123))
+        assert s.called == 0
+    s.MOV_rm(r11, (edi, 123))
+    assert s.called == 1
+    s.MOV32_rm(r11, (edi, 123))
+    assert s.called == 2
+    s.MOVSX32_rm(r11, (edi, 123))
+    assert s.called == 3
+    s.MOV_mr((edi, 123), r11)
+    assert s.called == 3
