@@ -223,6 +223,42 @@ static PyTypeObject footype = {
     foo_getseters,           /*tp_getset*/
 };
 
+static PyTypeObject footypeNoSub = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "foo.fooNoSub",               /*tp_name*/
+    sizeof(fooobject),       /*tp_size*/
+    0,                       /*tp_itemsize*/
+    /* methods */
+    (destructor)foo_dealloc, /*tp_dealloc*/
+    0,                       /*tp_print*/
+    0,                       /*tp_getattr*/
+    0,                       /*tp_setattr*/
+    0,                       /*tp_compare*/
+    foo_repr,                /*tp_repr*/
+    0,                       /*tp_as_number*/
+    0,                       /*tp_as_sequence*/
+    0,                       /*tp_as_mapping*/
+    0,                       /*tp_hash*/
+    foo_call,                /*tp_call*/
+    0,                       /*tp_str*/
+    0,                       /*tp_getattro*/
+    (setattrofunc)foo_setattro, /*tp_setattro*/
+    0,                       /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT,      /*tp_flags*/
+    foo_doc,                 /*tp_doc*/
+    0,                       /*tp_traverse*/
+    0,                       /*tp_clear*/
+    0,                       /*tp_richcompare*/
+    0,                       /*tp_weaklistoffset*/
+    0,                       /*tp_iter*/
+    0,                       /*tp_iternext*/
+    foo_methods,             /*tp_methods*/
+    foo_members,             /*tp_members*/
+    foo_getseters,           /*tp_getset*/
+};
+
+ 
+
 /* A type that inherits from 'unicode */
 
 typedef struct {
@@ -664,6 +700,8 @@ initfoo(void)
 
     if (PyType_Ready(&footype) < 0)
         return;
+    if (PyType_Ready(&footypeNoSub) < 0)
+        return;
     if (PyType_Ready(&UnicodeSubtype) < 0)
         return;
     if (PyType_Ready(&UnicodeSubtype2) < 0)
@@ -696,6 +734,8 @@ initfoo(void)
     if (d == NULL)
         return;
     if (PyDict_SetItemString(d, "fooType", (PyObject *)&footype) < 0)
+        return;
+    if (PyDict_SetItemString(d, "fooTypeNoSub", (PyObject *)&footypeNoSub) < 0)
         return;
     if (PyDict_SetItemString(d, "UnicodeSubtype", (PyObject *) &UnicodeSubtype) < 0)
         return;

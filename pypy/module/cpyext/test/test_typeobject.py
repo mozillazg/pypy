@@ -6,7 +6,6 @@ from pypy.module.cpyext.pyobject import make_ref, from_ref
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr
 
 import pytest
-import sys
 
 class AppTestTypeObject(AppTestCpythonExtensionBase):
     def test_typeobject(self):
@@ -124,8 +123,10 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         obj = module.fooType.classmeth()
         assert obj is module.fooType
 
-    @pytest.mark.skipif('__pypy__' not in sys.builtin_module_names, reason='cpython segfaults')
     def test_new(self):
+        import sys
+        if '__pypy__' not in sys.builtin_module_names:
+            skip('cpython segfaults')
         # XXX cpython segfaults but if run singly (with -k test_new) this passes
         module = self.import_module(name='foo')
         obj = module.new()
@@ -196,11 +197,10 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         del x, y
 
     def test_metaclass_compatible2(self):
-        skip('type.__new__ does not check acceptable_as_base_class')
-        # XXX FIX - must raise since fooType (which is a base type)
+        # must raise since fooTypeNoSub (which is a base type)
         # does not have flag Py_TPFLAGS_BASETYPE
         module = self.import_module(name='foo')
-        raises(TypeError, module.MetaType, 'other', (module.fooType,), {})
+        raises(TypeError, module.MetaType, 'other', (module.fooTypeNoSub,), {})
     def test_sre(self):
         import sys
         for m in ['_sre', 'sre_compile', 'sre_constants', 'sre_parse', 're']:
@@ -901,8 +901,10 @@ class AppTestSlots(AppTestCpythonExtensionBase):
         #print('calling module.footype()...')
         module.footype("X", (object,), {})
 
-    @pytest.mark.skipif('__pypy__' not in sys.builtin_module_names, reason='cpython fails')
     def test_app_subclass_of_c_type(self):
+        import sys
+        if '__pypy__' not in sys.builtin_module_names:
+            skip('cpython adds 6 bytes to size')
         # on cpython, the size changes (6 bytes added)
         module = self.import_module(name='foo')
         size = module.size_of_instances(module.fooType)
