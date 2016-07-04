@@ -12,6 +12,7 @@ from pypy.tool.option import make_objspace
 from pypy import pypydir
 from rpython.rlib import rthread
 from pypy.module.thread import os_thread
+from platform import machine
 
 thisdir = py.path.local(__file__).dirpath()
 
@@ -275,6 +276,17 @@ class PyPyTarget(object):
             config.objspace.usemodules.pypyjit = True
         elif config.objspace.usemodules.pypyjit:
             config.translation.jit = True
+
+        # s390x build a no jit version on older CPUs
+        if config.translation.jit and machine() == 's390x':
+            from rpython.translator.platform.arch.s390x import s390x_cpu_revision
+            cpu_revision = s390x_cpu_revision()
+            if cpu_revision == "unknown":
+                # this CPU might be very old! Thus we turn off
+                # the JIT, ve
+                config.translation.jit = False
+                print  >> sys.stderr, "(s390x) turning off JIT. " \
+                                      "CPU revision is not supported"
 
         if config.translation.sandbox:
             config.objspace.lonepycfiles = False

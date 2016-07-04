@@ -80,7 +80,7 @@ def update_cflags(cflags):
             # gcc does not recognize z13 as a compiler flag!
             revision = 'zEC12'
 
-        assert revision != 'unknown'
-        cflags += ('-march='+revision,)
+        if revision != 'unknown':
+            cflags += ('-march='+revision,)
     cflags += ('-m64','-mzarch')
     return cflags
