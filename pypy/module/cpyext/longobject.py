@@ -9,14 +9,6 @@ from rpython.rlib.rbigint import rbigint
 from rpython.rlib.rarithmetic import intmask
 
 
-PyLongObjectStruct = lltype.ForwardReference()
-PyLongObject = lltype.Ptr(PyLongObjectStruct)
-Digits = rffi.CArray(PyObject)
-PyTupleObjectFields = PyObjectFields + \
-    (("ob_size", Py_ssize_t), ("ob_item", lltype.Ptr(ObjectItems)))
-cpython_struct("PyTupleObject", PyTupleObjectFields, PyTupleObjectStruct)
-
-
 PyLong_Check, PyLong_CheckExact = build_type_checkers("Long")
 
 @cpython_api([lltype.Signed], PyObject)

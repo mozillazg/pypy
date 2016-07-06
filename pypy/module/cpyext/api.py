@@ -613,7 +613,7 @@ def build_exported_objects():
         }.items():
         GLOBALS['%s#%s' % (cpyname, pypy_decl)] = ('PyTypeObject*', pypyexpr)
 
-    for cpyname in '''PyMethodObject PyListObject
+    for cpyname in '''PyMethodObject PyListObject PyLongObject
                       PyDictObject PyClassObject'''.split():
         FORWARD_DECLS.append('typedef struct { PyObject_HEAD } %s'
                              % (cpyname, ))
