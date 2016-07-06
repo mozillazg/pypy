@@ -705,7 +705,7 @@ if _POSIX:
 
     def free_memory_chunk(addr, map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
-        c_munmap_safe(addr, map_size)
+        c_munmap_safe(addr, rffi.cast(size_t, map_size))
 
     def alloc_hinted(hintp, map_size):
         flags = MAP_PRIVATE | MAP_ANONYMOUS
