@@ -727,9 +727,10 @@ class IncrementalMiniMarkGC(MovingGCBase):
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
 
-    def collect(self, gen=2):
+    def collect(self, gen=3):
         """Do a minor (gen=0), start a major (gen=1), or do a full
-        major (gen>=2) collection."""
+        major (gen>=2) collection.  If gen>=3 then ask minimarkpage
+        to free now its cache of arenas."""
         if gen < 0:
             self._minor_collection()   # dangerous! no major GC cycle progress
         elif gen <= 1:
@@ -738,6 +739,8 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 self.major_collection_step()
         else:
             self.minor_and_major_collection()
+            if gen >= 3:
+                self.ac.kill_dying_arenas()
         self.rrc_invoke_callback()
 
 

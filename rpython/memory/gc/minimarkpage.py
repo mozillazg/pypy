@@ -124,6 +124,16 @@ class ArenaCollection(object):
                                               flavor='raw', zero=True,
                                               immortal=True)
         #
+        # two lists of completely free arenas.  These arenas are
+        # pending to be returned to the OS.  They are first added to
+        # the 'dying_arenas' list when the major collection runs.  At
+        # the end, they are moved to the 'dead_arenas' list, and all
+        # arenas that were already in the 'dead_arenas' list at that
+        # point (from the previous major collection) are really
+        # returned to the OS.
+        self.dying_arenas = ARENA_NULL
+        self.dead_arenas = ARENA_NULL
+        #
         # the arena currently consumed; it must have at least one page
         # available, or be NULL.  The arena object that we point to is
         # not in any 'arenas_lists'.  We will consume all its pages before
@@ -244,7 +254,7 @@ class ArenaCollection(object):
 
 
     def _all_arenas(self):
-        """For testing.  Enumerates all arenas."""
+        """For testing.  Enumerates all not-completely-free arenas."""
         if self.current_arena:
             yield self.current_arena
         for arena in self.arenas_lists:
@@ -290,29 +300,56 @@ class ArenaCollection(object):
             for a in self._all_arenas():
                 assert a.nfreepages == 0
         #
-        # 'arena_base' points to the start of malloced memory; it might not
-        # be a page-aligned address
-        arena_base = llarena.arena_malloc(self.arena_size, False)
-        if not arena_base:
-            out_of_memory("out of memory: couldn't allocate the next arena")
-        arena_end = arena_base + self.arena_size
+        # Maybe we have a dying or a dead arena.
+        if self.dying_arenas:
+            arena = self.dying_arenas
+            self.dying_arenas = arena.nextarena
+        elif self.dead_arenas:
+            arena = self.dead_arenas
+            self.dead_arenas = arena.nextarena
+        else:
+            #
+            # 'arena_base' points to the start of malloced memory.  It might
+            # not be a page-aligned address depending on the underlying call
+            # (although with mmap() it should be).
+            arena_base = llarena.arena_mmap(self.arena_size)
+            if not arena_base:
+                out_of_memory("out of memory: couldn't allocate the next arena")
+            arena_end = arena_base + self.arena_size
+            #
+            # 'firstpage' points to the first unused page
+            firstpage = start_of_page(arena_base + self.page_size - 1,
+                                      self.page_size)
+            # 'npages' is the number of full pages just allocated
+            npages = (arena_end - firstpage) // self.page_size
+            #
+            # Allocate an ARENA object and initialize it
+            arena = lltype.malloc(ARENA, flavor='raw', track_allocation=False)
+            arena.base = arena_base
+            arena.totalpages = npages
         #
-        # 'firstpage' points to the first unused page
-        firstpage = start_of_page(arena_base + self.page_size - 1,
-                                  self.page_size)
-        # 'npages' is the number of full pages just allocated
-        npages = (arena_end - firstpage) // self.page_size
-        #
-        # Allocate an ARENA object and initialize it
-        arena = lltype.malloc(ARENA, flavor='raw', track_allocation=False)
-        arena.base = arena_base
         arena.nfreepages = 0        # they are all uninitialized pages
-        arena.totalpages = npages
-        arena.freepages = firstpage
-        self.num_uninitialized_pages = npages
+        arena.freepages = start_of_page(arena.base + self.page_size - 1,
+                                        self.page_size)
+        arena.nextarena = ARENA_NULL
+        self.num_uninitialized_pages = arena.totalpages
         self.current_arena = arena
         #
     allocate_new_arena._dont_inline_ = True
+
+
+    def kill_dying_arenas(self):
+        """Return to the OS all dead arenas, and then move the 'dying'
+        arenas to the 'dead' arenas list.
+        """
+        arena = self.dead_arenas
+        while arena:
+            nextarena = arena.nextarena
+            llarena.arena_munmap(arena.base, self.arena_size)
+            lltype.free(arena, flavor='raw', track_allocation=False)
+            arena = nextarena
+        self.dead_arenas = self.dying_arenas
+        self.dying_arenas = ARENA_NULL
 
 
     def mass_free_prepare(self):
@@ -360,6 +397,7 @@ class ArenaCollection(object):
         if size_class >= 0:
             self._rehash_arenas_lists()
             self.size_class_with_old_pages = -1
+            self.kill_dying_arenas()
         #
         return True
 
@@ -394,9 +432,12 @@ class ArenaCollection(object):
                 #
                 if arena.nfreepages == arena.totalpages:
                     #
-                    # The whole arena is empty.  Free it.
-                    llarena.arena_free(arena.base)
-                    lltype.free(arena, flavor='raw', track_allocation=False)
+                    # The whole arena is empty.  Move it to the dying list.
+                    arena.nextarena = self.dying_arenas
+                    self.dying_arenas = arena
+                    llarena.arena_reset(arena.base,
+                                        llarena.RESET_WHOLE_ARENA,
+                                        0)
                     #
                 else:
                     # Insert 'arena' in the correct arenas_lists[n]

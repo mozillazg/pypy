@@ -691,6 +691,22 @@ if _POSIX:
         m.setdata(res, map_size)
         return m
 
+    def allocate_memory_chunk(map_size):
+        # used by the memory allocator (in llarena.py, from minimarkpage.py)
+        flags = MAP_PRIVATE | MAP_ANONYMOUS
+        prot = PROT_READ | PROT_WRITE
+        if we_are_translated():
+            flags = NonConstant(flags)
+            prot = NonConstant(prot)
+        res = c_mmap_safe(rffi.cast(PTR, 0), map_size, prot, flags, -1, 0)
+        if res == rffi.cast(PTR, -1):
+            res = rffi.cast(PTR, 0)
+        return res
+
+    def free_memory_chunk(addr, map_size):
+        # used by the memory allocator (in llarena.py, from minimarkpage.py)
+        c_munmap_safe(addr, map_size)
+
     def alloc_hinted(hintp, map_size):
         flags = MAP_PRIVATE | MAP_ANONYMOUS
         prot = PROT_EXEC | PROT_READ | PROT_WRITE
