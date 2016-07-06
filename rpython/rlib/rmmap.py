@@ -727,7 +727,10 @@ if _POSIX:
 
     # XXX is this really necessary?
     class Hint:
-        pos = -0x4fff0000   # for reproducible results
+        if sys.maxint <= 2**32:
+            pos = -0x4fff0000   # for reproducible results
+        else:
+            pos = 0x4fde00000000
     hint = Hint()
 
     def alloc(map_size):
