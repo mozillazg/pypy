@@ -793,11 +793,6 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                 if (!PyArg_ParseTuple(args, "l", &intval))
                     return NULL;
 
-                IntLike_Type.tp_as_number = &intlike_as_number;
-                IntLike_Type.tp_flags |= Py_TPFLAGS_DEFAULT | Py_TPFLAGS_CHECKTYPES;
-                intlike_as_number.nb_add = intlike_nb_add;
-                intlike_as_number.nb_power = intlike_nb_pow;
-                if (PyType_Ready(&IntLike_Type) < 0) return NULL;
                 intObj = PyObject_New(IntLikeObject, &IntLike_Type);
                 if (!intObj) {
                     return NULL;
@@ -814,8 +809,6 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                 if (!PyArg_ParseTuple(args, "l", &intval))
                     return NULL;
 
-                IntLike_Type_NoOp.tp_flags |= Py_TPFLAGS_DEFAULT | Py_TPFLAGS_CHECKTYPES;
-                if (PyType_Ready(&IntLike_Type_NoOp) < 0) return NULL;
                 intObjNoOp = PyObject_New(IntLikeObjectNoOp, &IntLike_Type_NoOp);
                 if (!intObjNoOp) {
                     return NULL;
@@ -823,6 +816,12 @@ class AppTestSlots(AppTestCpythonExtensionBase):
 
                 intObjNoOp->ival = intval;
                 return (PyObject *)intObjNoOp;
+             """),
+             ("switch_as_number", 'METH_NOARGS',
+             """
+                intlike_as_number2.nb_subtract = &intlike_nb_subtract;
+                IntLike_Type.tp_as_number = &intlike_as_number2;
+                Py_RETURN_NONE;
              """)], prologue=
             """
             #include <math.h>
@@ -856,7 +855,19 @@ class AppTestSlots(AppTestCpythonExtensionBase):
 
                 val2 = ((IntLikeObject *)(other))->ival;
                 return PyInt_FromLong((int)pow(val1,val2));
-             }
+            }
+            static PyObject * 
+            intlike_nb_subtract(PyObject *self, PyObject *other)
+            {
+                long val2, val1 = ((IntLikeObject *)(self))->ival;
+                if (PyInt_Check(other)) {
+                  long val2 = PyInt_AsLong(other);
+                  return PyInt_FromLong(val1-val2);
+                }
+
+                val2 = ((IntLikeObject *)(other))->ival;
+                return PyInt_FromLong(val1-val2);
+           }
 
             PyTypeObject IntLike_Type = {
                 PyObject_HEAD_INIT(0)
@@ -865,6 +876,7 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                 /*tp_basicsize*/        sizeof(IntLikeObject),
             };
             static PyNumberMethods intlike_as_number;
+            static PyNumberMethods intlike_as_number2;
 
             typedef struct
             {
@@ -878,6 +890,15 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                 /*tp_name*/             "IntLikeNoOp",
                 /*tp_basicsize*/        sizeof(IntLikeObjectNoOp),
             };
+            """, more_init=
+            """
+                IntLike_Type.tp_as_number = &intlike_as_number;
+                IntLike_Type.tp_flags |= Py_TPFLAGS_DEFAULT | Py_TPFLAGS_CHECKTYPES;
+                intlike_as_number.nb_add = intlike_nb_add;
+                intlike_as_number.nb_power = intlike_nb_pow;
+                if (PyType_Ready(&IntLike_Type) < 0) return;
+                IntLike_Type_NoOp.tp_flags |= Py_TPFLAGS_DEFAULT | Py_TPFLAGS_CHECKTYPES;
+                if (PyType_Ready(&IntLike_Type_NoOp) < 0) return;
             """)
         a = module.newInt(1)
         b = module.newInt(2)
@@ -887,6 +908,13 @@ class AppTestSlots(AppTestCpythonExtensionBase):
         assert (b + c) == 5
         assert (d + a) == 5
         assert pow(d,b) == 16
+
+        # Make sure tp_as_number slots can be assigned to after PyType_Ready,
+        # even if the slot was NULL at PyType_Ready
+        module.switch_as_number()
+        a = module.newInt(4)
+        b = module.newInt(2)
+        assert (a - b) == 2
 
     def test_tp_new_in_subclass_of_type(self):
         module = self.import_module(name='foo3')
