@@ -926,4 +926,12 @@ elif _MS_WINDOWS:
     def free(ptr, map_size):
         VirtualFree_safe(ptr, 0, MEM_RELEASE)
 
-# register_external here?
+    def allocate_memory_chunk(map_size):
+        # used by the memory allocator (in llarena.py, from minimarkpage.py)
+        null = lltype.nullptr(rffi.VOIDP.TO)
+        return VirtualAlloc_safe(null, map_size, MEM_COMMIT | MEM_RESERVE,
+                                 PAGE_READWRITE)
+
+    def free_memory_chunk(addr, map_size):
+        # used by the memory allocator (in llarena.py, from minimarkpage.py)
+        VirtualFree_safe(addr, 0, MEM_RELEASE)
