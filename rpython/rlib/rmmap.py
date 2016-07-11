@@ -912,8 +912,10 @@ elif _MS_WINDOWS:
         case of a sandboxed process
         """
         null = lltype.nullptr(rffi.VOIDP.TO)
-        res = VirtualAlloc_safe(null, map_size, MEM_COMMIT | MEM_RESERVE,
-                           PAGE_EXECUTE_READWRITE)
+        prot = PAGE_EXECUTE_READWRITE
+        if we_are_translated():
+            prot = NonConstant(prot)
+        res = VirtualAlloc_safe(null, map_size, MEM_COMMIT | MEM_RESERVE, prot)
         if not res:
             raise MemoryError
         arg = lltype.malloc(LPDWORD.TO, 1, zero=True, flavor='raw')
@@ -929,8 +931,11 @@ elif _MS_WINDOWS:
     def allocate_memory_chunk(map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
         null = lltype.nullptr(rffi.VOIDP.TO)
-        return VirtualAlloc_safe(null, map_size, MEM_COMMIT | MEM_RESERVE,
-                                 PAGE_READWRITE)
+        prot = PAGE_READWRITE
+        if we_are_translated():
+            prot = NonConstant(prot)
+        res = VirtualAlloc_safe(null, map_size, MEM_COMMIT | MEM_RESERVE, prot)
+        return res
 
     def free_memory_chunk(addr, map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
