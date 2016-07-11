@@ -131,6 +131,11 @@ class ArenaCollection(object):
         # arenas that were already in the 'dead_arenas' list at that
         # point (from the previous major collection) are really
         # returned to the OS.
+        #   Memory usage goes down quickly during the incremental
+        # major collection and up slowly the rest of the time.  The
+        # point of these two lists is to avoid constantly freeing and
+        # re-allocating arenas: we return to the OS the arenas that
+        # have been unused for a complete cycle already.
         self.dying_arenas = ARENA_NULL
         self.dead_arenas = ARENA_NULL
         #
