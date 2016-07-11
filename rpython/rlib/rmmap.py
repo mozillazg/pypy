@@ -924,6 +924,7 @@ elif _MS_WINDOWS:
         flags = MEM_COMMIT | MEM_RESERVE
         prot = PAGE_EXECUTE_READWRITE
         if we_are_translated():
+            null = NonConstant(null)
             flags = NonConstant(flags)
             prot = NonConstant(prot)
         res = VirtualAlloc_safe(null, map_size, flags, prot)
@@ -945,6 +946,7 @@ elif _MS_WINDOWS:
         flags = MEM_COMMIT | MEM_RESERVE
         prot = PAGE_READWRITE
         if we_are_translated():
+            null = NonConstant(null)
             flags = NonConstant(flags)
             prot = NonConstant(prot)
         res = VirtualAlloc_safe(null, map_size, flags, prot)
