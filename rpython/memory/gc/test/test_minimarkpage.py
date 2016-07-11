@@ -7,19 +7,18 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, llarena
 from rpython.rtyper.lltypesystem.llmemory import cast_ptr_to_adr
 
 NULL = llmemory.NULL
-SHIFT = WORD
 hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
 
 
 def test_allocate_arena():
-    ac = ArenaCollection(SHIFT + 64*20, 64, 1)
+    ac = ArenaCollection(64*20, 64, 1)
     ac.allocate_new_arena()
     assert ac.num_uninitialized_pages == 20
     upages = ac.current_arena.freepages
     upages + 64*20   # does not raise
     py.test.raises(llarena.ArenaError, "upages + 64*20 + 1")
     #
-    ac = ArenaCollection(SHIFT + 64*20 + 7, 64, 1)
+    ac = ArenaCollection(64*20 + 7, 64, 1)
     ac.allocate_new_arena()
     assert ac.num_uninitialized_pages == 20
     upages = ac.current_arena.freepages

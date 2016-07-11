@@ -18,11 +18,10 @@ assert 1 << WORD_POWER_2 == WORD
 
 ARENA_PTR = lltype.Ptr(lltype.ForwardReference())
 ARENA = lltype.Struct('ArenaReference',
-    # -- The address of the arena, as returned by malloc()
+    # -- The address of the arena, as returned by arena_mmap()
     ('base', llmemory.Address),
-    # -- The number of free and the total number of pages in the arena
+    # -- The number of free pages in the arena
     ('nfreepages', lltype.Signed),
-    ('totalpages', lltype.Signed),
     # -- A chained list of free pages in the arena.  Ends with NULL.
     ('freepages', llmemory.Address),
     # -- A linked list of arenas.  See below.
@@ -113,14 +112,14 @@ class ArenaCollection(object):
         for i in range(1, length):
             self.nblocks_for_size[i] = (page_size - self.hdrsize) // (WORD * i)
         #
-        self.max_pages_per_arena = arena_size // page_size
+        self.pages_per_arena = arena_size // page_size
         self.arenas_lists = lltype.malloc(rffi.CArray(ARENA_PTR),
-                                          self.max_pages_per_arena,
+                                          self.pages_per_arena,
                                           flavor='raw', zero=True,
                                           immortal=True)
         # this is used in mass_free() only
         self.old_arenas_lists = lltype.malloc(rffi.CArray(ARENA_PTR),
-                                              self.max_pages_per_arena,
+                                              self.pages_per_arena,
                                               flavor='raw', zero=True,
                                               immortal=True)
         #
@@ -158,7 +157,7 @@ class ArenaCollection(object):
         self.current_arena = ARENA_NULL
         #
         # guarantee that 'arenas_lists[1:min_empty_nfreepages]' are all empty
-        self.min_empty_nfreepages = self.max_pages_per_arena
+        self.min_empty_nfreepages = self.pages_per_arena
         #
         # part of current_arena might still contain uninitialized pages
         self.num_uninitialized_pages = 0
@@ -284,7 +283,7 @@ class ArenaCollection(object):
         # but > 0.  Use caching with 'min_empty_nfreepages', which guarantees
         # that 'arenas_lists[1:min_empty_nfreepages]' are all empty.
         i = self.min_empty_nfreepages
-        while i < self.max_pages_per_arena:
+        while i < self.pages_per_arena:
             #
             if self.arenas_lists[i] != ARENA_NULL:
                 #
@@ -328,30 +327,21 @@ class ArenaCollection(object):
             self.mreset_arenas = arena.nextarena
         else:
             #
-            # 'arena_base' points to the start of malloced memory.  It might
-            # not be a page-aligned address depending on the underlying call
-            # (although with mmap() it should be).
+            # 'arena_base' points to the start of malloced memory.  It is
+            # aligned to a physical page (although self.page_size is
+            # typically two physical pages on 64-bit).
             arena_base = llarena.arena_mmap(self.arena_size)
             if not arena_base:
                 out_of_memory("out of memory: couldn't allocate the next arena")
-            arena_end = arena_base + self.arena_size
-            #
-            # 'firstpage' points to the first unused page
-            firstpage = start_of_page(arena_base + self.page_size - 1,
-                                      self.page_size)
-            # 'npages' is the number of full pages just allocated
-            npages = (arena_end - firstpage) // self.page_size
             #
             # Allocate an ARENA object and initialize it
             arena = lltype.malloc(ARENA, flavor='raw', track_allocation=False)
             arena.base = arena_base
-            arena.totalpages = npages
         #
         arena.nfreepages = 0        # they are all uninitialized pages
-        arena.freepages = start_of_page(arena.base + self.page_size - 1,
-                                        self.page_size)
+        arena.freepages = arena.base
         arena.nextarena = ARENA_NULL
-        self.num_uninitialized_pages = arena.totalpages
+        self.num_uninitialized_pages = self.pages_per_arena
         self.current_arena = arena
         #
     allocate_new_arena._dont_inline_ = True
@@ -443,17 +433,17 @@ class ArenaCollection(object):
             self.arenas_lists, self.old_arenas_lists)
         #
         i = 0
-        while i < self.max_pages_per_arena:
+        while i < self.pages_per_arena:
             self.arenas_lists[i] = ARENA_NULL
             i += 1
         #
         i = 0
-        while i < self.max_pages_per_arena:
+        while i < self.pages_per_arena:
             arena = self.old_arenas_lists[i]
             while arena != ARENA_NULL:
                 nextarena = arena.nextarena
                 #
-                if arena.nfreepages == arena.totalpages:
+                if arena.nfreepages == self.pages_per_arena:
                     #
                     # The whole arena is empty.  Move it to the dying list.
                     arena.nextarena = self.dying_arenas
@@ -465,8 +455,8 @@ class ArenaCollection(object):
                 else:
                     # Insert 'arena' in the correct arenas_lists[n]
                     n = arena.nfreepages
-                    ll_assert(n < self.max_pages_per_arena,
-                             "totalpages != nfreepages >= max_pages_per_arena")
+                    ll_assert(n < self.pages_per_arena,
+                             "nfreepages > pages_per_arena")
                     arena.nextarena = self.arenas_lists[n]
                     self.arenas_lists[n] = arena
                 #
@@ -543,7 +533,7 @@ class ArenaCollection(object):
         """Free a whole page."""
         #
         # Insert the freed page in the arena's 'freepages' list.
-        # If nfreepages == totalpages, then it will be freed at the
+        # If nfreepages == pages_per_arena, then it will be freed at the
         # end of mass_free().
         arena = page.arena
         arena.nfreepages += 1
@@ -635,21 +625,6 @@ class ArenaCollection(object):
 
 # ____________________________________________________________
 # Helpers to go from a pointer to the start of its page
-
-def start_of_page(addr, page_size):
-    """Return the address of the start of the page that contains 'addr'."""
-    if we_are_translated():
-        offset = llmemory.cast_adr_to_int(addr) % page_size
-        return addr - offset
-    else:
-        return _start_of_page_untranslated(addr, page_size)
-
-def _start_of_page_untranslated(addr, page_size):
-    assert isinstance(addr, llarena.fakearenaaddress)
-    shift = WORD  # for testing, we assume that the whole arena is not
-                  # on a page boundary
-    ofs = ((addr.offset - shift) // page_size) * page_size + shift
-    return llarena.fakearenaaddress(addr.arena, ofs)
 
 def _dummy_size(size):
     if we_are_translated():
