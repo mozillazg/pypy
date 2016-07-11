@@ -124,20 +124,31 @@ class ArenaCollection(object):
                                               flavor='raw', zero=True,
                                               immortal=True)
         #
-        # two lists of completely free arenas.  These arenas are
-        # pending to be returned to the OS.  They are first added to
-        # the 'dying_arenas' list when the major collection runs.  At
-        # the end, they are moved to the 'dead_arenas' list, and all
+        # three lists of completely free arenas, classified in terms of
+        # their age, measured as the number of "end major collection"
+        # since they are completely free:
+        #
+        # * 'dying_arenas': age = 0
+        # * 'dead_arenas': age = 1
+        # * 'mreset_arenas': age >= 2
+        #
+        # The 'mreset_arenas' have been returned to the OS with
+        # llarena.arena_mreset().
+        #
+        # The idea is that free arenas are first added to the
+        # 'dying_arenas' list when the major collection runs.  At the
+        # end, they are moved to the 'dead_arenas' list, and all
         # arenas that were already in the 'dead_arenas' list at that
         # point (from the previous major collection) are really
-        # returned to the OS.
-        #   Memory usage goes down quickly during the incremental
-        # major collection and up slowly the rest of the time.  The
-        # point of these two lists is to avoid constantly freeing and
+        # returned to the OS, and moved to the 'mreset_arenas' list.
+        # Memory usage goes down quickly during the incremental major
+        # collection and up slowly the rest of the time.  The point of
+        # these three lists is to avoid constantly freeing and
         # re-allocating arenas: we return to the OS the arenas that
         # have been unused for a complete cycle already.
         self.dying_arenas = ARENA_NULL
         self.dead_arenas = ARENA_NULL
+        self.mreset_arenas = ARENA_NULL
         #
         # the arena currently consumed; it must have at least one page
         # available, or be NULL.  The arena object that we point to is
@@ -305,13 +316,16 @@ class ArenaCollection(object):
             for a in self._all_arenas():
                 assert a.nfreepages == 0
         #
-        # Maybe we have a dying or a dead arena.
+        # Maybe we have a dying or a dead or a mreset arena.
         if self.dying_arenas:
             arena = self.dying_arenas
             self.dying_arenas = arena.nextarena
         elif self.dead_arenas:
             arena = self.dead_arenas
             self.dead_arenas = arena.nextarena
+        elif self.mreset_arenas:
+            arena = self.mreset_arenas
+            self.mreset_arenas = arena.nextarena
         else:
             #
             # 'arena_base' points to the start of malloced memory.  It might
@@ -343,16 +357,20 @@ class ArenaCollection(object):
     allocate_new_arena._dont_inline_ = True
 
 
-    def kill_dying_arenas(self):
-        """Return to the OS all dead arenas, and then move the 'dying'
-        arenas to the 'dead' arenas list.
+    def mreset_dead_arenas(self):
+        """Return to the OS all 'dead' arenas and move them to the
+        'mreset' arenas list, and then move the 'dying' arenas to the
+        'dead' arenas list.
         """
         arena = self.dead_arenas
+        mreset_head = self.mreset_arenas
         while arena:
             nextarena = arena.nextarena
-            llarena.arena_munmap(arena.base, self.arena_size)
-            lltype.free(arena, flavor='raw', track_allocation=False)
+            llarena.arena_mreset(arena.base, self.arena_size)
+            arena.nextarena = mreset_head
+            mreset_head = arena
             arena = nextarena
+        self.mreset_arenas = mreset_head
         self.dead_arenas = self.dying_arenas
         self.dying_arenas = ARENA_NULL
 
@@ -402,7 +420,7 @@ class ArenaCollection(object):
         if size_class >= 0:
             self._rehash_arenas_lists()
             self.size_class_with_old_pages = -1
-            self.kill_dying_arenas()
+            self.mreset_dead_arenas()
         #
         return True
 

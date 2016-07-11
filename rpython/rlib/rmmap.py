@@ -76,7 +76,8 @@ elif _MS_WINDOWS:
     constant_names = ['PAGE_READONLY', 'PAGE_READWRITE', 'PAGE_WRITECOPY',
                       'FILE_MAP_READ', 'FILE_MAP_WRITE', 'FILE_MAP_COPY',
                       'DUPLICATE_SAME_ACCESS', 'MEM_COMMIT', 'MEM_RESERVE',
-                      'MEM_RELEASE', 'PAGE_EXECUTE_READWRITE', 'PAGE_NOACCESS']
+                      'MEM_RELEASE', 'PAGE_EXECUTE_READWRITE', 'PAGE_NOACCESS',
+                      'MEM_RESET']
     for name in constant_names:
         setattr(CConfig, name, rffi_platform.ConstantInteger(name))
 
@@ -703,9 +704,17 @@ if _POSIX:
             res = rffi.cast(PTR, 0)
         return res
 
-    def free_memory_chunk(addr, map_size):
+    def reset_memory_chunk(addr, map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
-        c_munmap_safe(addr, rffi.cast(size_t, map_size))
+        # to release the memory currently held in a memory chunk, possibly
+        # zeroing it, but keep that memory chunk available for future use.
+        # should only be used on allocate_memory_chunk() memory.
+        flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED
+        prot = PROT_READ | PROT_WRITE
+        if we_are_translated():
+            flags = NonConstant(flags)
+            prot = NonConstant(prot)
+        c_mmap_safe(rffi.cast(PTR, addr), map_size, prot, flags, -1, 0)
 
     def alloc_hinted(hintp, map_size):
         flags = MAP_PRIVATE | MAP_ANONYMOUS
@@ -912,10 +921,12 @@ elif _MS_WINDOWS:
         case of a sandboxed process
         """
         null = lltype.nullptr(rffi.VOIDP.TO)
+        flags = MEM_COMMIT | MEM_RESERVE
         prot = PAGE_EXECUTE_READWRITE
         if we_are_translated():
+            flags = NonConstant(flags)
             prot = NonConstant(prot)
-        res = VirtualAlloc_safe(null, map_size, MEM_COMMIT | MEM_RESERVE, prot)
+        res = VirtualAlloc_safe(null, map_size, flags, prot)
         if not res:
             raise MemoryError
         arg = lltype.malloc(LPDWORD.TO, 1, zero=True, flavor='raw')
@@ -931,12 +942,19 @@ elif _MS_WINDOWS:
     def allocate_memory_chunk(map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
         null = lltype.nullptr(rffi.VOIDP.TO)
+        flags = MEM_COMMIT | MEM_RESERVE
         prot = PAGE_READWRITE
         if we_are_translated():
+            flags = NonConstant(flags)
             prot = NonConstant(prot)
-        res = VirtualAlloc_safe(null, map_size, MEM_COMMIT | MEM_RESERVE, prot)
+        res = VirtualAlloc_safe(null, map_size, flags, prot)
         return res
 
-    def free_memory_chunk(addr, map_size):
+    def reset_memory_chunk(addr, map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
-        VirtualFree_safe(addr, 0, MEM_RELEASE)
+        flags = MEM_RESET
+        prot = PAGE_READWRITE
+        if we_are_translated():
+            flags = NonConstant(flags)
+            prot = NonConstant(prot)
+        VirtualAlloc_safe(rffi.cast(rffi.VOIDP, addr), map_size, flags, prot)

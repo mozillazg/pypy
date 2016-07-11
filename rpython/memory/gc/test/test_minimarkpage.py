@@ -421,12 +421,13 @@ def test_random(incremental=False):
         print '-' * 80
         ac.__class__.allocate_new_arena(ac)
         a = ac.current_arena.base.arena
-        def my_mark_freed():
-            a.freed = True
+        def my_mreset():
+            a.__class__.mreset(a)
             DoneTesting.counter += 1
             if DoneTesting.counter > 3:
                 raise DoneTesting
-        a.mark_freed = my_mark_freed
+        a.mark_freed = "not callable"
+        a.mreset = my_mreset
     ac.allocate_new_arena = my_allocate_new_arena
 
     def allocate_object(live_objects):

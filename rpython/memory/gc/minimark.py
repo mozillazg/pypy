@@ -634,11 +634,13 @@ class MiniMarkGC(MovingGCBase):
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
 
-    def collect(self, gen=1):
+    def collect(self, gen=2):
         """Do a minor (gen=0) or major (gen>0) collection."""
         self.minor_collection()
         if gen > 0:
             self.major_collection()
+            if gen > 1:
+                self.ac.mreset_dead_arenas()
 
     def move_nursery_top(self, totalsize):
         size = self.nursery_cleanup

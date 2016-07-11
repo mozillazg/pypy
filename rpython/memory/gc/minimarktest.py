@@ -57,5 +57,5 @@ class SimpleArenaCollection(object):
         res = self.mass_free_incremental(ok_to_free_func, sys.maxint)
         assert res
 
-    def kill_dying_arenas(self):
+    def mreset_dead_arenas(self):
         pass

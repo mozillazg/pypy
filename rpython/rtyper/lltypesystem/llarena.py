@@ -133,6 +133,11 @@ class Arena(object):
     def mark_freed(self):
         self.freed = True    # this method is a hook for tests
 
+    def mreset(self):        # this method is a hook for tests
+        assert self.mmaped
+        self.reset(False)
+        assert not self.objectptrs
+
     def set_protect(self, inaccessible):
         if inaccessible:
             assert self.protect_inaccessible is None
@@ -318,8 +323,9 @@ class RoundedUpForAllocation(llmemory.AddressOffset):
 # arena_new_view(ptr) is a no-op when translated, returns fresh view
 # on previous arena when run on top of llinterp
 
-# arena_mmap() and arena_munmap() are similar to arena_malloc(zero=True)
-# and arena_free(), but use the OS's mmap() function.
+# arena_mmap() is similar to arena_malloc(zero=True), but uses the
+# OS's mmap() function.  We can then use arena_mreset() on the result
+# to reset memory content (i.e. mark as free, possibly reset to zero)
 
 def arena_malloc(nbytes, zero):
     """Allocate and return a new arena, optionally zero-initialized."""
@@ -327,12 +333,9 @@ def arena_malloc(nbytes, zero):
 
 def arena_free(arena_addr):
     """Release an arena."""
-    _arena_free(arena_addr, mmaped=False)
-
-def _arena_free(arena_addr, mmaped):
     assert isinstance(arena_addr, fakearenaaddress)
     assert arena_addr.offset == 0
-    assert arena_addr.arena.mmaped == mmaped
+    assert not arena_addr.arena.mmaped
     arena_addr.arena.reset(False)
     assert not arena_addr.arena.objectptrs
     arena_addr.arena.mark_freed()
@@ -341,9 +344,15 @@ def arena_mmap(nbytes):
     """Allocate a new arena using mmap()."""
     return Arena(nbytes, zero=True, mmaped=True).getaddr(0)
 
-def arena_munmap(arena_addr, original_nbytes):
-    """Release an arena allocated with arena_mmap()."""
-    _arena_free(arena_addr, mmaped=True)
+def arena_mreset(arena_addr, original_nbytes):
+    """Reset a complete arena allocated with arena_mmap().
+    Equivalent to arena_reset(..., zero=0), but really tries
+    to return the memory to the OS until the next access.
+    """
+    assert isinstance(arena_addr, fakearenaaddress)
+    assert arena_addr.offset == 0
+    assert arena_addr.arena.nbytes == original_nbytes
+    arena_addr.arena.mreset()
 
 def arena_reset(arena_addr, size, zero):
     """Free all objects in the arena, which can then be reused.
@@ -526,9 +535,9 @@ def llimpl_arena_mmap(nbytes):
     from rpython.rlib import rmmap
     return rffi.cast(llmemory.Address, rmmap.allocate_memory_chunk(nbytes))
 
-def llimpl_arena_munmap(addr, nbytes):
+def llimpl_arena_mreset(addr, nbytes):
     from rpython.rlib import rmmap
-    rmmap.free_memory_chunk(rffi.cast(rmmap.PTR, addr), nbytes)
+    rmmap.reset_memory_chunk(rffi.cast(rmmap.PTR, addr), nbytes)
 
 register_external(arena_mmap, [int], llmemory.Address,
                   'll_arena.arena_mmap',
@@ -536,10 +545,10 @@ register_external(arena_mmap, [int], llmemory.Address,
                   llfakeimpl=arena_mmap,
                   sandboxsafe=True)
 
-register_external(arena_munmap, [llmemory.Address, int], None,
-                  'll_arena.arena_munmap',
-                  llimpl=llimpl_arena_munmap,
-                  llfakeimpl=arena_munmap,
+register_external(arena_mreset, [llmemory.Address, int], None,
+                  'll_arena.arena_mreset',
+                  llimpl=llimpl_arena_mreset,
+                  llfakeimpl=arena_mreset,
                   sandboxsafe=True)
 
 def llimpl_arena_reset(arena_addr, size, zero):

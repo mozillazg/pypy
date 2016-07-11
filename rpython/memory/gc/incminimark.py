@@ -739,9 +739,9 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 self.major_collection_step()
         else:
             self.minor_and_major_collection()
-            if gen >= 3:
-                self.ac.kill_dying_arenas()
         self.rrc_invoke_callback()
+        if gen >= 3:
+            self.ac.mreset_dead_arenas()
 
 
     def minor_collection_with_major_progress(self, extrasize=0):
