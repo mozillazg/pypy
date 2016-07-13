@@ -8,7 +8,7 @@ pypy/module/mmap/.
 
 from rpython.rtyper.tool import rffi_platform
 from rpython.rtyper.lltypesystem import rffi, lltype
-from rpython.rlib import rposix
+from rpython.rlib import rposix, rgc, jit
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.nonconst import NonConstant
@@ -109,8 +109,7 @@ if rffi.sizeof(off_t) > rffi.sizeof(lltype.Signed):
 else:
     HAVE_LARGEFILE_SUPPORT = False
 
-def external(name, args, result, save_err_on_unsafe=0, save_err_on_safe=0,
-             **kwargs):
+def external(name, args, result, save_err_on_unsafe=0, **kwargs):
     unsafe = rffi.llexternal(name, args, result,
                              compilation_info=CConfig._compilation_info_,
                              save_err=save_err_on_unsafe,
@@ -118,7 +117,7 @@ def external(name, args, result, save_err_on_unsafe=0, save_err_on_safe=0,
     safe = rffi.llexternal(name, args, result,
                            compilation_info=CConfig._compilation_info_,
                            sandboxsafe=True, releasegil=False,
-                           save_err=save_err_on_safe,
+                           _nowrapper=True,
                            **kwargs)
     return unsafe, safe
 
@@ -330,7 +329,8 @@ class MMap(object):
             Per munmap(1), the offset must be a multiple of the page size,
             and the size will be rounded up to a multiple of the page size.
             """
-            c_munmap_safe(self.getptr(offset), size)
+            c_munmap_safe(self.getptr(offset),
+                          rffi.cast(size_t, size))
 
     def close(self):
         if _MS_WINDOWS:
@@ -704,14 +704,19 @@ if _POSIX:
         # to release the memory currently held in a memory chunk, possibly
         # zeroing it, but keep that memory chunk available for future use.
         # should only be used on allocate_memory_chunk() memory.
-        flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED
+        flags = MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS
         prot = PROT_READ | PROT_WRITE
-        if we_are_translated():
-            flags = NonConstant(flags)
-            prot = NonConstant(prot)
-        c_mmap_safe(rffi.cast(PTR, addr), map_size, prot, flags, -1, 0)
-        # ignore unlikely errors
+        addr = rffi.cast(PTR, addr)
+        res = c_mmap_safe(addr,
+                          rffi.cast(size_t, map_size),
+                          rffi.cast(rffi.INT, prot),
+                          rffi.cast(rffi.INT, flags),
+                          rffi.cast(rffi.INT, -1),
+                          rffi.cast(off_t, 0))
+        return res == addr
 
+    @rgc.no_collect
+    @jit.dont_look_inside
     def mmap_hinted(hint, map_size):
         from errno import ENOMEM
         from rpython.rlib import debug
@@ -721,24 +726,30 @@ if _POSIX:
             #      PROT_EXEC but Cygwin's fork() fails.  mprotect()
             #      cannot be used, but seems to be unnecessary there.
             #      Just use malloc().
-            return c_malloc_safe(map_size)
+            return c_malloc_safe(rffi.cast(size_t, map_size))
 
         flags = MAP_PRIVATE | MAP_ANONYMOUS
-        if we_are_translated():
-            flags = NonConstant(flags)
         pos = hint.pos
         if hint.direction < 0:
             pos -= map_size
-        res = c_mmap_safe(rffi.cast(PTR, pos), map_size,
-                          hint.prot, flags, -1, 0)
+        res = c_mmap_safe(rffi.cast(PTR, pos),
+                          rffi.cast(size_t, map_size),
+                          rffi.cast(rffi.INT, hint.prot),
+                          rffi.cast(rffi.INT, flags),
+                          rffi.cast(rffi.INT, -1),
+                          rffi.cast(off_t, 0))
         if res == rffi.cast(PTR, -1):
             # some systems (some versions of OS/X?) complain if they
             # are passed a non-zero address.  Try again without a hint.
-            res = c_mmap_safe(rffi.cast(PTR, 0), map_size,
-                              hint.prot, flags, -1, 0)
+            res = c_mmap_safe(rffi.cast(PTR, 0),
+                              rffi.cast(size_t, map_size),
+                              rffi.cast(rffi.INT, hint.prot),
+                              rffi.cast(rffi.INT, flags),
+                              rffi.cast(rffi.INT, -1),
+                              rffi.cast(off_t, 0))
             if res == rffi.cast(PTR, -1):
                 # ENOMEM simply raises MemoryError, but other errors are fatal
-                if rposix.get_saved_errno() != ENOMEM:
+                if intmask(rposix._get_errno()) != ENOMEM:
                     if hint.prot & PROT_EXEC:
                         debug.fatalerror_notb(
                             "Got an unexpected error trying to allocate some "
@@ -756,14 +767,7 @@ if _POSIX:
         return res
 
     def clear_large_memory_chunk_aligned(addr, map_size):
-        addr = rffi.cast(PTR, addr)
-        flags = MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS
-        prot = PROT_READ | PROT_WRITE
-        if we_are_translated():
-            flags = NonConstant(flags)
-            prot = NonConstant(prot)
-        res = c_mmap_safe(addr, map_size, prot, flags, -1, 0)
-        return res == addr
+        return reset_memory_chunk(rffi.cast(PTR, addr), map_size)
 
     # gives a hint to mmap(), for reproducible results, but also to
     # avoid the following problem.  We use both malloc() for all large
@@ -813,10 +817,12 @@ if _POSIX:
         return res
     alloc._annenforceargs_ = (int,)
 
-    if _CYGWIN:
-        free = c_free_safe
-    else:
-        free = c_munmap_safe
+    def free(addr, map_size):
+        if _CYGWIN:
+            _free = c_free_safe
+        else:
+            _free = c_munmap_safe
+        _free(rffi.cast(PTR, addr), rffi.cast(size_t, map_size))
 
 elif _MS_WINDOWS:
     def mmap(fileno, length, tagname="", access=_ACCESS_DEFAULT, offset=0):
