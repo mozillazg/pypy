@@ -73,6 +73,11 @@ class TestMMap:
         f.write(size*4096*"c")
         f.flush()
 
+        class Hint:
+            prot = mmap.PROT_EXEC | mmap.PROT_READ | mmap.PROT_WRITE
+            direction = -1
+        hint = Hint()
+
         def func(no):
             m = mmap.mmap(no, size*4096)
             m.unmap_range(left*4096, (right-left)*4096)
@@ -84,7 +89,8 @@ class TestMMap:
                 return rffi.ptradd(m.data, offset)
             def as_num(ptr):
                 return rffi.cast(lltype.Unsigned, ptr)
-            res = mmap.alloc_hinted(in_map(m, (left+right)/2 * 4096), 4096)
+            hint.pos = rffi.cast(lltype.Signed, in_map(m, (left+right)/2 * 4096))
+            res = mmap.mmap_hinted(hint, 4096)
             assert as_num(in_map(m, left*4096)) <= as_num(res) < as_num(in_map(m, right*4096))
         interpret(func, [f.fileno()])
         f.close()

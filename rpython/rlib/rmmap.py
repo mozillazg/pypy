@@ -694,15 +694,10 @@ if _POSIX:
 
     def allocate_memory_chunk(map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
-        flags = MAP_PRIVATE | MAP_ANONYMOUS
-        prot = PROT_READ | PROT_WRITE
+        hint = hint_regular
         if we_are_translated():
-            flags = NonConstant(flags)
-            prot = NonConstant(prot)
-        res = c_mmap_safe(rffi.cast(PTR, 0), map_size, prot, flags, -1, 0)
-        if res == rffi.cast(PTR, -1):
-            res = rffi.cast(PTR, 0)
-        return res
+            hint = NonConstant(hint)
+        return mmap_hinted(hint, map_size)
 
     def reset_memory_chunk(addr, map_size):
         # used by the memory allocator (in llarena.py, from minimarkpage.py)
@@ -715,14 +710,50 @@ if _POSIX:
             flags = NonConstant(flags)
             prot = NonConstant(prot)
         c_mmap_safe(rffi.cast(PTR, addr), map_size, prot, flags, -1, 0)
+        # ignore unlikely errors
 
-    def alloc_hinted(hintp, map_size):
+    def mmap_hinted(hint, map_size):
+        from errno import ENOMEM
+        from rpython.rlib import debug
+
+        if _CYGWIN:
+            # XXX: JIT memory should be using mmap MAP_PRIVATE with
+            #      PROT_EXEC but Cygwin's fork() fails.  mprotect()
+            #      cannot be used, but seems to be unnecessary there.
+            #      Just use malloc().
+            return c_malloc_safe(map_size)
+
         flags = MAP_PRIVATE | MAP_ANONYMOUS
-        prot = PROT_EXEC | PROT_READ | PROT_WRITE
         if we_are_translated():
             flags = NonConstant(flags)
-            prot = NonConstant(prot)
-        return c_mmap_safe(hintp, map_size, prot, flags, -1, 0)
+        pos = hint.pos
+        if hint.direction < 0:
+            pos -= map_size
+        res = c_mmap_safe(rffi.cast(PTR, pos), map_size,
+                          hint.prot, flags, -1, 0)
+        if res == rffi.cast(PTR, -1):
+            # some systems (some versions of OS/X?) complain if they
+            # are passed a non-zero address.  Try again without a hint.
+            res = c_mmap_safe(rffi.cast(PTR, 0), map_size,
+                              hint.prot, flags, -1, 0)
+            if res == rffi.cast(PTR, -1):
+                # ENOMEM simply raises MemoryError, but other errors are fatal
+                if rposix.get_saved_errno() != ENOMEM:
+                    if hint.prot & PROT_EXEC:
+                        debug.fatalerror_notb(
+                            "Got an unexpected error trying to allocate some "
+                            "memory for the JIT (tried to do mmap() with "
+                            "PROT_EXEC|PROT_READ|PROT_WRITE).  This can be caused "
+                            "by a system policy like PAX.  You need to find how "
+                            "to work around the policy on your system.")
+                    else:
+                        debug.fatalerror_notb(
+                            "Got an unexpected error trying to allocate memory "
+                            "with mmap().  Cannot continue.")
+                return rffi.cast(PTR, 0)
+        else:
+            hint.pos += map_size * hint.direction
+        return res
 
     def clear_large_memory_chunk_aligned(addr, map_size):
         addr = rffi.cast(PTR, addr)
@@ -734,47 +765,51 @@ if _POSIX:
         res = c_mmap_safe(addr, map_size, prot, flags, -1, 0)
         return res == addr
 
-    # XXX is this really necessary?
-    class Hint:
-        if sys.maxint <= 2**32:
-            pos = -0x4fff0000   # for reproducible results
-        else:
-            pos = 0x4fde00000000
-    hint = Hint()
+    # gives a hint to mmap(), for reproducible results, but also to
+    # avoid the following problem.  We use both malloc() for all large
+    # objects, and direct mmap() of 512KB arenas for small objects.
+    # Without any hint, the mmap() tend to go just after the malloc()
+    # zone; and then the malloc() zone cannot grow and fragments.  We
+    # avoid that by hinting the mmap()s to go somewhere else.
+    #
+    # The 'hint_regular' decrements.  We also allocate a few smaller
+    # executable zones for the JIT's machine code; this is 'hint_jit'
+    # which increments.
+    #
+    # These hints are valid on Linux.  XXX check on OS/X and possibly
+    # elsewhere.
+    #
+    # Using a 'Struct' instead of a regular 'class' as a way to work
+    # around the multiple steps of a translation.
+
+    HINT = lltype.Struct('HINT', ('pos', lltype.Signed),
+                                 ('direction', lltype.Signed),
+                                 ('prot', lltype.Signed))
+
+    hint_regular = lltype.malloc(HINT, flavor='raw', immortal=True)
+    if sys.maxint <= 2**32:
+        hint_regular.pos = -0x20000000
+    else:
+        hint_regular.pos = 0x4fde00000000
+    hint_regular.direction = -1
+    hint_regular.prot = PROT_READ | PROT_WRITE
+
+    hint_jit = lltype.malloc(HINT, flavor='raw', immortal=True)
+    hint_jit.pos = hint_regular.pos
+    hint_jit.direction = +1
+    hint_jit.prot = PROT_EXEC | PROT_READ | PROT_WRITE
 
     def alloc(map_size):
         """Allocate memory.  This is intended to be used by the JIT,
         so the memory has the executable bit set and gets allocated
         internally in case of a sandboxed process.
         """
-        from errno import ENOMEM
-        from rpython.rlib import debug
-
-        if _CYGWIN:
-            # XXX: JIT memory should be using mmap MAP_PRIVATE with
-            #      PROT_EXEC but Cygwin's fork() fails.  mprotect()
-            #      cannot be used, but seems to be unnecessary there.
-            res = c_malloc_safe(map_size)
-            if res == rffi.cast(PTR, 0):
-                raise MemoryError
-            return res
-        res = alloc_hinted(rffi.cast(PTR, hint.pos), map_size)
-        if res == rffi.cast(PTR, -1):
-            # some systems (some versions of OS/X?) complain if they
-            # are passed a non-zero address.  Try again.
-            res = alloc_hinted(rffi.cast(PTR, 0), map_size)
-            if res == rffi.cast(PTR, -1):
-                # ENOMEM simply raises MemoryError, but other errors are fatal
-                if rposix.get_saved_errno() != ENOMEM:
-                    debug.fatalerror_notb(
-                        "Got an unexpected error trying to allocate some "
-                        "memory for the JIT (tried to do mmap() with "
-                        "PROT_EXEC|PROT_READ|PROT_WRITE).  This can be caused "
-                        "by a system policy like PAX.  You need to find how "
-                        "to work around the policy on your system.")
-                raise MemoryError
-        else:
-            hint.pos += map_size
+        hint = hint_jit
+        if we_are_translated():
+            hint = NonConstant(hint)
+        res = mmap_hinted(hint, map_size)
+        if res == rffi.cast(PTR, 0):
+            raise MemoryError
         return res
     alloc._annenforceargs_ = (int,)
 
@@ -908,11 +943,6 @@ elif _MS_WINDOWS:
             rwin32.CloseHandle_no_err(m.map_handle)
         m.map_handle = INVALID_HANDLE
         raise winerror
-
-    class Hint:
-        pos = -0x4fff0000   # for reproducible results
-    hint = Hint()
-    # XXX this has no effect on windows
 
     def alloc(map_size):
         """Allocate memory.  This is intended to be used by the JIT,
