@@ -12,6 +12,7 @@ class ListChangeUnallowed(AnnotatorError):
 class ListItem(object):
     mutated = False    # True for lists mutated after creation
     resized = False    # True for lists resized after creation
+    deque_hinted = False # True for 'list_implemented_as_deque()'
     range_step = None  # the step -- only for lists only created by a range()
     dont_change_any_more = False   # set to True when too late for changes
     immutable = False  # for getattr out of _immutable_fields_ = ['attr[*]']
@@ -49,6 +50,13 @@ class ListItem(object):
                 raise ListChangeUnallowed("resizing list")
             self.resized = True
 
+    def deque_hint(self):
+        if not self.deque_hinted:
+            if self.dont_change_any_more:
+                raise TooLateForChange
+            self.resize()
+            self.deque_hinted = True
+
     def setrangestep(self, step):
         if step != self.range_step:
             if self.dont_change_any_more:
@@ -79,6 +87,8 @@ class ListItem(object):
                 self.mutate()
             if other.resized:
                 self.resize()
+            if other.deque_hinted:
+                self.deque_hint()
             if other.range_step != self.range_step:
                 self.setrangestep(self._step_map[type(self.range_step),
                                                  type(other.range_step)])
@@ -173,9 +183,10 @@ class ListDef(object):
         self.listitem.merge(newlistitem)
 
     def __repr__(self):
-        return '<[%r]%s%s%s%s>' % (self.listitem.s_value,
+        return '<[%r]%s%s%s%s%s>' % (self.listitem.s_value,
                                self.listitem.mutated and 'm' or '',
                                self.listitem.resized and 'r' or '',
+                               self.listitem.deque_hinted and 'd' or '',
                                self.listitem.immutable and 'I' or '',
                                self.listitem.must_not_resize and '!R' or '')
 
@@ -185,6 +196,10 @@ class ListDef(object):
     def resize(self):
         self.listitem.mutate()
         self.listitem.resize()
+
+    def deque_hint(self):
+        self.resize()
+        self.listitem.deque_hint()
 
     def never_resize(self):
         if self.listitem.resized:

@@ -4631,6 +4631,20 @@ class TestAnnotateTestCase:
         assert ('string formatting requires a constant string/unicode'
                 in str(e.value))
 
+    def test_list_implemented_as_deque(self):
+        def f(x):
+            if x > 5:
+                l = []
+            else:
+                l = []
+                objectmodel.list_implemented_as_deque(l)
+            return l
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s.listdef.listitem.mutated
+        assert s.listdef.listitem.resized
+        assert s.listdef.listitem.deque_hinted
+
 
 def g(n):
     return [0, 1, 2, n]

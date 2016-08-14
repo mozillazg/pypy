@@ -431,6 +431,27 @@ class Entry(ExtRegistryEntry):
         hop.exception_is_here()
         hop.gendirectcall(r_list.LIST._ll_resize_hint, v_list, v_sizehint)
 
+def list_implemented_as_deque(l):
+    """Hint that the list 'l' should use an implementation that allows
+    a "gap" at the start, which allows O(1) implementation of a few
+    operations like 'lst.insert(0, x)' and 'del lst[:n]'.
+    """
+
+class Entry(ExtRegistryEntry):
+    _about_ = list_implemented_as_deque
+
+    def compute_result_annotation(self, s_l):
+        from rpython.annotator import model as annmodel
+        if annmodel.s_None.contains(s_l):
+            return   # first argument is only None so far, but we
+                     # expect a generalization later
+        if not isinstance(s_l, annmodel.SomeList):
+            raise annmodel.AnnotatorError("Argument must be a list")
+        s_l.listdef.deque_hint()
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+
 # ____________________________________________________________
 #
 # id-like functions.  The idea is that calling hash() or id() is not
