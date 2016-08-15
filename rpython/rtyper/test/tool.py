@@ -77,8 +77,8 @@ class BaseRtypingTest(object):
     @staticmethod
     def ll_to_list(l):
         r = []
-        items = l.ll_items()
-        for i in range(l.ll_length()):
+        items, start = l.ll_items_start()
+        for i in range(start, start + l.ll_length()):
             r.append(items[i])
         return r
 

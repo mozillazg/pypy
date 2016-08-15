@@ -555,8 +555,10 @@ def listItemType(lst):
 def ll_arraycopy(source, dest, source_start, dest_start, length):
     SRCTYPE = typeOf(source)
     # lltype
-    rgc.ll_arraycopy(source.ll_items(), dest.ll_items(),
-                     source_start, dest_start, length)
+    srcitems, srcstart = source.ll_items_start()
+    dstitems, dststart = dest.ll_items_start()
+    rgc.ll_arraycopy(srcitems, dstitems,
+                     srcstart + source_start, dststart + dest_start, length)
 
 
 def ll_copy(RESLIST, l):

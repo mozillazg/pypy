@@ -182,11 +182,18 @@ class BaseLLStringRepr(Repr):
                             # where NULL is always valid: it is chr(0)
 
 
-    def _list_length_items(self, hop, v_lst, LIST):
+    def _list_length_items_start(self, hop, v_lst, LIST):
         LIST = LIST.TO
         v_length = hop.gendirectcall(LIST.ll_length, v_lst)
-        v_items = hop.gendirectcall(LIST.ll_items, v_lst)
-        return v_length, v_items
+        v_items = hop.gendirectcall(_ll_items_of, v_lst)
+        v_start = hop.gendirectcall(_ll_start_of, v_lst)
+        return v_length, v_items, v_start
+
+def _ll_items_of(l):
+    return l.ll_items_start()[0]
+def _ll_start_of(l):
+    return l.ll_items_start()[1]
+
 
 class StringRepr(BaseLLStringRepr, AbstractStringRepr):
     lowleveltype = Ptr(STR)
@@ -507,7 +514,7 @@ class LLHelpers(AbstractLLHelpers):
         return result
 
     @staticmethod
-    def ll_join(s, length, items):
+    def ll_join(s, length, items, start):
         s_chars = s.chars
         s_len = len(s_chars)
         num_items = length
@@ -517,7 +524,7 @@ class LLHelpers(AbstractLLHelpers):
         i = 0
         while i < num_items:
             try:
-                itemslen = ovfcheck(itemslen + len(items[i].chars))
+                itemslen = ovfcheck(itemslen + len(items[start + i].chars))
             except OverflowError:
                 raise MemoryError
             i += 1
@@ -528,14 +535,14 @@ class LLHelpers(AbstractLLHelpers):
         # a single '+' at the end is allowed to overflow: it gets
         # a negative result, and the gc will complain
         result = s.malloc(itemslen + seplen)
-        res_index = len(items[0].chars)
-        s.copy_contents(items[0], result, 0, 0, res_index)
+        res_index = len(items[start].chars)
+        s.copy_contents(items[start], result, 0, 0, res_index)
         i = 1
         while i < num_items:
             s.copy_contents(s, result, 0, res_index, s_len)
             res_index += s_len
-            lgt = len(items[i].chars)
-            s.copy_contents(items[i], result, 0, res_index, lgt)
+            lgt = len(items[start + i].chars)
+            s.copy_contents(items[start + i], result, 0, res_index, lgt)
             res_index += lgt
             i += 1
         return result
@@ -811,20 +818,20 @@ class LLHelpers(AbstractLLHelpers):
         return count
 
     @staticmethod
-    @signature(types.int(), types.any(), returns=types.any())
-    @jit.look_inside_iff(lambda length, items: jit.loop_unrolling_heuristic(
-        items, length))
-    def ll_join_strs(length, items):
+    @signature(types.int(), types.any(), types.int(), returns=types.any())
+    @jit.look_inside_iff(lambda length, items, start:
+                         jit.loop_unrolling_heuristic(items, length))
+    def ll_join_strs(length, items, start):
         # Special case for length 1 items, helps both the JIT and other code
         if length == 1:
-            return items[0]
+            return items[start]
 
         num_items = length
         itemslen = 0
         i = 0
         while i < num_items:
             try:
-                itemslen = ovfcheck(itemslen + len(items[i].chars))
+                itemslen = ovfcheck(itemslen + len(items[start + i].chars))
             except OverflowError:
                 raise MemoryError
             i += 1
@@ -838,18 +845,17 @@ class LLHelpers(AbstractLLHelpers):
         res_index = 0
         i = 0
         while i < num_items:
-            item_chars = items[i].chars
+            item_chars = items[start + i].chars
             item_len = len(item_chars)
-            copy_contents(items[i], result, 0, res_index, item_len)
+            copy_contents(items[start + i], result, 0, res_index, item_len)
             res_index += item_len
             i += 1
         return result
 
     @staticmethod
-    @jit.look_inside_iff(lambda length, chars, RES: jit.isconstant(length) and jit.isvirtual(chars))
-    def ll_join_chars(length, chars, RES):
-        # no need to optimize this, will be replaced by string builder
-        # at some point soon
+    @jit.look_inside_iff(lambda length, chars, start, RES:
+                         jit.isconstant(length) and jit.isvirtual(chars))
+    def ll_join_chars(length, chars, start, RES):
         num_chars = length
         if RES is StringRepr.lowleveltype:
             target = Char
@@ -861,7 +867,7 @@ class LLHelpers(AbstractLLHelpers):
         res_chars = result.chars
         i = 0
         while i < num_chars:
-            res_chars[i] = cast_primitive(target, chars[i])
+            res_chars[i] = cast_primitive(target, chars[start + i])
             i += 1
         return result
 
@@ -918,7 +924,8 @@ class LLHelpers(AbstractLLHelpers):
                     break
             i += 1
         res = LIST.ll_newlist(count)
-        items = res.ll_items()
+        items, start = res.ll_items_start()
+        assert start == 0
         i = 0
         j = 0
         resindex = 0
@@ -951,7 +958,8 @@ class LLHelpers(AbstractLLHelpers):
             pos = s.find(c, pos + markerlen, last)
             count += 1
         res = LIST.ll_newlist(count)
-        items = res.ll_items()
+        items, start = res.ll_items_start()
+        assert start == 0
         pos = 0
         count = 0
         pos = s.find(c, 0, last)
@@ -985,7 +993,8 @@ class LLHelpers(AbstractLLHelpers):
                     break
             i += 1
         res = LIST.ll_newlist(count)
-        items = res.ll_items()
+        items, start = res.ll_items_start()
+        assert start == 0
         i = strlen
         j = strlen
         resindex = count - 1
@@ -1018,7 +1027,8 @@ class LLHelpers(AbstractLLHelpers):
             pos = s.rfind(c, 0, pos - markerlen)
             count += 1
         res = LIST.ll_newlist(count)
-        items = res.ll_items()
+        items, start = res.ll_items_start()
+        assert start == 0
         pos = 0
         pos = len(s.chars)
         prev_pos = pos
@@ -1133,7 +1143,7 @@ class LLHelpers(AbstractLLHelpers):
 
     @staticmethod
     def ll_build_finish(builder):
-        return LLHelpers.ll_join_strs(len(builder), builder)
+        return LLHelpers.ll_join_strs(len(builder), builder, 0)
 
     @staticmethod
     @specialize.memo()
@@ -1210,14 +1220,16 @@ class LLHelpers(AbstractLLHelpers):
             hop.genop('setarrayitem', [vtemp, i, vchunk])
 
         hop.exception_cannot_occur()   # to ignore the ZeroDivisionError of '%'
-        return hop.gendirectcall(cls.ll_join_strs, size, vtemp)
+        c_zero = inputconst(Signed, 0)
+        return hop.gendirectcall(cls.ll_join_strs, size, vtemp, c_zero)
 
     @staticmethod
     @jit.dont_look_inside
     def ll_string2list(RESLIST, src):
         length = len(src.chars)
         lst = RESLIST.ll_newlist(length)
-        dst = lst.ll_items()
+        dst, start = lst.ll_items_start()
+        assert start == 0
         SRC = typeOf(src).TO     # STR or UNICODE
         DST = typeOf(dst).TO     # GcArray
         assert DST.OF is SRC.chars.OF

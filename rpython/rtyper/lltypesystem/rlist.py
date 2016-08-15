@@ -17,6 +17,7 @@ from rpython.tool.pairtype import pairtype, pair
 #  Concrete implementation of RPython lists:
 #
 #    struct list {
+#        int start;  // optional, default to 0
 #        int length;
 #        items_array *items;
 #    }
@@ -67,7 +68,7 @@ class BaseListRepr(AbstractBaseListRepr):
                                  "ll_newlist": ll_fixed_newlist,
                                  "ll_newemptylist": ll_fixed_newemptylist,
                                  "ll_length": ll_fixed_length,
-                                 "ll_items": ll_fixed_items,
+                                 "ll_items_start": ll_fixed_items_start,
                                  "ITEM": ITEM,
                                  "ll_getitem_fast": ll_fixed_getitem_fast,
                                  "ll_setitem_fast": ll_fixed_setitem_fast,
@@ -94,6 +95,11 @@ class ListRepr(AbstractListRepr, BaseListRepr):
             ITEM = self.item_repr.lowleveltype
             ITEMARRAY = self.get_itemarray_lowleveltype()
             # XXX we might think of turning length stuff into Unsigned
+            extra = []
+            _ll_items_start = ll_items_0
+            if getattr(self.listitem, 'deque_hinted', False):
+                extra = [("start", Signed)]
+                _ll_items_start = ll_items_start
             self.LIST.become(GcStruct("list", ("length", Signed),
                                               ("items", Ptr(ITEMARRAY)),
                                       adtmeths = ADTIList({
@@ -101,7 +107,7 @@ class ListRepr(AbstractListRepr, BaseListRepr):
                                           "ll_newlist_hint": ll_newlist_hint,
                                           "ll_newemptylist": ll_newemptylist,
                                           "ll_length": ll_length,
-                                          "ll_items": ll_items,
+                                          "ll_items_start": _ll_items_start,
                                           "ITEM": ITEM,
                                           "ll_getitem_fast": ll_getitem_fast,
                                           "ll_setitem_fast": ll_setitem_fast,
@@ -347,17 +353,22 @@ def ll_length(l):
     return l.length
 ll_length.oopspec = 'list.len(l)'
 
-def ll_items(l):
-    return l.items
+def ll_items_0(l):
+    return l.items, 0
+
+def ll_items_start(l):
+    return l.items, l.start
 
 def ll_getitem_fast(l, index):
     ll_assert(index < l.length, "getitem out of bounds")
-    return l.ll_items()[index]
+    items, start = l.ll_items_start()
+    return items[start + index]
 ll_getitem_fast.oopspec = 'list.getitem(l, index)'
 
 def ll_setitem_fast(l, index, item):
     ll_assert(index < l.length, "setitem out of bounds")
-    l.ll_items()[index] = item
+    items, start = l.ll_items_start()
+    items[start + index] = item
 ll_setitem_fast.oopspec = 'list.setitem(l, index, item)'
 
 # fixed size versions
@@ -377,8 +388,8 @@ def ll_fixed_length(l):
     return len(l)
 ll_fixed_length.oopspec = 'list.len(l)'
 
-def ll_fixed_items(l):
-    return l
+def ll_fixed_items_start(l):
+    return l, 0
 
 def ll_fixed_getitem_fast(l, index):
     ll_assert(index < len(l), "fixed getitem out of bounds")

@@ -1236,7 +1236,8 @@ def _make_ll_keys_values_items(kind):
         res = LIST.ll_newlist(dic.num_live_items)
         entries = dic.entries
         dlen = dic.num_ever_used_items
-        items = res.ll_items()
+        items, start = res.ll_items_start()
+        assert start == 0
         i = 0
         p = 0
         while i < dlen:

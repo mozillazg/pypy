@@ -203,7 +203,7 @@ class AbstractStringRepr(Repr):
         hop.exception_cannot_occur()
         return hop.gendirectcall(self.ll.ll_isalnum, v_str)
 
-    def _list_length_items(self, hop, v_lst, LIST):
+    def _list_length_items_start(self, hop, v_lst, LIST):
         """Return two Variables containing the length and items of a
         list. Need to be overriden because it is typesystem-specific."""
         raise NotImplementedError
@@ -219,7 +219,8 @@ class AbstractStringRepr(Repr):
         if not isinstance(r_lst, BaseListRepr):
             raise TyperError("string.join of non-list: %r" % r_lst)
         v_str, v_lst = hop.inputargs(rstr.repr, r_lst)
-        v_length, v_items = self._list_length_items(hop, v_lst, r_lst.lowleveltype)
+        v_length, v_items, v_start = self._list_length_items_start(hop, v_lst,
+                                                            r_lst.lowleveltype)
 
         if hop.args_s[0].is_constant() and hop.args_s[0].const == '':
             if r_lst.item_repr == rstr.repr:
@@ -228,16 +229,16 @@ class AbstractStringRepr(Repr):
                   r_lst.item_repr == unichar_repr):
                 v_tp = hop.inputconst(Void, self.lowleveltype)
                 return hop.gendirectcall(self.ll.ll_join_chars, v_length,
-                                         v_items, v_tp)
+                                         v_items, v_start, v_tp)
             else:
                 raise TyperError("''.join() of non-string list: %r" % r_lst)
-            return hop.gendirectcall(llfn, v_length, v_items)
+            return hop.gendirectcall(llfn, v_length, v_items, v_start)
         else:
             if r_lst.item_repr == rstr.repr:
                 llfn = self.ll.ll_join
             else:
                 raise TyperError("sep.join() of non-string list: %r" % r_lst)
-            return hop.gendirectcall(llfn, v_str, v_length, v_items)
+            return hop.gendirectcall(llfn, v_str, v_length, v_items, v_start)
 
     def rtype_method_splitlines(self, hop):
         rstr = hop.args_r[0].repr
