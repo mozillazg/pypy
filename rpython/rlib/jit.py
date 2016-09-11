@@ -1210,8 +1210,8 @@ def conditional_call_elidable(value, special_constant, function, *args):
 
     whichever is better for the JIT.  Usually it first checks if 'value'
     is equal to 'special_constant', and conditionally calls
-    'function(*args)' if it is.  The 'function' must be marked as
-    @elidable.
+    'function(*args)' if it is.  The 'function' must not be marked as
+    @elidable, but is treated almost like an @elidable.
 
     If 'value != special_constant', then the JIT assumes that both
     solutions would work and _are equal_.  This means that if, say, all
@@ -1226,8 +1226,6 @@ def conditional_call_elidable(value, special_constant, function, *args):
         return _jit_conditional_call_elidable(value, special_constant,
                                               function, *args)
     else:
-        if not we_are_translated():
-            assert function._elidable_function_ # must call an elidable function
         if not we_are_translated() or isinstance(value, int):
             if value == special_constant:
                 value = function(*args)
@@ -1245,10 +1243,6 @@ class ConditionalCallEntry(ExtRegistryEntry):
         s_res = self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
                                                  args_s[2], args_s[3:])
         if self.instance is _jit_conditional_call_elidable:
-            function = args_s[2].const
-            assert getattr(function, '_elidable_function_', False), (
-                "jit.conditional_call_elidable() must call an elidable "
-                "function, but got %r" % (function,))
             return annmodel.unionof(s_res, args_s[0])
 
     def specialize_call(self, hop):

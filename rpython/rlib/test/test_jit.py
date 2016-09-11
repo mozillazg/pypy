@@ -311,7 +311,6 @@ class TestJIT(BaseRtypingTest):
         t.compile_c() # does not crash
 
     def test_conditional_call_elidable(self):
-        @elidable
         def g(m):
             return m + 42
         def f(n, m):
@@ -326,7 +325,6 @@ class TestJIT(BaseRtypingTest):
 
     def test_compiled_conditional_call_elidable(self):
         from rpython.translator.c.test.test_genc import compile
-        @elidable
         def g(m):
             return m + 42
         def f(n, m):

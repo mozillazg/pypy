@@ -1738,8 +1738,7 @@ class MIFrame(object):
         effectinfo = descr.get_extra_info()
         assert not effectinfo.check_forces_virtual_or_virtualizable()
         exc = effectinfo.check_can_raise()
-        pure = effectinfo.check_is_elidable()
-        assert pure == (opnum != rop.COND_CALL)
+        pure = effectinfo.check_is_elidable() or (opnum != rop.COND_CALL)
         return self.execute_varargs(opnum,
                                     [condbox, specialvalbox] + allboxes,
                                     descr, exc, pure)

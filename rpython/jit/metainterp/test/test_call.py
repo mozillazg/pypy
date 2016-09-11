@@ -54,7 +54,6 @@ class CallTest(object):
         self.check_resops(guard_no_exception=0)
 
     def test_cond_call_i(self):
-        @jit.elidable
         def f(n):
             return n * 200
 
@@ -65,7 +64,6 @@ class CallTest(object):
         assert self.interp_operations(main, [15]) == 15
 
     def test_cond_call_r(self):
-        @jit.elidable
         def f(n):
             return [n]
 
@@ -81,7 +79,6 @@ class CallTest(object):
         assert self.interp_operations(main, [5]) == 1
 
     def test_cond_call_constant_in_pyjitpl(self):
-        @jit.elidable
         def f(a, b):
             return a + b
         def main(n):
@@ -97,7 +94,6 @@ class CallTest(object):
 
     def test_cond_call_constant_in_optimizer(self):
         myjitdriver = jit.JitDriver(greens = ['m'], reds = ['n', 'p'])
-        @jit.elidable
         def externfn(x):
             return x - 3
         class V:
@@ -118,12 +114,8 @@ class CallTest(object):
 
     def test_cond_call_constant_in_optimizer_2(self):
         myjitdriver = jit.JitDriver(greens = ['m'], reds = ['n', 'p'])
-        @jit.elidable
         def externfn(x):
             return 2
-        class V:
-            def __init__(self, value):
-                self.value = value
         def f(n, m, p):
             while n > 0:
                 myjitdriver.can_enter_jit(n=n, p=p, m=m)
@@ -141,12 +133,8 @@ class CallTest(object):
 
     def test_cond_call_constant_in_optimizer_3(self):
         myjitdriver = jit.JitDriver(greens = ['m'], reds = ['n', 'p'])
-        @jit.elidable
         def externfn(x):
             return 1
-        class V:
-            def __init__(self, value):
-                self.value = value
         def f(n, m, p):
             while n > 0:
                 myjitdriver.can_enter_jit(n=n, p=p, m=m)
@@ -164,6 +152,25 @@ class CallTest(object):
         # they are called with the same arguments
         self.check_resops(call_pure_i=0, cond_call_pure_i=0, call_i=2,
                           int_sub=4)
+
+    def test_cond_call_constant_in_optimizer_4(self):
+        class X:
+            def __init__(self, value):
+                self.value = value
+                self.triple = -1
+            def _compute_triple(self):
+                self.triple = self.value * 3
+                return self.triple
+            def get_triple(self):
+                return jit.conditional_call_elidable(self.triple, -1,
+                                                     X._compute_triple, self)
+        def main(n, initvalue):
+            x = X(n)
+            x.triple = initvalue
+            return x.get_triple() + x.get_triple()
+
+        assert self.interp_operations(main, [100, -1]) == 600
+        self.check_operations_history(finish=1)   # empty history
 
 
 class TestCall(LLJitMixin, CallTest):
