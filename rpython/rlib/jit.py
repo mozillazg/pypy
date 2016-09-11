@@ -1178,33 +1178,47 @@ class Entry(ExtRegistryEntry):
         hop.exception_is_here()
         return hop.gendirectcall(ll_record_exact_class, v_inst, v_cls)
 
-def _jit_conditional_call(condition, function, *args):
-    pass
+def _jit_conditional_call_value(value, special_constant, function, *args):
+    """NOT_RPYTHON"""
 
 @specialize.call_location()
 def conditional_call(condition, function, *args):
     if we_are_jitted():
-        _jit_conditional_call(condition, function, *args)
+        _jit_conditional_call_value(condition, True, function, *args)
     else:
         if condition:
             function(*args)
 conditional_call._always_inline_ = True
 
+@specialize.call_location()
+def conditional_call_value(value, special_constant, function, *args):
+    if we_are_jitted():
+        return _jit_conditional_call_value(value, special_constant,
+                                           function, *args)
+    else:
+        if value == special_constant:
+            value = function(*args)
+        return value
+conditional_call_value._always_inline_ = True
+
 class ConditionalCallEntry(ExtRegistryEntry):
-    _about_ = _jit_conditional_call
+    _about_ = _jit_conditional_call_value
 
     def compute_result_annotation(self, *args_s):
         self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
-                                         args_s[1], args_s[2:])
+                                         args_s[2], args_s[3:])
+        return args_s[0]
 
     def specialize_call(self, hop):
         from rpython.rtyper.lltypesystem import lltype
 
-        args_v = hop.inputargs(lltype.Bool, lltype.Void, *hop.args_r[2:])
-        args_v[1] = hop.args_r[1].get_concrete_llfn(hop.args_s[1],
-                                                    hop.args_s[2:], hop.spaceop)
+        r_value = hop.args_r[0]
+        args_v = hop.inputargs(r_value, r_value, lltype.Void, *hop.args_r[3:])
+        args_v[2] = hop.args_r[2].get_concrete_llfn(hop.args_s[2],
+                                                    hop.args_s[3:], hop.spaceop)
         hop.exception_is_here()
-        return hop.genop('jit_conditional_call', args_v)
+        return hop.genop('jit_conditional_call_value', args_v,
+                         resulttype=r_value)
 
 def enter_portal_frame(unique_id):
     """call this when starting to interpret a function. calling this is not

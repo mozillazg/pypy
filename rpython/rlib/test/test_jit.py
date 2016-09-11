@@ -3,7 +3,7 @@ import py, pytest
 from rpython.conftest import option
 from rpython.annotator.model import UnionError
 from rpython.rlib.jit import (hint, we_are_jitted, JitDriver, elidable_promote,
-    JitHintError, oopspec, isconstant, conditional_call,
+    JitHintError, oopspec, isconstant, conditional_call, conditional_call_value,
     elidable, unroll_safe, dont_look_inside,
     enter_portal_frame, leave_portal_frame)
 from rpython.rlib.rarithmetic import r_uint
@@ -309,3 +309,14 @@ class TestJIT(BaseRtypingTest):
             leave_portal_frame()
         t = Translation(g, [])
         t.compile_c() # does not crash
+
+    def test_conditional_call_value(self):
+        def g(m):
+            return m + 42
+        def f(n, m):
+            return conditional_call_value(n, -1, g, m)
+
+        res = self.interpret(f, [10, 200])
+        assert res == 10
+        res = self.interpret(f, [-1, 200])
+        assert res == 242
