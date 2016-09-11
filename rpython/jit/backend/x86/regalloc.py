@@ -928,7 +928,7 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
 
     consider_cond_call_gc_wb_array = consider_cond_call_gc_wb
 
-    def XXXconsider_cond_call(self, op):
+    def consider_cond_call_n(self, op):
         # A 32-bit-only, asmgcc-only issue: 'cond_call_register_arguments'
         # contains edi and esi, which are also in asmgcroot.py:ASM_FRAMEDATA.
         # We must make sure that edi and esi do not contain GC pointers.
@@ -938,16 +938,27 @@ class RegAlloc(BaseRegalloc, VectorRegallocMixin):
                     self.rm.force_spill_var(box)
                     assert box not in self.rm.reg_bindings
         #
-        assert op.type == 'v'
+        #assert op.type == 'v'
         args = op.getarglist()
-        assert 2 <= len(args) <= 4 + 2     # maximum 4 arguments
-        v = args[1]
-        assert isinstance(v, Const)
-        imm_func = self.rm.convert_to_imm(v)
-        arglocs = [self.loc(args[i]) for i in range(2, len(args))]
+        assert 3 <= len(args) <= 4 + 3     # maximum 4 arguments
+        v_func = args[2]
+        assert isinstance(v_func, Const)
+        imm_func = self.rm.convert_to_imm(v_func)
+        arglocs = [self.loc(args[i]) for i in range(3, len(args))]
         gcmap = self.get_gcmap()
-        self.load_condition_into_cc(op.getarg(0))
-        self.assembler.cond_call(op, gcmap, imm_func, arglocs)
+        if op.type == 'v':   # COND_CALL_N
+            self.load_condition_into_cc(op.getarg(0))
+            resloc = None
+        else:
+            condvalue_loc = self.loc(args[0])
+            assert not isinstance(condvalue_loc, ImmedLoc)
+            self.assembler.mc.CMP(condvalue_loc, self.loc(args[1]))
+            self.assembler.guard_success_cc = rx86.Conditions['E']
+            resloc = self.rm.force_result_in_reg(op, args[0])
+        self.assembler.cond_call(op, gcmap, imm_func, arglocs, resloc)
+
+    consider_cond_call_i = consider_cond_call_n
+    consider_cond_call_r = consider_cond_call_n
 
     def consider_call_malloc_nursery(self, op):
         size_box = op.getarg(0)

@@ -392,7 +392,7 @@ class GcRewriterAssembler(object):
         opnum = next_op.getopnum()
         if not (opnum == rop.GUARD_TRUE or
                 opnum == rop.GUARD_FALSE or
-                opnum == rop.COND_CALL):
+                opnum == rop.COND_CALL_N):
             return False
         if next_op.getarg(0) is not op:
             return False

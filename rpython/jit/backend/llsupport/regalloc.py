@@ -757,17 +757,17 @@ class BaseRegalloc(object):
         next_op = operations[i + 1]
         opnum = next_op.getopnum()
         if (opnum != rop.GUARD_TRUE and opnum != rop.GUARD_FALSE
-                                    and opnum != rop.COND_CALL):
+                                    and opnum != rop.COND_CALL_N):
             return False
         if next_op.getarg(0) is not op:
             return False
         if self.longevity[op][1] > i + 1:
             return False
-        if opnum != rop.COND_CALL:
+        if opnum != rop.COND_CALL_N:
             if op in operations[i + 1].getfailargs():
                 return False
         else:
-            if op in operations[i + 1].getarglist()[1:]:
+            if op in operations[i + 1].getarglist()[3:]:
                 return False
         return True
 
