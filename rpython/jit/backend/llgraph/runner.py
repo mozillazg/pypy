@@ -1328,11 +1328,21 @@ class LLFrame(object):
         x = math.sqrt(y)
         return support.cast_to_floatstorage(x)
 
-    def execute_cond_call(self, calldescr, cond, func, *args):
-        if not cond:
-            return
-        # cond_call can't have a return value
-        self.execute_call_n(calldescr, func, *args)
+    def execute_cond_call_i(self, calldescr, cond, specialval, func, *args):
+        if cond == specialval:
+            cond = self.execute_call_i(calldescr, func, *args)
+        return cond
+
+    def execute_cond_call_r(self, calldescr, cond, specialval, func, *args):
+        if cond == specialval:
+            cond = self.execute_call_r(calldescr, func, *args)
+        return cond
+
+    def execute_cond_call_n(self, calldescr, cond, specialval, func, *args):
+        assert specialval == 1
+        assert cond in (0, 1)
+        if cond == specialval:
+            self.execute_call_n(calldescr, func, *args)
 
     def _execute_call(self, calldescr, func, *args):
         effectinfo = calldescr.get_extra_info()

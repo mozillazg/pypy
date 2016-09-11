@@ -1074,9 +1074,9 @@ class MIFrame(object):
     @arguments("box", "box", "box", "boxes2", "descr", "orgpc")
     def opimpl_conditional_call_ir_v(self, condbox, specialvalbox,
                                      funcbox, argboxes, calldescr, pc):
-        return self.do_conditional_call(condbox, specialvalbox,
-                                        funcbox, argboxes, calldescr, pc,
-                                        rop.COND_CALL_N)
+        self.do_conditional_call(condbox, specialvalbox,
+                                 funcbox, argboxes, calldescr, pc,
+                                 rop.COND_CALL_N)
 
     @arguments("int", "boxes3", "boxes3", "orgpc")
     def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes, pc):
