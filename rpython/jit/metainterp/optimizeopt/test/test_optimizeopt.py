@@ -7592,7 +7592,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         ops = """
         [i0]
         p1 = new_with_vtable(descr=nodesize)
-        cond_call(1, 123, p1, descr=clear_vable)
+        cond_call_n(1, 1, 123, p1, descr=clear_vable)
         jump(i0)
         """
         expected = """
@@ -8652,7 +8652,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
     def test_cond_call_with_a_constant(self):
         ops = """
         [p1]
-        cond_call(1, 123, p1, descr=plaincalldescr)
+        cond_call_n(1, 1, 123, p1, descr=plaincalldescr)
         jump(p1)
         """
         expected = """
@@ -8665,12 +8665,83 @@ class OptimizeOptTest(BaseTestWithUnroll):
     def test_cond_call_with_a_constant_2(self):
         ops = """
         [p1]
-        cond_call(0, 123, p1, descr=plaincalldescr)
+        cond_call_n(0, 1, 123, p1, descr=plaincalldescr)
         jump(p1)
         """
         expected = """
         [p1]
         jump(p1)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_cond_call_with_a_constant_i(self):
+        ops = """
+        [p1]
+        i2 = cond_call_i(12, 12, 123, p1, descr=plaincalldescr)
+        escape_n(i2)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        i2 = call_i(123, p1, descr=plaincalldescr)
+        escape_n(i2)
+        jump(p1)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_cond_call_with_a_constant_i2(self):
+        ops = """
+        [p1]
+        i2 = cond_call_i(12, 45, 123, p1, descr=plaincalldescr)
+        escape_n(i2)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        escape_n(12)
+        jump(p1)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_cond_call_with_a_constant_i3(self):
+        ops = """
+        [p1, i1]
+        i0 = int_gt(i1, 100)
+        guard_true(i0) []
+        i2 = cond_call_i(i1, 45, 123, p1, descr=plaincalldescr)
+        i3 = escape_i(i2)
+        jump(p1, i3)
+        """
+        expected = """
+        [p1, i1]
+        i0 = int_gt(i1, 100)
+        guard_true(i0) []
+        i3 = escape_i(i1)
+        jump(p1, i3)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_cond_call_r1(self):
+        ops = """
+        [p1]
+        p2 = cond_call_r(p1, NULL, 123, 45, descr=plaincalldescr)
+        jump(p2)
+        """
+        self.optimize_loop(ops, ops)
+
+    def test_cond_call_r2(self):
+        ops = """
+        [p1]
+        guard_nonnull(p1) []
+        p2 = cond_call_r(p1, NULL, 123, 45, descr=plaincalldescr)
+        p3 = escape_r(p2)
+        jump(p3)
+        """
+        expected = """
+        [p1]
+        guard_nonnull(p1) []
+        p3 = escape_r(p1)
+        jump(p3)
         """
         self.optimize_loop(ops, expected)
 

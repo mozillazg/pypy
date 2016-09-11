@@ -2215,6 +2215,51 @@ class LLtypeBackendTest(BaseBackendTest):
         excvalue = self.cpu.grab_exc_value(deadframe)
         assert not excvalue
 
+    def test_cond_call_value(self):
+        def func_int(*args):
+            called.append(args)
+            return len(args) * 100 + 1000
+
+        for i in range(5):
+            called = []
+
+            FUNC = self.FuncType([lltype.Signed] * i, lltype.Signed)
+            func_ptr = llhelper(lltype.Ptr(FUNC), func_int)
+            calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                                             EffectInfo.MOST_GENERAL)
+
+            ops = '''
+            [i0, i1, i2, i3, i4, i5, i6, f0, f1]
+            i15 = cond_call_i(i1, 20, ConstClass(func_ptr), %s)
+            guard_false(i0, descr=faildescr) [i1,i2,i3,i4,i5,i6,i15, f0,f1]
+            finish(i15)
+            ''' % ', '.join(['i%d' % (j + 2) for j in range(i)] +
+                            ["descr=calldescr"])
+            loop = parse(ops, namespace={'faildescr': BasicFailDescr(),
+                                         'func_ptr': func_ptr,
+                                         'calldescr': calldescr})
+            looptoken = JitCellToken()
+            self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
+            f1 = longlong.getfloatstorage(1.2)
+            f2 = longlong.getfloatstorage(3.4)
+            frame = self.cpu.execute_token(looptoken, 1, 50, 1, 2, 3, 4, 5,
+                                           f1, f2)
+            assert not called
+            assert [self.cpu.get_int_value(frame, j) for j in range(7)] == [
+                        50, 1, 2, 3, 4, 5, 50]
+            assert longlong.getrealfloat(
+                        self.cpu.get_float_value(frame, 7)) == 1.2
+            assert longlong.getrealfloat(
+                        self.cpu.get_float_value(frame, 8)) == 3.4
+            #
+            frame = self.cpu.execute_token(looptoken, 1, 20, 1, 2, 3, 4, 5,
+                                           f1, f2)
+            assert called == [(1, 2, 3, 4)[:i]]
+            assert [self.cpu.get_int_value(frame, j) for j in range(7)] == [
+                        20, 1, 2, 3, 4, 5, i * 100 + 1000]
+            assert longlong.getrealfloat(self.cpu.get_float_value(frame, 7)) == 1.2
+            assert longlong.getrealfloat(self.cpu.get_float_value(frame, 8)) == 3.4
+
     def test_cond_call_gc_wb(self):
         def func_void(a):
             record.append(rffi.cast(lltype.Signed, a))

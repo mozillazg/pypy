@@ -2,7 +2,7 @@ from rpython.jit.codewriter.effectinfo import EffectInfo
 from rpython.jit.codewriter import longlong
 from rpython.jit.metainterp import compile
 from rpython.jit.metainterp.history import (Const, ConstInt, make_hashable_int,
-                                            ConstFloat)
+                                            ConstFloat, CONST_NULL)
 from rpython.jit.metainterp.optimize import InvalidLoop
 from rpython.jit.metainterp.optimizeopt.intutils import IntBound
 from rpython.jit.metainterp.optimizeopt.optimizer import (Optimization, REMOVED,
@@ -516,16 +516,28 @@ class OptRewrite(Optimization):
     optimize_CALL_LOOPINVARIANT_F = optimize_CALL_LOOPINVARIANT_I
     optimize_CALL_LOOPINVARIANT_N = optimize_CALL_LOOPINVARIANT_I
 
-    def optimize_COND_CALL(self, op):
-        arg = op.getarg(0)
-        b = self.getintbound(arg)
-        if b.is_constant():
-            if b.getint() == 0:
-                self.last_emitted_operation = REMOVED
-                return
+    def optimize_COND_CALL_N(self, op):
+        arg0 = self.get_box_replacement(op.getarg(0))
+        arg1 = self.get_box_replacement(op.getarg(1))
+        if arg0.type == 'i':
+            b1 = self.getintbound(arg0)
+            b2 = self.getintbound(arg1)
+            drop = b1.known_gt(b2) or b1.known_lt(b2)
+        elif arg0.type == 'r' and arg1.same_constant(CONST_NULL):
+            drop = self.getnullness(arg0) == INFO_NONNULL
+        else:
+            drop = False
+        if drop:
+            if op.type != 'v':
+                self.make_equal_to(op, arg0)
+            self.last_emitted_operation = REMOVED
+            return
+        if arg0.same_box(arg1):
             opnum = OpHelpers.call_for_type(op.type)
-            op = op.copy_and_change(opnum, args=op.getarglist()[1:])
+            op = self.replace_op_with(op, opnum, args=op.getarglist()[2:])
         self.emit_operation(op)
+    optimize_COND_CALL_I = optimize_COND_CALL_N
+    optimize_COND_CALL_R = optimize_COND_CALL_N
 
     def _optimize_nullness(self, op, box, expect_nonnull):
         info = self.getnullness(box)
