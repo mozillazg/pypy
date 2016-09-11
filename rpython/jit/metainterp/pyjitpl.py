@@ -904,7 +904,7 @@ class MIFrame(object):
                                        history.CONST_NULL)
         funcbox = ConstInt(rffi.cast(lltype.Signed, vinfo.clear_vable_ptr))
         calldescr = vinfo.clear_vable_descr
-        self.execute_varargs(rop.COND_CALL_I, [condbox, history.CONST_TRUE,
+        self.execute_varargs(rop.COND_CALL_N, [condbox, history.CONST_TRUE,
                                                funcbox, box],
                              calldescr, False, False)
 

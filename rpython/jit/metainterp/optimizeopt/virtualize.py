@@ -94,11 +94,11 @@ class OptVirtualize(optimizer.Optimization):
     optimize_CALL_MAY_FORCE_F = optimize_CALL_MAY_FORCE_I
     optimize_CALL_MAY_FORCE_N = optimize_CALL_MAY_FORCE_I
 
-    def XXXoptimize_COND_CALL(self, op):
+    def optimize_COND_CALL_N(self, op):
         effectinfo = op.getdescr().get_extra_info()
         oopspecindex = effectinfo.oopspecindex
         if oopspecindex == EffectInfo.OS_JIT_FORCE_VIRTUALIZABLE:
-            opinfo = self.getptrinfo(op.getarg(2))
+            opinfo = self.getptrinfo(op.getarg(3))
             if opinfo and opinfo.is_virtual():
                 return
         self.emit_operation(op)
