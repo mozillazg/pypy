@@ -1062,14 +1062,14 @@ class MIFrame(object):
                                      funcbox, argboxes, calldescr, pc):
         return self.do_conditional_call(condbox, specialvalbox,
                                         funcbox, argboxes, calldescr, pc,
-                                        rop.COND_CALL_I)
+                                        rop.COND_CALL_PURE_I)
 
     @arguments("box", "box", "box", "boxes2", "descr", "orgpc")
     def opimpl_conditional_call_ir_r(self, condbox, specialvalbox,
                                      funcbox, argboxes, calldescr, pc):
         return self.do_conditional_call(condbox, specialvalbox,
                                         funcbox, argboxes, calldescr, pc,
-                                        rop.COND_CALL_R)
+                                        rop.COND_CALL_PURE_R)
 
     @arguments("box", "box", "box", "boxes2", "descr", "orgpc")
     def opimpl_conditional_call_ir_v(self, condbox, specialvalbox,
@@ -1730,7 +1730,7 @@ class MIFrame(object):
                 assert False
 
     def do_conditional_call(self, condbox, specialvalbox,
-                            funcbox, argboxes, descr, pc, rop_num):
+                            funcbox, argboxes, descr, pc, opnum):
         if (isinstance(condbox, Const) and
                 not condbox.same_constant(specialvalbox)):
             return condbox  # so that the heapcache can keep argboxes virtual
@@ -1739,7 +1739,8 @@ class MIFrame(object):
         assert not effectinfo.check_forces_virtual_or_virtualizable()
         exc = effectinfo.check_can_raise()
         pure = effectinfo.check_is_elidable()
-        return self.execute_varargs(rop_num,
+        assert pure == (opnum != rop.COND_CALL_N)
+        return self.execute_varargs(opnum,
                                     [condbox, specialvalbox] + allboxes,
                                     descr, exc, pure)
 
@@ -3081,6 +3082,10 @@ class MetaInterp(object):
         """ Patch a CALL into a CALL_PURE.
         """
         resbox_as_const = executor.constant_from_op(op)
+        is_cond = (op.opnum == rop.COND_CALL_PURE_I or
+                   op.opnum == rop.COND_CALL_PURE_R)
+        if is_cond:
+            argboxes = argboxes[2:]
         for argbox in argboxes:
             if not isinstance(argbox, Const):
                 break
@@ -3093,6 +3098,8 @@ class MetaInterp(object):
         # be either removed later by optimizeopt or turned back into CALL.
         arg_consts = [executor.constant_from_op(a) for a in argboxes]
         self.call_pure_results[arg_consts] = resbox_as_const
+        if is_cond:
+            return op    # there is no COND_CALL_I/R
         opnum = OpHelpers.call_pure_for_descr(descr)
         self.history.cut(patch_pos)
         newop = self.history.record_nospec(opnum, argboxes, descr)

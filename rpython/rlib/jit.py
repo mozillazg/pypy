@@ -1181,11 +1181,20 @@ class Entry(ExtRegistryEntry):
 
 def _jit_conditional_call(value, ignored, function, *args):
     """NOT_RPYTHON"""
-def _jit_conditional_call_value(value, special_constant, function, *args):
+def _jit_conditional_call_elidable(value, special_constant, function, *args):
     """NOT_RPYTHON"""
 
 @specialize.call_location()
 def conditional_call(condition, function, *args):
+    """Does the same as:
+        
+         if condition:
+             function(*args)
+     
+    but is better for the JIT, in case the condition is often false
+    but could be true occasionally.  It allows the JIT to always produce
+    bridge-free code.
+    """
     if we_are_jitted():
         _jit_conditional_call(condition, True, function, *args)
     else:
@@ -1194,11 +1203,25 @@ def conditional_call(condition, function, *args):
 conditional_call._always_inline_ = True
 
 @specialize.call_location()
-def conditional_call_value(value, special_constant, function, *args):
+def conditional_call_elidable(value, special_constant, function, *args):
+    """Does the same as:
+
+        return ONE OF function(*args) OR (value if value != special_constant)
+
+    whichever is better for the JIT.  Usually it first checks if 'value'
+    is equal to 'special_constant', and only if it is, it calls
+    'function(*args)'.  The 'function' must be marked as @elidable.  An
+    example of an "unusual" case is if, say, all arguments are constant.
+    In this case the JIT knows the result of the call in advance, and
+    so it always uses the 'function(*args)' path without comparing
+    'value' and 'special_constant' at all.
+    """
     if we_are_jitted():
-        return _jit_conditional_call_value(value, special_constant,
-                                           function, *args)
+        return _jit_conditional_call_elidable(value, special_constant,
+                                              function, *args)
     else:
+        if not we_are_translated():
+            assert function._elidable_function_ # must call an elidable function
         if not we_are_translated() or isinstance(value, int):
             if value == special_constant:
                 value = function(*args)
@@ -1206,16 +1229,20 @@ def conditional_call_value(value, special_constant, function, *args):
             if value is special_constant:
                 value = function(*args)
         return value
-conditional_call_value._always_inline_ = True
+conditional_call_elidable._always_inline_ = True
 
 class ConditionalCallEntry(ExtRegistryEntry):
-    _about_ = _jit_conditional_call_value, _jit_conditional_call
+    _about_ = _jit_conditional_call_elidable, _jit_conditional_call
 
     def compute_result_annotation(self, *args_s):
         from rpython.annotator import model as annmodel
         self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
                                          args_s[2], args_s[3:])
-        if self.instance is _jit_conditional_call_value:
+        if self.instance is _jit_conditional_call_elidable:
+            function = args_s[2].const
+            assert getattr(function, '_elidable_function_', False), (
+                "jit.conditional_call_elidable() must call an elidable "
+                "function, but got %r" % (function,))
             return args_s[0]
 
     def specialize_call(self, hop):

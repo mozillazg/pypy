@@ -3,8 +3,8 @@ import py, pytest
 from rpython.conftest import option
 from rpython.annotator.model import UnionError
 from rpython.rlib.jit import (hint, we_are_jitted, JitDriver, elidable_promote,
-    JitHintError, oopspec, isconstant, conditional_call, conditional_call_value,
-    elidable, unroll_safe, dont_look_inside,
+    JitHintError, oopspec, isconstant, conditional_call,
+    elidable, unroll_safe, dont_look_inside, conditional_call_elidable,
     enter_portal_frame, leave_portal_frame)
 from rpython.rlib.rarithmetic import r_uint
 from rpython.rtyper.test.tool import BaseRtypingTest
@@ -310,23 +310,27 @@ class TestJIT(BaseRtypingTest):
         t = Translation(g, [])
         t.compile_c() # does not crash
 
-    def test_conditional_call_value(self):
+    def test_conditional_call_elidable(self):
+        @elidable
         def g(m):
             return m + 42
         def f(n, m):
-            return conditional_call_value(n, -1, g, m)
+            return conditional_call_elidable(n, -1, g, m)
 
+        assert f(10, 200) == 10
+        assert f(-1, 200) == 242
         res = self.interpret(f, [10, 200])
         assert res == 10
         res = self.interpret(f, [-1, 200])
         assert res == 242
 
-    def test_compiled_conditional_call_value(self):
+    def test_compiled_conditional_call_elidable(self):
         from rpython.translator.c.test.test_genc import compile
+        @elidable
         def g(m):
             return m + 42
         def f(n, m):
-            return conditional_call_value(n, -1, g, m)
+            return conditional_call_elidable(n, -1, g, m)
         fn = compile(f, [int, int], backendopt=False)
         assert fn(10, 200) == 10
         assert fn(-1, 200) == 242

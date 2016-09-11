@@ -96,21 +96,21 @@ do_call_may_force_i = do_call_i
 do_call_may_force_f = do_call_f
 do_call_may_force_n = do_call_n
 
-def do_cond_call_i(cpu, metainterp, argboxes, descr):
+def do_cond_call_pure_i(cpu, metainterp, argboxes, descr):
     cond = argboxes[0].getint()
     specialval = argboxes[1].getint()
     if cond == specialval:
         return do_call_i(cpu, metainterp, argboxes[2:], descr)
     return cond
 
-def do_cond_call_r(cpu, metainterp, argboxes, descr):
+def do_cond_call_pure_r(cpu, metainterp, argboxes, descr):
     cond = argboxes[0].getref_base()
     specialval = argboxes[1].getref_base()
     if cond == specialval:
         return do_call_r(cpu, metainterp, argboxes[2:], descr)
     return cond
 
-def do_cond_call_n(cpu, metainterp, argboxes, descr):
+def do_cond_call(cpu, metainterp, argboxes, descr):
     cond = argboxes[0].getint()
     specialval = argboxes[1].getint()
     assert specialval == 1       # cond_call_n is only used with that case

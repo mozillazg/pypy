@@ -2,7 +2,7 @@
 from rpython.jit.metainterp.test.support import LLJitMixin
 from rpython.rlib import jit
 
-class TestCall(LLJitMixin):
+class CallTest(object):
     def test_indirect_call(self):
         @jit.dont_look_inside
         def f1(x):
@@ -54,19 +54,21 @@ class TestCall(LLJitMixin):
         self.check_resops(guard_no_exception=0)
 
     def test_cond_call_i(self):
+        @jit.elidable   # not really, for tests
         def f(l, n):
             l.append(n)
             return 1000
 
         def main(n):
             l = []
-            x = jit.conditional_call_value(n, 10, f, l, n)
+            x = jit.conditional_call_elidable(n, 10, f, l, n)
             return x + len(l)
 
         assert self.interp_operations(main, [10]) == 1001
         assert self.interp_operations(main, [5]) == 5
 
     def test_cond_call_r(self):
+        @jit.elidable
         def f(n):
             return [n]
 
@@ -75,8 +77,24 @@ class TestCall(LLJitMixin):
                 l = []
             else:
                 l = None
-            l = jit.conditional_call_value(l, None, f, n)
+            l = jit.conditional_call_elidable(l, None, f, n)
             return len(l)
 
         assert self.interp_operations(main, [10]) == 0
         assert self.interp_operations(main, [5]) == 1
+
+    def test_cond_call_constant_in_pyjitpl(self):
+        @jit.elidable
+        def f(a, b):
+            return a + b
+        def main(n):
+            # this is completely constant-folded because the arguments
+            # to f() are constants.
+            return jit.conditional_call_elidable(n, 23, f, 40, 2)
+
+        assert main(12) == 12    # because 12 != 23
+        assert self.interp_operations(main, [12]) == 42   # == f(40, 2)
+
+
+class TestCall(LLJitMixin, CallTest):
+    pass

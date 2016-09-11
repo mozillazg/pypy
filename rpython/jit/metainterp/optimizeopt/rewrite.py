@@ -516,28 +516,41 @@ class OptRewrite(Optimization):
     optimize_CALL_LOOPINVARIANT_F = optimize_CALL_LOOPINVARIANT_I
     optimize_CALL_LOOPINVARIANT_N = optimize_CALL_LOOPINVARIANT_I
 
-    def optimize_COND_CALL_N(self, op):
+    def optimize_COND_CALL(self, op):
         arg0 = self.get_box_replacement(op.getarg(0))
         arg1 = self.get_box_replacement(op.getarg(1))
-        if arg0.type == 'i':
+        equal = -1    # unknown
+        if isinstance(arg0, Const):
+            equal = arg0.same_constant(arg1)
+        elif arg0.type == 'i':
             b1 = self.getintbound(arg0)
             b2 = self.getintbound(arg1)
-            drop = b1.known_gt(b2) or b1.known_lt(b2)
-        elif arg0.type == 'r' and arg1.same_constant(CONST_NULL):
-            drop = self.getnullness(arg0) == INFO_NONNULL
-        else:
-            drop = False
-        if drop:
+            if b1.known_gt(b2) or b1.known_lt(b2):
+                equal = 0    # different
+        elif arg0.type == 'r':
+            if arg1.same_constant(CONST_NULL):
+                if self.getnullness(arg0) == INFO_NONNULL:
+                    equal = 0    # different
+            else:
+                info0 = self.getptrinfo(arg0)
+                if info0 and info0.is_virtual():
+                    equal = 0    # a virtual can't be equal to a constant
+        #
+        if equal == 1:
+            if op.type == 'v':
+                opnum = rop.CALL_N
+            else:
+                opnum = OpHelpers.call_pure_for_descr(op.getdescr())
+            op = self.replace_op_with(op, opnum, args=op.getarglist()[2:])
+            self.send_extra_operation(op)
+        elif equal == 0:
             if op.type != 'v':
                 self.make_equal_to(op, arg0)
             self.last_emitted_operation = REMOVED
-            return
-        if arg0.same_box(arg1):
-            opnum = OpHelpers.call_for_type(op.type)
-            op = self.replace_op_with(op, opnum, args=op.getarglist()[2:])
-        self.emit_operation(op)
-    optimize_COND_CALL_I = optimize_COND_CALL_N
-    optimize_COND_CALL_R = optimize_COND_CALL_N
+        else:
+            self.emit_operation(op)
+    optimize_COND_CALL_PURE_I = optimize_COND_CALL
+    optimize_COND_CALL_PURE_R = optimize_COND_CALL
 
     def _optimize_nullness(self, op, box, expect_nonnull):
         info = self.getnullness(box)
