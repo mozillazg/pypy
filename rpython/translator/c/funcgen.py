@@ -453,7 +453,7 @@ class FunctionCodeGenerator(object):
         fnexpr = '((%s)%s)' % (cdecl(typename, ''), self.expr(fnaddr))
         return self.generic_call(FUNC, fnexpr, op.args[1:], op.result)
 
-    def OP_JIT_CONDITIONAL_CALL(self, op):
+    def OP_JIT_CONDITIONAL_CALL_VALUE(self, op):
         return 'abort();  /* jit_conditional_call */'
 
     # low-level operations

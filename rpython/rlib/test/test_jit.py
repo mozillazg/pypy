@@ -320,3 +320,13 @@ class TestJIT(BaseRtypingTest):
         assert res == 10
         res = self.interpret(f, [-1, 200])
         assert res == 242
+
+    def test_compiled_conditional_call_value(self):
+        from rpython.translator.c.test.test_genc import compile
+        def g(m):
+            return m + 42
+        def f(n, m):
+            return conditional_call_value(n, -1, g, m)
+        fn = compile(f, [int, int], backendopt=False)
+        assert fn(10, 200) == 10
+        assert fn(-1, 200) == 242
