@@ -1199,28 +1199,25 @@ class BlackholeInterpreter(object):
     def bhimpl_residual_call_irf_v(cpu, func, args_i,args_r,args_f,calldescr):
         return cpu.bh_call_v(func, args_i, args_r, args_f, calldescr)
 
-    # conditional calls - note that they cannot return stuff
-    @arguments("cpu", "i", "i", "I", "d")
-    def bhimpl_conditional_call_i_v(cpu, condition, func, args_i, calldescr):
-        if condition:
-            cpu.bh_call_v(func, args_i, None, None, calldescr)
+    @arguments("cpu", "i", "i", "I", "R", "d", returns="i")
+    def bhimpl_conditional_call_ir_i(cpu, value, special_constant,
+                                     func, args_i, args_r, calldescr):
+        if value == special_constant:
+            value = cpu.bh_call_i(func, args_i, args_r, None, calldescr)
+        return value
 
-    @arguments("cpu", "i", "i", "R", "d")
-    def bhimpl_conditional_call_r_v(cpu, condition, func, args_r, calldescr):
-        if condition:
-            cpu.bh_call_v(func, None, args_r, None, calldescr)
+    @arguments("cpu", "r", "r", "I", "R", "d", returns="r")
+    def bhimpl_conditional_call_ir_r(cpu, value, special_constant,
+                                     func, args_i, args_r, calldescr):
+        if value == special_constant:
+            value = cpu.bh_call_r(func, args_i, args_r, None, calldescr)
+        return value
 
-    @arguments("cpu", "i", "i", "I", "R", "d")
-    def bhimpl_conditional_call_ir_v(cpu, condition, func, args_i, args_r,
-                                     calldescr):
-        if condition:
+    @arguments("cpu", "r", "r", "I", "R", "d")
+    def bhimpl_conditional_call_ir_v(cpu, value, special_constant,
+                                     func, args_i, args_r, calldescr):
+        if value == special_constant:
             cpu.bh_call_v(func, args_i, args_r, None, calldescr)
-
-    @arguments("cpu", "i", "i", "I", "R", "F", "d")
-    def bhimpl_conditional_call_irf_v(cpu, condition, func, args_i, args_r,
-                                      args_f, calldescr):
-        if condition:
-            cpu.bh_call_v(func, args_i, args_r, args_f, calldescr)
 
     @arguments("cpu", "j", "R", returns="i")
     def bhimpl_inline_call_r_i(cpu, jitcode, args_r):

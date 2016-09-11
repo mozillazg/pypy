@@ -1178,13 +1178,15 @@ class Entry(ExtRegistryEntry):
         hop.exception_is_here()
         return hop.gendirectcall(ll_record_exact_class, v_inst, v_cls)
 
+def _jit_conditional_call(value, ignored, function, *args):
+    """NOT_RPYTHON"""
 def _jit_conditional_call_value(value, special_constant, function, *args):
     """NOT_RPYTHON"""
 
 @specialize.call_location()
 def conditional_call(condition, function, *args):
     if we_are_jitted():
-        _jit_conditional_call_value(condition, True, function, *args)
+        _jit_conditional_call(condition, True, function, *args)
     else:
         if condition:
             function(*args)
@@ -1202,12 +1204,14 @@ def conditional_call_value(value, special_constant, function, *args):
 conditional_call_value._always_inline_ = True
 
 class ConditionalCallEntry(ExtRegistryEntry):
-    _about_ = _jit_conditional_call_value
+    _about_ = _jit_conditional_call_value, _jit_conditional_call
 
     def compute_result_annotation(self, *args_s):
+        from rpython.annotator import model as annmodel
         self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
                                          args_s[2], args_s[3:])
-        return args_s[0]
+        if self.instance is _jit_conditional_call_value:
+            return args_s[0]
 
     def specialize_call(self, hop):
         from rpython.rtyper.lltypesystem import lltype
@@ -1218,7 +1222,7 @@ class ConditionalCallEntry(ExtRegistryEntry):
                                                     hop.args_s[3:], hop.spaceop)
         hop.exception_is_here()
         return hop.genop('jit_conditional_call_value', args_v,
-                         resulttype=r_value)
+                         resulttype=hop.r_result)
 
 def enter_portal_frame(unique_id):
     """call this when starting to interpret a function. calling this is not

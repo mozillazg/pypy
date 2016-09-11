@@ -364,7 +364,7 @@ class Transformer(object):
         return getattr(self, 'handle_%s_indirect_call' % kind)(op)
 
     def rewrite_call(self, op, namebase, initialargs, args=None,
-                     calldescr=None):
+                     calldescr=None, forced_ir=False):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'
            into 'i0 = xxx_call_ir_i(fn, descr, [i1,i2], [ref1,ref2])'.
            The name is one of '{residual,direct}_call_{r,ir,irf}_{i,r,f,v}'."""
@@ -374,7 +374,7 @@ class Transformer(object):
         lst_i, lst_r, lst_f = self.make_three_lists(args)
         reskind = getkind(op.result.concretetype)[0]
         if lst_f or reskind == 'f': kinds = 'irf'
-        elif lst_i: kinds = 'ir'
+        elif lst_i or forced_ir: kinds = 'ir'
         else: kinds = 'r'
         sublists = []
         if 'i' in kinds: sublists.append(lst_i)
@@ -1564,20 +1564,19 @@ class Transformer(object):
             return []
         return getattr(self, 'handle_jit_marker__%s' % key)(op, jitdriver)
 
-    def rewrite_op_jit_conditional_call(self, op):
-        have_floats = False
+    def rewrite_op_jit_conditional_call_value(self, op):
+        have_floats = (getkind(op.result.concretetype) == 'float')
         for arg in op.args:
             if getkind(arg.concretetype) == 'float':
                 have_floats = True
-                break
-        if len(op.args) > 4 + 2 or have_floats:
+        if len(op.args) > 4 + 3 or have_floats:
             raise Exception("Conditional call does not support floats or more than 4 arguments")
-        callop = SpaceOperation('direct_call', op.args[1:], op.result)
+        callop = SpaceOperation('direct_call', op.args[2:], op.result)
         calldescr = self.callcontrol.getcalldescr(callop)
         assert not calldescr.get_extra_info().check_forces_virtual_or_virtualizable()
         op1 = self.rewrite_call(op, 'conditional_call',
-                                op.args[:2], args=op.args[2:],
-                                calldescr=calldescr)
+                                op.args[:3], args=op.args[3:],
+                                calldescr=calldescr, forced_ir=True)
         if self.callcontrol.calldescr_canraise(calldescr):
             op1 = [op1, SpaceOperation('-live-', [], None)]
         return op1

@@ -904,7 +904,8 @@ class MIFrame(object):
                                        history.CONST_NULL)
         funcbox = ConstInt(rffi.cast(lltype.Signed, vinfo.clear_vable_ptr))
         calldescr = vinfo.clear_vable_descr
-        self.execute_varargs(rop.COND_CALL, [condbox, funcbox, box],
+        self.execute_varargs(rop.COND_CALL_I, [condbox, history.CONST_TRUE,
+                                               funcbox, box],
                              calldescr, False, False)
 
     def _get_virtualizable_field_index(self, fielddescr):
@@ -1056,22 +1057,26 @@ class MIFrame(object):
     opimpl_residual_call_irf_f = _opimpl_residual_call3
     opimpl_residual_call_irf_v = _opimpl_residual_call3
 
-    @arguments("box", "box", "boxes", "descr", "orgpc")
-    def opimpl_conditional_call_i_v(self, condbox, funcbox, argboxes, calldescr,
-                                    pc):
-        self.do_conditional_call(condbox, funcbox, argboxes, calldescr, pc)
+    @arguments("box", "box", "box", "boxes2", "descr", "orgpc")
+    def opimpl_conditional_call_ir_i(self, condbox, specialvalbox,
+                                     funcbox, argboxes, calldescr, pc):
+        return self.do_conditional_call(condbox, specialvalbox,
+                                        funcbox, argboxes, calldescr, pc,
+                                        rop.COND_CALL_I)
 
-    opimpl_conditional_call_r_v = opimpl_conditional_call_i_v
+    @arguments("box", "box", "box", "boxes2", "descr", "orgpc")
+    def opimpl_conditional_call_ir_r(self, condbox, specialvalbox,
+                                     funcbox, argboxes, calldescr, pc):
+        return self.do_conditional_call(condbox, specialvalbox,
+                                        funcbox, argboxes, calldescr, pc,
+                                        rop.COND_CALL_R)
 
-    @arguments("box", "box", "boxes2", "descr", "orgpc")
-    def opimpl_conditional_call_ir_v(self, condbox, funcbox, argboxes,
-                                     calldescr, pc):
-        self.do_conditional_call(condbox, funcbox, argboxes, calldescr, pc)
-
-    @arguments("box", "box", "boxes3", "descr", "orgpc")
-    def opimpl_conditional_call_irf_v(self, condbox, funcbox, argboxes,
-                                      calldescr, pc):
-        self.do_conditional_call(condbox, funcbox, argboxes, calldescr, pc)
+    @arguments("box", "box", "box", "boxes2", "descr", "orgpc")
+    def opimpl_conditional_call_ir_v(self, condbox, specialvalbox,
+                                     funcbox, argboxes, calldescr, pc):
+        return self.do_conditional_call(condbox, specialvalbox,
+                                        funcbox, argboxes, calldescr, pc,
+                                        rop.COND_CALL_N)
 
     @arguments("int", "boxes3", "boxes3", "orgpc")
     def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes, pc):
@@ -1724,16 +1729,19 @@ class MIFrame(object):
             else:
                 assert False
 
-    def do_conditional_call(self, condbox, funcbox, argboxes, descr, pc):
-        if isinstance(condbox, ConstInt) and condbox.value == 0:
-            return   # so that the heapcache can keep argboxes virtual
+    def do_conditional_call(self, condbox, specialvalbox,
+                            funcbox, argboxes, descr, pc, rop_num):
+        if (isinstance(condbox, Const) and
+                not condbox.same_constant(specialvalbox)):
+            return condbox  # so that the heapcache can keep argboxes virtual
         allboxes = self._build_allboxes(funcbox, argboxes, descr)
         effectinfo = descr.get_extra_info()
         assert not effectinfo.check_forces_virtual_or_virtualizable()
         exc = effectinfo.check_can_raise()
         pure = effectinfo.check_is_elidable()
-        return self.execute_varargs(rop.COND_CALL, [condbox] + allboxes, descr,
-                                    exc, pure)
+        return self.execute_varargs(rop_num,
+                                    [condbox, specialvalbox] + allboxes,
+                                    descr, exc, pure)
 
     def _do_jit_force_virtual(self, allboxes, descr, pc):
         assert len(allboxes) == 2
