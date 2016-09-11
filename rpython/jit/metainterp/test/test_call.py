@@ -139,6 +139,32 @@ class CallTest(object):
         self.check_resops(call_pure_i=0, cond_call_pure_i=0, call_i=2,
                           int_sub=2)
 
+    def test_cond_call_constant_in_optimizer_3(self):
+        myjitdriver = jit.JitDriver(greens = ['m'], reds = ['n', 'p'])
+        @jit.elidable
+        def externfn(x):
+            return 1
+        class V:
+            def __init__(self, value):
+                self.value = value
+        def f(n, m, p):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, p=p, m=m)
+                myjitdriver.jit_merge_point(n=n, p=p, m=m)
+                assert p > 14
+                assert p < 16
+                n0 = n
+                n -= jit.conditional_call_elidable(p, 15, externfn, n0)
+                n -= jit.conditional_call_elidable(p, 15, externfn, n0)
+            return n
+        res = self.meta_interp(f, [21, 5, 15])
+        assert res == -1
+        # same as test_cond_call_constant_in_optimizer_2, but the two
+        # intermediate CALL_PUREs are replaced with only one, because
+        # they are called with the same arguments
+        self.check_resops(call_pure_i=0, cond_call_pure_i=0, call_i=2,
+                          int_sub=4)
+
 
 class TestCall(LLJitMixin, CallTest):
     pass
