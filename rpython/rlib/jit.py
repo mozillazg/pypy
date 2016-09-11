@@ -1209,12 +1209,18 @@ def conditional_call_elidable(value, special_constant, function, *args):
         return ONE OF function(*args) OR (value if value != special_constant)
 
     whichever is better for the JIT.  Usually it first checks if 'value'
-    is equal to 'special_constant', and only if it is, it calls
-    'function(*args)'.  The 'function' must be marked as @elidable.  An
-    example of an "unusual" case is if, say, all arguments are constant.
-    In this case the JIT knows the result of the call in advance, and
-    so it always uses the 'function(*args)' path without comparing
-    'value' and 'special_constant' at all.
+    is equal to 'special_constant', and conditionally calls
+    'function(*args)' if it is.  The 'function' must be marked as
+    @elidable.
+
+    If 'value != special_constant', then the JIT assumes that both
+    solutions would work and _are equal_.  This means that if, say, all
+    arguments to the call are constants, then the JIT removes everything
+    and replaces it with a constant (by constant-folding
+    'function(*args)').  That constant is whatever value was seen as
+    result during tracing (which is the original 'value' if different
+    from 'special_constant'--that's supposed to be equal to
+    'function(*args)').
     """
     if we_are_jitted():
         return _jit_conditional_call_elidable(value, special_constant,

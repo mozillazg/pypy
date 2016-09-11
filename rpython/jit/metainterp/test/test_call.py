@@ -95,6 +95,27 @@ class CallTest(object):
         assert self.interp_operations(main, [23]) == 42  # because 23 == 23
         self.check_operations_history(finish=1)   # empty history
 
+    def test_cond_call_constant_in_optimizer(self):
+        myjitdriver = jit.JitDriver(greens = ['m'], reds = ['n', 'p'])
+        @jit.elidable
+        def externfn(x):
+            return x - 3
+        class V:
+            def __init__(self, value):
+                self.value = value
+        def f(n, m, p):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, p=p, m=m)
+                myjitdriver.jit_merge_point(n=n, p=p, m=m)
+                v = V(m)
+                n -= jit.conditional_call_elidable(p, -42, externfn, v.value)
+            return n
+        res = self.meta_interp(f, [21, 5, -42])
+        assert res == -1
+        # the COND_CALL_PURE is constant-folded away by optimizeopt.py
+        self.check_resops(call_pure_i=0, cond_call_pure_i=0, call_i=0,
+                          int_sub=2)
+
 
 class TestCall(LLJitMixin, CallTest):
     pass
