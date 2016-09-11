@@ -3,7 +3,8 @@ import sys
 import py
 
 from rpython.rlib.nonconst import NonConstant
-from rpython.rlib.objectmodel import CDefinedIntSymbolic, keepalive_until_here, specialize
+from rpython.rlib.objectmodel import CDefinedIntSymbolic, keepalive_until_here
+from rpython.rlib.objectmodel import specialize, we_are_translated
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.tool.sourcetools import rpython_wrapper
@@ -1198,8 +1199,12 @@ def conditional_call_value(value, special_constant, function, *args):
         return _jit_conditional_call_value(value, special_constant,
                                            function, *args)
     else:
-        if value == special_constant:
-            value = function(*args)
+        if not we_are_translated() or isinstance(value, int):
+            if value == special_constant:
+                value = function(*args)
+        else:
+            if value is special_constant:
+                value = function(*args)
         return value
 conditional_call_value._always_inline_ = True
 

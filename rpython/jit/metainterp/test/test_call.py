@@ -52,3 +52,31 @@ class TestCall(LLJitMixin):
 
         assert self.meta_interp(main, [10]) == 42
         self.check_resops(guard_no_exception=0)
+
+    def test_cond_call_i(self):
+        def f(l, n):
+            l.append(n)
+            return 1000
+
+        def main(n):
+            l = []
+            x = jit.conditional_call_value(n, 10, f, l, n)
+            return x + len(l)
+
+        assert self.interp_operations(main, [10]) == 1001
+        assert self.interp_operations(main, [5]) == 5
+
+    def test_cond_call_r(self):
+        def f(n):
+            return [n]
+
+        def main(n):
+            if n == 10:
+                l = []
+            else:
+                l = None
+            l = jit.conditional_call_value(l, None, f, n)
+            return len(l)
+
+        assert self.interp_operations(main, [10]) == 0
+        assert self.interp_operations(main, [5]) == 1
