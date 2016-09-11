@@ -1076,7 +1076,7 @@ class MIFrame(object):
                                      funcbox, argboxes, calldescr, pc):
         self.do_conditional_call(condbox, specialvalbox,
                                  funcbox, argboxes, calldescr, pc,
-                                 rop.COND_CALL_N)
+                                 rop.COND_CALL)
 
     @arguments("int", "boxes3", "boxes3", "orgpc")
     def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes, pc):
@@ -1554,8 +1554,8 @@ class MIFrame(object):
         op = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
         if pure and not self.metainterp.last_exc_value and op:
-            op = self.metainterp.record_result_of_call_pure(op, argboxes, descr,
-                patch_pos)
+            op = self.metainterp.record_result_of_call_pure(op, opnum,
+                argboxes, descr, patch_pos)
             exc = exc and not isinstance(op, Const)
         if exc:
             if op is not None:
@@ -1739,7 +1739,7 @@ class MIFrame(object):
         assert not effectinfo.check_forces_virtual_or_virtualizable()
         exc = effectinfo.check_can_raise()
         pure = effectinfo.check_is_elidable()
-        assert pure == (opnum != rop.COND_CALL_N)
+        assert pure == (opnum != rop.COND_CALL)
         return self.execute_varargs(opnum,
                                     [condbox, specialvalbox] + allboxes,
                                     descr, exc, pure)
@@ -3078,12 +3078,12 @@ class MetaInterp(object):
         debug_stop("jit-abort-longest-function")
         return max_jdsd, max_key
 
-    def record_result_of_call_pure(self, op, argboxes, descr, patch_pos):
+    def record_result_of_call_pure(self, op, opnum, argboxes, descr, patch_pos):
         """ Patch a CALL into a CALL_PURE.
         """
         resbox_as_const = executor.constant_from_op(op)
-        is_cond = (op.opnum == rop.COND_CALL_PURE_I or
-                   op.opnum == rop.COND_CALL_PURE_R)
+        is_cond = (opnum == rop.COND_CALL_PURE_I or
+                   opnum == rop.COND_CALL_PURE_R)
         if is_cond:
             argboxes = argboxes[2:]
         for argbox in argboxes:
@@ -3099,6 +3099,7 @@ class MetaInterp(object):
         arg_consts = [executor.constant_from_op(a) for a in argboxes]
         self.call_pure_results[arg_consts] = resbox_as_const
         if is_cond:
+            import pdb;pdb.set_trace()
             return op    # there is no COND_CALL_I/R
         opnum = OpHelpers.call_pure_for_descr(descr)
         self.history.cut(patch_pos)

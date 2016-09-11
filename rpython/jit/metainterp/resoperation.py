@@ -884,6 +884,8 @@ class N_aryOp(object):
     _args = None
 
     def initarglist(self, args):
+        if self.opnum == rop.CALL_PURE_I:
+            import pdb;pdb.set_trace()
         self._args = args
         if not we_are_translated() and \
                self.__class__.__name__.startswith('FINISH'):   # XXX remove me
@@ -1437,6 +1439,11 @@ class rop(object):
         return (opnum == rop.CALL_RELEASE_GIL_I or
                 opnum == rop.CALL_RELEASE_GIL_F or
                 opnum == rop.CALL_RELEASE_GIL_N)
+
+    @staticmethod
+    def is_cond_call_pure(opnum):
+        return (opnum == rop.COND_CALL_PURE_I or
+                opnum == rop.COND_CALL_PURE_R)
 
     @staticmethod
     def is_ovf(opnum):

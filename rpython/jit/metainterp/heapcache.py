@@ -271,8 +271,7 @@ class HeapCache(object):
             return
         if (OpHelpers.is_plain_call(opnum) or
             OpHelpers.is_call_loopinvariant(opnum) or
-            opnum == rop.COND_CALL_I or
-            opnum == rop.COND_CALL_R):
+            OpHelpers.is_cond_call_pure(opnum)):
             effectinfo = descr.get_extra_info()
             ef = effectinfo.extraeffect
             if (ef == effectinfo.EF_LOOPINVARIANT or

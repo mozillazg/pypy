@@ -54,18 +54,15 @@ class CallTest(object):
         self.check_resops(guard_no_exception=0)
 
     def test_cond_call_i(self):
-        @jit.elidable   # not really, for tests
-        def f(l, n):
-            l.append(n)
-            return 1000
+        @jit.elidable
+        def f(n):
+            return n * 200
 
         def main(n):
-            l = []
-            x = jit.conditional_call_elidable(n, 10, f, l, n)
-            return x + len(l)
+            return jit.conditional_call_elidable(n, 10, f, n)
 
-        assert self.interp_operations(main, [10]) == 1001
-        assert self.interp_operations(main, [5]) == 5
+        assert self.interp_operations(main, [10]) == 2000
+        assert self.interp_operations(main, [15]) == 15
 
     def test_cond_call_r(self):
         @jit.elidable
@@ -92,8 +89,11 @@ class CallTest(object):
             # to f() are constants.
             return jit.conditional_call_elidable(n, 23, f, 40, 2)
 
-        assert main(12) == 12    # because 12 != 23
-        assert self.interp_operations(main, [12]) == 42   # == f(40, 2)
+        assert main(12) == 12                            # because 12 != 23
+        assert self.interp_operations(main, [12]) == 12  # because 12 != 23
+        self.check_operations_history(finish=1)   # empty history
+        assert self.interp_operations(main, [23]) == 42  # because 23 == 23
+        self.check_operations_history(finish=1)   # empty history
 
 
 class TestCall(LLJitMixin, CallTest):

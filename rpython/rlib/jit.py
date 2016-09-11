@@ -1236,14 +1236,14 @@ class ConditionalCallEntry(ExtRegistryEntry):
 
     def compute_result_annotation(self, *args_s):
         from rpython.annotator import model as annmodel
-        self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
-                                         args_s[2], args_s[3:])
+        s_res = self.bookkeeper.emulate_pbc_call(self.bookkeeper.position_key,
+                                                 args_s[2], args_s[3:])
         if self.instance is _jit_conditional_call_elidable:
             function = args_s[2].const
             assert getattr(function, '_elidable_function_', False), (
                 "jit.conditional_call_elidable() must call an elidable "
                 "function, but got %r" % (function,))
-            return args_s[0]
+            return annmodel.unionof(s_res, args_s[0])
 
     def specialize_call(self, hop):
         from rpython.rtyper.lltypesystem import lltype
