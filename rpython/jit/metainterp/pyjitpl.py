@@ -3099,7 +3099,6 @@ class MetaInterp(object):
         arg_consts = [executor.constant_from_op(a) for a in argboxes]
         self.call_pure_results[arg_consts] = resbox_as_const
         if is_cond:
-            import pdb;pdb.set_trace()
             return op    # there is no COND_CALL_I/R
         opnum = OpHelpers.call_pure_for_descr(descr)
         self.history.cut(patch_pos)

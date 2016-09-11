@@ -884,8 +884,6 @@ class N_aryOp(object):
     _args = None
 
     def initarglist(self, args):
-        if self.opnum == rop.CALL_PURE_I:
-            import pdb;pdb.set_trace()
         self._args = args
         if not we_are_translated() and \
                self.__class__.__name__.startswith('FINISH'):   # XXX remove me
