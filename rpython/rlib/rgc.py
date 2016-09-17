@@ -583,6 +583,12 @@ class AddMemoryPressureEntry(ExtRegistryEntry):
                          resulttype=lltype.Void)
 
 
+def getsizeof(instance):
+    """Get the size of an object as seen by the GC.
+    Only includes this object, not anything else it depends on!
+    """
+    return get_rpy_memory_usage(cast_instance_to_gcref(instance))
+
 def get_rpy_memory_usage(gcref):
     "NOT_RPYTHON"
     # approximate implementation using CPython's type info
