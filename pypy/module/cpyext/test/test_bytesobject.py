@@ -99,13 +99,13 @@ class AppTestBytesObject(AppTestCpythonExtensionBase):
              """),
             ('alloc_rw', "METH_NOARGS",
              '''
-                PyObject *obj = _PyObject_NewVar(&PyBytes_Type, 10);
+                PyVarObject *obj = _PyObject_NewVar(&PyBytes_Type, 10);
                 memcpy(PyBytes_AS_STRING(obj), "works", 6);
                 return (PyObject*)obj;
              '''),
             ])
         s = module.alloc_rw()
-        assert s == b'works' + b'\x00' * 5
+        assert s[:6] == b'works\x00'
         s = module.tpalloc()
         assert s == b'\x00' * 10
 
@@ -343,14 +343,16 @@ class AppTestBytesObject(AppTestCpythonExtensionBase):
         assert module.test_sstate()
 
     def test_subclass(self):
-        # taken from PyStringArrType_Type in numpy's scalartypes.c.src
+        # part 1 - taken from PyStringArrType_Type in numpy's scalartypes.c.src
+        # part 2 - make sure int(np.string_('abc')) does not reach nb_int,
+        #          i.e. it fails space.lookup(ob, "__int__") in 
+        #          _newint() from std/intobject.py
         module = self.import_extension('bar', [
             ("newsubstr", "METH_O",
              """
                 PyObject * obj;
                 char * data;
                 int len;
-                PyType_Ready(&PyStringArrType_Type);
 
                 data = PyString_AS_STRING(args);
                 len = PyString_GET_SIZE(args);
@@ -369,63 +371,98 @@ class AppTestBytesObject(AppTestCpythonExtensionBase):
                     0                             /* tp_itemsize */
                     };
 
-                    static PyObject *
-                    stringtype_repr(PyObject *self)
-                    {
-                        const char *dptr, *ip;
-                        int len;
-                        PyObject *new;
+                static PyObject *
+                stringtype_repr(PyObject *self)
+                {
+                    const char *dptr, *ip;
+                    int len;
+                    PyObject *new;
 
-                        ip = dptr = PyString_AS_STRING(self);
-                        len = PyString_GET_SIZE(self);
-                        dptr += len-1;
-                        while(len > 0 && *dptr-- == 0) {
-                            len--;
-                        }
-                        new = PyString_FromStringAndSize(ip, len);
-                        if (new == NULL) {
-                            return PyString_FromString("");
-                        }
-                        return new;
+                    ip = dptr = PyString_AS_STRING(self);
+                    len = PyString_GET_SIZE(self);
+                    dptr += len-1;
+                    while(len > 0 && *dptr-- == 0) {
+                        len--;
                     }
-
-                    static PyObject *
-                    stringtype_str(PyObject *self)
-                    {
-                        const char *dptr, *ip;
-                        int len;
-                        PyObject *new;
-
-                        ip = dptr = PyString_AS_STRING(self);
-                        len = PyString_GET_SIZE(self);
-                        dptr += len-1;
-                        while(len > 0 && *dptr-- == 0) {
-                            len--;
-                        }
-                        new = PyString_FromStringAndSize(ip, len);
-                        if (new == NULL) {
-                            return PyString_FromString("");
-                        }
-                        return new;
+                    new = PyString_FromStringAndSize(ip, len);
+                    if (new == NULL) {
+                        return PyString_FromString("");
                     }
+                    return new;
+                }
 
-                    PyObject *
-                    PyArray_Scalar(char *data, int n)
-                    {
-                        PyTypeObject *type = &PyStringArrType_Type;
-                        PyObject *obj;
-                        void *destptr;
-                        int itemsize = n;
-                        obj = type->tp_alloc(type, itemsize);
-                        if (obj == NULL) {
-                            return NULL;
-                        }
-                        destptr = PyString_AS_STRING(obj);
-                        ((PyBytesObject *)obj)->ob_shash = -1;
-                        memcpy(destptr, data, itemsize);
-                        return obj;
+                static PyObject *
+                stringtype_str(PyObject *self)
+                {
+                    const char *dptr, *ip;
+                    int len;
+                    PyObject *new;
+
+                    ip = dptr = PyString_AS_STRING(self);
+                    len = PyString_GET_SIZE(self);
+                    dptr += len-1;
+                    while(len > 0 && *dptr-- == 0) {
+                        len--;
                     }
+                    new = PyString_FromStringAndSize(ip, len);
+                    if (new == NULL) {
+                        return PyString_FromString("");
+                    }
+                    return new;
+                }
+
+                PyObject *
+                PyArray_Scalar(char *data, int n)
+                {
+                    PyTypeObject *type = &PyStringArrType_Type;
+                    PyObject *obj;
+                    void *destptr;
+                    int itemsize = n;
+                    obj = type->tp_alloc(type, itemsize);
+                    if (obj == NULL) {
+                        return NULL;
+                    }
+                    destptr = PyString_AS_STRING(obj);
+                    ((PyBytesObject *)obj)->ob_shash = -1;
+                    memcpy(destptr, data, itemsize);
+                    return obj;
+                }
+
+                static PyTypeObject Intermediate_Type = {
+                    PyObject_HEAD_INIT(NULL)
+                    0,
+                    "bar.Intermediate",
+                };
+
+                static PyTypeObject Base_Type = {
+                    PyObject_HEAD_INIT(NULL)
+                    0,
+                    "bar.Base",
+                };
+
+                PyObject *
+                nb_int(PyObject * self)
+                {
+                    return PyLong_FromLong(42);
+                }
+
+                PyNumberMethods base_as_number;
             """, more_init = '''
+                if (PyType_Ready(&PyString_Type)<0)
+                    return;
+
+                base_as_number.nb_int = nb_int;
+                /*Base_Type.tp_base = &PyType_Type;*/
+                Base_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
+                Base_Type.tp_as_number = &base_as_number;
+                if (PyType_Ready(&Base_Type) < 0)
+                    return;
+
+                Intermediate_Type.tp_base = &Base_Type;
+                Intermediate_Type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
+                if (PyType_Ready(&Intermediate_Type) < 0)
+                    return;
+
                 PyStringArrType_Type.tp_alloc = NULL;
                 PyStringArrType_Type.tp_free = NULL;
 
@@ -434,11 +471,18 @@ class AppTestBytesObject(AppTestCpythonExtensionBase):
                 PyStringArrType_Type.tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE;
                 PyStringArrType_Type.tp_itemsize = sizeof(char);
                 PyStringArrType_Type.tp_base = &PyString_Type;
+                PyStringArrType_Type.tp_bases = Py_BuildValue("(OO)",
+                        &PyString_Type, &Intermediate_Type);
+                PyType_Ready(&PyStringArrType_Type);
+                Py_INCREF(&PyStringArrType_Type);    
             ''')
 
         a = module.newsubstr('abc')
         assert type(a).__name__ == 'string_'
         assert a == 'abc'
+        #print type(a).mro(type(a))
+        raises(ValueError, int, a)
+
 
 class TestBytes(BaseApiTest):
     def test_bytes_resize(self, space, api):
