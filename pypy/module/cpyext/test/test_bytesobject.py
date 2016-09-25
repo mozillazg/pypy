@@ -480,6 +480,7 @@ class AppTestBytesObject(AppTestCpythonExtensionBase):
         a = module.newsubstr('abc')
         assert type(a).__name__ == 'string_'
         assert a == 'abc'
+        assert str(a) == 'abc'
         #print type(a).mro(type(a))
         raises(ValueError, int, a)
 

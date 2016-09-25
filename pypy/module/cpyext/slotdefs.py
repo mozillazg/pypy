@@ -453,6 +453,23 @@ def build_slot_tp_function(space, typedef, name):
             api_func = slot_func.api_func
             handled = True
 
+    # unary functions returning Py_ssize_t
+    for tp_name, attr in [('tp_as_sequence.c_sq_length', '__len__'),
+                          #('tp_as_mapping.c_mp_length', '__len__'),
+                          ]:
+        if name == tp_name:
+            slot_fn = w_type.getdictvalue(space, attr)
+            if slot_fn is None:
+                return
+
+            @cpython_api([PyObject], Py_ssize_t, header=header, error=-1)
+            @func_renamer("cpyext_%s_%s" % (name.replace('.', '_'), typedef.name))
+            def slot_func(space, w_self):
+                ret = space.call_function(slot_fn, w_self)
+                return space.int_w(ret)
+            api_func = slot_func.api_func
+            handled = True
+
     # binary functions
     for tp_name, attr in [('tp_as_number.c_nb_add', '__add__'),
                           ('tp_as_number.c_nb_subtract', '__sub__'),

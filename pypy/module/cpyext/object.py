@@ -40,7 +40,7 @@ def PyObject_Free(space, ptr):
 def _PyObject_New(space, type):
     return _PyObject_NewVar(space, type, 0)
 
-@cpython_api([PyTypeObjectPtr, Py_ssize_t], PyObject, result_is_ll=True)
+@cpython_api([PyTypeObjectPtr, Py_ssize_t], PyVarObject, result_is_ll=True)
 def _PyObject_NewVar(space, type, itemcount):
     w_type = from_ref(space, rffi.cast(PyObject, type))
     assert isinstance(w_type, W_TypeObject)

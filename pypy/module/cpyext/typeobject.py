@@ -479,6 +479,10 @@ class W_PyCTypeObject(W_TypeObject):
         if pto.c_tp_doc:
             self.w_doc = space.wrap(rffi.charp2str(pto.c_tp_doc))
 
+    def lookup(self, name):
+        # do not traverse the mro, look only in self
+        return self.getdictvalue(self.space, name)
+
 @bootstrap_function
 def init_typeobject(space):
     make_typedescr(space.w_type.layout.typedef,
@@ -819,15 +823,24 @@ def _type_realize(space, py_obj):
     # inheriting tp_as_* slots
     base = py_type.c_tp_base
     if base:
+        remap_slots = False
         if not py_type.c_tp_as_number: 
             py_type.c_tp_as_number = base.c_tp_as_number
             py_type.c_tp_flags |= base.c_tp_flags & Py_TPFLAGS_CHECKTYPES
             py_type.c_tp_flags |= base.c_tp_flags & Py_TPFLAGS_HAVE_INPLACEOPS
+            remap_slots = True
         if not py_type.c_tp_as_sequence:
             py_type.c_tp_as_sequence = base.c_tp_as_sequence
             py_type.c_tp_flags |= base.c_tp_flags & Py_TPFLAGS_HAVE_INPLACEOPS
-        if not py_type.c_tp_as_mapping: py_type.c_tp_as_mapping = base.c_tp_as_mapping
-        if not py_type.c_tp_as_buffer: py_type.c_tp_as_buffer = base.c_tp_as_buffer
+            remap_slots = True
+        if not py_type.c_tp_as_mapping:
+            py_type.c_tp_as_mapping = base.c_tp_as_mapping
+            remap_slots = True
+        if not py_type.c_tp_as_buffer:
+            py_type.c_tp_as_buffer = base.c_tp_as_buffer
+            remap_slots = True
+        if remap_slots:
+            add_operators(space, w_obj.dict_w, py_type)
 
     return w_obj
 
