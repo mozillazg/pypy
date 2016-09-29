@@ -92,6 +92,7 @@ class AppTestBytesObject:
         raises(ValueError, 'a%Zb'.__mod__, ((23,),))
 
     def test_format(self):
+        import sys
         raises(TypeError, "foo".__mod__, "bar")
         raises(TypeError, u"foo".__mod__, "bar")
         raises(TypeError, "foo".__mod__, u"bar")
@@ -105,11 +106,28 @@ class AppTestBytesObject:
             assert result == "a foo b"
             assert isinstance(result, cls)
 
+        for format, arg, cls in [("a %s b", "foo", str),
+                                 (u"a %s b", u"foo", unicode)]:
+            raises(TypeError, arg.__rmod__, format[:2])
+            result = arg.__rmod__(format)
+            assert result == "a foo b"
+            assert isinstance(result, cls)
+        for format, arg, cls in [(u"a %s b", "foo", str),
+                                 ("a %s b", u"foo", unicode)]:
+            result = arg.__rmod__(format)
+            if '__pypy__' in sys.builtin_module_names:
+                raises(TypeError, arg.__rmod__, format[:2])
+                assert result == "a foo b"
+                assert isinstance(result, cls)
+            else:
+                assert result is NotImplemented
+
     def test_format_wrongtype(self):
         for int_format in '%d', '%o', '%x':
             exc_info = raises(TypeError, int_format.__mod__, '123')
             expected = int_format + ' format: a number is required, not str'
             assert str(exc_info.value) == expected
+        raises(TypeError, "None % 'abc'") # __rmod__
 
     def test_split(self):
         assert b"".split() == []
@@ -656,7 +674,7 @@ class AppTestBytesObject:
         table = maketrans(b'abc', b'xyz')
         assert b'xyzxyz' == b'xyzabcdef'.translate(table, b'def')
         exc = raises(TypeError, "'xyzabcdef'.translate(memoryview(table), 'def')")
-        assert str(exc.value) == 'expected a character buffer object'
+        assert 'expected a' in str(exc.value)
 
         table = maketrans(b'a', b'A')
         assert b'Abc' == b'abc'.translate(table)
@@ -799,8 +817,18 @@ class AppTestBytesObject:
         raises(TypeError, len, iter(iterable))
 
     def test___radd__(self):
+        import sys
+        raises(TypeError, "None + ''")
+        if '__pypy__' in sys.builtin_module_names:
+            assert 'abc'.__radd__('def') is NotImplemented
+        else:
+            # xxx CPython has no str.__radd__ and no unicode.__radd__
+            raises(AttributeError, "'abc'.__radd__('def')")
+
+
         class Foo(object):
             def __radd__(self, other):
                 return 42
+
         x = Foo()
         assert "hello" + x == 42

@@ -301,6 +301,9 @@ class W_UnicodeObject(W_Root):
             raise
         return space.newbool(res)
 
+    def descr_radd(self, space, w_other):
+        return space.w_NotImplemented
+
     def descr_format(self, space, __args__):
         return newformat.format_method(space, self, __args__, is_unicode=True)
 
@@ -315,6 +318,9 @@ class W_UnicodeObject(W_Root):
 
     def descr_mod(self, space, w_values):
         return mod_format(space, self, w_values, do_unicode=True)
+
+    def descr_rmod(self, space, w_values):
+        return mod_format(space, w_values, self, do_unicode=True)
 
     def descr_translate(self, space, w_table):
         selfvalue = self._value
@@ -582,6 +588,9 @@ class UnicodeDocstrings:
     def __add__():
         """x.__add__(y) <==> x+y"""
 
+    def __radd__():
+        """x.__radd__(y) <==> y+x"""
+
     def __contains__():
         """x.__contains__(y) <==> y in x"""
 
@@ -629,6 +638,9 @@ class UnicodeDocstrings:
 
     def __mod__():
         """x.__mod__(y) <==> x%y"""
+
+    def __rmod__():
+        """x.__rmod__(y) <==> y%x"""
 
     def __mul__():
         """x.__mul__(n) <==> x*n"""
@@ -998,6 +1010,8 @@ W_UnicodeObject.typedef = TypeDef(
 
     __add__ = interp2app(W_UnicodeObject.descr_add,
                          doc=UnicodeDocstrings.__add__.__doc__),
+    __radd__ = interp2app(W_UnicodeObject.descr_radd,
+                         doc=UnicodeDocstrings.__radd__.__doc__),
     __mul__ = interp2app(W_UnicodeObject.descr_mul,
                          doc=UnicodeDocstrings.__mul__.__doc__),
     __rmul__ = interp2app(W_UnicodeObject.descr_mul,
@@ -1093,6 +1107,8 @@ W_UnicodeObject.typedef = TypeDef(
                             doc=UnicodeDocstrings.__format__.__doc__),
     __mod__ = interp2app(W_UnicodeObject.descr_mod,
                          doc=UnicodeDocstrings.__mod__.__doc__),
+    __rmod__ = interp2app(W_UnicodeObject.descr_rmod,
+                         doc=UnicodeDocstrings.__rmod__.__doc__),
     __getnewargs__ = interp2app(W_UnicodeObject.descr_getnewargs,
                                 doc=UnicodeDocstrings.__getnewargs__.__doc__),
     _formatter_parser = interp2app(W_UnicodeObject.descr_formatter_parser),

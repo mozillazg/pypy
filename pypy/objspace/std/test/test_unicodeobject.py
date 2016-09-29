@@ -738,11 +738,21 @@ class AppTestUnicodeString:
                             '\x00\x00\x00X\x00\x00\x00Y']
 
     def test_call_special_methods(self):
+        import sys
         # xxx not completely clear if these are implementation details or not
         assert 'abc'.__add__(u'def') == u'abcdef'
         assert u'abc'.__add__(u'def') == u'abcdef'
         assert u'abc'.__add__('def') == u'abcdef'
-        # xxx CPython has no str.__radd__ and no unicode.__radd__
+        assert u'abc'.__rmod__(u'%s') == u'abc'
+        ret = u'abc'.__rmod__('%s')
+        
+        if '__pypy__' in sys.builtin_module_names:
+            assert ret == u'abc'
+            assert u'abc'.__radd__(u'def') is NotImplemented
+        else:
+            assert ret is NotImplemented
+            # xxx CPython has no str.__radd__ and no unicode.__radd__
+            raises(AttributeError, "u'abc'.__radd__(u'def')")
 
     def test_str_unicode_concat_overrides(self):
         "Test from Jython about being bug-compatible with CPython."
