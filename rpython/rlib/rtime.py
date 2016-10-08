@@ -67,6 +67,7 @@ class CConfigForClockGetTime:
         includes=['time.h'],
         libraries=libraries
     )
+    _NO_MISSING_RT = rffi_platform.Has('printf("%d", clock_gettime(0, 0))')
     TIMESPEC = rffi_platform.Struct('struct timespec', [('tv_sec', rffi.LONG),
                                                         ('tv_nsec', rffi.LONG)])
 
@@ -163,11 +164,13 @@ elif CLOCK_PROCESS_CPUTIME_ID is not None:
     globals().update(rffi_platform.configure(CConfigForClockGetTime))
     TIMESPEC = TIMESPEC
     CLOCK_PROCESS_CPUTIME_ID = CLOCK_PROCESS_CPUTIME_ID
-    eci_with_lrt = eci.merge(ExternalCompilationInfo(libraries=['rt']))
+    eciclock = eci.merge(CConfigForClockGetTime._compilation_info_)
+    if not _NO_MISSING_RT:
+        eciclock = eciclock.merge(ExternalCompilationInfo(libraries=['rt']))
     c_clock_gettime = external('clock_gettime',
                                [lltype.Signed, lltype.Ptr(TIMESPEC)],
                                rffi.INT, releasegil=False,
-                               compilation_info=eci_with_lrt)
+                               compilation_info=eciclock)
 if need_rusage:
     RUSAGE = RUSAGE
     RUSAGE_SELF = RUSAGE_SELF or 0
