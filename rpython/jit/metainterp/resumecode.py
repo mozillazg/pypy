@@ -1,4 +1,3 @@
-
 """ Resume bytecode. It goes as following:
 
   # ----- resume section
@@ -19,10 +18,23 @@
 
   # ----- optimization section
   <more code>                                      further sections according to bridgeopt.py
+
 """
 
 from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.rlib import objectmodel
+
+class TagOverflow(Exception):
+    pass
+
+def integer_fits(item):
+    item *= 2
+    if item < 0:
+       item = ~item
+    # we can fit up to 22 content bits into 1-3 bytes (24 bits, with 2 continuation
+    # bits)
+    return item < 2 ** 22
+
 
 NUMBERINGP = lltype.Ptr(lltype.GcForwardReference())
 NUMBERING = lltype.GcStruct('Numbering',
@@ -31,10 +43,13 @@ NUMBERINGP.TO.become(NUMBERING)
 NULL_NUMBER = lltype.nullptr(NUMBERING)
 
 def append_numbering(lst, item):
-    item = rffi.cast(lltype.Signed, item)
+    # item is just an int
+    assert isinstance(item, int)
+    if not integer_fits(item):
+        raise TagOverflow
     item *= 2
     if item < 0:
-        item = -1 - item
+       item = ~item
 
     assert item >= 0
     if item < 2**7:
@@ -43,7 +58,7 @@ def append_numbering(lst, item):
         lst.append(rffi.cast(rffi.UCHAR, item | 0x80))
         lst.append(rffi.cast(rffi.UCHAR, item >> 7))
     else:
-        assert item < 2**16
+        assert item < 2**22
         lst.append(rffi.cast(rffi.UCHAR, item | 0x80))
         lst.append(rffi.cast(rffi.UCHAR, (item >> 7) | 0x80))
         lst.append(rffi.cast(rffi.UCHAR, item >> 14))
@@ -80,19 +95,14 @@ def unpack_numbering(numb):
     return l
 
 class Writer(object):
-    def __init__(self, size):
+    def __init__(self, size=0):
         self.current = objectmodel.newlist_hint(3 * size)
         self.grow(size)
         self.items = 0
 
-    def append_short(self, item):
+    def append_int(self, item):
         self.items += 1
         append_numbering(self.current, item)
-
-    def append_int(self, item):
-        short = rffi.cast(rffi.SHORT, item)
-        assert rffi.cast(lltype.Signed, short) == item
-        return self.append_short(short)
 
     def create_numbering(self):
         numb = lltype.malloc(NUMBERING, len(self.current))
@@ -105,10 +115,17 @@ class Writer(object):
 
     def patch_current_size(self, index):
         # mess :-(
-        assert rffi.cast(lltype.Signed, self.current[index]) == 0
+        assert self.current[index] == 0
         l = []
         append_numbering(l, self.items)
         self.current = l + self.current[1:]
+
+
+def create_numbering(l):
+    w = Writer()
+    for item in l:
+        w.append_int(item)
+    return w.create_numbering()
 
 
 class Reader(object):

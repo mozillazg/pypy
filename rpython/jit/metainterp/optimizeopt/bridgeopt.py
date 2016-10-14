@@ -81,9 +81,9 @@ def serialize_optimizer_knowledge(optimizer, numb_state, liveboxes, liveboxes_fr
             if index == -1:
                 # XXX XXX XXX fix length!
                 continue # just skip it, if the descr is not encodable
-            numb_state.append_short(tag_box(box1, liveboxes_from_env, memo))
+            numb_state.append_int(tag_box(box1, liveboxes_from_env, memo))
             numb_state.append_int(index)
-            numb_state.append_short(tag_box(box2, liveboxes_from_env, memo))
+            numb_state.append_int(tag_box(box2, liveboxes_from_env, memo))
     else:
         numb_state.append_int(0)
 

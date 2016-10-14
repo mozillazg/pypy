@@ -13,6 +13,7 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, rffi, rstr
 from rpython.rtyper.rclass import OBJECTPTR
 from rpython.jit.metainterp.walkvirtual import VirtualVisitor
 from rpython.jit.metainterp import resumecode
+TagOverflow = resumecode.TagOverflow
 
 
 # Logic to encode the chain of frames and the state of the boxes at a
@@ -124,18 +125,14 @@ PENDINGFIELDSP = lltype.Ptr(lltype.GcArray(PENDINGFIELDSTRUCT))
 
 TAGMASK = 3
 
-class TagOverflow(Exception):
-    pass
-
 def tag(value, tagbits):
     assert 0 <= tagbits <= 3
-    sx = value >> 13
-    if sx != 0 and sx != -1:
-        raise TagOverflow
-    return rffi.r_short(value<<2|tagbits)
+    result = value<<2|tagbits
+    if not resumecode.integer_fits(result):
+        raise resumecode.TagOverflow
+    return result
 
 def untag(value):
-    value = rarithmetic.widen(value)
     tagbits = value & TAGMASK
     return value >> 2, tagbits
 
@@ -249,7 +246,7 @@ class ResumeDataLoopMemo(object):
                     tagged = tag(num_boxes, TAGBOX)
                     num_boxes += 1
                 liveboxes[box] = tagged
-            numb_state.append_short(tagged)
+            numb_state.append_int(tagged)
         numb_state.num_boxes = num_boxes
         numb_state.num_virtuals = num_virtuals
 
@@ -559,8 +556,8 @@ class ResumeDataVirtualAdder(VirtualVisitor):
                 fieldbox = optimizer.get_box_replacement(fieldbox)
                 #descr, box, fieldbox, itemindex = pending_setfields[i]
                 lldescr = annlowlevel.cast_instance_to_base_ptr(descr)
-                num = self._gettagged(box)
-                fieldnum = self._gettagged(fieldbox)
+                num = rffi.r_short(self._gettagged(box))
+                fieldnum = rffi.r_short(self._gettagged(fieldbox))
                 # the index is limited to 2147483647 (64-bit machines only)
                 if itemindex > 2147483647:
                     raise TagOverflow
