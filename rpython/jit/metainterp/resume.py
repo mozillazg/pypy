@@ -253,7 +253,8 @@ class ResumeDataLoopMemo(object):
     def number(self, optimizer, position, trace):
         snapshot_iter = trace.get_snapshot_iter(position)
         numb_state = NumberingState(snapshot_iter.size)
-        numb_state.append_int(0) # patch later
+        numb_state.append_int(0) # patch later: size of resume section
+        numb_state.append_int(0) # patch later: number of failargs
 
         arr = snapshot_iter.vable_array
 
@@ -457,6 +458,8 @@ class ResumeDataVirtualAdder(VirtualVisitor):
 
         self._number_virtuals(liveboxes, optimizer, num_virtuals)
         self._add_pending_fields(optimizer, pending_setfields)
+
+        numb_state.patch(1, len(liveboxes))
 
         self._add_optimizer_sections(numb_state, liveboxes, liveboxes_from_env)
         storage.rd_numb = numb_state.create_numbering()
@@ -928,7 +931,7 @@ class AbstractResumeDataReader(object):
         self.resumecodereader = resumecode.Reader(storage.rd_numb)
         count = self.resumecodereader.next_item()
         self.items_resume_section = count
-        self.count = storage.rd_count
+        self.count = self.resumecodereader.next_item()
         self.consts = storage.rd_consts
 
     def _prepare(self, storage):
@@ -1072,7 +1075,7 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         self._init(metainterp.cpu, storage)
         self.deadframe = deadframe
         self.metainterp = metainterp
-        self.liveboxes = [None] * storage.rd_count
+        self.liveboxes = [None] * self.count
         self._prepare(storage)
 
     def consume_boxes(self, info, boxes_i, boxes_r, boxes_f):
@@ -1263,9 +1266,6 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         assert box.type == kind
         return box
 
-    def next_box_of_type(self, kind):
-        return self.decode_box(self.resumecodereader.next_item(), kind)
-
     def load_box_from_cpu(self, num, kind):
         if num < 0:
             num += len(self.liveboxes)
@@ -1294,7 +1294,7 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
             kind = FLOAT
         else:
             raise AssertionError(kind)
-        return self.decode_box(tagged, kind)
+        return self.decode_box(self.resumecodereader.next_item(), kind)
     next_box_of_type._annspecialcase_ = 'specialize:arg(1)'
 
     def write_an_int(self, index, box):
@@ -1405,7 +1405,6 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         # just reset the token, we'll force it later
         vinfo.reset_token_gcref(virtualizable)
         vinfo.write_from_resume_data_partial(virtualizable, self)
-        return index
 
     def load_next_value_of_type(self, TYPE):
         from rpython.jit.metainterp.warmstate import specialize_value
