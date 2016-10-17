@@ -32,3 +32,51 @@ the ``libpypy-c.so`` must really be inside the path containing
 ``lib-python`` and ``lib_pypy``.  Of course, you can put a symlink to it
 from somewhere else.  You no longer have to do the same with the
 ``pypy`` executable, as long as it finds its ``libpypy-c.so`` library.
+
+.. branch: _warnings
+
+CPython allows warning.warn(('something', 1), Warning), on PyPy this
+produced a "expected a readable buffer object" error. Test and fix.
+
+.. branch: stricter-strip
+
+CPython rejects 'a'.strip(buffer(' ')); only None, str or unicode are
+allowed as arguments. Test and fix for str and unicode
+
+.. branch: faulthandler
+
+Port the 'faulthandler' module to PyPy default.  This module is standard
+in Python 3.3 but can also be installed from CPython >= 2.6 from PyPI.
+
+.. branch: test-cpyext
+
+Refactor cpyext testing to be more pypy3-friendly.
+
+.. branch: better-error-missing-self
+
+Improve the error message when the user forgot the "self" argument of a method.
+
+
+.. fb6bb835369e
+Change the ``timeit`` module: it now prints the average time and the standard
+deviation over 7 runs by default, instead of the minimum. The minimum is often
+misleading.
+
+.. branch: unrecursive-opt
+
+Make optimiseopt iterative instead of recursive so it can be reasoned about
+more easily and debugging is faster.
+
+.. branch: Tiberiumk/fix-2412-1476011166874
+.. branch: redirect-assembler-jitlog
+
+
+
+.. branch: stdlib-2.7.12
+
+Update stdlib to version 2.7.12
+
+.. branch: buffer-interface2
+
+Improve support for new buffer interface in cpyext, bf_getbuffer on built-in
+types still missing
