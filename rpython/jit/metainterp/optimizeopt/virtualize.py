@@ -80,7 +80,8 @@ class OptVirtualize(optimizer.Optimization):
     def postprocess_FINISH(self, op):
         guard_op = self._finish_guard_op
         if guard_op is not None:
-            guard_op = self.optimizer.store_final_boxes_in_guard(guard_op, [])
+            # XXX why are there never any pendingwrites here?
+            guard_op = self.optimizer.store_final_boxes_in_guard(guard_op, None)
             i = len(self.optimizer._newoperations) - 1
             assert i >= 0
             self.optimizer._newoperations.insert(i, guard_op)

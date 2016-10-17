@@ -10,8 +10,7 @@ class OptSimplify(Optimization):
 
     def emit(self, op):
         if op.is_guard():
-            if self.optimizer.pendingfields is None:
-                self.optimizer.pendingfields = []
+            self.optimizer.pendingwrites = None
         return Optimization.emit(self, op)
 
     def optimize_CALL_PURE_I(self, op):

@@ -116,13 +116,6 @@ def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes, t):
             virtualizable_boxes, virtualref_boxes)
     return result
 
-PENDINGFIELDSTRUCT = lltype.Struct('PendingField',
-                                   ('lldescr', OBJECTPTR),
-                                   ('num', rffi.SHORT),
-                                   ('fieldnum', rffi.SHORT),
-                                   ('itemindex', rffi.INT))
-PENDINGFIELDSP = lltype.Ptr(lltype.GcArray(PENDINGFIELDSTRUCT))
-
 TAGMASK = 3
 
 def tag(value, tagbits):
@@ -160,7 +153,7 @@ UNINITIALIZED = tag(-2, TAGCONST)   # used for uninitialized string characters
 TAG_CONST_OFFSET = 0
 
 class NumberingState(resumecode.Writer):
-    def __init__(self, size):
+    def __init__(self, size=0):
         resumecode.Writer.__init__(self, size)
         self.liveboxes = {}
         self.num_boxes = 0
@@ -217,44 +210,46 @@ class ResumeDataLoopMemo(object):
 
     # env numbering
 
+    def _number_box(self, box, optimizer, numb_state):
+        box = optimizer.get_box_replacement(box)
+        liveboxes = numb_state.liveboxes
+
+        if isinstance(box, Const):
+            tagged = self.getconst(box)
+        elif box in liveboxes:
+            tagged = liveboxes[box]
+        else:
+            is_virtual = False
+            if box.type == 'r':
+                info = optimizer.getptrinfo(box)
+                is_virtual = (info is not None and info.is_virtual())
+            if box.type == 'i':
+                info = optimizer.getrawptrinfo(box, create=False)
+                is_virtual = (info is not None and info.is_virtual()) 
+            if is_virtual:
+                tagged = tag(numb_state.num_virtuals, TAGVIRTUAL)
+                numb_state.num_virtuals += 1
+            else:
+                tagged = tag(numb_state.num_boxes, TAGBOX)
+                numb_state.num_boxes += 1
+            liveboxes[box] = tagged
+        return tagged
+
     def _number_boxes(self, iter, arr, optimizer, numb_state):
         """ Number boxes from one snapshot
         """
-        num_boxes = numb_state.num_boxes
-        num_virtuals = numb_state.num_virtuals
-        liveboxes = numb_state.liveboxes
         for item in arr:
             box = iter.get(rffi.cast(lltype.Signed, item))
-            box = optimizer.get_box_replacement(box)
-
-            if isinstance(box, Const):
-                tagged = self.getconst(box)
-            elif box in liveboxes:
-                tagged = liveboxes[box]
-            else:
-                is_virtual = False
-                if box.type == 'r':
-                    info = optimizer.getptrinfo(box)
-                    is_virtual = (info is not None and info.is_virtual())
-                if box.type == 'i':
-                    info = optimizer.getrawptrinfo(box, create=False)
-                    is_virtual = (info is not None and info.is_virtual()) 
-                if is_virtual:
-                    tagged = tag(num_virtuals, TAGVIRTUAL)
-                    num_virtuals += 1
-                else:
-                    tagged = tag(num_boxes, TAGBOX)
-                    num_boxes += 1
-                liveboxes[box] = tagged
+            tagged = self._number_box(box, optimizer, numb_state)
             numb_state.append_int(tagged)
-        numb_state.num_boxes = num_boxes
-        numb_state.num_virtuals = num_virtuals
 
-    def number(self, optimizer, position, trace):
+    def number(self, optimizer, position, trace, pendingwrites=None):
         snapshot_iter = trace.get_snapshot_iter(position)
         numb_state = NumberingState(snapshot_iter.size)
         numb_state.append_int(0) # patch later: size of resume section
         numb_state.append_int(0) # patch later: number of failargs
+
+        self._add_pending_writes(optimizer, pendingwrites, numb_state)
 
         arr = snapshot_iter.vable_array
 
@@ -277,6 +272,43 @@ class ResumeDataLoopMemo(object):
         numb_state.patch_current_size(0)
 
         return numb_state
+
+    def _add_pending_writes(self, optimizer, pendingwrites, numb_state):
+        if not pendingwrites:
+            numb_state.append_int(0)
+            numb_state.append_int(0)
+            return
+        metainterp_sd = optimizer.metainterp_sd
+        numb_state.append_int(len(pendingwrites.fields))
+        for op in pendingwrites.fields:
+            box = optimizer.get_box_replacement(op.getarg(0))
+            descr = op.getdescr()
+            if descr.descr_index == -1:
+                raise TagOverflow # shouldn't happen
+            fieldbox = optimizer.get_box_replacement(op.getarg(1))
+            numb_state.append_int(self._number_box(box, optimizer, numb_state))
+            numb_state.append_int(descr.descr_index)
+            numb_state.append_int(self._number_box(fieldbox, optimizer, numb_state))
+
+        numb_state.append_int(len(pendingwrites.arrays))
+        for op in pendingwrites.arrays:
+            box = optimizer.get_box_replacement(op.getarg(0))
+            descr = op.getdescr()
+            if descr.descr_index == -1:
+                raise TagOverflow # shouldn't happen
+            boxindex = optimizer.get_box_replacement(op.getarg(1))
+            itemindex = boxindex.getint()
+            # sanity: it's impossible to run code with SETARRAYITEM_GC
+            # with negative index, so this guard cannot ever fail;
+            # but it's possible to try to *build* such invalid code
+            if itemindex < 0:
+                raise TagOverflow
+            fieldbox = optimizer.get_box_replacement(op.getarg(2))
+            numb_state.append_int(self._number_box(box, optimizer, numb_state))
+            numb_state.append_int(descr.descr_index)
+            # the index is limited to 2**21
+            numb_state.append_int(itemindex)
+            numb_state.append_int(self._number_box(fieldbox, optimizer, numb_state))
 
 
     # caching for virtuals and boxes inside them
@@ -409,7 +441,7 @@ class ResumeDataVirtualAdder(VirtualVisitor):
         _, tagbits = untag(tagged)
         return tagbits == TAGVIRTUAL
 
-    def finish(self, pending_setfields=[]):
+    def finish(self, pendingwrites=None):
         optimizer = self.optimizer
         # compute the numbering
         storage = self.storage
@@ -419,7 +451,7 @@ class ResumeDataVirtualAdder(VirtualVisitor):
         assert resume_position >= 0
         # count stack depth
         numb_state = self.memo.number(optimizer,
-            resume_position, optimizer.trace)
+            resume_position, optimizer.trace, pendingwrites)
         self.liveboxes_from_env = liveboxes_from_env = numb_state.liveboxes
         num_virtuals = numb_state.num_virtuals
         self.liveboxes = {}
@@ -442,22 +474,8 @@ class ResumeDataVirtualAdder(VirtualVisitor):
                 assert info.is_virtual()
                 info.visitor_walk_recursive(box, self, optimizer)
 
-        for setfield_op in pending_setfields:
-            box = setfield_op.getarg(0)
-            box = optimizer.get_box_replacement(box)
-            if setfield_op.getopnum() == rop.SETFIELD_GC:
-                fieldbox = setfield_op.getarg(1)
-            else:
-                fieldbox = setfield_op.getarg(2)
-            fieldbox = optimizer.get_box_replacement(fieldbox)
-            self.register_box(box)
-            self.register_box(fieldbox)
-            info = optimizer.getptrinfo(fieldbox)
-            assert info is not None and info.is_virtual()
-            info.visitor_walk_recursive(fieldbox, self, optimizer)
-
+        # extends liveboxes!
         self._number_virtuals(liveboxes, optimizer, num_virtuals)
-        self._add_pending_fields(optimizer, pending_setfields)
 
         numb_state.patch(1, len(liveboxes))
 
@@ -468,7 +486,7 @@ class ResumeDataVirtualAdder(VirtualVisitor):
 
     def _number_virtuals(self, liveboxes, optimizer, num_env_virtuals):
         from rpython.jit.metainterp.optimizeopt.info import AbstractVirtualPtrInfo
-        
+
         # !! 'liveboxes' is a list that is extend()ed in-place !!
         memo = self.memo
         new_liveboxes = [None] * memo.num_cached_boxes()
@@ -531,45 +549,6 @@ class ResumeDataVirtualAdder(VirtualVisitor):
             if nholes > nliveboxes // 3:
                 return True
         return False
-
-    def _add_pending_fields(self, optimizer, pending_setfields):
-        rd_pendingfields = lltype.nullptr(PENDINGFIELDSP.TO)
-        if pending_setfields:
-            n = len(pending_setfields)
-            rd_pendingfields = lltype.malloc(PENDINGFIELDSP.TO, n)
-            for i in range(n):
-                op = pending_setfields[i]
-                box = optimizer.get_box_replacement(op.getarg(0))
-                descr = op.getdescr()
-                opnum = op.getopnum()
-                if opnum == rop.SETARRAYITEM_GC:
-                    fieldbox = op.getarg(2)
-                    boxindex = optimizer.get_box_replacement(op.getarg(1))
-                    itemindex = boxindex.getint()
-                    # sanity: it's impossible to run code with SETARRAYITEM_GC
-                    # with negative index, so this guard cannot ever fail;
-                    # but it's possible to try to *build* such invalid code
-                    if itemindex < 0:
-                        raise TagOverflow
-                elif opnum == rop.SETFIELD_GC:
-                    fieldbox = op.getarg(1)
-                    itemindex = -1
-                else:
-                    raise AssertionError
-                fieldbox = optimizer.get_box_replacement(fieldbox)
-                #descr, box, fieldbox, itemindex = pending_setfields[i]
-                lldescr = annlowlevel.cast_instance_to_base_ptr(descr)
-                num = rffi.r_short(self._gettagged(box))
-                fieldnum = rffi.r_short(self._gettagged(fieldbox))
-                # the index is limited to 2147483647 (64-bit machines only)
-                if itemindex > 2147483647:
-                    raise TagOverflow
-                #
-                rd_pendingfields[i].lldescr = lldescr
-                rd_pendingfields[i].num = num
-                rd_pendingfields[i].fieldnum = fieldnum
-                rd_pendingfields[i].itemindex = rffi.cast(rffi.INT, itemindex)
-        self.storage.rd_pendingfields = rd_pendingfields
 
     def _gettagged(self, box):
         if box is None:
@@ -926,17 +905,18 @@ class AbstractResumeDataReader(object):
     virtual_int_default = None
 
 
-    def _init(self, cpu, storage):
-        self.cpu = cpu
+    def _init(self, metainterp_sd, storage):
+        self.metainterp_sd = metainterp_sd
+        self.cpu = metainterp_sd.cpu
         self.resumecodereader = resumecode.Reader(storage.rd_numb)
-        count = self.resumecodereader.next_item()
-        self.items_resume_section = count
+        items_resume_section = self.resumecodereader.next_item()
+        self.items_resume_section = items_resume_section
         self.count = self.resumecodereader.next_item()
         self.consts = storage.rd_consts
 
     def _prepare(self, storage):
         self._prepare_virtuals(storage.rd_virtuals)
-        self._prepare_pendingfields(storage.rd_pendingfields)
+        self._prepare_pendingfields()
 
     def read_jitcode_pos_pc(self):
         jitcode_pos = self.resumecodereader.next_item()
@@ -1003,21 +983,23 @@ class AbstractResumeDataReader(object):
             self.virtuals_cache = self.VirtualCache([self.virtual_ptr_default] * len(virtuals),
                                                     [self.virtual_int_default] * len(virtuals))
 
-    def _prepare_pendingfields(self, pendingfields):
-        if pendingfields:
-            for i in range(len(pendingfields)):
-                lldescr = pendingfields[i].lldescr
-                num = pendingfields[i].num
-                fieldnum = pendingfields[i].fieldnum
-                itemindex = pendingfields[i].itemindex
-                descr = annlowlevel.cast_base_ptr_to_instance(AbstractDescr,
-                                                              lldescr)
-                struct = self.decode_ref(num)
-                itemindex = rffi.cast(lltype.Signed, itemindex)
-                if itemindex < 0:
-                    self.setfield(struct, fieldnum, descr)
-                else:
-                    self.setarrayitem(struct, itemindex, fieldnum, descr)
+    def _prepare_pendingfields(self):
+        metainterp_sd = self.metainterp_sd
+        for i in range(self.resumecodereader.next_item()):
+            num = self.resumecodereader.next_item()
+            struct = self.decode_ref(num)
+            descrindex = self.resumecodereader.next_item()
+            descr = metainterp_sd.all_descrs[descrindex]
+            fieldnum = self.resumecodereader.next_item()
+            self.setfield(struct, fieldnum, descr)
+        for i in range(self.resumecodereader.next_item()):
+            num = self.resumecodereader.next_item()
+            struct = self.decode_ref(num)
+            descrindex = self.resumecodereader.next_item()
+            descr = metainterp_sd.all_descrs[descrindex]
+            index = self.resumecodereader.next_item()
+            fieldnum = self.resumecodereader.next_item()
+            self.setarrayitem(struct, index, fieldnum, descr)
 
     def setarrayitem(self, array, index, fieldnum, arraydescr):
         if arraydescr.is_array_of_pointers():
@@ -1072,7 +1054,7 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
     VirtualCache = get_VirtualCache_class('BoxReader')
 
     def __init__(self, storage, deadframe, metainterp):
-        self._init(metainterp.cpu, storage)
+        self._init(metainterp.staticdata, storage)
         self.deadframe = deadframe
         self.metainterp = metainterp
         self.liveboxes = [None] * self.count
@@ -1363,7 +1345,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     #             2: resuming from the GUARD_NOT_FORCED
 
     def __init__(self, metainterp_sd, storage, deadframe, all_virtuals=None):
-        self._init(metainterp_sd.cpu, storage)
+        self._init(metainterp_sd, storage)
         self.deadframe = deadframe
         self.callinfocollection = metainterp_sd.callinfocollection
         if all_virtuals is None:        # common case
@@ -1375,6 +1357,12 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             self.virtuals_cache = all_virtuals
             # self.rd_virtuals can remain None, because virtuals_cache is
             # already filled
+
+            # skip over the resume code section that does pending field writes
+            num_field_writes = self.resumecodereader.next_item()
+            assert num_field_writes == 0
+            num_array_writes = self.resumecodereader.next_item()
+            assert num_array_writes == 0
 
     def handling_async_forcing(self):
         self.resume_after_guard_not_forced = 1

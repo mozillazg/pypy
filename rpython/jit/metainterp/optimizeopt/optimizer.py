@@ -274,8 +274,9 @@ class Optimizer(Optimization):
         self.interned_refs = self.cpu.ts.new_ref_dict()
         self.interned_ints = {}
         self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
-        self.pendingfields = None # set temporarily to a list, normally by
-                                  # heap.py, as we're about to generate a guard
+        # set temporarily to an instance of heap.PendingWrites, normally by
+        # heap.py, as we're about to generate a guard
+        self.pendingwrites = None
         self.quasi_immutable_deps = None
         self.replaces_guard = {}
         self._newoperations = []
@@ -612,14 +613,14 @@ class Optimizer(Optimization):
         if rop.is_guard(op.opnum):
             assert isinstance(op, GuardResOp)
             self.metainterp_sd.profiler.count(jitprof.Counters.OPT_GUARDS)
-            pendingfields = self.pendingfields
-            self.pendingfields = None
+            pendingwrites = self.pendingwrites
+            self.pendingwrites = None
             if self.replaces_guard and orig_op in self.replaces_guard:
                 self.replace_guard_op(self.replaces_guard[orig_op], op)
                 del self.replaces_guard[orig_op]
                 return
             else:
-                op = self.emit_guard_operation(op, pendingfields)
+                op = self.emit_guard_operation(op, pendingwrites)
         elif op.can_raise():
             self.exception_might_have_happened = True
         opnum = op.opnum
@@ -632,7 +633,7 @@ class Optimizer(Optimization):
         self._really_emitted_operation = op
         self._newoperations.append(op)
 
-    def emit_guard_operation(self, op, pendingfields):
+    def emit_guard_operation(self, op, pendingwrites):
         guard_op = op # self.replace_op_with(op, op.getopnum())
         opnum = guard_op.getopnum()
         # If guard_(no)_exception is merged with another previous guard, then
@@ -652,7 +653,7 @@ class Optimizer(Optimization):
             op = self._copy_resume_data_from(guard_op,
                                              self._last_guard_op)
         else:
-            op = self.store_final_boxes_in_guard(guard_op, pendingfields)
+            op = self.store_final_boxes_in_guard(guard_op, pendingwrites)
             self._last_guard_op = op
             # for unrolling
             for farg in op.getfailargs():
@@ -722,8 +723,7 @@ class Optimizer(Optimization):
         new_descr.copy_all_attributes_from(old_descr)
         self._newoperations[old_op_pos] = new_op
 
-    def store_final_boxes_in_guard(self, op, pendingfields):
-        assert pendingfields is not None
+    def store_final_boxes_in_guard(self, op, pendingwrites):
         if op.getdescr() is not None:
             descr = op.getdescr()
             assert isinstance(descr, compile.ResumeGuardDescr)
@@ -735,11 +735,12 @@ class Optimizer(Optimization):
         modifier = resume.ResumeDataVirtualAdder(self, descr, op, self.trace,
                                                  self.resumedata_memo)
         try:
-            newboxes = modifier.finish(pendingfields)
+            newboxes = modifier.finish(pendingwrites)
             if (newboxes is not None and
                 len(newboxes) > self.metainterp_sd.options.failargs_limit):
                 raise resume.TagOverflow
         except resume.TagOverflow:
+            #import pdb;pdb.xpm()
             raise compile.giveup()
         # check no duplicates
         #if not we_are_translated():

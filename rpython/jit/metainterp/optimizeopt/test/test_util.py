@@ -488,6 +488,8 @@ class FakeMetaInterpStaticData(object):
         self.globaldata = Fake()
         self.config = get_combined_translation_config(translating=True)
         self.jitlog = jl.JitLogger()
+        if cpu:
+            self.all_descrs = self.cpu.setup_descrs()
 
     class logger_noopt:
         @classmethod

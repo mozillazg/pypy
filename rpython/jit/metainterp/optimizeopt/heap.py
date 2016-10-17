@@ -227,6 +227,11 @@ class ArrayCachedItem(AbstractCachedEntry):
         self.cached_infos = []
         self.cached_structs = []
 
+class PendingWrites(object):
+    def __init__(self, fields, arrays):
+        self.fields = fields
+        self.arrays = arrays
+
 class OptHeap(Optimization):
     """Cache repeated heap accesses"""
 
@@ -329,7 +334,7 @@ class OptHeap(Optimization):
         if rop.is_ovf(op.opnum):
             return
         if rop.is_guard(op.opnum):
-            self.optimizer.pendingfields = (
+            self.optimizer.pendingwrites = (
                 self.force_lazy_sets_for_guard())
             return
         opnum = op.getopnum()
@@ -513,6 +518,7 @@ class OptHeap(Optimization):
                 pendingfields.append(op)
                 continue
             cf.force_lazy_set(self, descr)
+        pendingarrays = []
         for descr, submap in self.cached_arrayitems.iteritems():
             for index, cf in submap.iteritems():
                 op = cf._lazy_set
@@ -525,10 +531,10 @@ class OptHeap(Optimization):
                 opinfo = self.getptrinfo(op.getarg(0))
                 assert not opinfo.is_virtual()      # it must be a non-virtual
                 if self.optimizer.is_virtual(op.getarg(2)):
-                    pendingfields.append(op)
+                    pendingarrays.append(op)
                 else:
                     cf.force_lazy_set(self, descr)
-        return pendingfields
+        return PendingWrites(pendingfields, pendingarrays)
 
     def optimize_GETFIELD_GC_I(self, op):
         descr = op.getdescr()
