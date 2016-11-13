@@ -8,7 +8,6 @@ from rpython.rlib.buffer import StringBuffer
 only_pypy ="config.option.runappdirect and '__pypy__' not in sys.builtin_module_names" 
 
 class TestMemoryViewObject(BaseApiTest):
-    skip('needs c_bf_getbuffer wrapper from slotdefs')
     def test_fromobject(self, space, api):
         w_hello = space.newbytes("hello")
         assert api.PyObject_CheckBuffer(w_hello)
@@ -30,6 +29,12 @@ class TestMemoryViewObject(BaseApiTest):
         assert w_view.c_len == 5
         o = rffi.charp2str(w_view.c_buf)
         assert o == 'hello'
+        w_mv = api.PyMemoryView_FromBuffer(w_view)
+        for f in ('format', 'itemsize', 'ndim', 'readonly', 
+                  'shape', 'strides', 'suboffsets'):
+            w_f = space.wrap(f)
+            assert space.eq_w(space.getattr(w_mv, w_f), 
+                              space.getattr(w_memoryview, w_f))
 
 class AppTestBufferProtocol(AppTestCpythonExtensionBase):
     def test_buffer_protocol(self):

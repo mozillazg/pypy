@@ -274,7 +274,7 @@ def update_all_slots(space, w_type, pto):
         if len(slot_names) == 1:
             if not getattr(pto, slot_names[0]):
                 setattr(pto, slot_names[0], slot_func_helper)
-        elif (w_type.getname(space) in ('list', 'tuple') and
+        elif ((w_type is space.w_list or w_type is space.w_tuple) and
               slot_names[0] == 'c_tp_as_number'):
             # XXX hack - hwo can we generalize this? The problem is method
             # names like __mul__ map to more than one slot, and we have no
@@ -820,8 +820,6 @@ def inherit_slots(space, pto, w_base):
                 pto_as.c_bf_getreadbuffer = base_as.c_bf_getreadbuffer
             if not pto_as.c_bf_getsegcount:
                 pto_as.c_bf_getsegcount = base_as.c_bf_getsegcount
-            if not pto_as.c_bf_getcharbuffer:
-                pto_as.c_bf_getcharbuffer = base_as.c_bf_getcharbuffer
             if not pto_as.c_bf_releasebuffer:
                 pto_as.c_bf_releasebuffer = base_as.c_bf_releasebuffer
     finally:
