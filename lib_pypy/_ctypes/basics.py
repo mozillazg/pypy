@@ -85,7 +85,7 @@ class _CDataMeta(type):
 
     def from_buffer(self, obj, offset=0):
         size = self._sizeofinstances()
-        buf = buffer(obj, offset, size)
+        buf = memoryview(obj[offset:offset+size])
         if len(buf) < size:
             raise ValueError(
                 "Buffer size too small (%d instead of at least %d bytes)"
@@ -97,7 +97,8 @@ class _CDataMeta(type):
 
     def from_buffer_copy(self, obj, offset=0):
         size = self._sizeofinstances()
-        buf = buffer(obj, offset, size)
+        buf = memoryview(obj, offset, size)
+        buf = memoryview(obj[offset:offset+size])
         if len(buf) < size:
             raise ValueError(
                 "Buffer size too small (%d instead of at least %d bytes)"
