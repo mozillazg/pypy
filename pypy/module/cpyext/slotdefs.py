@@ -6,9 +6,9 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.rlib.rarithmetic import widen
 from pypy.module.cpyext.api import (
     cpython_api, generic_cpy_call, PyObject, Py_ssize_t, Py_TPFLAGS_CHECKTYPES,
-    mangle_name, pypy_decl, Py_buffer, Py_bufferP)
+    mangle_name, pypy_decl, Py_buffer, Py_bufferP, PyTypeObjectPtr)
 from pypy.module.cpyext.typeobjectdefs import (
-    unaryfunc, ternaryfunc, PyTypeObjectPtr, binaryfunc,
+    unaryfunc, ternaryfunc, binaryfunc,
     getattrfunc, getattrofunc, setattrofunc, lenfunc, ssizeargfunc, inquiry,
     ssizessizeargfunc, ssizeobjargproc, iternextfunc, initproc, richcmpfunc,
     cmpfunc, hashfunc, descrgetfunc, descrsetfunc, objobjproc, objobjargproc,

@@ -789,6 +789,42 @@ typedef struct {
 	releasebufferproc bf_releasebuffer;
 } PyBufferProcs;
 
+/* from descrobject.h */
+typedef PyObject *(*getter)(PyObject *, void *);
+typedef int (*setter)(PyObject *, PyObject *, void *);
+
+typedef struct PyGetSetDef {
+	char *name;
+	getter get;
+	setter set;
+	char *doc;
+	void *closure;
+} PyGetSetDef;
+
+/* from methodobject.h */
+typedef PyObject *(*PyCFunction)(PyObject *, PyObject *);
+typedef PyObject *(*PyCFunctionWithKeywords)(PyObject *, PyObject *,
+                                             PyObject *);
+typedef PyObject *(*PyNoArgsFunction)(PyObject *);
+
+struct PyMethodDef {
+    const char  *ml_name;   /* The name of the built-in function/method */
+    PyCFunction  ml_meth;   /* The C function that implements it */
+    int          ml_flags;  /* Combination of METH_xxx flags, which mostly
+                               describe the args expected by the C func */
+    const char  *ml_doc;    /* The __doc__ attribute, or NULL */
+};
+typedef struct PyMethodDef PyMethodDef;
+
+/* from structmember.h */
+typedef struct PyMemberDef {
+    /* Current version, use this */
+    char *name;
+    int type;
+    Py_ssize_t offset;
+    int flags;
+    char *doc;
+} PyMemberDef;
 
 
 typedef struct _typeobject {
