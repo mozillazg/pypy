@@ -732,9 +732,10 @@ class ParsedSource(object):
                 return rffi.VOIDP
             elif isinstance(TO, DelayedStruct):
                 TO = TO.TYPE
-            elif isinstance(obj.totype, model.PrimitiveType):
+            if isinstance(TO, lltype.ContainerType):
+                return lltype.Ptr(TO)
+            else:
                 return rffi.CArrayPtr(TO)
-            return lltype.Ptr(TO)
         elif isinstance(obj, model.FunctionPtrType):
             if obj.ellipsis:
                 raise NotImplementedError
