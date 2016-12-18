@@ -690,7 +690,7 @@ class ParsedSource(object):
         if isinstance(tp, DelayedStruct):
             self.realize_struct(tp, name)
             tp = self.structs[obj] = tp.TYPE
-        self.definitions[name] = lltype.Typedef(tp, name)
+        self.definitions[name] = tp
 
     def add_macro(self, name, value):
         assert name not in self.macros
