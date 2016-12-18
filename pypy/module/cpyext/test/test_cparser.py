@@ -63,3 +63,11 @@ def test_include():
     hdr2 = parse_source(cdef2, includes=[hdr1])
     assert 'Object' in hdr2.definitions
     assert 'Type' not in hdr2.definitions
+
+def test_const():
+    cdef = """
+    typedef struct {
+        const char * const foo;
+    } bar;
+    """
+    hdr = parse_source(cdef)
