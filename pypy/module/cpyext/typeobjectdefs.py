@@ -1,57 +1,57 @@
 from pypy.module.cpyext.api import h
 
 
-freefunc = h.definitions['freefunc']
-destructor = h.definitions['destructor']
-printfunc = h.definitions['printfunc']
-getattrfunc = h.definitions['getattrfunc']
-getattrofunc = h.definitions['getattrofunc']
-setattrfunc = h.definitions['setattrfunc']
-setattrofunc = h.definitions['setattrofunc']
-cmpfunc = h.definitions['cmpfunc']
-reprfunc = h.definitions['reprfunc']
-hashfunc = h.definitions['hashfunc']
-richcmpfunc = h.definitions['richcmpfunc']
-getiterfunc = h.definitions['getiterfunc']
-iternextfunc = h.definitions['iternextfunc']
-descrgetfunc = h.definitions['descrgetfunc']
-descrsetfunc = h.definitions['descrsetfunc']
-initproc = h.definitions['initproc']
-newfunc = h.definitions['newfunc']
-allocfunc = h.definitions['allocfunc']
+freefunc = h.definitions['freefunc'].OF
+destructor = h.definitions['destructor'].OF
+printfunc = h.definitions['printfunc'].OF
+getattrfunc = h.definitions['getattrfunc'].OF
+getattrofunc = h.definitions['getattrofunc'].OF
+setattrfunc = h.definitions['setattrfunc'].OF
+setattrofunc = h.definitions['setattrofunc'].OF
+cmpfunc = h.definitions['cmpfunc'].OF
+reprfunc = h.definitions['reprfunc'].OF
+hashfunc = h.definitions['hashfunc'].OF
+richcmpfunc = h.definitions['richcmpfunc'].OF
+getiterfunc = h.definitions['getiterfunc'].OF
+iternextfunc = h.definitions['iternextfunc'].OF
+descrgetfunc = h.definitions['descrgetfunc'].OF
+descrsetfunc = h.definitions['descrsetfunc'].OF
+initproc = h.definitions['initproc'].OF
+newfunc = h.definitions['newfunc'].OF
+allocfunc = h.definitions['allocfunc'].OF
 
-unaryfunc = h.definitions['unaryfunc']
-binaryfunc = h.definitions['binaryfunc']
-ternaryfunc = h.definitions['ternaryfunc']
-inquiry = h.definitions['inquiry']
-lenfunc = h.definitions['lenfunc']
-coercion = h.definitions['coercion']
-intargfunc = h.definitions['intargfunc']
-intintargfunc = h.definitions['intintargfunc']
-ssizeargfunc = h.definitions['ssizeargfunc']
-ssizessizeargfunc = h.definitions['ssizessizeargfunc']
-intobjargproc = h.definitions['intobjargproc']
-intintobjargproc = h.definitions['intintobjargproc']
-ssizeobjargproc = h.definitions['ssizeobjargproc']
-ssizessizeobjargproc = h.definitions['ssizessizeobjargproc']
-objobjargproc = h.definitions['objobjargproc']
+unaryfunc = h.definitions['unaryfunc'].OF
+binaryfunc = h.definitions['binaryfunc'].OF
+ternaryfunc = h.definitions['ternaryfunc'].OF
+inquiry = h.definitions['inquiry'].OF
+lenfunc = h.definitions['lenfunc'].OF
+coercion = h.definitions['coercion'].OF
+intargfunc = h.definitions['intargfunc'].OF
+intintargfunc = h.definitions['intintargfunc'].OF
+ssizeargfunc = h.definitions['ssizeargfunc'].OF
+ssizessizeargfunc = h.definitions['ssizessizeargfunc'].OF
+intobjargproc = h.definitions['intobjargproc'].OF
+intintobjargproc = h.definitions['intintobjargproc'].OF
+ssizeobjargproc = h.definitions['ssizeobjargproc'].OF
+ssizessizeobjargproc = h.definitions['ssizessizeobjargproc'].OF
+objobjargproc = h.definitions['objobjargproc'].OF
 
-objobjproc = h.definitions['objobjproc']
-visitproc = h.definitions['visitproc']
-traverseproc = h.definitions['traverseproc']
+objobjproc = h.definitions['objobjproc'].OF
+visitproc = h.definitions['visitproc'].OF
+traverseproc = h.definitions['traverseproc'].OF
 
-getter = h.definitions['getter']
-setter = h.definitions['setter']
+getter = h.definitions['getter'].OF
+setter = h.definitions['setter'].OF
 
 #wrapperfunc = h.definitions['wrapperfunc']
 #wrapperfunc_kwds = h.definitions['wrapperfunc_kwds']
 
-readbufferproc = h.definitions['readbufferproc']
-writebufferproc = h.definitions['writebufferproc']
-segcountproc = h.definitions['segcountproc']
-charbufferproc = h.definitions['charbufferproc']
-getbufferproc = h.definitions['getbufferproc']
-releasebufferproc = h.definitions['releasebufferproc']
+readbufferproc = h.definitions['readbufferproc'].OF
+writebufferproc = h.definitions['writebufferproc'].OF
+segcountproc = h.definitions['segcountproc'].OF
+charbufferproc = h.definitions['charbufferproc'].OF
+getbufferproc = h.definitions['getbufferproc'].OF
+releasebufferproc = h.definitions['releasebufferproc'].OF
 
 
 PyGetSetDef = h.definitions['PyGetSetDef'].OF
