@@ -293,7 +293,11 @@ class ApiFunction(object):
         argtypesw = zip(self.argtypes,
                         [_name.startswith("w_") for _name in self.argnames])
         error_value = getattr(self, "error_value", CANNOT_FAIL)
-        if (isinstance(self.restype, lltype.Ptr)
+        if isinstance(self.restype, lltype.Typedef):
+            real_restype = self.restype.OF
+        else:
+            real_restype = self.restype
+        if (isinstance(real_restype, lltype.Ptr)
                 and error_value is not CANNOT_FAIL):
             assert lltype.typeOf(error_value) == self.restype
             assert not error_value    # only support error=NULL
