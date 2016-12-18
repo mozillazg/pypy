@@ -911,7 +911,7 @@ typedef struct _typeobject {
 """)
 h.configure_types()
 
-Py_ssize_t = h.definitions['Py_ssize_t']
+Py_ssize_t = h.definitions['Py_ssize_t'].OF
 Py_ssize_tP = rffi.CArrayPtr(Py_ssize_t)
 size_t = rffi.ULONG
 ADDR = lltype.Signed
