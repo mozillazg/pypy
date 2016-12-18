@@ -1,18 +1,26 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import (PyObjectFields, bootstrap_function,
-    cpython_struct,
+from pypy.module.cpyext.api import (
+    bootstrap_function, object_h,
     CANNOT_FAIL, cpython_api, PyObject, build_type_checkers, CONST_STRING)
 from pypy.module.cpyext.pyobject import (
     make_typedescr, track_reference, from_ref)
-from pypy.interpreter.error import OperationError
 from rpython.rlib.rstruct import runpack
 from pypy.objspace.std.floatobject import W_FloatObject
+from pypy.module.cpyext.cparser import parse_source
 
-PyFloatObjectStruct = lltype.ForwardReference()
+
+cdef = """\
+typedef struct {
+    PyObject_HEAD
+    double ob_fval;
+} PyFloatObject;
+"""
+float_h = parse_source(cdef, includes=[object_h])
+float_h.configure_types()
+
+PyFloatObjectStruct = float_h.definitions['PyFloatObject']
+assert not isinstance(PyFloatObjectStruct, lltype.ForwardReference)
 PyFloatObject = lltype.Ptr(PyFloatObjectStruct)
-PyFloatObjectFields = PyObjectFields + \
-    (("ob_fval", rffi.DOUBLE),)
-cpython_struct("PyFloatObject", PyFloatObjectFields, PyFloatObjectStruct)
 
 @bootstrap_function
 def init_floatobject(space):
@@ -83,4 +91,3 @@ def _PyFloat_Unpack8(space, ptr, le):
         return runpack.runpack("<d", input)
     else:
         return runpack.runpack(">d", input)
-

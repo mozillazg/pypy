@@ -1,6 +1,8 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from rpython.rtyper.lltypesystem import rffi
+from pypy.module.cpyext.pyobject import create_ref
+from pypy.module.cpyext.floatobject import PyFloatObject
 
 class TestFloatObject(BaseApiTest):
     def test_floatobject(self, space, api):
@@ -31,6 +33,12 @@ class TestFloatObject(BaseApiTest):
             assert abs(api._PyFloat_Unpack8(ptr, 1) - 3.14) < 1e-15
         with rffi.scoped_str2charp("@\t\x1e\xb8Q\xeb\x85\x1f") as ptr:
             assert abs(api._PyFloat_Unpack8(ptr, 0) - 3.14) < 1e-15
+
+    def test_cast(self, space):
+        w_f = space.newfloat(1.5)
+        py_obj = create_ref(space, w_f)
+        py_float = rffi.cast(PyFloatObject, py_obj)
+        assert py_float._TYPE is PyFloatObject
 
 class AppTestFloatObject(AppTestCpythonExtensionBase):
     def test_fromstring(self):
