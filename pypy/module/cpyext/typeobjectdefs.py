@@ -235,6 +235,5 @@ PyTypeObjectFields.extend([
     ("tp_weaklist", PyObject),   #U
     ("tp_del", destructor),      #N
     ])
-cpython_struct("PyTypeObject", PyTypeObjectFields, PyTypeObject)
 
 

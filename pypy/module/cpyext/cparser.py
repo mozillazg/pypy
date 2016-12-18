@@ -695,13 +695,14 @@ class ParsedSource(object):
         self.macros[name] = value
 
     def new_struct(self, obj):
-        if obj.fldtypes is None:
-            fields = None
-        else:
-            fields = zip(
+        struct = DelayedStruct(obj.name, None, lltype.ForwardReference())
+        # Cache it early, to avoid infinite recursion
+        self.structs[obj] = struct
+        if obj.fldtypes is not None:
+            struct.fields = zip(
                 obj.fldnames,
                 [self.convert_type(field) for field in obj.fldtypes])
-        return DelayedStruct(obj.name, fields, lltype.ForwardReference())
+        return struct
 
     def realize_struct(self, struct, type_name):
         from pypy.module.cpyext.api import CConfig, TYPES
