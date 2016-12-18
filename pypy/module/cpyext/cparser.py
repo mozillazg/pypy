@@ -686,8 +686,8 @@ class ParsedSource(object):
         assert name not in self.definitions
         tp = self.convert_type(obj)
         if isinstance(tp, DelayedStruct):
-            tp = self.realize_struct(tp, name)
-            self.structs[obj] = tp
+            self.realize_struct(tp, name)
+            tp = self.structs[obj] = tp.TYPE
         self.definitions[name] = lltype.Typedef(tp, name)
 
     def add_macro(self, name, value):
@@ -705,13 +705,10 @@ class ParsedSource(object):
         return struct
 
     def realize_struct(self, struct, type_name):
-        from pypy.module.cpyext.api import CConfig, TYPES
         configname = type_name.replace(' ', '__')
         setattr(self._Config, configname,
             rffi_platform.Struct(type_name, struct.fields))
-        forward = lltype.ForwardReference()
-        self._TYPES[configname] = forward
-        return forward
+        self._TYPES[configname] = struct.TYPE
 
     def configure_types(self):
         for name, TYPE in rffi_platform.configure(self._Config).iteritems():
