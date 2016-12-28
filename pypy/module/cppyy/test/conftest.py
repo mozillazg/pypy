@@ -1,13 +1,20 @@
 import py, sys
 
+skip_reason = ''
+if sys.platform == 'win32':
+    skip_reason= 'need to refactor for MSVC'
+else:
+    # tests require minimally std=c++11
+    cc_info = py.process.cmdexec('gcc -v --help')
+    if not '-std=c++11' in cc_info:
+        skip_reason = 'gcc does not support -std=c+11'
+
+
+# This is supposed to work? How?
+#py.test.mark = py.test.mark.skipif(skip_reason != '', reason=skip_reason)
+
 @py.test.mark.tryfirst
 def pytest_runtest_setup(item):
-    if 'linux' in sys.platform:
-        # tests require minimally std=c++11
-        cc_info = py.process.cmdexec('gcc -v --help')
-        if not '-std=c++11' in cc_info:
-            py.test.skip('skipping tests because gcc does not support C++11')
-
     if py.path.local.sysfind('genreflex') is None:
         import pypy.module.cppyy.capi.loadable_capi as lcapi
         if 'dummy' in lcapi.reflection_library:
@@ -29,41 +36,45 @@ def pytest_runtest_setup(item):
 def pytest_ignore_collect(path, config):
     if py.path.local.sysfind('genreflex') is None and config.option.runappdirect:
         return True          # "can't run dummy tests in -A"
+    # This actually worked
+    if skip_reason:
+        return True
+    
+if skip_reason == '':
+    def pytest_configure(config):
+        if py.path.local.sysfind('genreflex') is None:
+            import pypy.module.cppyy.capi.loadable_capi as lcapi
+            try:
+                import ctypes
+                ctypes.CDLL(lcapi.reflection_library)
+            except Exception as e:
+                if config.option.runappdirect:
+                    return       # "can't run dummy tests in -A"
 
-def pytest_configure(config):
-    if py.path.local.sysfind('genreflex') is None:
-        import pypy.module.cppyy.capi.loadable_capi as lcapi
-        try:
-            import ctypes
-            ctypes.CDLL(lcapi.reflection_library)
-        except Exception as e:
-            if config.option.runappdirect:
-                return       # "can't run dummy tests in -A"
+                # build dummy backend (which has reflex info and calls hard-wired)
+                import os
+                from rpython.translator.tool.cbuild import ExternalCompilationInfo
+                from rpython.translator.platform import platform
+                from rpython.translator import cdir
 
-            # build dummy backend (which has reflex info and calls hard-wired)
-            import os
-            from rpython.translator.tool.cbuild import ExternalCompilationInfo
-            from rpython.translator.platform import platform
-            from rpython.translator import cdir
+                from rpython.rtyper.lltypesystem import rffi
 
-            from rpython.rtyper.lltypesystem import rffi
+                pkgpath = py.path.local(__file__).dirpath().join(os.pardir)
+                srcpath = pkgpath.join('src')
+                incpath = pkgpath.join('include')
+                tstpath = pkgpath.join('test')
 
-            pkgpath = py.path.local(__file__).dirpath().join(os.pardir)
-            srcpath = pkgpath.join('src')
-            incpath = pkgpath.join('include')
-            tstpath = pkgpath.join('test')
+                eci = ExternalCompilationInfo(
+                    separate_module_files=[srcpath.join('dummy_backend.cxx')],
+                    include_dirs=[incpath, tstpath, cdir],
+                    compile_extra=['-DRPY_EXTERN=RPY_EXPORTED', '-DCPPYY_DUMMY_BACKEND',
+                                   '-fno-strict-aliasing', '-std=c++11'],
+                    use_cpp_linker=True,
+                )
 
-            eci = ExternalCompilationInfo(
-                separate_module_files=[srcpath.join('dummy_backend.cxx')],
-                include_dirs=[incpath, tstpath, cdir],
-                compile_extra=['-DRPY_EXTERN=RPY_EXPORTED', '-DCPPYY_DUMMY_BACKEND',
-                               '-fno-strict-aliasing', '-std=c++11'],
-                use_cpp_linker=True,
-            )
+                soname = platform.compile(
+                    [], eci,
+                    outputfilename='libcppyy_dummy_backend',
+                    standalone=False)
 
-            soname = platform.compile(
-                [], eci,
-                outputfilename='libcppyy_dummy_backend',
-                standalone=False)
-
-            lcapi.reflection_library = str(soname)
+                lcapi.reflection_library = str(soname)
