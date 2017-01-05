@@ -6,9 +6,11 @@ from pypy.module.cpyext.pyobject import (PyObject, make_ref, as_pyobj, incref,
              decref, from_ref, make_typedescr)
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rlib.rarithmetic import widen
+from pypy.interpreter.baseobjspace import BufferInterfaceNotFound
 from pypy.objspace.std.memoryobject import W_MemoryView
 from pypy.module.cpyext.object import _dealloc
 from pypy.module.cpyext.import_ import PyImport_Import
+from rpython.rlib.buffer import Buffer
 
 PyMemoryView_Check, PyMemoryView_CheckExact = build_type_checkers("MemoryView")
 
@@ -95,22 +97,7 @@ def PyMemoryView_GET_BUFFER(space, w_obj):
     if not isinstance(w_obj, W_MemoryView):
         return lltype.nullptr(Py_buffer)
     py_memobj = rffi.cast(PyMemoryViewObject, as_pyobj(space, w_obj)) # no inc_ref
-    view = py_memobj.c_view
-    ndim = w_obj.buf.getndim()
-    if ndim >= Py_MAX_NDIMS:
-        # XXX warn?
-        return view
-    fill_Py_buffer(space, w_obj.buf, view)
-    try:
-        view.c_buf = rffi.cast(rffi.VOIDP, w_obj.buf.get_raw_address())
-        #view.c_obj = make_ref(space, w_obj) # NO - this creates a ref cycle!
-        rffi.setintfield(view, 'c_readonly', w_obj.buf.readonly)
-    except ValueError:
-        w_s = w_obj.descr_tobytes(space)
-        view.c_obj = make_ref(space, w_s)
-        view.c_buf = rffi.cast(rffi.VOIDP, rffi.str2charp(space.str_w(w_s), track_allocation=False))
-        rffi.setintfield(view, 'c_readonly', 1)
-    return view
+    return py_memobj.c_view
 
 def fill_Py_buffer(space, buf, view):
     # c_buf, c_obj have been filled in
@@ -147,6 +134,7 @@ def fill_Py_buffer(space, buf, view):
         view.c_strides = lltype.nullptr(Py_ssize_tP.TO)
     view.c_suboffsets = lltype.nullptr(Py_ssize_tP.TO)
     view.c_internal = lltype.nullptr(rffi.VOIDP.TO)
+    rffi.setintfield(view, 'c_readonly', buf.readonly)
     return 0
 
 def _IsFortranContiguous(view):
@@ -202,9 +190,46 @@ def PyBuffer_IsContiguous(space, view, fort):
         return (_IsCContiguous(view) or _IsFortranContiguous(view))
     return 0
 
+def _py_memoryview_frombuffer(space, buf):
+    mview = W_MemoryView(buf)
+    return mview
+
 @cpython_api([PyObject], PyObject)
 def PyMemoryView_FromObject(space, w_obj):
-    return space.call_method(space.builtin, "memoryview", w_obj)
+    try:
+        buf = space.buffer_w(w_obj, space.BUF_FULL_RO)
+    except BufferInterfaceNotFound:
+        # review, buffer interface is not found
+        raise oefmt(space.w_TypeError, "cannot make memory view because object "
+                                       "does not have the buffer interface")
+
+    # allocate a new pypy memory view and expose it to cpython using as_pyobj
+    w_mview = W_MemoryView(buf)
+    py_mview = rffi.cast(PyMemoryViewObject, as_pyobj(space, w_mview))
+
+    view = py_mview.c_view
+    fill_Py_buffer(space, buf, view)
+    view.c_buf = rffi.cast(rffi.VOIDP, buf.get_raw_address())
+    # the docs say that in PyMemoryView_FromBuffer (and thus FromObject)
+    # this object must be NULL
+    view.c_obj = make_ref(space, w_obj)
+
+    # XXX what about w_mview.base = w_obj (see cpython 2.7 implementation)
+    return py_mview
+
+class Py_bufferBuffer(Buffer):
+    _attrs_ = ['readonly', 'view']
+    _immutable_ = True
+
+    def __init__(self, view):
+        self.view = view
+        self.readonly = view.c_readonly
+
+    def getlength(self):
+        return self.view.c_len
+
+    def get_raw_address(self):
+        return self.view.c_buf
 
 @cpython_api([Py_bufferP], PyObject)
 def PyMemoryView_FromBuffer(space, view):
@@ -212,10 +237,9 @@ def PyMemoryView_FromBuffer(space, view):
     The memoryview object then owns the buffer, which means you shouldn't
     try to release it yourself: it will be released on deallocation of the
     memoryview object."""
-    w_obj = from_ref(space, view.c_obj)
-    if isinstance(w_obj, W_MemoryView):
-        return w_obj
-    return space.call_method(space.builtin, "memoryview", w_obj)
+    w_mview = W_MemoryView(Py_bufferBuffer(view))
+    py_mview = rffi.cast(PyMemoryViewObject, as_pyobj(space, w_mview))
+    return py_mview
 
 @cpython_api([PyObject], PyObject)
 def PyMemoryView_GET_BASE(space, w_obj):

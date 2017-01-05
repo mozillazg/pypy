@@ -4,6 +4,7 @@ from rpython.rtyper.lltypesystem import rffi
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from rpython.rlib.buffer import StringBuffer
+from pypy.module.cpyext.pyobject import from_ref
 
 only_pypy ="config.option.runappdirect and '__pypy__' not in sys.builtin_module_names" 
 
@@ -19,8 +20,9 @@ class TestMemoryViewObject(BaseApiTest):
 
     def test_frombuffer(self, space, api):
         w_buf = space.newbuffer(StringBuffer("hello"))
-        w_memoryview = api.PyMemoryView_FromObject(w_buf)
-        view = api.PyMemoryView_GET_BUFFER(w_memoryview)
+        py_memoryview = api.PyMemoryView_FromObject(w_buf)
+        w_memoryview = from_ref(space, py_memoryview)
+        view = api.PyMemoryView_GET_BUFFER(py_memoryview)
         assert view.c_ndim == 1
         f = rffi.charp2str(view.c_format)
         assert f == 'B'
@@ -29,7 +31,7 @@ class TestMemoryViewObject(BaseApiTest):
         assert view.c_len == 5
         o = rffi.charp2str(view.c_buf)
         assert o == 'hello'
-        w_mv = api.PyMemoryView_FromBuffer(view)
+        w_mv = from_ref(space, api.PyMemoryView_FromBuffer(view))
         for f in ('format', 'itemsize', 'ndim', 'readonly', 
                   'shape', 'strides', 'suboffsets'):
             w_f = space.wrap(f)
