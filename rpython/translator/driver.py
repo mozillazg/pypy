@@ -264,7 +264,7 @@ class TranslationDriver(object):
         KCacheGrind(prof).output(open(goal + ".out", "w"))
         return d['res']
 
-    def _do(self, func):
+    def _run_task(self, func):
         if func.task_name in self.done:
             self.log.info("already done: %s" % func.task_title)
             return
@@ -589,7 +589,7 @@ class TranslationDriver(object):
                 task.task_earlycheck(self)
         for task, _ in tasks:
             self.fork_before(task.task_name)
-            result = self._do(task)
+            result = self._run_task(task)
         self.log.info('usession directory: %s' % (udir,))
         return result
 
