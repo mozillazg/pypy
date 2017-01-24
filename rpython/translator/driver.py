@@ -192,6 +192,9 @@ class TranslationDriver(object):
     def _proceed_inner(self, goals):
         backend, ts = self.get_backend_and_type_system()
         goals = set(self.backend_select_goals(goals + self.extra_goals))
+        if not goals:
+            self.log('Nothing to do.')
+            raise Done(None)
 
         if any(cgoal in goals
                for bakgoal in ['database', 'source', 'compile']
