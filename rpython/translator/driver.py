@@ -17,8 +17,6 @@ from rpython.tool.ansi_print import AnsiLogger
 
 log = AnsiLogger("translation")
 
-class Done(Exception): pass
-
 # TODO:
 # sanity-checks using states
 
@@ -84,28 +82,57 @@ class TranslationDriver(object):
         self.extra_goals = []
 
     def annotate(self):
-        return self.proceed(['annotate'])
+        return self.run_task(self.task_annotate, 'annotate')
 
     def rtype_lltype(self):
-        return self.proceed(['rtype_lltype'])
-
-    def backendopt_lltype(self):
-        return self.proceed(['backendopt_lltype'])
-
-    def llinterpret_lltype(self):
-        return self.proceed(['llinterpret_lltype'])
+        self.annotate()
+        return self.run_task(self.task_rtype_lltype, 'rtype_lltype')
 
     def pyjitpl_lltype(self):
-        return self.proceed(['pyjitpl_lltype'])
+        self.rtype_lltype()
+        return self.run_task(self.task_pyjitpl_lltype, 'pyjitpl_lltype')
+
+    def jittest_lltype(self):
+        self.rtype_lltype()
+        return self.run_task(self.task_jittest_lltype, 'jittest_lltype')
+
+    def backendopt_lltype(self):
+        self.rtype_lltype()
+        if 'pyjitpl' in self.extra_goals:
+            self.pyjitpl_lltype()
+        if 'jittest' in self.extra_goals:
+            self.jittest_lltype()
+        
+        return self.run_task(self.task_backendopt_lltype,
+                             'backendopt_lltype')
+
+    def stackcheckinsertion_lltype(self):
+        self.rtype_lltype()
+        if 'backendopt' in self.extra_goals:
+            self.backendopt_lltype()
+        return self.run_task(self.task_stackcheckinsertion_lltype,
+                             'stackcheckinsertion_lltype')
+
+    def llinterpret_lltype(self):
+        self.stackcheckinsertion_lltype()
+        return self.run_task(self.task_llinterpret_lltype,
+                             'llinterpret_lltype')
 
     def source_c(self):
-        return self.proceed(['source_c'])
+        if 'check_for_boehm' not in self.done:
+            self.possibly_check_for_boehm()
+            self.done.add('check_for_boehm')
+        self.stackcheckinsertion_lltype()
+        self.run_task(self.task_database_c, 'database_c')
+        return self.run_task(self.task_source_c, 'source_c')
 
     def compile_c(self):
-        return self.proceed(['compile_c'])
+        self.source_c()
+        return self.run_task(self.task_compile_c, 'compile_c')
 
     def run_c(self):
-        return self.proceed(['run_c'])
+        self.compile_c()
+        return self.run_task(self.task_run_c, 'run_c')
 
     def set_extra_goals(self, goals):
         self.extra_goals = goals
@@ -122,7 +149,7 @@ class TranslationDriver(object):
         backend = self.config.translation.backend
         return backend, type_system
 
-    def run_task(self, name, goals, *args, **kwargs):
+    def run_task(self, task, name, *args, **kwargs):
         if name in self.done or name in self._disabled:
             return
         task = getattr(self, 'task_%s' % name)
@@ -157,47 +184,21 @@ class TranslationDriver(object):
         self.log.info('usession directory: %s' % (udir,))
 
         self.done.add(name)
-        goals.discard(name)
-        if not goals:
-            raise Done(res)
         return res
 
     def proceed(self, goals):
-        try:
-            self._proceed_inner(goals)
-        except Done as d:
-            return d.args[0]
-
-    def _proceed_inner(self, goals):
         backend, ts = self.get_backend_and_type_system()
         goals = set(self.backend_select_goals(goals + self.extra_goals))
         if not goals:
             self.log('Nothing to do.')
-            raise Done(None)
+        self.extra_goals += goals
 
-        if any(cgoal in goals
-               for bakgoal in ['database', 'source', 'compile']
-               for cgoal in [bakgoal, bakgoal + '_c']):
-            if 'check_for_boehm' not in self.done:
-                self.possibly_check_for_boehm()
-                self.done.add('check_for_boehm')
-
-        self.run_task('annotate', goals)
-        self.run_task('rtype_lltype', goals)
-        if 'pyjitpl_lltype' in goals or 'jittest_lltype' in goals:
-            self.run_task('pyjitpl_lltype', goals)
-        if 'jittest_lltype' in goals:
-            self.run_task('jittest_lltype', goals)
-        self.run_task('backendopt_lltype', goals)
-        self.run_task('stackcheckinsertion_lltype', goals)
-        if 'llinterpret_lltype' in goals:
-            self.run_task('llinterpret_lltype', goals)
-        self.run_task('backend_%s' % backend, goals, goals)
-
-    def task_backend_c(self, goals):
-        self.run_task('database_c', goals)
-        self.run_task('source_c', goals)
-        self.run_task('compile_c', goals)
+        # run C goals first to catch missing boehm.
+        for goal in goals:
+            if goal.endswith('_c'):
+                getattr(self, goal)()
+        for goal in goals:
+            getattr(self, goal)()
 
     def backend_select_goals(self, goals):
         backend, ts = self.get_backend_and_type_system()
