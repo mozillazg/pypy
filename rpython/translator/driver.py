@@ -149,6 +149,27 @@ class TranslationDriver(object):
         backend = self.config.translation.backend
         return backend, type_system
 
+    def backend_select_goals(self, goals):
+        backend, ts = self.get_backend_and_type_system()
+        result = []
+        for goal in goals:
+            names = ['task_%s_%s' % (goal, backend),
+                     'task_%s_%s' % (goal, ts),
+                     'task_%s' % (goal,)]
+            if set(names).intersection(self.done):
+                continue
+            for name in names:
+                task = getattr(self, name, None)
+                if task is not None:
+                    result.append(name[len('task_'):])
+                    break
+            else:
+                raise Exception("cannot infer complete goal from: %r" % goal)
+        return result
+            
+    def disable(self, to_disable):
+        self._disabled = to_disable
+
     def run_task(self, task, name, *args, **kwargs):
         if name in self.done or name in self._disabled:
             return
@@ -199,27 +220,6 @@ class TranslationDriver(object):
                 getattr(self, goal)()
         for goal in goals:
             getattr(self, goal)()
-
-    def backend_select_goals(self, goals):
-        backend, ts = self.get_backend_and_type_system()
-        result = []
-        for goal in goals:
-            names = ['task_%s_%s' % (goal, backend),
-                     'task_%s_%s' % (goal, ts),
-                     'task_%s' % (goal,)]
-            if set(names).intersection(self.done):
-                continue
-            for name in names:
-                task = getattr(self, name, None)
-                if task is not None:
-                    result.append(name[len('task_'):])
-                    break
-            else:
-                raise Exception("cannot infer complete goal from: %r" % goal)
-        return result
-            
-    def disable(self, to_disable):
-        self._disabled = to_disable
 
     def setup(self, entry_point, inputtypes, policy=None, extra={}, empty_translator=None):
         standalone = inputtypes is None
