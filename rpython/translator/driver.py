@@ -86,18 +86,6 @@ class TranslationDriver(object):
     def annotate(self):
         return self.proceed(['annotate'])
 
-    def rtype(self):
-        return self.proceed(['rtype'])
-
-    def backendopt(self):
-        return self.proceed(['backendopt'])
-
-    def llinterpret(self):
-        return self.proceed(['llinterpret'])
-
-    def pyjitpl(self):
-        return self.proceed(['pyjitpl'])
-
     def rtype_lltype(self):
         return self.proceed(['rtype_lltype'])
 
@@ -109,15 +97,6 @@ class TranslationDriver(object):
 
     def pyjitpl_lltype(self):
         return self.proceed(['pyjitpl_lltype'])
-
-    def source(self):
-        return self.proceed(['source'])
-
-    def compile(self):
-        return self.proceed(['compile'])
-
-    def run(self):
-        return self.proceed(['run'])
 
     def source_c(self):
         return self.proceed(['source_c'])
