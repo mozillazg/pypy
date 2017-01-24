@@ -3,7 +3,6 @@ import os.path
 import shutil
 
 from rpython.translator.translator import TranslationContext
-from rpython.translator.tool.taskengine import SimpleTaskEngine
 from rpython.translator.goal import query
 from rpython.translator.goal.timing import Timer
 from rpython.annotator.listdef import s_list_of_strings
@@ -18,18 +17,7 @@ from rpython.tool.ansi_print import AnsiLogger
 
 log = AnsiLogger("translation")
 
-
-def taskdef(deps, title, new_state=None, expected_states=[],
-            idemp=False, earlycheck=None):
-    def decorator(taskfunc):
-        taskfunc.task_deps = deps
-        taskfunc.task_title = title
-        taskfunc.task_newstate = None
-        taskfunc.task_expected_states = expected_states
-        taskfunc.task_idempotent = idemp
-        taskfunc.task_earlycheck = earlycheck
-        return taskfunc
-    return decorator
+class Done(Exception): pass
 
 # TODO:
 # sanity-checks using states
@@ -60,16 +48,13 @@ class ProfInstrument(object):
         os._exit(0)
 
 
-class TranslationDriver(SimpleTaskEngine):
+class TranslationDriver(object):
     _backend_extra_options = {}
 
-    def __init__(self, setopts=None, default_goal=None,
-                 disable=[],
-                 exe_name=None, extmod_name=None,
-                 config=None, overrides=None):
+    def __init__(self, setopts=None, default_goal=None, disable=(),
+                 exe_name=None, config=None, overrides=None):
         from rpython.config import translationoption
         self.timer = Timer()
-        SimpleTaskEngine.__init__(self)
 
         self.log = log
 
@@ -85,9 +70,8 @@ class TranslationDriver(SimpleTaskEngine):
             self.config.set(**setopts)
 
         self.exe_name = exe_name
-        self.extmod_name = extmod_name
 
-        self.done = {}
+        self.done = set()
 
         self.disable(disable)
 
@@ -98,40 +82,51 @@ class TranslationDriver(SimpleTaskEngine):
 
         self.default_goal = default_goal
         self.extra_goals = []
-        self.exposed = []
 
-        # expose tasks
-        def expose_task(task, backend_goal=None):
-            if backend_goal is None:
-                backend_goal = task
-            def proc():
-                return self.proceed(backend_goal)
-            self.exposed.append(task)
-            setattr(self, task, proc)
+    def annotate(self):
+        return self.proceed(['annotate'])
 
-        backend, ts = self.get_backend_and_type_system()
-        for task in self.tasks:
-            explicit_task = task
-            if task == 'annotate':
-                expose_task(task)
-            else:
-                task, postfix = task.split('_')
-                if task in ('rtype', 'backendopt', 'llinterpret',
-                            'pyjitpl'):
-                    if ts:
-                        if ts == postfix:
-                            expose_task(task, explicit_task)
-                    else:
-                        expose_task(explicit_task)
-                elif task in ('source', 'compile', 'run'):
-                    if backend:
-                        if backend == postfix:
-                            expose_task(task, explicit_task)
-                    elif ts:
-                        if ts == 'lltype':
-                            expose_task(explicit_task)
-                    else:
-                        expose_task(explicit_task)
+    def rtype(self):
+        return self.proceed(['rtype'])
+
+    def backendopt(self):
+        return self.proceed(['backendopt'])
+
+    def llinterpret(self):
+        return self.proceed(['llinterpret'])
+
+    def pyjitpl(self):
+        return self.proceed(['pyjitpl'])
+
+    def rtype_lltype(self):
+        return self.proceed(['rtype_lltype'])
+
+    def backendopt_lltype(self):
+        return self.proceed(['backendopt_lltype'])
+
+    def llinterpret_lltype(self):
+        return self.proceed(['llinterpret_lltype'])
+
+    def pyjitpl_lltype(self):
+        return self.proceed(['pyjitpl_lltype'])
+
+    def source(self):
+        return self.proceed(['source'])
+
+    def compile(self):
+        return self.proceed(['compile'])
+
+    def run(self):
+        return self.proceed(['run'])
+
+    def source_c(self):
+        return self.proceed(['source_c'])
+
+    def compile_c(self):
+        return self.proceed(['compile_c'])
+
+    def run_c(self):
+        return self.proceed(['run_c'])
 
     def set_extra_goals(self, goals):
         self.extra_goals = goals
@@ -148,30 +143,100 @@ class TranslationDriver(SimpleTaskEngine):
         backend = self.config.translation.backend
         return backend, type_system
 
+    def run_task(self, name, goals, *args, **kwargs):
+        if name in self.done or name in self._disabled:
+            return
+        task = getattr(self, 'task_%s' % name)
+
+        self.fork_before(name)
+
+        debug_start('translation-task')
+        debug_print('starting', name)
+        self.timer.start_event(name)
+        try:
+            instrument = False
+            try:
+                if name in PROFILE:
+                    res = self._profile(name, func)
+                else:
+                    res = task(*args, **kwargs)
+            except Instrument:
+                instrument = True
+            if instrument:
+                self.proceed(['compile_c'])
+                assert False, 'we should not get here'
+        finally:
+            try:
+                debug_stop('translation-task')
+                self.timer.end_event(name)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                pass
+        #import gc; gc.dump_rpy_heap('rpyheap-after-%s.dump' % goal)
+
+        self.log.info('usession directory: %s' % (udir,))
+
+        self.done.add(name)
+        goals.discard(name)
+        if not goals:
+            raise Done(res)
+        return res
+
+    def proceed(self, goals):
+        try:
+            self._proceed_inner(goals)
+        except Done as d:
+            return d.args[0]
+
+    def _proceed_inner(self, goals):
+        backend, ts = self.get_backend_and_type_system()
+        goals = set(self.backend_select_goals(goals + self.extra_goals))
+
+        if any(cgoal in goals
+               for bakgoal in ['database', 'source', 'compile']
+               for cgoal in [bakgoal, bakgoal + '_c']):
+            if 'check_for_boehm' not in self.done:
+                self.possibly_check_for_boehm()
+                self.done.add('check_for_boehm')
+
+        self.run_task('annotate', goals)
+        self.run_task('rtype_lltype', goals)
+        if 'pyjitpl_lltype' in goals or 'jittest_lltype' in goals:
+            self.run_task('pyjitpl_lltype', goals)
+        if 'jittest_lltype' in goals:
+            self.run_task('jittest_lltype', goals)
+        self.run_task('backendopt_lltype', goals)
+        self.run_task('stackcheckinsertion_lltype', goals)
+        if 'llinterpret_lltype' in goals:
+            self.run_task('llinterpret_lltype', goals)
+        self.run_task('backend_%s' % backend, goals, goals)
+
+    def task_backend_c(self, goals):
+        self.run_task('database_c', goals)
+        self.run_task('source_c', goals)
+        self.run_task('compile_c', goals)
+
     def backend_select_goals(self, goals):
         backend, ts = self.get_backend_and_type_system()
-        postfixes = [''] + ['_'+p for p in (backend, ts) if p]
-        l = []
+        result = []
         for goal in goals:
-            for postfix in postfixes:
-                cand = "%s%s" % (goal, postfix)
-                if cand in self.tasks:
-                    new_goal = cand
+            names = ['task_%s_%s' % (goal, backend),
+                     'task_%s_%s' % (goal, ts),
+                     'task_%s' % (goal,)]
+            if set(names).intersection(self.done):
+                continue
+            for name in names:
+                task = getattr(self, name, None)
+                if task is not None:
+                    result.append(name[len('task_'):])
                     break
             else:
                 raise Exception("cannot infer complete goal from: %r" % goal)
-            l.append(new_goal)
-        return l
-
+        return result
+            
     def disable(self, to_disable):
         self._disabled = to_disable
-
-    def _maybe_skip(self):
-        maybe_skip = []
-        if self._disabled:
-            for goal in self.backend_select_goals(self._disabled):
-                maybe_skip.extend(self._depending_on_closure(goal))
-        return dict.fromkeys(maybe_skip).keys()
 
     def setup(self, entry_point, inputtypes, policy=None, extra={}, empty_translator=None):
         standalone = inputtypes is None
@@ -259,42 +324,6 @@ class TranslationDriver(SimpleTaskEngine):
         KCacheGrind(prof).output(open(goal + ".out", "w"))
         return d['res']
 
-    def _do(self, goal, func, *args, **kwds):
-        title = func.task_title
-        if goal in self.done:
-            self.log.info("already done: %s" % title)
-            return
-        else:
-            self.log.info("%s..." % title)
-        debug_start('translation-task')
-        debug_print('starting', goal)
-        self.timer.start_event(goal)
-        try:
-            instrument = False
-            try:
-                if goal in PROFILE:
-                    res = self._profile(goal, func)
-                else:
-                    res = func()
-            except Instrument:
-                instrument = True
-            if not func.task_idempotent:
-                self.done[goal] = True
-            if instrument:
-                self.proceed('compile')
-                assert False, 'we should not get here'
-        finally:
-            try:
-                debug_stop('translation-task')
-                self.timer.end_event(goal)
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except:
-                pass
-        #import gc; gc.dump_rpy_heap('rpyheap-after-%s.dump' % goal)
-        return res
-
-    @taskdef([], "Annotating&simplifying")
     def task_annotate(self):
         """ Annotate
         """
@@ -336,15 +365,12 @@ class TranslationDriver(SimpleTaskEngine):
         lost = query.qoutput(query.check_methods_qgen(translator))
         assert not lost, "lost methods, something gone wrong with the annotation of method defs"
 
-    RTYPE = 'rtype_lltype'
-    @taskdef(['annotate'], "RTyping")
     def task_rtype_lltype(self):
         """ RTyping - lltype version
         """
         rtyper = self.translator.buildrtyper()
         rtyper.specialize(dont_simplify_again=True)
 
-    @taskdef([RTYPE], "JIT compiler generation")
     def task_pyjitpl_lltype(self):
         """ Generate bytecodes for JIT and flow the JIT helper functions
         lltype version
@@ -362,7 +388,6 @@ class TranslationDriver(SimpleTaskEngine):
         #
         self.log.info("the JIT compiler was generated")
 
-    @taskdef([RTYPE], "test of the JIT on the llgraph backend")
     def task_jittest_lltype(self):
         """ Run with the JIT on top of the llgraph backend
         """
@@ -375,8 +400,6 @@ class TranslationDriver(SimpleTaskEngine):
         from rpython.jit.tl import jittest
         jittest.jittest(self)
 
-    BACKENDOPT = 'backendopt_lltype'
-    @taskdef([RTYPE, '??pyjitpl_lltype', '??jittest_lltype'], "lltype back-end optimisations")
     def task_backendopt_lltype(self):
         """ Run all backend optimizations - lltype version
         """
@@ -384,8 +407,6 @@ class TranslationDriver(SimpleTaskEngine):
         backend_optimizations(self.translator, replace_we_are_jitted=True)
 
 
-    STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
-    @taskdef(['?'+BACKENDOPT, RTYPE, 'annotate'], "inserting stack checks")
     def task_stackcheckinsertion_lltype(self):
         from rpython.translator.transform import insert_ll_stackcheck
         count = insert_ll_stackcheck(self.translator)
@@ -402,9 +423,6 @@ class TranslationDriver(SimpleTaskEngine):
                 i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=minimark"'
                 raise Exception(str(e) + '\n' + i)
 
-    @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'],
-        "Creating database for generating c source",
-        earlycheck = possibly_check_for_boehm)
     def task_database_c(self):
         """ Create a database for further backend generation
         """
@@ -427,14 +445,11 @@ class TranslationDriver(SimpleTaskEngine):
                                        functions=functions,
                                        name='libtesting',
                                        config=self.config)
-        if not standalone:     # xxx more messy
-            cbuilder.modulename = self.extmod_name
         database = cbuilder.build_database()
         self.log.info("database for generating C source was created")
         self.cbuilder = cbuilder
         self.database = database
 
-    @taskdef(['database_c'], "Generating c source")
     def task_source_c(self):
         """ Create C source files from the generated database
         """
@@ -506,7 +521,6 @@ class TranslationDriver(SimpleTaskEngine):
             self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
 
-    @taskdef(['source_c'], "Compiling c source")
     def task_compile_c(self):
         """ Compile the generated C code using either makefile or
         translator/platform
@@ -523,7 +537,6 @@ class TranslationDriver(SimpleTaskEngine):
         else:
             self.c_entryp = cbuilder.get_entry_point()
 
-    @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE], "LLInterpreting")
     def task_llinterpret_lltype(self):
         from rpython.rtyper.llinterp import LLInterpreter
 
@@ -536,21 +549,6 @@ class TranslationDriver(SimpleTaskEngine):
                                              lambda: [])())
 
         log.llinterpret("result -> %s" % v)
-
-    def proceed(self, goals):
-        if not goals:
-            if self.default_goal:
-                goals = [self.default_goal]
-            else:
-                self.log.info("nothing to do")
-                return
-        elif isinstance(goals, str):
-            goals = [goals]
-        goals.extend(self.extra_goals)
-        goals = self.backend_select_goals(goals)
-        result = self._execute(goals, task_skip = self._maybe_skip())
-        self.log.info('usession directory: %s' % (udir,))
-        return result
 
     @classmethod
     def from_targetspec(cls, targetspec_dic, config=None, args=None,
@@ -588,19 +586,16 @@ class TranslationDriver(SimpleTaskEngine):
     prereq_checkpt_rtype_lltype = prereq_checkpt_rtype
 
     # checkpointing support
-    def _event(self, kind, goal, func):
-        if kind == 'planned' and func.task_earlycheck:
-            func.task_earlycheck(self)
-        if kind == 'pre':
-            fork_before = self.config.translation.fork_before
-            if fork_before:
-                fork_before, = self.backend_select_goals([fork_before])
-                if not fork_before in self.done and fork_before == goal:
-                    prereq = getattr(self, 'prereq_checkpt_%s' % goal, None)
-                    if prereq:
-                        prereq()
-                    from rpython.translator.goal import unixcheckpoint
-                    unixcheckpoint.restartable_point(auto='run')
+    def fork_before(self, goal):
+        fork_before = self.config.translation.fork_before
+        if fork_before:
+            fork_before, = self.backend_select_goals([fork_before])
+            if not fork_before in self.done and fork_before == goal:
+                prereq = getattr(self, 'prereq_checkpt_%s' % goal, None)
+                if prereq:
+                    prereq()
+                from rpython.translator.goal import unixcheckpoint
+                unixcheckpoint.restartable_point(auto='run')
 
 def mkexename(name):
     if sys.platform == 'win32':
