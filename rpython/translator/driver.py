@@ -17,17 +17,13 @@ from rpython.tool.ansi_print import AnsiLogger
 
 log = AnsiLogger("translation")
 
-def taskdef(deps, title, new_state=None, expected_states=[],
-            idemp=False, earlycheck=None):
+def taskdef(deps, title, earlycheck=None):
     def decorator(taskfunc):
         name = taskfunc.__name__
         assert name.startswith('task_')
         taskfunc.task_name = name[len('task_'):]
         taskfunc.task_deps = deps
         taskfunc.task_title = title
-        taskfunc.task_newstate = None
-        taskfunc.task_expected_states = expected_states
-        taskfunc.task_idempotent = idemp
         taskfunc.task_earlycheck = earlycheck
         return taskfunc
     return decorator
