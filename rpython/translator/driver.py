@@ -3,7 +3,6 @@ import os.path
 import shutil
 
 from rpython.translator.translator import TranslationContext
-from rpython.translator.tool.taskengine import SimpleTaskEngine
 from rpython.translator.goal import query
 from rpython.translator.goal.timing import Timer
 from rpython.annotator.listdef import s_list_of_strings
@@ -18,10 +17,12 @@ from rpython.tool.ansi_print import AnsiLogger
 
 log = AnsiLogger("translation")
 
-
 def taskdef(deps, title, new_state=None, expected_states=[],
             idemp=False, earlycheck=None):
     def decorator(taskfunc):
+        name = taskfunc.__name__
+        assert name.startswith('task_')
+        taskfunc.task_name = name[len('task_'):]
         taskfunc.task_deps = deps
         taskfunc.task_title = title
         taskfunc.task_newstate = None
@@ -60,7 +61,7 @@ class ProfInstrument(object):
         os._exit(0)
 
 
-class TranslationDriver(SimpleTaskEngine):
+class TranslationDriver(object):
     _backend_extra_options = {}
 
     def __init__(self, setopts=None, default_goal=None,
@@ -69,7 +70,15 @@ class TranslationDriver(SimpleTaskEngine):
                  config=None, overrides=None):
         from rpython.config import translationoption
         self.timer = Timer()
-        SimpleTaskEngine.__init__(self)
+        self.tasks = tasks = {}
+
+        for name in dir(self):
+            if name.startswith('task_'):
+                task = getattr(self, name)
+                assert callable(task)
+                task_deps = getattr(task, 'task_deps', [])
+
+                tasks[task.task_name] = task, task_deps
 
         self.log = log
 
@@ -259,39 +268,37 @@ class TranslationDriver(SimpleTaskEngine):
         KCacheGrind(prof).output(open(goal + ".out", "w"))
         return d['res']
 
-    def _do(self, goal, func, *args, **kwds):
-        title = func.task_title
-        if goal in self.done:
-            self.log.info("already done: %s" % title)
+    def _do(self, func):
+        if func.task_name in self.done:
+            self.log.info("already done: %s" % func.task_title)
             return
         else:
-            self.log.info("%s..." % title)
+            self.log.info("%s..." % func.task_title)
         debug_start('translation-task')
-        debug_print('starting', goal)
-        self.timer.start_event(goal)
+        debug_print('starting', func.task_name)
+        self.timer.start_event(func.task_name)
         try:
             instrument = False
             try:
-                if goal in PROFILE:
-                    res = self._profile(goal, func)
+                if func.task_name in PROFILE:
+                    res = self._profile(func.task_name, func)
                 else:
                     res = func()
             except Instrument:
                 instrument = True
-            if not func.task_idempotent:
-                self.done[goal] = True
+            self.done[func.task_name] = True
             if instrument:
                 self.proceed('compile')
                 assert False, 'we should not get here'
         finally:
             try:
                 debug_stop('translation-task')
-                self.timer.end_event(goal)
+                self.timer.end_event(func.task_name)
             except (KeyboardInterrupt, SystemExit):
                 raise
             except:
-                pass
-        #import gc; gc.dump_rpy_heap('rpyheap-after-%s.dump' % goal)
+                pass # don't clobber any exception in progress
+        #import gc; gc.dump_rpy_heap('rpyheap-after-%s.dump' % func.task_name)
         return res
 
     @taskdef([], "Annotating&simplifying")
@@ -537,6 +544,38 @@ class TranslationDriver(SimpleTaskEngine):
 
         log.llinterpret("result -> %s" % v)
 
+    def _gather(self, task_name, result, skip=(), also=()):
+        task_name, = self.backend_select_goals([task_name])
+        if task_name in self.done:
+            return
+        _, deps = self.tasks[task_name]
+        for dep in deps:
+            depname = dep.lstrip('?')
+            if dep.startswith('??'):
+                if depname in also:
+                    self._gather(depname, result, skip)
+            elif dep.startswith('?'):
+                if depname not in skip:
+                    self._gather(depname, result, skip)
+            else:
+                self._gather(depname, result, skip)
+        result.append(task_name)
+
+    def _plan(self, goals, skip=None, also=()):
+        if skip is None:
+            skip = self._disabled
+        # gather once to determine the tasks to run, another time to
+        # determine their order, which may move a task forward if it
+        # is an optional dependency of something that appears earlier
+        # in the first plan.
+        selected_goals = []
+        for goal in goals:
+            self._gather(goal, selected_goals, skip, goals)
+        plan = []
+        for goal in selected_goals:
+            self._gather(goal, plan, skip, selected_goals)
+        return plan
+
     def proceed(self, goals):
         if not goals:
             if self.default_goal:
@@ -546,9 +585,15 @@ class TranslationDriver(SimpleTaskEngine):
                 return
         elif isinstance(goals, str):
             goals = [goals]
-        goals.extend(self.extra_goals)
-        goals = self.backend_select_goals(goals)
-        result = self._execute(goals, task_skip = self._maybe_skip())
+        goals = self._plan(goals + self.extra_goals)
+        print goals
+        tasks = [self.tasks[goal] for goal in goals]
+        for task, _ in tasks:
+            if task.task_earlycheck:
+                task.task_earlycheck(self)
+        for task, _ in tasks:
+            self.fork_before(task.task_name)
+            result = self._do(task)
         self.log.info('usession directory: %s' % (udir,))
         return result
 
@@ -588,19 +633,17 @@ class TranslationDriver(SimpleTaskEngine):
     prereq_checkpt_rtype_lltype = prereq_checkpt_rtype
 
     # checkpointing support
-    def _event(self, kind, goal, func):
-        if kind == 'planned' and func.task_earlycheck:
-            func.task_earlycheck(self)
-        if kind == 'pre':
-            fork_before = self.config.translation.fork_before
-            if fork_before:
-                fork_before, = self.backend_select_goals([fork_before])
-                if not fork_before in self.done and fork_before == goal:
-                    prereq = getattr(self, 'prereq_checkpt_%s' % goal, None)
-                    if prereq:
-                        prereq()
-                    from rpython.translator.goal import unixcheckpoint
-                    unixcheckpoint.restartable_point(auto='run')
+    def fork_before(self, goal):
+        fork_before = self.config.translation.fork_before
+        if fork_before:
+            fork_before, = self.backend_select_goals([fork_before])
+            if not fork_before in self.done and fork_before == goal:
+                prereq = getattr(self, 'prereq_checkpt_%s' % goal, None)
+                if prereq:
+                    prereq()
+                from rpython.translator.goal import unixcheckpoint
+                unixcheckpoint.restartable_point(auto='run')
+
 
 def mkexename(name):
     if sys.platform == 'win32':
