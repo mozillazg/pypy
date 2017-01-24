@@ -22,8 +22,11 @@ class SimpleTaskEngine(object):
         except KeyError:
             pass
 
+        # a map from {task : inferred priority}.
         optionality = dict((goal.lstrip('?'), goal.count('?'))
                            for goal in goals)
+
+        # a map from a task to its depedencies.
         task_deps = {}
 
         def will_do(task):
@@ -32,6 +35,17 @@ class SimpleTaskEngine(object):
                 return True
             return priority == 1 and task not in skip
 
+        # we're going to first consider all tasks that are reachable,
+        # regardless of how many ? are found while searching.  We will
+        # record two things about the task - what dependencies it has,
+        # for easy searching later, and how many ? should appear
+        # before the task.  So if A depends on ?C, and C depends on D,
+        # D has one ?.
+        #
+        # some tasks may be considered more than once here - if a
+        # later dependency specifies that a task is not optional,
+        # we'll not only update its optionality but also reconsider
+        # its own dependencies.
         goal_walker = list(goals[::-1])
         while goal_walker:
             goal = goal_walker.pop()
@@ -48,6 +62,8 @@ class SimpleTaskEngine(object):
                     optionality[depname] = dep_qs
                     goal_walker.append(depname)
 
+        # remove any tasks with too-low priority, simple cycles, and
+        # deps with too-low priority.
         for task, deps in list(task_deps.iteritems()):
             if not will_do(task):
                 del task_deps[task]
@@ -58,6 +74,11 @@ class SimpleTaskEngine(object):
                     if not will_do(dep):
                         deps.remove(dep)
 
+        # now it's a matter of toposorting the tasks over their deps.
+        #
+        # we could consider using a sort which is stable in the order
+        # that deps are declared, at least unless that order isn't
+        # consistent.
         plan = []
         seen = set()
         tasks = list(task_deps)
@@ -65,11 +86,12 @@ class SimpleTaskEngine(object):
             remaining = []
             for task in tasks:
                 if task_deps[task] - seen:
+                    # this task has unsatisfied dependencies
                     remaining.append(task)
                 else:
                     plan.append(task)
                     seen.add(task)
-            if len(remaining) == len(tasks):
+            if len(remaining) == len(tasks): # no progress
                 raise RuntimeException('circular dependency')
             tasks = remaining
 
