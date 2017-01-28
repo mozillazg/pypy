@@ -75,7 +75,7 @@ class TranslationDriver(object):
 
         if default_goal:
             default_goal, = self.backend_select_goals([default_goal])
-            if default_goal in self._maybe_skip():
+            if default_goal in self._disabled:
                 default_goal = None
 
         self.default_goal = default_goal
@@ -208,6 +208,8 @@ class TranslationDriver(object):
         return res
 
     def proceed(self, goals):
+        if not goals:
+            goals = [self.default_goal]
         backend, ts = self.get_backend_and_type_system()
         goals = set(self.backend_select_goals(goals + self.extra_goals))
         if not goals:
