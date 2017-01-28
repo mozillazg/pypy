@@ -75,7 +75,7 @@ class TranslationDriver(object):
 
         if default_goal:
             default_goal, = self.backend_select_goals([default_goal])
-            if default_goal in self._disabled:
+            if default_goal in self.backend_select_goals(self._disabled):
                 default_goal = None
 
         self.default_goal = default_goal
@@ -98,9 +98,9 @@ class TranslationDriver(object):
 
     def backendopt_lltype(self):
         self.rtype_lltype()
-        if 'pyjitpl' in self.extra_goals:
+        if 'pyjitpl_lltype' in self.extra_goals:
             self.pyjitpl_lltype()
-        if 'jittest' in self.extra_goals:
+        if 'jittest_lltype' in self.extra_goals:
             self.jittest_lltype()
         
         return self.run_task(self.task_backendopt_lltype,
@@ -108,7 +108,7 @@ class TranslationDriver(object):
 
     def stackcheckinsertion_lltype(self):
         self.rtype_lltype()
-        if 'backendopt' in self.extra_goals:
+        if 'backendopt_lltype' in self.extra_goals:
             self.backendopt_lltype()
         return self.run_task(self.task_stackcheckinsertion_lltype,
                              'stackcheckinsertion_lltype')
@@ -135,7 +135,7 @@ class TranslationDriver(object):
         return self.run_task(self.task_run_c, 'run_c')
 
     def set_extra_goals(self, goals):
-        self.extra_goals = goals
+        self.extra_goals = self.backend_select_goals(goals)
 
     def set_backend_extra_options(self, extra_options):
         self._backend_extra_options = extra_options
