@@ -108,7 +108,8 @@ class TranslationDriver(object):
 
     def stackcheckinsertion_lltype(self):
         self.rtype_lltype()
-        if 'backendopt_lltype' in self.extra_goals:
+        disabled = self.backend_select_goals(self._disabled)
+        if 'backendopt_lltype' not in disabled:
             self.backendopt_lltype()
         return self.run_task(self.task_stackcheckinsertion_lltype,
                              'stackcheckinsertion_lltype')
@@ -213,7 +214,7 @@ class TranslationDriver(object):
         backend, ts = self.get_backend_and_type_system()
         goals = set(self.backend_select_goals(goals + self.extra_goals))
         if not goals:
-            self.log('Nothing to do.')
+            self.log.info('Nothing to do.')
         self.extra_goals += goals
 
         # run C goals first to catch missing boehm.
