@@ -330,12 +330,9 @@ class PyPyTarget(object):
         # ugly hack to modify target goal from compile_* to build_cffi_imports
         # this should probably get cleaned up and merged with driver.create_exe
         from rpython.tool.runsubprocess import run_subprocess
-        from rpython.translator.driver import taskdef
-        import types
 
         compile_goal, = driver.backend_select_goals(['compile'])
-        @taskdef([compile_goal], "Create cffi bindings for modules")
-        def task_build_cffi_imports(self):
+        def task_build_cffi_imports():
             ''' Use cffi to compile cffi interfaces to modules'''
             filename = os.path.join(pypydir, 'tool', 'build_cffi_imports.py')
             status, out, err = run_subprocess(str(driver.compute_exe_name()),
@@ -343,8 +340,13 @@ class PyPyTarget(object):
             sys.stdout.write(out)
             sys.stderr.write(err)
             # otherwise, ignore errors
-        driver.task_build_cffi_imports = types.MethodType(task_build_cffi_imports, driver)
-        driver.tasks['build_cffi_imports'] = driver.task_build_cffi_imports, [compile_goal]
+
+        def build_cffi_imports():
+            getattr(driver, compile_goal)()
+            driver.run_task(task_build_cffi_imports, 'build_cffi_imports')
+
+        driver.task_build_cffi_imports = task_build_cffi_imports
+        driver.build_cffi_imports = build_cffi_imports
         driver.default_goal = 'build_cffi_imports'
         # HACKHACKHACK end
 
