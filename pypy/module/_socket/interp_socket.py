@@ -233,6 +233,7 @@ class W_Socket(W_Root):
         except SocketError:
             # cpython doesn't return any errors on close
             pass
+        self.may_unregister_rpython_finalizer(space)
 
     def connect_w(self, space, w_addr):
         """connect(address)
@@ -423,7 +424,7 @@ class W_Socket(W_Root):
             w_addr = w_param3
         try:
             addr = self.addr_from_object(space, w_addr)
-            count = self.sock.sendto(data, flags, addr)
+            count = self.sock.sendto(data, len(data), flags, addr)
         except SocketError as e:
             raise converted_error(space, e)
         return space.wrap(count)

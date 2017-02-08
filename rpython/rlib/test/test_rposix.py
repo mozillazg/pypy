@@ -281,6 +281,12 @@ class TestPosixFunction:
     def test_isatty(self):
         assert rposix.isatty(-1) is False
 
+    @py.test.mark.skipif("not hasattr(rposix, 'makedev')")
+    def test_makedev(self):
+        dev = rposix.makedev(24, 7)
+        assert rposix.major(dev) == 24
+        assert rposix.minor(dev) == 7
+
 
 @py.test.mark.skipif("not hasattr(os, 'ttyname')")
 class TestOsExpect(ExpectTest):
@@ -663,3 +669,10 @@ def test_set_status_flags():
     finally:
         os.close(fd1)
         os.close(fd2)
+
+@rposix_requires('getpriority')
+def test_getpriority():
+    # a "don't crash" kind of test only
+    prio = rposix.getpriority(rposix.PRIO_PROCESS, 0)
+    rposix.setpriority(rposix.PRIO_PROCESS, 0, prio)
+    py.test.raises(OSError, rposix.getpriority, rposix.PRIO_PGRP, 123456789)

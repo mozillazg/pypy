@@ -234,6 +234,7 @@ else:
         _ptyh = 'pty.h'
     includes = ['unistd.h',  'sys/types.h', 'sys/wait.h',
                 'utime.h', 'sys/time.h', 'sys/times.h',
+                'sys/resource.h',
                 'grp.h', 'dirent.h', 'sys/stat.h', 'fcntl.h',
                 'signal.h', 'sys/utsname.h', _ptyh]
     if sys.platform.startswith('freebsd'):
@@ -249,6 +250,9 @@ class CConfig:
     SEEK_SET = rffi_platform.DefinedConstantInteger('SEEK_SET')
     SEEK_CUR = rffi_platform.DefinedConstantInteger('SEEK_CUR')
     SEEK_END = rffi_platform.DefinedConstantInteger('SEEK_END')
+    PRIO_PROCESS = rffi_platform.DefinedConstantInteger('PRIO_PROCESS')
+    PRIO_PGRP = rffi_platform.DefinedConstantInteger('PRIO_PGRP')
+    PRIO_USER = rffi_platform.DefinedConstantInteger('PRIO_USER')
     O_NONBLOCK = rffi_platform.DefinedConstantInteger('O_NONBLOCK')
     OFF_T_SIZE = rffi_platform.SizeOf('off_t')
 
@@ -261,6 +265,7 @@ class CConfig:
     if not _WIN32:
         UID_T = rffi_platform.SimpleType('uid_t', rffi.UINT)
         GID_T = rffi_platform.SimpleType('gid_t', rffi.UINT)
+        ID_T = rffi_platform.SimpleType('id_t', rffi.UINT)
         TIOCGWINSZ = rffi_platform.DefinedConstantInteger('TIOCGWINSZ')
 
         TMS = rffi_platform.Struct(
@@ -1734,6 +1739,22 @@ if not _WIN32:
     def setresgid(rgid, egid, sgid):
         handle_posix_error('setresgid', c_setresgid(rgid, egid, sgid))
 
+    c_getpriority = external('getpriority', [rffi.INT, ID_T], rffi.INT,
+                             save_err=rffi.RFFI_FULL_ERRNO_ZERO)
+    c_setpriority = external('setpriority', [rffi.INT, ID_T, rffi.INT],
+                             rffi.INT, save_err=rffi.RFFI_SAVE_ERRNO)
+
+    def getpriority(which, who):
+        result = widen(c_getpriority(which, who))
+        error = get_saved_errno()
+        if error != 0:
+            raise OSError(error, 'getpriority failed')
+        return result
+
+    def setpriority(which, who, prio):
+        handle_posix_error('setpriority', c_setpriority(which, who, prio))
+
+
 #___________________________________________________________________
 
 c_chroot = external('chroot', [rffi.CCHARP], rffi.INT,
@@ -1778,25 +1799,23 @@ def uname():
     finally:
         lltype.free(l_utsbuf, flavor='raw')
 
-# These are actually macros on some/most systems
-c_makedev = external('makedev', [rffi.INT, rffi.INT], rffi.INT)
-c_major = external('major', [rffi.INT], rffi.INT)
-c_minor = external('minor', [rffi.INT], rffi.INT)
+if sys.platform != 'win32':
+    # These are actually macros on some/most systems
+    c_makedev = external('makedev', [rffi.INT, rffi.INT], rffi.INT, macro=True)
+    c_major = external('major', [rffi.INT], rffi.INT, macro=True)
+    c_minor = external('minor', [rffi.INT], rffi.INT, macro=True)
 
-@replace_os_function('makedev')
-@jit.dont_look_inside
-def makedev(maj, min):
-    return c_makedev(maj, min)
+    @replace_os_function('makedev')
+    def makedev(maj, min):
+        return c_makedev(maj, min)
 
-@replace_os_function('major')
-@jit.dont_look_inside
-def major(dev):
-    return c_major(dev)
+    @replace_os_function('major')
+    def major(dev):
+        return c_major(dev)
 
-@replace_os_function('minor')
-@jit.dont_look_inside
-def minor(dev):
-    return c_minor(dev)
+    @replace_os_function('minor')
+    def minor(dev):
+        return c_minor(dev)
 
 #___________________________________________________________________
 
@@ -1874,7 +1893,9 @@ class EnvironExtRegistry(ControllerEntryForPrebuilt):
 # Support for f... and ...at families of POSIX functions
 
 class CConfig:
-    _compilation_info_ = eci
+    _compilation_info_ = eci.merge(ExternalCompilationInfo(
+        includes=['sys/statvfs.h'],
+    ))
     for _name in """faccessat fchdir fchmod fchmodat fchown fchownat fexecve
             fdopendir fpathconf fstat fstatat fstatvfs ftruncate
             futimens futimes futimesat linkat chflags lchflags lchmod lchown

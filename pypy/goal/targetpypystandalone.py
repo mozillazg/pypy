@@ -35,6 +35,7 @@ def create_entry_point(space, w_dict):
         w_run_toplevel = space.getitem(w_dict, space.wrap('run_toplevel'))
         w_initstdio = space.getitem(w_dict, space.wrap('initstdio'))
         withjit = space.config.objspace.usemodules.pypyjit
+        hashfunc = space.config.objspace.hash
     else:
         w_initstdio = space.appexec([], """():
             return lambda unbuffered: None
@@ -44,6 +45,10 @@ def create_entry_point(space, w_dict):
         if withjit:
             from rpython.jit.backend.hlinfo import highleveljitinfo
             highleveljitinfo.sys_executable = argv[0]
+
+        if hashfunc == "siphash24":
+            from rpython.rlib import rsiphash
+            rsiphash.enable_siphash24()
 
         #debug("entry point starting")
         #for arg in argv:
@@ -83,11 +88,17 @@ def create_entry_point(space, w_dict):
                 return 1
         return exitcode
 
+    return entry_point, get_additional_entrypoints(space, w_initstdio)
+
+
+def get_additional_entrypoints(space, w_initstdio):
     # register the minimal equivalent of running a small piece of code. This
     # should be used as sparsely as possible, just to register callbacks
-
     from rpython.rlib.entrypoint import entrypoint_highlevel
     from rpython.rtyper.lltypesystem import rffi, lltype
+
+    if space.config.objspace.disable_entrypoints:
+        return {}
 
     @entrypoint_highlevel('main', [rffi.CCHARP, rffi.INT],
                           c_name='pypy_setup_home')
@@ -188,11 +199,11 @@ def create_entry_point(space, w_dict):
             return -1
         return 0
 
-    return entry_point, {'pypy_execute_source': pypy_execute_source,
-                         'pypy_execute_source_ptr': pypy_execute_source_ptr,
-                         'pypy_init_threads': pypy_init_threads,
-                         'pypy_thread_attach': pypy_thread_attach,
-                         'pypy_setup_home': pypy_setup_home}
+    return {'pypy_execute_source': pypy_execute_source,
+            'pypy_execute_source_ptr': pypy_execute_source_ptr,
+            'pypy_init_threads': pypy_init_threads,
+            'pypy_thread_attach': pypy_thread_attach,
+            'pypy_setup_home': pypy_setup_home}
 
 
 # _____ Define and setup target ___
@@ -297,6 +308,12 @@ class PyPyTarget(object):
 
         if config.translation.sandbox:
             config.objspace.lonepycfiles = False
+
+        if config.objspace.usemodules.cpyext:
+            if config.translation.gc not in ('incminimark', 'boehm'):
+                raise Exception("The 'cpyext' module requires the 'incminimark'"
+                    " or 'boehm' GC.  You need either 'targetpypystandalone.py"
+                    " --withoutmod-cpyext', or use one of these two GCs.")
 
         config.translating = True
 

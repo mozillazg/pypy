@@ -323,17 +323,28 @@ class W_CData(W_Root):
         #
         return self._add_or_sub(w_other, -1)
 
-    def getcfield(self, w_attr):
-        return self.ctype.getcfield(self.space.str_w(w_attr))
+    def getcfield(self, w_attr, mode):
+        space = self.space
+        attr = space.str_w(w_attr)
+        try:
+            cfield = self.ctype.getcfield(attr)
+        except KeyError:
+            raise oefmt(space.w_AttributeError, "cdata '%s' has no field '%s'",
+                        self.ctype.name, attr)
+        if cfield is None:
+            raise oefmt(space.w_AttributeError,
+                        "cdata '%s' points to an opaque type: cannot %s fields",
+                        self.ctype.name, mode)
+        return cfield
 
     def getattr(self, w_attr):
-        cfield = self.getcfield(w_attr)
+        cfield = self.getcfield(w_attr, mode="read")
         with self as ptr:
             w_res = cfield.read(ptr, self)
         return w_res
 
     def setattr(self, w_attr, w_value):
-        cfield = self.getcfield(w_attr)
+        cfield = self.getcfield(w_attr, mode="write")
         with self as ptr:
             cfield.write(ptr, w_value)
 
@@ -397,7 +408,7 @@ class W_CData(W_Root):
         space = self.space
         if space.is_none(w_destructor):
             if isinstance(self, W_CDataGCP):
-                self.w_destructor = None
+                self.detach_destructor()
                 return space.w_None
             raise oefmt(space.w_TypeError,
                         "Can remove destructor only on a object "
@@ -603,6 +614,10 @@ class W_CDataGCP(W_CData):
         if w_destructor is not None:
             self.w_destructor = None
             self.space.call_function(w_destructor, self.w_original_cdata)
+
+    def detach_destructor(self):
+        self.w_destructor = None
+        self.may_unregister_rpython_finalizer(self.space)
 
 
 W_CData.typedef = TypeDef(
