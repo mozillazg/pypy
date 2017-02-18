@@ -1,10 +1,11 @@
 from pypy.module.cpyext.api import (
-    cpython_api, generic_cpy_call, CANNOT_FAIL, CConfig, cpython_struct)
+    cpython_api, generic_cpy_call, CANNOT_FAIL, CConfig, cpython_struct, cpyext_glob_tid_ptr)
 from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, make_ref, from_ref
 from pypy.interpreter.error import OperationError
 from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.rlib import rthread
 from rpython.rlib.objectmodel import we_are_translated
+from rpython.rlib import rgil
 
 PyInterpreterStateStruct = lltype.ForwardReference()
 PyInterpreterState = lltype.Ptr(PyInterpreterStateStruct)
@@ -232,11 +233,15 @@ def _workaround_cpython_untranslated(space):
     space.threadlocals.get_ec = get_possibly_deleted_ec
 
 
-@cpython_api([], PyGILState_STATE, error=CANNOT_FAIL, gil="pygilstate_ensure")
-def PyGILState_Ensure(space, previous_state):
-    # The argument 'previous_state' is not part of the API; it is inserted
-    # by make_wrapper() and contains PyGILState_LOCKED/UNLOCKED based on
-    # the previous GIL state.
+@cpython_api([], PyGILState_STATE, error=CANNOT_FAIL, gil="ignore")
+def PyGILState_Ensure(space):
+    tid = rthread.get_or_make_ident()
+    if cpyext_glob_tid_ptr[0] == tid:
+        cpyext_glob_tid_ptr[0] = 0
+        previous_state = PyGILState_LOCKED
+    else:
+        rgil.acquire()
+        previous_state = PyGILState_UNLOCKED
     must_leave = space.threadlocals.try_enter_thread(space)
     ec = space.getexecutioncontext()
     if not must_leave:
@@ -254,10 +259,14 @@ def PyGILState_Ensure(space, previous_state):
         if not we_are_translated():
             _workaround_cpython_untranslated(space)
     #
+    cpyext_glob_tid_ptr[0] = tid
     return rffi.cast(PyGILState_STATE, previous_state)
 
-@cpython_api([PyGILState_STATE], lltype.Void, gil="pygilstate_release")
+@cpython_api([PyGILState_STATE], lltype.Void, gil="ignore")
 def PyGILState_Release(space, oldstate):
+    tid = rthread.get_or_make_ident()
+    assert cpyext_glob_tid_ptr[0] == tid
+    cpyext_glob_tid_ptr[0] = 0
     oldstate = rffi.cast(lltype.Signed, oldstate)
     ec = space.getexecutioncontext()
     if ec.cpyext_gilstate_counter_noleave > 0:
@@ -266,6 +275,10 @@ def PyGILState_Release(space, oldstate):
         assert ec.cpyext_gilstate_counter_noleave == 0
         assert oldstate == PyGILState_UNLOCKED
         space.threadlocals.leave_thread(space)
+    if oldstate == PyGILState_UNLOCKED:
+        rgil.release()
+    else:
+        cpyext_glob_tid_ptr[0] = tid
 
 @cpython_api([], PyInterpreterState, error=CANNOT_FAIL)
 def PyInterpreterState_Head(space):

@@ -266,9 +266,6 @@ class ApiFunction(object):
         sig = pycode.cpython_code_signature(callable.func_code)
         assert sig.argnames[0] == 'space'
         self.argnames = sig.argnames[1:]
-        if gil == 'pygilstate_ensure':
-            assert self.argnames[-1] == 'previous_state'
-            del self.argnames[-1]
         assert len(self.argnames) == len(self.argtypes)
 
         self.gil = gil
@@ -851,15 +848,11 @@ def unexpected_exception(funcname, e, tb):
         pypy_debug_catch_fatal_exception()
         assert False
 
-def _restore_gil_state(pygilstate_release, gilstate, gil_release, _gil_auto, tid):
+def _restore_gil_state(gil_release, _gil_auto, tid):
     from rpython.rlib import rgil
     # see "Handling of the GIL" above
     assert cpyext_glob_tid_ptr[0] == 0
-    if pygilstate_release:
-        from pypy.module.cpyext import pystate
-        unlock = (gilstate == pystate.PyGILState_UNLOCKED)
-    else:
-        unlock = gil_release or _gil_auto
+    unlock = gil_release or _gil_auto
     if unlock:
         rgil.release()
     else:
@@ -875,11 +868,9 @@ def make_wrapper_second_level(space, argtypesw, restype,
                                          # have the GIL, and acquire/release it
     gil_acquire = (gil == "acquire" or gil == "around")
     gil_release = (gil == "release" or gil == "around")
-    pygilstate_ensure = (gil == "pygilstate_ensure")
-    pygilstate_release = (gil == "pygilstate_release")
-    assert (gil is None or gil_acquire or gil_release
-            or pygilstate_ensure or pygilstate_release)
-    expected_nb_args = len(argtypesw) + pygilstate_ensure
+    gil_ignore = (gil == "ignore")
+    assert (gil is None or gil_acquire or gil_release or gil_ignore)
+    expected_nb_args = len(argtypesw)
 
     if isinstance(restype, lltype.Ptr) and error_value == 0:
         error_value = lltype.nullptr(restype.TO)
@@ -893,7 +884,6 @@ def make_wrapper_second_level(space, argtypesw, restype,
     def wrapper_second_level(callable, pname, *args):
         from pypy.module.cpyext.pyobject import make_ref, from_ref, is_pyobj
         from pypy.module.cpyext.pyobject import as_pyobj
-        from pypy.module.cpyext import pystate
         # we hope that malloc removal removes the newtuple() that is
         # inserted exactly here by the varargs specializer
 
@@ -905,21 +895,12 @@ def make_wrapper_second_level(space, argtypesw, restype,
                 deadlock_error(pname)
             rgil.acquire()
             assert cpyext_glob_tid_ptr[0] == 0
-        elif pygilstate_ensure:
-            if cpyext_glob_tid_ptr[0] == tid:
-                cpyext_glob_tid_ptr[0] = 0
-                args += (pystate.PyGILState_LOCKED,)
-            else:
-                rgil.acquire()
-                args += (pystate.PyGILState_UNLOCKED,)
+        elif gil_ignore:
+            pass
         else:
             if cpyext_glob_tid_ptr[0] != tid:
                 no_gil_error(pname)
             cpyext_glob_tid_ptr[0] = 0
-        if pygilstate_release:
-            gilstate = rffi.cast(lltype.Signed, args[-1])
-        else:
-            gilstate = pystate.PyGILState_IGNORE
 
         rffi.stackcounter.stacks_counter += 1
         llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
@@ -943,8 +924,6 @@ def make_wrapper_second_level(space, argtypesw, restype,
                 else:
                     arg_conv = arg
                 boxed_args += (arg_conv, )
-            if pygilstate_ensure:
-                boxed_args += (args[-1], )
             try:
                 result = callable(space, *boxed_args)
                 if not we_are_translated() and DEBUG_WRAPPER:
@@ -989,14 +968,16 @@ def make_wrapper_second_level(space, argtypesw, restype,
 
         except Exception as e:
             unexpected_exception(pname, e, tb)
-            _restore_gil_state(pygilstate_release, gilstate, gil_release, _gil_auto, tid)
+            if not gil_ignore:
+                _restore_gil_state(gil_release, _gil_auto, tid)
             state.check_and_raise_exception(always=True)
             return fatal_value
 
         assert lltype.typeOf(retval) == restype
         rffi.stackcounter.stacks_counter -= 1
 
-        _restore_gil_state(pygilstate_release, gilstate, gil_release, _gil_auto, tid)
+        if not gil_ignore:
+            _restore_gil_state(gil_release, _gil_auto, tid)
         return retval
 
     wrapper_second_level._dont_inline_ = True
