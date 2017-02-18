@@ -485,6 +485,31 @@ def fdatasync(fd):
 def sync():
     c_sync()
 
+c_pread = external('pread',
+                  [rffi.INT, rffi.VOIDP, rffi.SIZE_T , rffi.LONGLONG], rffi.SSIZE_T,
+                  save_err=rffi.RFFI_SAVE_ERRNO)
+c_pwrite = external('pwrite',
+                   [rffi.INT, rffi.VOIDP, rffi.SIZE_T, rffi.LONGLONG], rffi.SSIZE_T,
+                   save_err=rffi.RFFI_SAVE_ERRNO)
+
+@replace_os_function('pread')
+@enforceargs(int, int, None)
+def pread(fd, count, offset):
+    if count < 0:
+        raise OSError(errno.EINVAL, None)
+    validate_fd(fd)
+    with rffi.scoped_alloc_buffer(count) as buf:
+        void_buf = rffi.cast(rffi.VOIDP, buf.raw)
+        return buf.str(handle_posix_error('pread', c_pread(fd, void_buf, count, offset)))
+
+@replace_os_function('pwrite')
+@enforceargs(int, None, None)
+def pwrite(fd, data, offset):
+    count = len(data)
+    validate_fd(fd)
+    with rffi.scoped_nonmovingbuffer(data) as buf:
+        return handle_posix_error('pwrite', c_pwrite(fd, buf, count, offset))
+
 #___________________________________________________________________
 
 c_chdir = external('chdir', [rffi.CCHARP], rffi.INT,

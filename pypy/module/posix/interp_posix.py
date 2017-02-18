@@ -269,7 +269,7 @@ def read(space, fd, length):
         raise wrap_oserror(space, e)
     else:
         return space.newbytes(s)
-
+        
 @unwrap_spec(fd=c_int)
 def write(space, fd, w_data):
     """Write a string to a file descriptor.  Return the number of bytes
@@ -277,6 +277,25 @@ actually written, which may be smaller than len(data)."""
     data = space.getarg_w('y*', w_data)
     try:
         res = os.write(fd, data.as_str())
+    except OSError as e:
+        raise wrap_oserror(space, e)
+    else:
+        return space.wrap(res)
+
+@unwrap_spec(fd=c_int, length=int, offset=int)
+def pread(space, fd, length, offset):
+    try:
+        s = rposix.pread(fd, length, offset)
+    except OSError as e:
+        raise wrap_oserror(space, e)
+    else:
+        return space.newbytes(s)
+
+@unwrap_spec(fd=c_int, offset=int)
+def pwrite(space, fd, w_data, offset):
+    data = space.getarg_w('y*', w_data)
+    try:
+        res = rposix.pwrite(fd, data.as_str(), offset)
     except OSError as e:
         raise wrap_oserror(space, e)
     else:
