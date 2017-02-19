@@ -1,3 +1,4 @@
+import sys
 import pytest
 from rpython.jit.metainterp.resumecode import create_numbering,\
     unpack_numbering, Reader, Writer, TagOverflow
@@ -7,12 +8,10 @@ from hypothesis import strategies, given, example
 
 def test_tag_overflow():
     w = Writer()
-    with pytest.raises(TagOverflow):
-        w.append_int(2**21)
-    with pytest.raises(TagOverflow):
-        w.append_int(-2**22)
-    with pytest.raises(TagOverflow):
-        w.append_int(-2**21-1)
+    for bad in [2 ** 21, -2**22, -2**21-1,
+                sys.maxint, -sys.maxint-1]:
+        with pytest.raises(TagOverflow):
+            w.append_int(bad)
 
 examples = [
     [1, 2, 3, 4, 257, 10000, 13, 15],

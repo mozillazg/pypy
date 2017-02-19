@@ -22,15 +22,18 @@
 """
 
 from rpython.rtyper.lltypesystem import rffi, lltype
-from rpython.rlib import objectmodel
+from rpython.rlib import objectmodel, rarithmetic
 
 class TagOverflow(Exception):
     pass
 
 def integer_fits(item):
-    item *= 2
+    try:
+        item = rarithmetic.ovfcheck(item * 2)
+    except OverflowError:
+        return False
     if item < 0:
-       item = ~item
+        item = ~item # can't overflow
     # we can fit up to 22 content bits into 1-3 bytes (24 bits, with 2 continuation
     # bits)
     return item < 2 ** 22

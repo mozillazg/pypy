@@ -1004,8 +1004,8 @@ class AbstractResumeDataReader(object):
         if pendingfields:
             for i in range(len(pendingfields)):
                 lldescr = pendingfields[i].lldescr
-                num = pendingfields[i].num
-                fieldnum = pendingfields[i].fieldnum
+                num = rarithmetic.widen(pendingfields[i].num)
+                fieldnum = rarithmetic.widen(pendingfields[i].fieldnum)
                 itemindex = pendingfields[i].itemindex
                 descr = annlowlevel.cast_base_ptr_to_instance(AbstractDescr,
                                                               lldescr)
