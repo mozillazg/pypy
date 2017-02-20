@@ -250,6 +250,7 @@ class CConfig:
     SEEK_CUR = rffi_platform.DefinedConstantInteger('SEEK_CUR')
     SEEK_END = rffi_platform.DefinedConstantInteger('SEEK_END')
     O_NONBLOCK = rffi_platform.DefinedConstantInteger('O_NONBLOCK')
+    OFF_T = rffi_platform.SimpleType('off_t')
     OFF_T_SIZE = rffi_platform.SizeOf('off_t')
 
     HAVE_UTIMES = rffi_platform.Has('utimes')
@@ -486,10 +487,10 @@ def sync():
     c_sync()
 
 c_pread = external('pread',
-                  [rffi.INT, rffi.VOIDP, rffi.SIZE_T , rffi.LONGLONG], rffi.SSIZE_T,
+                  [rffi.INT, rffi.VOIDP, rffi.SIZE_T , OFF_T], rffi.SSIZE_T,
                   save_err=rffi.RFFI_SAVE_ERRNO)
 c_pwrite = external('pwrite',
-                   [rffi.INT, rffi.VOIDP, rffi.SIZE_T, rffi.LONGLONG], rffi.SSIZE_T,
+                   [rffi.INT, rffi.VOIDP, rffi.SIZE_T, OFF_T], rffi.SSIZE_T,
                    save_err=rffi.RFFI_SAVE_ERRNO)
 
 @replace_os_function('pread')
