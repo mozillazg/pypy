@@ -11,7 +11,7 @@ from rpython.rlib._os_support import (
     _prefer_unicode, _preferred_traits)
 from rpython.rlib.objectmodel import (
     specialize, enforceargs, register_replacement_for, NOT_CONSTANT)
-from rpython.rlib.rarithmetic import intmask, widen, r_longlong
+from rpython.rlib.rarithmetic import intmask, widen
 from rpython.rlib.signature import signature
 from rpython.tool.sourcetools import func_renamer
 from rpython.translator.platform import platform
