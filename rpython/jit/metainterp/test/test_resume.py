@@ -113,19 +113,19 @@ def dump_storage(storage, liveboxes):
 def test_tag():
     assert tag(3, 1) == 3<<2|1
     assert tag(-3, 2) == -3<<2|2
-    assert tag((1<<13)-1, 3) == ((1<<15)-1)|3
-    assert tag(-1<<13, 3) ==(-1<<15)|3
+    assert tag((1<<19)-1, 3) == ((1<<21)-1)|3
+    assert tag(-1<<19, 3) ==(-1<<21)|3
     py.test.raises(AssertionError, tag, 3, 5)
-    py.test.raises(TagOverflow, tag, 1<<13, 0)
-    py.test.raises(TagOverflow, tag, (1<<13)+1, 0)
-    py.test.raises(TagOverflow, tag, (-1<<13)-1, 0)
-    py.test.raises(TagOverflow, tag, (-1<<13)-5, 0)
+    py.test.raises(TagOverflow, tag, 1<<19, 0)
+    py.test.raises(TagOverflow, tag, (1<<19)+1, 0)
+    py.test.raises(TagOverflow, tag, (-1<<19)-1, 0)
+    py.test.raises(TagOverflow, tag, (-1<<19)-5, 0)
 
 def test_untag():
     assert untag(tag(3, 1)) == (3, 1)
     assert untag(tag(-3, 2)) == (-3, 2)
-    assert untag(tag((1<<13)-1, 3)) == ((1<<13)-1, 3)
-    assert untag(tag(-1<<13, 3)) == (-1<<13, 3)
+    assert untag(tag((1<<19)-1, 3)) == ((1<<19)-1, 3)
+    assert untag(tag(-1<<19, 3)) == (-1<<19, 3)
 
 def test_tagged_eq():
     assert tagged_eq(UNASSIGNED, UNASSIGNED)
@@ -776,12 +776,12 @@ def test_ResumeDataLoopMemo_ints():
     assert untag(tagged) == (44, TAGINT)
     tagged = memo.getconst(ConstInt(-3))
     assert untag(tagged) == (-3, TAGINT)
-    const = ConstInt(50000)
+    const = ConstInt(1<<20)
     tagged = memo.getconst(const)
     index, tagbits = untag(tagged)
     assert tagbits == TAGCONST
     assert memo.consts[index - TAG_CONST_OFFSET] is const
-    tagged = memo.getconst(ConstInt(50000))
+    tagged = memo.getconst(ConstInt(1<<20))
     index2, tagbits = untag(tagged)
     assert tagbits == TAGCONST
     assert index2 == index
@@ -1081,7 +1081,7 @@ def test_virtual_adder_int_constants():
     _next_section(reader, sys.maxint, 2**16, -65)
 
 def test_virtual_adder_memo_const_sharing():
-    b1s, b2s, b3s = [ConstInt(sys.maxint), ConstInt(2**16), ConstInt(-65)]
+    b1s, b2s, b3s = [ConstInt(sys.maxint), ConstInt(2**22), ConstInt(-65)]
     storage, t = make_storage(b1s, b2s, b3s)
     metainterp_sd = FakeMetaInterpStaticData()
     memo = ResumeDataLoopMemo(metainterp_sd)
@@ -1091,7 +1091,7 @@ def test_virtual_adder_memo_const_sharing():
     assert len(memo.consts) == 2
     assert storage.rd_consts is memo.consts
 
-    b1s, b2s, b3s = [ConstInt(sys.maxint), ConstInt(2**17), ConstInt(-65)]
+    b1s, b2s, b3s = [ConstInt(sys.maxint), ConstInt(2**23), ConstInt(-65)]
     storage2, t = make_storage(b1s, b2s, b3s)
     i = t.get_iter()
     modifier2 = ResumeDataVirtualAdder(FakeOptimizer(i), storage2, storage2,
@@ -1497,14 +1497,12 @@ def test_resume_reader_fields_and_arrayitems():
             self.got_array = got_array
         def setfield(self, struct, fieldnum, descr):
             assert lltype.typeOf(struct) is lltype.Signed
-            assert lltype.typeOf(fieldnum) is rffi.SHORT
-            fieldnum = rffi.cast(lltype.Signed, fieldnum)
+            assert lltype.typeOf(fieldnum) is lltype.Signed
             self.got.append((descr, struct, fieldnum))
         def setarrayitem(self, array, index, fieldnum, arraydescr):
             assert lltype.typeOf(array) is lltype.Signed
             assert lltype.typeOf(index) is lltype.Signed
-            assert lltype.typeOf(fieldnum) is rffi.SHORT
-            fieldnum = rffi.cast(lltype.Signed, fieldnum)
+            assert lltype.typeOf(fieldnum) is lltype.Signed
             self.got_array.append((arraydescr, array, index, fieldnum))
         def decode_ref(self, num):
             return rffi.cast(lltype.Signed, num) * 100

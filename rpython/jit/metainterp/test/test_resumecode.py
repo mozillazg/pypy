@@ -20,8 +20,10 @@ examples = [
     [13000, 12000, 10000, 256, 255, 254, 257, -3, -1000]
 ]
 
+codelists = strategies.lists(strategies.integers(-2**21, 2**21-1), min_size=1)
+
 def hypothesis_and_examples(func):
-    func = given(strategies.lists(strategies.integers(-2**21, 2**21-1)))(func)
+    func = given(codelists)(func)
     for ex in examples:
         func = example(ex)(func)
     return func
@@ -55,7 +57,7 @@ def test_writer(l):
         assert unpack_numbering(n) == l
 
 @hypothesis_and_examples
-def test_patch(l):
+def test_patch_current_size(l):
     for middle in range(len(l)):
         l1 = l[:middle]
         l2 = l[middle:]
@@ -70,4 +72,18 @@ def test_patch(l):
         assert unpack_numbering(n)[1:] == l
         assert unpack_numbering(n)[0] == middle + 1
 
+@hypothesis_and_examples
+def test_patch(l):
+    item = l[0]
+    l = l[1:]
+    for middle in range(len(l)):
+        output = l[:]
+        output[middle] = item
+        w = Writer(len(l))
+        for i, num in enumerate(l):
+            index = w.append_int(num)
+            assert index == i
+        w.patch(middle, item)
+        n = w.create_numbering()
+        assert unpack_numbering(n) == output
 

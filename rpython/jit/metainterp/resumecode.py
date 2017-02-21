@@ -1,7 +1,7 @@
 """ Resume bytecode. It goes as following:
 
   # ----- resume section
-  [total size of resume section, unencoded]
+  [total size of resume section]
   [<length> <virtualizable object> <numb> <numb> <numb>]    if vinfo is not None
    -OR-
   [1 <ginfo object>]                                        if ginfo is not None
@@ -99,29 +99,29 @@ def unpack_numbering(numb):
 
 class Writer(object):
     def __init__(self, size=0):
-        self.current = objectmodel.newlist_hint(3 * size)
-        self.grow(size)
-        self.items = 0
+        self.current = objectmodel.newlist_hint( size)
 
     def append_int(self, item):
-        self.items += 1
-        append_numbering(self.current, item)
+        """ append an item. return the position of the item """
+        if not integer_fits(item):
+            raise TagOverflow
+        self.current.append(item)
+        return len(self.current) - 1
 
     def create_numbering(self):
-        numb = lltype.malloc(NUMBERING, len(self.current))
-        for i, elt in enumerate(self.current):
+        l = []
+        for item in self.current:
+            append_numbering(l, item)
+        numb = lltype.malloc(NUMBERING, len(l))
+        for i, elt in enumerate(l):
             numb.code[i] = elt
         return numb
 
-    def grow(self, size):
-        pass
-
     def patch_current_size(self, index):
-        # mess :-(
-        assert self.current[index] == 0
-        l = []
-        append_numbering(l, self.items)
-        self.current = l + self.current[1:]
+        self.patch(index, len(self.current))
+
+    def patch(self, index, item):
+        self.current[index] = item
 
 
 def create_numbering(l):

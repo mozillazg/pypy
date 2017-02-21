@@ -13,7 +13,8 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, rffi, rstr
 from rpython.rtyper.rclass import OBJECTPTR
 from rpython.jit.metainterp.walkvirtual import VirtualVisitor
 from rpython.jit.metainterp import resumecode
-TagOverflow = resumecode.TagOverflow
+from rpython.jit.metainterp.resumecode import TagOverflow
+
 
 
 # Logic to encode the chain of frames and the state of the boxes at a
@@ -563,8 +564,8 @@ class ResumeDataVirtualAdder(VirtualVisitor):
                     raise TagOverflow
                 #
                 rd_pendingfields[i].lldescr = lldescr
-                rd_pendingfields[i].num = num
-                rd_pendingfields[i].fieldnum = fieldnum
+                rd_pendingfields[i].num = rffi.r_short(num)
+                rd_pendingfields[i].fieldnum = rffi.r_short(fieldnum)
                 rd_pendingfields[i].itemindex = rffi.cast(rffi.INT, itemindex)
         self.storage.rd_pendingfields = rd_pendingfields
 
