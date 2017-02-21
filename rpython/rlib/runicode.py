@@ -3,6 +3,7 @@ from rpython.rlib.objectmodel import specialize, we_are_translated, enforceargs
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder
 from rpython.rlib.rarithmetic import r_uint, intmask, widen
 from rpython.rlib.unicodedata import unicodedb
+from rpython.tool.sourcetools import func_with_new_name
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rlib import jit
 
@@ -108,15 +109,7 @@ def default_unicode_error_encode(errors, encoding, msg, u,
 # ____________________________________________________________
 # utf-8
 
-utf8_code_length = [
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, # 00-0F
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, # 70-7F
+_utf8_code_length = ''.join(map(chr, [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, # 80-8F
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -125,17 +118,17 @@ utf8_code_length = [
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, # D0-DF
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, # E0-EF
     4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  # F0-F4 - F5-FF
-]
+]))
 
+# if you can't use the @elidable version, call str_decode_utf_8_impl()
+# directly
+@jit.elidable
 def str_decode_utf_8(s, size, errors, final=False,
                      errorhandler=None, allow_surrogates=allow_surrogate_by_default):
     if errorhandler is None:
         errorhandler = default_unicode_error_decode
-    result = UnicodeBuilder(size)
-    pos = str_decode_utf_8_impl(s, size, errors, final, errorhandler,
-                                 allow_surrogates=allow_surrogates,
-                                 result=result)
-    return result.build(), pos
+    return str_decode_utf_8_elidable(s, size, errors, final, errorhandler,
+                                     allow_surrogates=allow_surrogates)
 
 def _invalid_cont_byte(ordch):
     return ordch>>6 != 0x2    # 0b10
@@ -157,14 +150,12 @@ def _invalid_byte_2_of_4(ordch1, ordch2):
             (ordch1 == 0xf0 and ordch2 < 0x90) or
             (ordch1 == 0xf4 and ordch2 > 0x8f))
 
-# note: this specialize() is here for rtyper/rstr.py, which calls this
-# function too but with its own fixed errorhandler
-@specialize.arg_or_var(4)
 def str_decode_utf_8_impl(s, size, errors, final, errorhandler,
-                          allow_surrogates, result):
+                          allow_surrogates):
     if size == 0:
-        return 0
+        return u'', 0
 
+    result = UnicodeBuilder(size)
     pos = 0
     while pos < size:
         ordch1 = ord(s[pos])
@@ -175,7 +166,7 @@ def str_decode_utf_8_impl(s, size, errors, final, errorhandler,
             pos += 1
             continue
 
-        n = utf8_code_length[ordch1]
+        n = ord(_utf8_code_length[ordch1 - 0x80])
         if pos + n > size:
             if not final:
                 break
@@ -316,7 +307,9 @@ def str_decode_utf_8_impl(s, size, errors, final, errorhandler,
                 result.append(unichr(0xDC00 + (c & 0x03FF)))
             pos += 4
 
-    return pos
+    return result.build(), pos
+str_decode_utf_8_elidable = jit.elidable(
+    func_with_new_name(str_decode_utf_8_impl, "str_decode_utf_8_elidable"))
 
 def _encodeUCS4(result, ch):
     # Encode UCS4 Unicode ordinals
@@ -325,6 +318,9 @@ def _encodeUCS4(result, ch):
     result.append((chr((0x80 | ((ch >> 6) & 0x3f)))))
     result.append((chr((0x80 | (ch & 0x3f)))))
 
+# if you can't use the @elidable version, call unicode_encode_utf_8_impl()
+# directly
+@jit.elidable
 def unicode_encode_utf_8(s, size, errors, errorhandler=None,
                          allow_surrogates=allow_surrogate_by_default):
     # In this function, allow_surrogates can be:
@@ -339,12 +335,9 @@ def unicode_encode_utf_8(s, size, errors, errorhandler=None,
     #
     if errorhandler is None:
         errorhandler = default_unicode_error_encode
-    return unicode_encode_utf_8_impl(s, size, errors, errorhandler,
-                                     allow_surrogates=allow_surrogates)
+    return unicode_encode_utf_8_elidable(s, size, errors, errorhandler,
+                                         allow_surrogates=allow_surrogates)
 
-# note: this specialize() is here for rtyper/rstr.py, which calls this
-# function too but with its own fixed errorhandler
-@specialize.arg_or_var(3)
 def unicode_encode_utf_8_impl(s, size, errors, errorhandler,
                               allow_surrogates=False):
     assert(size >= 0)
@@ -400,6 +393,9 @@ def unicode_encode_utf_8_impl(s, size, errors, errorhandler,
             else:
                 _encodeUCS4(result, ch)
     return result.build()
+unicode_encode_utf_8_elidable = jit.elidable(
+    func_with_new_name(unicode_encode_utf_8_impl,
+                       "unicode_encode_utf_8_elidable"))
 
 def unicode_encode_utf8sp(s, size):
     # Surrogate-preserving utf-8 encoding.  Any surrogate character
