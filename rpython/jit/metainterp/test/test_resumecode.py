@@ -1,8 +1,18 @@
+import pytest
 from rpython.jit.metainterp.resumecode import create_numbering,\
-    unpack_numbering, Reader, Writer
+    unpack_numbering, Reader, Writer, TagOverflow
 from rpython.rtyper.lltypesystem import lltype
 
 from hypothesis import strategies, given, example
+
+def test_tag_overflow():
+    w = Writer()
+    with pytest.raises(TagOverflow):
+        w.append_int(2**21)
+    with pytest.raises(TagOverflow):
+        w.append_int(-2**22)
+    with pytest.raises(TagOverflow):
+        w.append_int(-2**21-1)
 
 examples = [
     [1, 2, 3, 4, 257, 10000, 13, 15],
@@ -12,7 +22,7 @@ examples = [
 ]
 
 def hypothesis_and_examples(func):
-    func = given(strategies.lists(strategies.integers(-2**15, 2**15-1)))(func)
+    func = given(strategies.lists(strategies.integers(-2**21, 2**21-1)))(func)
     for ex in examples:
         func = example(ex)(func)
     return func
@@ -60,3 +70,5 @@ def test_patch(l):
         n = w.create_numbering()
         assert unpack_numbering(n)[1:] == l
         assert unpack_numbering(n)[0] == middle + 1
+
+

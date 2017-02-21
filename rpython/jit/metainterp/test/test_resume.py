@@ -111,10 +111,10 @@ def dump_storage(storage, liveboxes):
 
 
 def test_tag():
-    assert tag(3, 1) == rffi.r_short(3<<2|1)
-    assert tag(-3, 2) == rffi.r_short(-3<<2|2)
-    assert tag((1<<13)-1, 3) == rffi.r_short(((1<<15)-1)|3)
-    assert tag(-1<<13, 3) == rffi.r_short((-1<<15)|3)
+    assert tag(3, 1) == 3<<2|1
+    assert tag(-3, 2) == -3<<2|2
+    assert tag((1<<13)-1, 3) == ((1<<15)-1)|3
+    assert tag(-1<<13, 3) ==(-1<<15)|3
     py.test.raises(AssertionError, tag, 3, 5)
     py.test.raises(TagOverflow, tag, 1<<13, 0)
     py.test.raises(TagOverflow, tag, (1<<13)+1, 0)
