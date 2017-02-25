@@ -312,7 +312,7 @@ def pwrite(space, fd, w_data, offset):
     try:
         res = rposix.pwrite(fd, data.as_str(), offset)
     except OSError as e:
-        raise wrap_oserror(space, e)
+        raise wrap_oserror(space, e, eintr_retry=True)
     else:
         return space.wrap(res)
 
