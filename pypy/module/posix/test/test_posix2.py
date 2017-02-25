@@ -7,6 +7,7 @@ import signal
 
 from rpython.tool.udir import udir
 from pypy.tool.pytest.objspace import gettestobjspace
+from pypy.interpreter.gateway import interp2app
 from rpython.translator.c.test.test_extfunc import need_sparse_files
 from rpython.rlib import rposix
 
@@ -201,6 +202,8 @@ class AppTestPosix:
         excinfo = raises(TypeError, self.posix.stat, 2.)
         assert "should be string, bytes or integer, not float" in str(excinfo.value)
         raises(ValueError, self.posix.stat, -1)
+        raises(ValueError, self.posix.stat, b"abc\x00def")
+        raises(ValueError, self.posix.stat, u"abc\x00def")
 
     if hasattr(__import__(os.name), "statvfs"):
         def test_statvfs(self):
@@ -359,11 +362,11 @@ class AppTestPosix:
         pdir = self.pdir + '/file1'
         posix = self.posix
 
-        assert posix.access(pdir, posix.R_OK)
-        assert posix.access(pdir, posix.W_OK)
+        assert posix.access(pdir, posix.R_OK) is True
+        assert posix.access(pdir, posix.W_OK) is True
         import sys
         if sys.platform != "win32":
-            assert not posix.access(pdir, posix.X_OK)
+            assert posix.access(pdir, posix.X_OK) is False
 
     def test_times(self):
         """
@@ -839,7 +842,7 @@ class AppTestPosix:
             fd = os.open(self.path2 + 'test_os_pread', os.O_RDWR | os.O_CREAT)
             try:
                 os.write(fd, b'test')
-                os.lseek(fd, 0, os.SEEK_SET)
+                os.lseek(fd, 0, 0)
                 assert os.pread(fd, 2, 1) == b'es'
                 assert os.read(fd, 2) == b'te'
             finally:
@@ -851,7 +854,7 @@ class AppTestPosix:
             fd = os.open(self.path2 + 'test_os_pwrite', os.O_RDWR | os.O_CREAT)
             try:
                 os.write(fd, b'test')
-                os.lseek(fd, 0, os.SEEK_SET)
+                os.lseek(fd, 0, 0)
                 os.pwrite(fd, b'xx', 1)
                 assert os.read(fd, 4) == b'txxt'
             finally:
@@ -873,6 +876,31 @@ class AppTestPosix:
         st = os.stat(self.path2 + 'test_largefile')
         assert st.st_size == 10000000000
     test_largefile.need_sparse_files = True
+
+    if hasattr(rposix, 'getpriority'):
+        def test_os_set_get_priority(self):
+            posix, os = self.posix, self.os
+            childpid = os.fork()
+            if childpid == 0:
+                # in the child (avoids changing the priority of the parent
+                # process)
+                orig_priority = posix.getpriority(posix.PRIO_PROCESS,
+                                                  os.getpid())
+                orig_grp_priority = posix.getpriority(posix.PRIO_PGRP,
+                                                      os.getpgrp())
+                posix.setpriority(posix.PRIO_PROCESS, os.getpid(),
+                                  orig_priority + 1)
+                new_priority = posix.getpriority(posix.PRIO_PROCESS,
+                                                 os.getpid())
+                assert new_priority == orig_priority + 1
+                assert posix.getpriority(posix.PRIO_PGRP, os.getpgrp()) == (
+                    orig_grp_priority)
+                os._exit(0)    # ok
+            #
+            pid1, status1 = os.waitpid(childpid, 0)
+            assert pid1 == childpid
+            assert os.WIFEXITED(status1)
+            assert os.WEXITSTATUS(status1) == 0   # else, test failure
 
     def test_write_buffer(self):
         os = self.posix
@@ -1089,6 +1117,10 @@ class AppTestPosix:
             mkfile(dest)
             posix.truncate(dest, 1)
             assert 1 == posix.stat(dest).st_size
+
+            # File does not exist
+            e = raises(OSError, posix.truncate, dest + '-DOESNT-EXIST', 0)
+            assert e.value.filename == dest + '-DOESNT-EXIST'
 
     try:
         os.getlogin()
@@ -1389,3 +1421,40 @@ class AppTestFdVariants:
         if os.name == 'posix':
             assert os.open in os.supports_dir_fd  # openat()
 
+
+class AppTestPep475Retry:
+    spaceconfig = {'usemodules': USEMODULES}
+
+    def setup_class(cls):
+        if os.name != 'posix':
+            skip("xxx tests are posix-only")
+        if cls.runappdirect:
+            skip("xxx does not work with -A")
+
+        def fd_data_after_delay(space):
+            g = os.popen("sleep 5 && echo hello", "r")
+            cls._keepalive_g = g
+            return space.wrap(g.fileno())
+
+        cls.w_posix = space.appexec([], GET_POSIX)
+        cls.w_fd_data_after_delay = cls.space.wrap(
+            interp2app(fd_data_after_delay))
+
+    def test_pep475_retry_read(self):
+        import _signal as signal
+        signalled = []
+
+        def foo(*args):
+            signalled.append("ALARM")
+
+        signal.signal(signal.SIGALRM, foo)
+        try:
+            fd = self.fd_data_after_delay()
+            signal.alarm(1)
+            got = self.posix.read(fd, 100)
+            self.posix.close(fd)
+        finally:
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+
+        assert signalled != []
+        assert got.startswith(b'h')
