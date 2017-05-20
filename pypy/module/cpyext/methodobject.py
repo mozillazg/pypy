@@ -272,6 +272,7 @@ W_PyCWrapperObject.typedef = TypeDef(
     __objclass__ = interp_attrproperty_w('w_objclass', cls=W_PyCWrapperObject),
     __repr__ = interp2app(W_PyCWrapperObject.descr_method_repr),
     # XXX missing: __getattribute__
+    __hash__ = None
     )
 W_PyCWrapperObject.typedef.acceptable_as_base_class = False
 

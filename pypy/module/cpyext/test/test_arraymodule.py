@@ -159,3 +159,11 @@ class AppTestArrayModule(AppTestCpythonExtensionBase):
         fd = BytesIO()
         # only test that it works
         fd.write(a)
+
+    def test_hash(self):
+        module = self.import_module(name='array')
+        a = module.array('c')
+        exc = raises(TypeError, hash, a)
+        assert 'unhashable' in str(exc.value)
+        exc = raises(TypeError, hash, a.__mul__)
+        assert 'unhashable' in str(exc.value)
