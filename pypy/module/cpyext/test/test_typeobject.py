@@ -143,6 +143,13 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert fuu2(u"abc").baz().escape()
         raises(TypeError, module.fooType.object_member.__get__, 1)
 
+    def test_hash_subtype(self):
+        module = self.import_module(name='foo')
+        newobj = module.UnicodeSubtype(u"xyz")
+        assert hash(newobj) == hash(u"xyz")
+        assert hash(module.UnicodeSubtype(u"")) in [0, -2]
+        
+
     def test_multiple_inheritance1(self):
         module = self.import_module(name='foo')
         obj = module.UnicodeSubtype(u'xyz')

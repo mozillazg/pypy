@@ -741,7 +741,6 @@ class AppTestBytesObject:
     def test_hash(self):
         # check that we have the same hash as CPython for at least 31 bits
         # (but don't go checking CPython's special case -1)
-        # disabled: assert hash('') == 0 --- different special case
         assert hash('hello') & 0x7fffffff == 0x347697fd
         assert hash('hello world!') & 0x7fffffff == 0x2f0bb411
         assert hash('') in [0, -2]

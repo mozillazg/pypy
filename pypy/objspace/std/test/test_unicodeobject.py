@@ -1012,3 +1012,7 @@ class AppTestUnicodeString:
         raises(TypeError, "unicode('', encoding=None)")
         raises(TypeError, 'u"".encode("utf-8", None)')
 
+    def test_hash(self):
+        assert hash(u'hello') & 0x7fffffff == 0x347697fd
+        assert hash(u'hello world!') & 0x7fffffff == 0x2f0bb411
+        assert hash(u'') in [0, -2]
