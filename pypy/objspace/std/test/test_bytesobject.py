@@ -744,6 +744,7 @@ class AppTestBytesObject:
         # disabled: assert hash('') == 0 --- different special case
         assert hash('hello') & 0x7fffffff == 0x347697fd
         assert hash('hello world!') & 0x7fffffff == 0x2f0bb411
+        assert hash('') in [0, -2]
 
     def test_buffer(self):
         x = b"he"

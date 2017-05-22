@@ -452,6 +452,7 @@ class AppTestBytesObject(AppTestCpythonExtensionBase):
         assert 3 == module.get_len(a)
         b = module.newsubstr('')
         assert 0 == module.get_len(b)
+        assert hash(b) in [0, -2]
 
 class TestBytes(BaseApiTest):
     def test_bytes_resize(self, space):

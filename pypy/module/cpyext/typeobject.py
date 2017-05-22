@@ -366,7 +366,6 @@ def add_operators(space, dict_w, pto):
         add_tp_new_wrapper(space, dict_w, pto)
     if not pto.c_tp_hash:
         dict_w['__hash__'] = space.w_None
-    print 'pto', rffi.charp2str(pto.c_tp_name), 'c_tp_hash', pto.c_tp_hash, dict_w['__hash__']
 
 @slot_function([PyObject, PyObject, PyObject], PyObject)
 def tp_new_wrapper(space, self, w_args, w_kwds):
