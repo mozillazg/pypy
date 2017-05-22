@@ -338,6 +338,7 @@ def update_all_slots(space, w_type, pto):
                 setattr(struct, slot_names[1], slot_func_helper)
 
 def add_operators(space, dict_w, pto):
+    # XXX support PyObject_HashNotImplemented
     for method_name, slot_names, wrapper_func, wrapper_func_kwds, doc in slotdefs_for_wrappers:
         if method_name in dict_w:
             continue
@@ -364,8 +365,6 @@ def add_operators(space, dict_w, pto):
             rffi.charp2str(cts.cast('char*', pto.c_tp_doc)))
     if pto.c_tp_new:
         add_tp_new_wrapper(space, dict_w, pto)
-    if not pto.c_tp_hash:
-        dict_w['__hash__'] = space.w_None
 
 @slot_function([PyObject, PyObject, PyObject], PyObject)
 def tp_new_wrapper(space, self, w_args, w_kwds):
@@ -944,7 +943,6 @@ def finish_type_2(space, pto, w_obj):
     if w_obj.is_cpytype():
         Py_DecRef(space, pto.c_tp_dict)
     w_dict = w_obj.getdict(space)
-
     # pass in the w_obj to convert any values that are
     # unbound GetSetProperty into bound PyGetSetDescrObject
     pto.c_tp_dict = make_ref(space, w_dict, w_obj)
