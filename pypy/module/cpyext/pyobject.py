@@ -318,9 +318,30 @@ def decref(space, obj):
             obj.c_ob_refcnt -= 1
             if obj.c_ob_refcnt == 0:
                 _Py_Dealloc(space, obj)
+            else:
+                trial_delete(space, obj)
     else:
-        get_w_obj_and_decref(space, obj)
+        get_w_obj_and_decref(space, obj)  # trial_delete?
 
+@specialize.ll()
+def trial_delete(space, obj):
+    from pypy.module.cpyext.api import generic_cpy_call, slot_function
+    from pypy.module.cpyext.typeobjectdefs import visitproc
+    from pypy.module.cpyext.slotdefs import llslot
+
+    if not obj.c_ob_type or not obj.c_ob_type.c_tp_traverse:
+        return
+
+    @slot_function([PyObject, rffi.VOIDP], rffi.INT_real, error=-1)
+    def visit(space, obj, args):
+        w_type = from_ref(space, rffi.cast(PyObject, obj.c_ob_type))
+        print "visit", obj, w_type.name
+        return 0
+
+    print "trial_delete", obj, obj.c_ob_refcnt
+
+    proc = rffi.cast(visitproc, llslot(space, visit))
+    generic_cpy_call(space, obj.c_ob_type.c_tp_traverse, obj, proc, None)
 
 @cpython_api([PyObject], lltype.Void)
 def Py_IncRef(space, obj):
