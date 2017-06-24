@@ -23,6 +23,26 @@ def _build_pypy_link(p):
     _adr2pypy.append(p)
     return res
 
+_trial_deletion_phase = 0
+_visited = []
+_marked = []
+
+def set_trialdeletion_phase(value):
+    _trial_deletion_phase = value
+def get_trialdeletion_phase():
+    return _trial_deletion_phase
+def add_visited(obj):
+    _visited.append(obj)
+def get_visited():
+    return _visited
+def clear_visited():
+    del _visited[:]
+def add_marked(obj):
+    _marked.append(obj)
+def get_marked():
+    return marked
+def clear_marked():
+    del _marked[:]
 
 @not_rpython
 def init(dealloc_trigger_callback=None):

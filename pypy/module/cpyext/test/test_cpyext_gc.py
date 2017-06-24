@@ -356,242 +356,419 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
             "the test actually passed in the first place; if it failed "
             "it is likely to reach this place.")
 
+def collect(space):
+    import gc
+    rawrefcount._collect()
+    gc.collect()
 
-class AppTestCpythonExtension(AppTestCpythonExtensionBase):
+class AppTestCpythonExtensionCycleGC(AppTestCpythonExtensionBase):
 
-    def test_refcount(self):
-        import sys, gc
-        init = """
-        if (Py_IsInitialized()) {
-            PyObject* m;
+    def setup_method(self, func):
+        if self.runappdirect:
+            return
 
-            if (PyType_Ready(&CycleType) < 0)
-                return;
-
-            m = Py_InitModule3("cycle", module_methods,
-                            "Example module that creates an extension type.");
-
-            if (m == NULL)
-                return;
-
-            Py_INCREF(&CycleType);
-            PyModule_AddObject(m, "Cycle", (PyObject *)&CycleType);
-        }
-        """
-        body = """
-                #include <Python.h>
-                #include "structmember.h"
-
-                typedef struct {
-                    PyObject_HEAD
-                    PyObject *next;
-                    PyObject *val;
-                } Cycle;
-
-                static PyTypeObject CycleType;
-
-                static int
-                Cycle_traverse(Cycle *self, visitproc visit, void *arg)
-                {
-                    int vret;
-
-                    if (self->next) {
-                        vret = visit(self->next, arg);
-                        if (vret != 0)
-                            return vret;
-                    }
-                    if (self->val) {
-                        vret = visit(self->val, arg);
-                        if (vret != 0)
-                            return vret;
-                    }
-
-                    return 0;
+        @unwrap_spec(methods='text')
+        def import_cycle_module(space, methods):
+            init = """
+            if (Py_IsInitialized()) {
+                PyObject* m;
+                if (PyType_Ready(&CycleType) < 0)
+                    return;
+                m = Py_InitModule("cycle", module_methods);
+                if (m == NULL)
+                    return;
+                Py_INCREF(&CycleType);
+                PyModule_AddObject(m, "Cycle", (PyObject *)&CycleType);
+            }
+            """
+            body = """
+            #include <Python.h>
+            #include "structmember.h"
+            typedef struct {
+                PyObject_HEAD
+                PyObject *next;
+                PyObject *val;
+            } Cycle;
+            static PyTypeObject CycleType;
+            static int Cycle_traverse(Cycle *self, visitproc visit, void *arg)
+            {
+                int vret;
+                if (self->next) {
+                    vret = visit(self->next, arg);
+                    if (vret != 0)
+                        return vret;
                 }
-
-                static int
-                Cycle_clear(Cycle *self)
-                {
-                    PyObject *tmp;
-
-                    tmp = self->next;
-                    self->next = NULL;
-                    Py_XDECREF(tmp);
-
-                    tmp = self->val;
-                    self->val = NULL;
-                    Py_XDECREF(tmp);
-
-                    return 0;
+                if (self->val) {
+                    vret = visit(self->val, arg);
+                    if (vret != 0)
+                        return vret;
                 }
-
-                static void
-                Cycle_dealloc(Cycle* self)
-                {
-                    Cycle_clear(self);
-                    Py_TYPE(self)->tp_free((PyObject*)self);
-                }
-
-                static PyObject *
-                Cycle_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
-                {
-                    Cycle *self;
-
-                    self = (Cycle *)type->tp_alloc(type, 0);
-                    if (self != NULL) {
-                        self->next = PyString_FromString("");
-                        if (self->next == NULL) {
-                            Py_DECREF(self);
-                            return NULL;
-                        }
-                    }
-
-                    return (PyObject *)self;
-                }
-
-                static int
-                Cycle_init(Cycle *self, PyObject *args, PyObject *kwds)
-                {
-                    PyObject *next=NULL, *tmp;
-
-                    static char *kwlist[] = {"next", NULL};
-
-                    if (! PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist,
-                                                    &next))
-                        return -1;
-
-                    if (next) {
-                        tmp = self->next;
-                        Py_INCREF(next);
-                        self->next = next;
-                        Py_XDECREF(tmp);
-                    }
-
-                    return 0;
-                }
-
-                static Cycle *lastCreated;
-
-                static PyObject * Cycle_createCycle(Cycle *self, PyObject *val)
-                {
-                    Cycle *c;
-
-                    c = PyObject_GC_New(Cycle, &CycleType);
-                    if (c == NULL)
+                return 0;
+            }
+            static int Cycle_clear(Cycle *self)
+            {
+                PyObject *tmp;
+                tmp = self->next;
+                self->next = NULL;
+                Py_XDECREF(tmp);
+                tmp = self->val;
+                self->val = NULL;
+                Py_XDECREF(tmp);
+                return 0;
+            }
+            static void Cycle_dealloc(Cycle* self)
+            {
+                Cycle_clear(self);
+                Py_TYPE(self)->tp_free((PyObject*)self);
+            }
+            static PyObject* Cycle_new(PyTypeObject *type, PyObject *args,
+                                       PyObject *kwds)
+            {
+                Cycle *self;
+                self = (Cycle *)type->tp_alloc(type, 0);
+                if (self != NULL) {
+                    self->next = PyString_FromString("");
+                    if (self->next == NULL) {
+                        Py_DECREF(self);
                         return NULL;
-
-                    // set value
-                    Py_INCREF(val);
-                    c->val = val;
-
-                    // track by GC
-                    PyObject_GC_Track(c);
-
-                    // create cycle
-                    Py_INCREF(c);
-                    c->next = (PyObject *)c;
-
-
-                    // save c, but do no INCREF -> reference in lastCreated might become broken
-                    lastCreated = (Cycle *)c;
-
-                    // throw away reference to c
-                    Py_DECREF(c);
-
-                    // return None
-                    Py_INCREF(Py_None);
-                    return Py_None;
+                    }
                 }
-
-                static PyObject * Cycle_breakCycle(Cycle *self)
-                {
-                    Cycle *tmp;
-
-                    // set next to None
-                    tmp = (Cycle *)lastCreated->next;
-                    Py_INCREF(Py_None);
-                    lastCreated->next = Py_None;
+                return (PyObject *)self;
+            }
+            static int Cycle_init(Cycle *self, PyObject *args, PyObject *kwds)
+            {
+                PyObject *next=NULL, *tmp;
+                static char *kwlist[] = {"next", NULL};
+                if (! PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist,
+                                                  &next))
+                    return -1;
+                if (next) {
+                    tmp = self->next;
+                    Py_INCREF(next);
+                    self->next = next;
                     Py_XDECREF(tmp);
-
-                    // return None
-                    Py_INCREF(Py_None);
-                    return Py_None;
                 }
+                return 0;
+            }
+            static PyMemberDef Cycle_members[] = {
+                {"next", T_OBJECT_EX, offsetof(Cycle, next), 0, "next"},
+                {"val", T_OBJECT_EX, offsetof(Cycle, val), 0, "val"},
+                {NULL}  /* Sentinel */
+            };
+            static PyMethodDef Cycle_methods[] = {
+                {NULL}  /* Sentinel */
+            };
+            static PyTypeObject CycleType = {
+                PyVarObject_HEAD_INIT(NULL, 0)
+                "Cycle.Cycle",             /* tp_name */
+                sizeof(Cycle),             /* tp_basicsize */
+                0,                         /* tp_itemsize */
+                (destructor)Cycle_dealloc, /* tp_dealloc */
+                0,                         /* tp_print */
+                0,                         /* tp_getattr */
+                0,                         /* tp_setattr */
+                0,                         /* tp_compare */
+                0,                         /* tp_repr */
+                0,                         /* tp_as_number */
+                0,                         /* tp_as_sequence */
+                0,                         /* tp_as_mapping */
+                0,                         /* tp_hash */
+                0,                         /* tp_call */
+                0,                         /* tp_str */
+                0,                         /* tp_getattro */
+                0,                         /* tp_setattro */
+                0,                         /* tp_as_buffer */
+                Py_TPFLAGS_DEFAULT |
+                    Py_TPFLAGS_BASETYPE |
+                    Py_TPFLAGS_HAVE_GC,    /* tp_flags */
+                "Cycle objects",           /* tp_doc */
+                (traverseproc)Cycle_traverse,   /* tp_traverse */
+                (inquiry)Cycle_clear,           /* tp_clear */
+                0,                         /* tp_richcompare */
+                0,                         /* tp_weaklistoffset */
+                0,                         /* tp_iter */
+                0,                         /* tp_iternext */
+                Cycle_methods,             /* tp_methods */
+                Cycle_members,             /* tp_members */
+                0,                         /* tp_getset */
+                0,                         /* tp_base */
+                0,                         /* tp_dict */
+                0,                         /* tp_descr_get */
+                0,                         /* tp_descr_set */
+                0,                         /* tp_dictoffset */
+                (initproc)Cycle_init,      /* tp_init */
+                0,                         /* tp_alloc */
+                Cycle_new,                 /* tp_new */
+            };
+            """
+            w_result = self.sys_info.import_module("cycle", init,
+                                                   body + methods,
+                                                   None, None, False)
+            return w_result
 
-                static PyMemberDef Cycle_members[] = {
-                    {"next", T_OBJECT_EX, offsetof(Cycle, next), 0,
-                    "next"},
-                    {"val", T_OBJECT_EX, offsetof(Cycle, val), 0,
-                    "val"},
-                    {NULL}  /* Sentinel */
-                };
+        self.imported_module_names = []
 
-                static PyMethodDef Cycle_methods[] = {
-                    {NULL}  /* Sentinel */
-                };
+        wrap = self.space.wrap
+        self.w_import_cycle_module = wrap(interp2app(import_cycle_module))
+        self.w_collect = wrap(interp2app(collect))
 
-                static PyTypeObject CycleType = {
-                    PyVarObject_HEAD_INIT(NULL, 0)
-                    "Cycle.Cycle",             /* tp_name */
-                    sizeof(Cycle),             /* tp_basicsize */
-                    0,                         /* tp_itemsize */
-                    (destructor)Cycle_dealloc, /* tp_dealloc */
-                    0,                         /* tp_print */
-                    0,                         /* tp_getattr */
-                    0,                         /* tp_setattr */
-                    0,                         /* tp_compare */
-                    0,                         /* tp_repr */
-                    0,                         /* tp_as_number */
-                    0,                         /* tp_as_sequence */
-                    0,                         /* tp_as_mapping */
-                    0,                         /* tp_hash */
-                    0,                         /* tp_call */
-                    0,                         /* tp_str */
-                    0,                         /* tp_getattro */
-                    0,                         /* tp_setattro */
-                    0,                         /* tp_as_buffer */
-                    Py_TPFLAGS_DEFAULT |
-                        Py_TPFLAGS_BASETYPE |
-                        Py_TPFLAGS_HAVE_GC,    /* tp_flags */
-                    "Cycle objects",           /* tp_doc */
-                    (traverseproc)Cycle_traverse,   /* tp_traverse */
-                    (inquiry)Cycle_clear,           /* tp_clear */
-                    0,                         /* tp_richcompare */
-                    0,                         /* tp_weaklistoffset */
-                    0,                         /* tp_iter */
-                    0,                         /* tp_iternext */
-                    Cycle_methods,             /* tp_methods */
-                    Cycle_members,             /* tp_members */
-                    0,                         /* tp_getset */
-                    0,                         /* tp_base */
-                    0,                         /* tp_dict */
-                    0,                         /* tp_descr_get */
-                    0,                         /* tp_descr_set */
-                    0,                         /* tp_dictoffset */
-                    (initproc)Cycle_init,      /* tp_init */
-                    0,                         /* tp_alloc */
-                    Cycle_new,                 /* tp_new */
-                };
-
-                static PyMethodDef module_methods[] = {
-                    {"breakCycle", (PyCFunction)Cycle_breakCycle, METH_NOARGS, "break cycle"},
-                    {"createCycle", (PyCFunction)Cycle_createCycle, METH_OLDARGS, "create a special cycle"},
-                    {NULL}  /* Sentinel */
-                };
-        """
-        cycle = self.import_module(name='cycle', init=init, body=body)
+    def test_free_self_reference_cycle_child_pypyobj(self):
+        cycle = self.import_cycle_module("""
+            static Cycle *c;
+            static PyObject * Cycle_cc(Cycle *self, PyObject *val)
+            {
+                c = PyObject_GC_New(Cycle, &CycleType);
+                if (c == NULL)
+                    return NULL;
+                Py_INCREF(val);
+                c->val = val;                // set value
+                PyObject_GC_Track(c);
+                Py_INCREF(c);
+                c->next = (PyObject *)c;     // create self reference
+                Py_INCREF(Py_None);
+                return Py_None;
+            }
+            static PyObject * Cycle_cd(Cycle *self)
+            {
+                Py_DECREF(c);                // throw cycle away
+                Py_INCREF(Py_None);
+                return Py_None;
+            }
+            static PyMethodDef module_methods[] = {
+                {"createCycle", (PyCFunction)Cycle_cc, METH_OLDARGS, ""},
+                {"discardCycle", (PyCFunction)Cycle_cd, METH_NOARGS, ""},
+                {NULL}  /* Sentinel */
+            };
+            """)
 
         class Example(object):
-            def __init__(self):
-                self.next = None
+            del_called = -1
+
+            def __init__(self, val):
+                self.val = val
+                Example.del_called = 0
 
             def __del__(self):
-                print("free")
+                Example.del_called = self.val
 
-        cycle.createCycle(Example())
+        # don't keep any reference in pypy
+        cycle.createCycle(Example(42))
+        self.collect()
+        assert Example.del_called == 0
+        cycle.discardCycle()
+        self.collect()
+        assert Example.del_called == 42
 
-        gc.collect()
+        # keep a temporary reference in pypy
+        e = Example(43)
+        cycle.createCycle(e)
+        cycle.discardCycle()
+        self.collect()
+        assert Example.del_called == 0
+        e = None
+        self.collect()
+        assert Example.del_called == 43
 
-        # check if object has been freed
+        # keep a reference in pypy, free afterwards
+        e = Example(44)
+        cycle.createCycle(e)
+        self.collect()
+        assert Example.del_called == 0
+        e = None
+        self.collect()
+        assert Example.del_called == 0
+        cycle.discardCycle()
+        self.collect()
+        assert Example.del_called == 44
 
-        assert False
+    def test_free_self_reference_cycle_parent_pypyobj(self):
+        # create and return a second object which references the cycle, because
+        # otherwise we will end up with a cycle that spans across cpy/pypy,
+        # which we don't want to test here
+        cycle = self.import_cycle_module("""
+            static PyObject * Cycle_cc(Cycle *self, PyObject *val)
+            {
+                Cycle *c = PyObject_GC_New(Cycle, &CycleType);
+                if (c == NULL)
+                    return NULL;
+                Cycle *c2 = PyObject_GC_New(Cycle, &CycleType);
+                if (c2 == NULL)
+                    return NULL;
+                Py_INCREF(val);
+                c2->val = val;                // set value
+                PyObject_GC_Track(c);
+                PyObject_GC_Track(c2);
+                Py_INCREF(c2);
+                c2->next = (PyObject *)c2;    // create self reference
+                c->next = (PyObject *)c2;
+                return (PyObject *)c;         // return other object
+            }
+            static PyMethodDef module_methods[] = {
+                {"createCycle", (PyCFunction)Cycle_cc, METH_OLDARGS, ""},
+                {NULL}  /* Sentinel */
+            };
+            """)
+
+        class Example(object):
+            del_called = -1
+
+            def __init__(self, val):
+                self.val = val
+                Example.del_called = 0
+
+            def __del__(self):
+                Example.del_called = self.val
+
+        c = cycle.createCycle(Example(42))
+        self.collect()
+        assert Example.del_called == 0
+        c = None
+        self.collect()
+        assert Example.del_called == 42
+
+    def test_free_simple_cycle_child_pypyobj(self):
+        cycle = self.import_cycle_module("""
+            static Cycle *c;
+            static PyObject * Cycle_cc(Cycle *self, PyObject *val)
+            {
+                c = PyObject_GC_New(Cycle, &CycleType);
+                if (c == NULL)
+                    return NULL;
+                Cycle *c2 = PyObject_GC_New(Cycle, &CycleType);
+                if (c2 == NULL)
+                    return NULL;
+                Py_INCREF(val);
+                c->val = val;                // set value
+                PyObject_GC_Track(c);
+                PyObject_GC_Track(c2);
+                c->next = (PyObject *)c2;
+                Py_INCREF(c);
+                c2->next = (PyObject *)c;    // simple cycle across two objects
+                Py_INCREF(Py_None);
+                return Py_None;
+            }
+            static PyObject * Cycle_cd(Cycle *self)
+            {
+                Py_DECREF(c);                // throw cycle away
+                Py_INCREF(Py_None);
+                return Py_None;
+            }
+            static PyMethodDef module_methods[] = {
+                {"createCycle", (PyCFunction)Cycle_cc, METH_OLDARGS, ""},
+                {"discardCycle", (PyCFunction)Cycle_cd, METH_NOARGS, ""},
+                {NULL}  /* Sentinel */
+            };
+            """)
+
+        class Example(object):
+            del_called = -1
+
+            def __init__(self, val):
+                self.val = val
+                Example.del_called = 0
+
+            def __del__(self):
+                Example.del_called = self.val
+
+        # don't keep any reference in pypy
+        cycle.createCycle(Example(42))
+        self.collect()
+        cycle.discardCycle()
+        assert Example.del_called == 0
+        self.collect()
+        assert Example.del_called == 42
+
+        # keep a temporary reference in pypy
+        e = Example(43)
+        cycle.createCycle(e)
+        cycle.discardCycle()
+        self.collect()
+        assert Example.del_called == 0
+        e = None
+        self.collect()
+        assert Example.del_called == 43
+
+        # keep a reference in pypy, free afterwards
+        e = Example(44)
+        cycle.createCycle(e)
+        self.collect()
+        assert Example.del_called == 0
+        e = None
+        self.collect()
+        assert Example.del_called == 0
+        cycle.discardCycle()
+        self.collect()
+        assert Example.del_called == 44
+
+    def test_free_complex_cycle_child_pypyobj(self):
+        cycle = self.import_cycle_module("""
+            static PyObject * Cycle_cc(Cycle *self, PyObject *val)
+            {
+                Cycle *c = PyObject_GC_New(Cycle, &CycleType);
+                if (c == NULL)
+                    return NULL;
+                Cycle *c2 = PyObject_GC_New(Cycle, &CycleType);
+                if (c2 == NULL)
+                    return NULL;
+                Cycle *c3 = PyObject_GC_New(Cycle, &CycleType);
+                if (c3 == NULL)
+                    return NULL;
+                Py_INCREF(val);
+                c->val = val;                // set value
+                Py_INCREF(val);
+                c3->val = val;                // set value
+                PyObject_GC_Track(c);
+                PyObject_GC_Track(c2);
+                PyObject_GC_Track(c3);
+                Py_INCREF(c2);
+                c->next = (PyObject *)c2;
+                Py_INCREF(c);
+                c2->next = (PyObject *)c;    // inner cycle
+                Py_INCREF(c3);
+                c2->val = (PyObject *)c3;
+                Py_INCREF(c);
+                c3->next = (PyObject *)c;     // outer cycle
+                Py_DECREF(c);
+                Py_DECREF(c2);
+                Py_DECREF(c3);               // throw all objects away
+                Py_INCREF(Py_None);
+                return Py_None;
+            }
+            static PyMethodDef module_methods[] = {
+                {"createCycle", (PyCFunction)Cycle_cc, METH_OLDARGS, ""},
+                {NULL}  /* Sentinel */
+            };
+            """)
+
+        class Example(object):
+            del_called = -1
+
+            def __init__(self, val):
+                self.val = val
+                Example.del_called = 0
+
+            def __del__(self):
+                Example.del_called = self.val
+
+        # don't keep any reference in pypy
+        cycle.createCycle(Example(42))
+        assert Example.del_called == 0
+        self.collect()
+        assert Example.del_called == 42
+
+        # keep a temporary reference in pypy
+        e = Example(43)
+        cycle.createCycle(e)
+        e = None
+        assert Example.del_called == 0
+        self.collect()
+        assert Example.del_called == 43
+
+        # keep a reference in pypy, free afterwards
+        e = Example(44)
+        cycle.createCycle(e)
+        self.collect()
+        assert Example.del_called == 0
+        e = None
+        self.collect()
+        assert Example.del_called == 44
