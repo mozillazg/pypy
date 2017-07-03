@@ -1347,3 +1347,34 @@ class AppTestSlots(AppTestCpythonExtensionBase):
         Bsize = module.get_basicsize(B)
         assert Asize == Bsize
         assert Asize > basesize
+
+    def test_late_doc_setup(self):
+        module = self.import_extension('foo', [
+           ("getType", "METH_NOARGS",
+            '''
+                Py_INCREF(&FooType_Type);
+                return (PyObject *)&FooType_Type;
+            '''
+            ),
+            ("add_doc_string", "METH_O",
+            '''
+                PyTypeObject* obj = (PyTypeObject *)args;
+                obj->tp_doc = "A docstring";
+                Py_INCREF(Py_None);
+                return Py_None;
+            '''
+            )], prologue='''
+            static PyTypeObject FooType_Type = {
+                PyVarObject_HEAD_INIT(NULL, 0)
+                "foo.Type",
+            };
+            ''', more_init='''
+                FooType_Type.tp_flags = Py_TPFLAGS_DEFAULT;
+                FooType_Type.tp_base = &PyType_Type;
+                if (PyType_Ready(&FooType_Type) < 0) INITERROR;
+            ''')
+        a = module.getType()
+        module.add_doc_string(a)
+        assert a.__doc__ == "A docstring"
+        assert a.__dict__['__doc__'] == None # compatibility
+
