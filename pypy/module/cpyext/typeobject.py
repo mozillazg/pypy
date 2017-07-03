@@ -366,6 +366,15 @@ def add_operators(space, dict_w, pto):
     if pto.c_tp_new:
         add_tp_new_wrapper(space, dict_w, pto)
 
+def maybe_set_doc(space, w_type):
+    pto = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
+    if pto and pto.c_tp_doc and space.is_none(w_type.w_doc):
+        w_type.w_doc = space.newtext(
+                rffi.charp2str(cts.cast('char*', pto.c_tp_doc)))
+        # compatibility with CPython - assignment to tp_doc
+        # does not automatically assign to __dic__['__doc__']
+        # w_type.dict_w.setdefault('__doc__', w_type.w_doc)
+
 @slot_function([PyObject, PyObject, PyObject], PyObject)
 def tp_new_wrapper(space, self, w_args, w_kwds):
     self_pytype = rffi.cast(PyTypeObjectPtr, self)

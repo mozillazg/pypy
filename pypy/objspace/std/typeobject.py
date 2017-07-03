@@ -882,6 +882,9 @@ def descr__doc(space, w_type):
 type(name, bases, dict) -> a new type""")
     w_type = _check(space, w_type)
     if not w_type.is_heaptype():
+        if space.is_none(w_type.w_doc) and w_type.is_cpytype():
+            from pypy.module.cpyext.typeobject import maybe_set_doc
+            maybe_set_doc(space, w_type)
         return w_type.w_doc
     w_result = w_type.getdictvalue(space, '__doc__')
     if w_result is None:
