@@ -1356,10 +1356,26 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                 return (PyObject *)&FooType_Type;
             '''
             ),
-            ("add_doc_string", "METH_O",
+            ("add_doc_string_type", "METH_O",
             '''
                 PyTypeObject* obj = (PyTypeObject *)args;
                 obj->tp_doc = "A docstring";
+                Py_INCREF(Py_None);
+                return Py_None;
+            '''
+            ),
+            ("add_doc_string_getset", "METH_O",
+            '''
+                PyGetSetDescrObject * obj = (PyGetSetDescrObject*)args;
+                obj->d_getset->doc = "A docstring";
+                Py_INCREF(Py_None);
+                return Py_None;
+            '''
+            ),
+            ("add_doc_string_method", "METH_O",
+            '''
+                PyMethodDescrObject * obj = (PyMethodDescrObject*)args;
+                obj->d_method->ml_doc = "A docstring";
                 Py_INCREF(Py_None);
                 return Py_None;
             '''
@@ -1368,13 +1384,44 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                 PyVarObject_HEAD_INIT(NULL, 0)
                 "foo.Type",
             };
+
+            static PyObject *
+            foo_42(void *self)
+            {
+                return PyInt_FromLong(42L);
+            };
+
+            static PyObject *
+            foo_43(void *self)
+            {
+                return PyInt_FromLong(43L);
+            };
+
+            static PyGetSetDef foo_getsetlist[] = {
+                {"foo_42",
+                    (getter)foo_42,
+                    NULL,
+                    NULL, NULL},
+                {NULL, NULL, NULL, NULL, NULL},
+            };
+
+            static PyMethodDef foo_methods[] = {
+                {"foo_43", (PyCFunction)foo_43, METH_NOARGS, NULL},
+                {NULL, NULL, 0, NULL}   /* sentinel */
+            };
             ''', more_init='''
                 FooType_Type.tp_flags = Py_TPFLAGS_DEFAULT;
                 FooType_Type.tp_base = &PyType_Type;
+                FooType_Type.tp_getset = foo_getsetlist;
+                FooType_Type.tp_methods = foo_methods;
                 if (PyType_Ready(&FooType_Type) < 0) INITERROR;
             ''')
         a = module.getType()
-        module.add_doc_string(a)
+        module.add_doc_string_type(a)
         assert a.__doc__ == "A docstring"
         assert a.__dict__['__doc__'] == None # compatibility
+        module.add_doc_string_getset(a.foo_42)
+        assert a.foo_42.__doc__ == "A docstring"
+        module.add_doc_string_method(a.foo_43)
+        assert a.foo_43.__doc__ == "A docstring"
 

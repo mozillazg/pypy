@@ -59,12 +59,12 @@ class W_GetSetPropertyEx(GetSetProperty):
             set = GettersAndSetters.setter.im_func
         GetSetProperty.__init__(self, get, set, None, doc,
                                 cls=None, use_closure=True,
-                                tag="cpyext_1")
+                                tag="cpyext_1", is_cpyext=True)
 
 def PyDescr_NewGetSet(space, getset, w_type):
     return W_GetSetPropertyEx(getset, w_type)
 
-def make_GetSet(space, getsetprop):
+def make_PyGetSetDef(space, getsetprop):
     py_getsetdef = lltype.malloc(PyGetSetDef, flavor='raw')
     doc = getsetprop.doc
     if doc:
@@ -95,7 +95,13 @@ class W_MemberDescr(GetSetProperty):
             set = GettersAndSetters.member_setter.im_func
         GetSetProperty.__init__(self, get, set, del_, doc,
                                 cls=None, use_closure=True,
-                                tag="cpyext_2")
+                                tag="cpyext_2", is_cpyext=True)
+
+    def descr__doc(space, w_self):
+        if w_self.doc is None and w_self.member.c_doc:
+            w_self.doc = rffi.charp2str(w_self.member.c_doc)
+        return space.newtext_or_none(w_self.doc)
+
 
 # change the typedef name
 W_MemberDescr.typedef = TypeDef(
@@ -106,8 +112,8 @@ W_MemberDescr.typedef = TypeDef(
     __name__ = interp_attrproperty('name', cls=GetSetProperty,
         wrapfn="newtext_or_none"),
     __objclass__ = GetSetProperty(GetSetProperty.descr_get_objclass),
-    __doc__ = interp_attrproperty('doc', cls=GetSetProperty,
-        wrapfn="newtext_or_none"),
+    __doc__ = GetSetProperty(W_MemberDescr.descr__doc, 
+                    cls=W_MemberDescr, name="__doc__"),
     )
 assert not W_MemberDescr.typedef.acceptable_as_base_class  # no __new__
 
@@ -183,16 +189,17 @@ def memberdescr_realize(space, obj):
     w_obj = space.allocate_instance(W_MemberDescr, w_type)
     w_obj.__init__(member, w_type)
     track_reference(space, obj, w_obj)
+    print 'memberdescr_realise called'
     return w_obj
 
 def getsetdescr_attach(space, py_obj, w_obj, w_userdata=None):
     """
-    Fills a newly allocated PyGetSetDescrObject with the given W_GetSetPropertyEx
-    object. The values must not be modified.
+    Fills a newly allocated PyGetSetDescrObject with the given
+    W_GetSetPropertyEx object. The values must not be modified.
     """
     py_getsetdescr = rffi.cast(PyGetSetDescrObject, py_obj)
-    if isinstance(w_obj, GetSetProperty):
-        py_getsetdef = make_GetSet(space, w_obj)
+    if type(w_obj) is GetSetProperty:
+        py_getsetdef = make_PyGetSetDef(space, w_obj)
         assert space.isinstance_w(w_userdata, space.w_type)
         w_obj = W_GetSetPropertyEx(py_getsetdef, w_userdata)
     # XXX assign to d_dname, d_type?
@@ -374,6 +381,12 @@ def maybe_set_doc(space, w_type):
         # compatibility with CPython - assignment to tp_doc
         # does not automatically assign to __dic__['__doc__']
         # w_type.dict_w.setdefault('__doc__', w_type.w_doc)
+
+def maybe_set_getset_doc(space, w_getset):
+    assert isinstance(w_getset, W_GetSetPropertyEx)
+    if not w_getset.doc and w_getset.getset.c_doc:
+        w_getset.doc = rffi.charp2str(
+                        cts.cast('char*', w_getset.getset.c_doc))
 
 @slot_function([PyObject, PyObject, PyObject], PyObject)
 def tp_new_wrapper(space, self, w_args, w_kwds):

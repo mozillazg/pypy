@@ -245,6 +245,7 @@ W_PyCMethodObject.typedef = TypeDef(
         wrapfn="newtext_or_none"),
     __objclass__ = interp_attrproperty_w('w_objclass', cls=W_PyCMethodObject),
     __repr__ = interp2app(W_PyCMethodObject.descr_method_repr),
+    __doc__ = GetSetProperty(W_PyCFunctionObject.get_doc),
     )
 W_PyCMethodObject.typedef.acceptable_as_base_class = False
 
@@ -257,6 +258,7 @@ W_PyCClassMethodObject.typedef = TypeDef(
     __objclass__ = interp_attrproperty_w('w_objclass',
                                          cls=W_PyCClassMethodObject),
     __repr__ = interp2app(W_PyCClassMethodObject.descr_method_repr),
+    __doc__ = GetSetProperty(W_PyCFunctionObject.get_doc),
     )
 W_PyCClassMethodObject.typedef.acceptable_as_base_class = False
 

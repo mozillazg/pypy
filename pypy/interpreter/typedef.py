@@ -250,12 +250,13 @@ def _make_objclass_getter(cls):
     return res
 
 class GetSetProperty(W_Root):
-    _immutable_fields_ = ["fget", "fset", "fdel"]
+    _immutable_fields_ = ["fget", "fset", "fdel", "is_cpyext"]
     w_objclass = None
 
     @specialize.arg(7)
     def __init__(self, fget, fset=None, fdel=None, doc=None,
-                 cls=None, use_closure=False, tag=None, name=None):
+                 cls=None, use_closure=False, tag=None, name=None,
+                 is_cpyext=False):
         objclass_getter, cls = make_objclass_getter(tag, fget, cls)
         fget = make_descr_typecheck_wrapper((tag, 0), fget,
                                             cls=cls, use_closure=use_closure)
@@ -264,10 +265,10 @@ class GetSetProperty(W_Root):
         fdel = make_descr_typecheck_wrapper((tag, 2), fdel,
                                             cls=cls, use_closure=use_closure)
         self._init(fget, fset, fdel, doc, cls, objclass_getter, use_closure,
-                   name)
+                   name, is_cpyext)
 
     def _init(self, fget, fset, fdel, doc, cls, objclass_getter, use_closure,
-              name):
+              name, is_cpyext):
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
@@ -276,12 +277,13 @@ class GetSetProperty(W_Root):
         self.objclass_getter = objclass_getter
         self.use_closure = use_closure
         self.name = name if name is not None else '<generic property>'
+        self.is_cpyext = is_cpyext
 
     def copy_for_type(self, w_objclass):
         if self.objclass_getter is None:
             new = instantiate(GetSetProperty)
             new._init(self.fget, self.fset, self.fdel, self.doc, self.reqcls,
-                      None, self.use_closure, self.name)
+                      None, self.use_closure, self.name, self.is_cpyext)
             new.w_objclass = w_objclass
             return new
         else:
@@ -348,6 +350,11 @@ class GetSetProperty(W_Root):
             space._see_getsetproperty(self)      # only for fake/objspace.py
         return self
 
+    def descr__doc(space, w_self):
+        if w_self.doc is None and w_self.is_cpyext:
+            from pypy.module.cpyext.typeobject import maybe_set_getset_doc
+            maybe_set_getset_doc(space, w_self)
+        return space.newtext_or_none(w_self.doc)
 
 def interp_attrproperty(name, cls, doc=None, wrapfn=None):
     "NOT_RPYTHON: initialization-time only"
@@ -374,7 +381,8 @@ GetSetProperty.typedef = TypeDef(
     __delete__ = interp2app(GetSetProperty.descr_property_del),
     __name__ = interp_attrproperty('name', cls=GetSetProperty, wrapfn="newtext_or_none"),
     __objclass__ = GetSetProperty(GetSetProperty.descr_get_objclass),
-    __doc__ = interp_attrproperty('doc', cls=GetSetProperty, wrapfn="newtext_or_none"),
+    __doc__ = GetSetProperty(GetSetProperty.descr__doc, 
+                                        cls=GetSetProperty, name="__doc__"),
     )
 assert not GetSetProperty.typedef.acceptable_as_base_class  # no __new__
 
