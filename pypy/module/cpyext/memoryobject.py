@@ -1,28 +1,21 @@
-from rpython.rlib.objectmodel import keepalive_until_here
-from pypy.interpreter.error import oefmt
 from pypy.module.cpyext.api import (
-    cpython_api, Py_buffer, CANNOT_FAIL, Py_MAX_FMT, Py_MAX_NDIMS,
-    build_type_checkers, Py_ssize_tP, PyObjectFields, cpython_struct,
-    bootstrap_function, Py_bufferP, slot_function, generic_cpy_call)
+    cpython_api, CANNOT_FAIL, Py_MAX_FMT, Py_MAX_NDIMS, build_type_checkers,
+    Py_ssize_tP, cts, parse_dir, bootstrap_function, Py_bufferP, slot_function)
 from pypy.module.cpyext.pyobject import (
-    PyObject, make_ref, as_pyobj, decref, from_ref, make_typedescr,
+    PyObject, make_ref, decref, from_ref, make_typedescr,
     get_typedescr, track_reference)
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rlib.rarithmetic import widen
 from pypy.objspace.std.memoryobject import W_MemoryView
 from pypy.module.cpyext.object import _dealloc
 from pypy.module.cpyext.import_ import PyImport_Import
+from pypy.module.cpyext.buffer import CPyBuffer, fq
+
+cts.parse_header(parse_dir / 'cpyext_memoryobject.h')
+PyMemoryViewObject = cts.gettype('PyMemoryViewObject*')
 
 PyMemoryView_Check, PyMemoryView_CheckExact = build_type_checkers("MemoryView")
 
-
-PyMemoryViewObjectStruct = lltype.ForwardReference()
-PyMemoryViewObject = lltype.Ptr(PyMemoryViewObjectStruct)
-PyMemoryViewObjectFields = PyObjectFields + \
-    (("view", Py_buffer),)
-cpython_struct(
-    "PyMemoryViewObject", PyMemoryViewObjectFields, PyMemoryViewObjectStruct,
-    level=2)
 
 @bootstrap_function
 def init_memoryobject(space):
@@ -32,7 +25,7 @@ def init_memoryobject(space):
                    attach=memory_attach,
                    dealloc=memory_dealloc,
                    realize=memory_realize,
-                  )
+                   )
 
 def memory_attach(space, py_obj, w_obj, w_userdata=None):
     """
@@ -61,7 +54,6 @@ def memory_realize(space, obj):
     """
     Creates the memory object in the interpreter
     """
-    from pypy.module.cpyext.slotdefs import CPyBuffer, fq
     py_mem = rffi.cast(PyMemoryViewObject, obj)
     view = py_mem.c_view
     ndim = widen(view.c_ndim)
