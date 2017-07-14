@@ -2,6 +2,7 @@
 #define Py_OBJECT_H
 
 #include <stdio.h>
+#include <math.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,10 +10,17 @@ extern "C" {
 
 #include "cpyext_object.h"
 
+int* foo;
 #define PY_SSIZE_T_MAX ((Py_ssize_t)(((size_t)-1)>>1))
 #define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)
 
-#define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
+#define PY_REFCNT_FROM_PYPY (4L << ((long)(log(PY_SSIZE_T_MAX) / log(2) - 2)))
+#define PY_REFCNT_GREEN (4L << ((long)(log(PY_SSIZE_T_MAX) / log(2) - 6)))
+#define PY_REFCNT_OVERFLOW (1L << ((long)(log(PY_SSIZE_T_MAX) / log(2) - 6) / 2L - 1L))
+#define PY_REFCNT_MASK ((PY_REFCNT_OVERFLOW << 1L) - 1L)
+
+#define Py_RETURN_NONE return (((((PyObject *)(Py_None))->ob_refcnt & PY_REFCNT_OVERFLOW) == 0) ? \
+                              ((PyObject *)(Py_None))->ob_refcnt++ : Py_IncRef((PyObject *)(Py_None))), Py_None
 
 /*
 CPython has this for backwards compatibility with really old extensions, and now
@@ -26,26 +34,34 @@ we have it for compatibility with CPython.
 #define PyVarObject_HEAD_INIT(type, size)	\
 	PyObject_HEAD_INIT(type) size,
 
-// #ifdef PYPY_DEBUG_REFCOUNT
-// /* Slow version, but useful for debugging */
+#ifdef PYPY_DEBUG_REFCOUNT
+/* Slow version, but useful for debugging */
 #define Py_INCREF(ob)   (Py_IncRef((PyObject *)(ob)))
 #define Py_DECREF(ob)   (Py_DecRef((PyObject *)(ob)))
 #define Py_XINCREF(ob)  (Py_IncRef((PyObject *)(ob)))
 #define Py_XDECREF(ob)  (Py_DecRef((PyObject *)(ob)))
-// #else
-// /* Fast version */
-// #define Py_INCREF(ob)   (((PyObject *)(ob))->ob_refcnt++)
-// #define Py_DECREF(op)                                   \
-//     do {                                                \
-//         if (--((PyObject *)(op))->ob_refcnt != 0)       \
-//             ;                                           \
-//         else                                            \
-//             _Py_Dealloc((PyObject *)(op));              \
-//     } while (0)
-
-// #define Py_XINCREF(op) do { if ((op) == NULL) ; else Py_INCREF(op); } while (0)
-// #define Py_XDECREF(op) do { if ((op) == NULL) ; else Py_DECREF(op); } while (0)
-// #endif
+#else
+/* Fast version */
+#define Py_INCREF(ob)                                                           \
+        do {                                                                    \
+                if (!(((PyObject *)(ob))->ob_refcnt & PY_REFCNT_OVERFLOW))      \
+                        ((PyObject *)(ob))->ob_refcnt++;                        \
+                else                                                            \
+                        Py_IncRef((PyObject *)(ob));                            \
+        } while (0)
+#define Py_DECREF(ob)                                                           \
+        do {                                                                    \
+                if (!(((PyObject *)(ob))->ob_refcnt & PY_REFCNT_GREEN) ||       \
+                    (((PyObject *)(ob))->ob_refcnt & PY_REFCNT_OVERFLOW))       \
+                        Py_DecRef((PyObject *)(ob));                            \
+                else if (--((PyObject *)(ob))->ob_refcnt & PY_REFCNT_MASK)      \
+                        ;                                                       \
+                else if (!((PyObject *)(ob))->ob_refcnt & PY_REFCNT_FROM_PYPY)  \
+                        _Py_Dealloc((PyObject *)(ob));                          \
+        } while (0)
+#define Py_XINCREF(op) do { if ((op) == NULL) ; else Py_INCREF(op); } while (0)
+#define Py_XDECREF(op) do { if ((op) == NULL) ; else Py_DECREF(op); } while (0)
+#endif
 
 #define Py_CLEAR(op)				\
         do {                            	\
@@ -56,7 +72,8 @@ we have it for compatibility with CPython.
                 }				\
         } while (0)
 
-#define Py_REFCNT(ob)		(((PyObject*)(ob))->ob_refcnt)
+#define Py_REFCNT(ob) ((((PyObject *)(ob))->ob_refcnt & PY_REFCNT_OVERFLOW == 0) ?  \
+                      (((PyObject*)(ob))->ob_refcnt & PY_REFCNT_MASK) : _Py_RefCnt_Overflow(ob))
 #define Py_TYPE(ob)		(((PyObject*)(ob))->ob_type)
 #define Py_SIZE(ob)		(((PyVarObject*)(ob))->ob_size)
 

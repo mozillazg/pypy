@@ -4,7 +4,7 @@
 #  This is meant for pypy's cpyext module, but is a generally
 #  useful interface over our GC.  XXX "pypy" should be removed here
 #
-import sys, weakref, py
+import sys, weakref, py, math
 from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from rpython.rlib.objectmodel import we_are_translated, specialize, not_rpython
 from rpython.rtyper.extregistry import ExtRegistryEntry
@@ -12,8 +12,37 @@ from rpython.translator.tool.cbuild import ExternalCompilationInfo
 from rpython.rlib import rgc
 
 
-REFCNT_FROM_PYPY       = sys.maxint // 4 + 1
-REFCNT_FROM_PYPY_LIGHT = REFCNT_FROM_PYPY + (sys.maxint // 2 + 1)
+MAX_BIT = int(math.log(sys.maxint, 2))
+
+REFCNT_FROM_PYPY = 1 << MAX_BIT - 2
+REFCNT_FROM_PYPY_LIGHT = (1 << MAX_BIT - 1) + REFCNT_FROM_PYPY
+
+# Object either in Roots or Cycle Buffer (= Link-object exists)
+REFCNT_CYCLE_BUFFERED = 1 << MAX_BIT - 3
+
+# Offsets and sizes
+REFCNT_CLR_OFFS = MAX_BIT - 6
+REFCNT_CRC_OFFS = REFCNT_CLR_OFFS / 2
+REFCNT_BITS = REFCNT_CRC_OFFS - 1
+
+# Concurrent cycle collection colors
+REFCNT_CLR_BLACK = 0 << REFCNT_CLR_OFFS   # In use or free (Default)
+REFCNT_CLR_GRAY = 1 << REFCNT_CLR_OFFS    # Possible member of cycle
+REFCNT_CLR_WHITE = 2 << REFCNT_CLR_OFFS   # Member of garbage cycle
+REFCNT_CLR_PURPLE = 3 << REFCNT_CLR_OFFS  # Possible root of cycle
+REFCNT_CLR_GREEN = 4 << REFCNT_CLR_OFFS   # Acyclic
+REFCNT_CLR_RED = 5 << REFCNT_CLR_OFFS     # Cand cycle undergoing SIGMA-comp.
+REFCNT_CLR_ORANGE = 6 << REFCNT_CLR_OFFS  # Cand cycle awaiting epoch boundary
+
+# Cyclic reference count with overflow bit
+REFCNT_CRC_OVERFLOW = 1 << REFCNT_CRC_OFFS + REFCNT_BITS
+REFCNT_CRC_MASK = (1 << REFCNT_CRC_OFFS + REFCNT_BITS + 1) - 1
+REFCNT_CRC = 1 < REFCNT_CRC_OFFS
+
+# True reference count with overflow bit
+REFCNT_OVERFLOW = 1 << REFCNT_BITS
+REFCNT_MASK = (1 << REFCNT_BITS + 1) - 1
+
 
 RAWREFCOUNT_DEALLOC_TRIGGER = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
@@ -24,25 +53,40 @@ def _build_pypy_link(p):
     return res
 
 _trial_deletion_phase = 0
-_visited = []
-_marked = []
 
 def set_trialdeletion_phase(value):
     _trial_deletion_phase = value
 def get_trialdeletion_phase():
     return _trial_deletion_phase
+
+_visited = []
+
 def add_visited(obj):
     _visited.append(obj)
 def get_visited():
     return _visited
 def clear_visited():
     del _visited[:]
-def add_marked(obj):
-    _marked.append(obj)
-def get_marked():
-    return marked
-def clear_marked():
-    del _marked[:]
+
+_refcount_overflow = dict()
+
+# TODO: if object moves, address changes!
+def overflow_new(obj):
+    _refcount_overflow[id(obj)] = 0
+def overflow_add(obj):
+    _refcount_overflow[id(obj)] += 1
+def overflow_sub(obj):
+    c = _refcount_overflow[id(obj)]
+    if c > 0:
+        _refcount_overflow[id(obj)] = c - 1
+        return False
+    else:
+        _refcount_overflow.pop(id(obj))
+        return True
+def overflow_get(obj):
+    return _refcount_overflow[id(obj)]
+
+# TODO: _cyclic_refcount_overflow = dict()
 
 @not_rpython
 def init(dealloc_trigger_callback=None):
@@ -142,7 +186,8 @@ def _collect(track_allocation=True):
     wr_p_list = []
     new_p_list = []
     for ob in reversed(_p_list):
-        if ob.c_ob_refcnt not in (REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_LIGHT):
+        if ob.c_ob_refcnt & REFCNT_MASK > 0 \
+           or ob.c_ob_refcnt & REFCNT_FROM_PYPY == 0:
             new_p_list.append(ob)
         else:
             p = detach(ob, wr_p_list)
@@ -175,7 +220,8 @@ def _collect(track_allocation=True):
             if ob.c_ob_refcnt >= REFCNT_FROM_PYPY_LIGHT:
                 ob.c_ob_refcnt -= REFCNT_FROM_PYPY_LIGHT
                 ob.c_ob_pypy_link = 0
-                if ob.c_ob_refcnt == 0:
+                if ob.c_ob_refcnt & REFCNT_MASK == 0 \
+                   and ob.c_ob_refcnt < REFCNT_FROM_PYPY:
                     lltype.free(ob, flavor='raw',
                                 track_allocation=track_allocation)
             else:
@@ -183,8 +229,9 @@ def _collect(track_allocation=True):
                 assert ob.c_ob_refcnt < int(REFCNT_FROM_PYPY_LIGHT * 0.99)
                 ob.c_ob_refcnt -= REFCNT_FROM_PYPY
                 ob.c_ob_pypy_link = 0
-                if ob.c_ob_refcnt == 0:
-                    ob.c_ob_refcnt = 1
+                if ob.c_ob_refcnt & REFCNT_MASK == 0 \
+                   and ob.c_ob_refcnt < REFCNT_FROM_PYPY:
+                    ob.c_ob_refcnt += 1
                     _d_list.append(ob)
             return None
 
