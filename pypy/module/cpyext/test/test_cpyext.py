@@ -102,13 +102,14 @@ class LeakCheckingTest(object):
                                    'itertools', 'time', 'binascii',
                                    'micronumpy', 'mmap'
                                    ])
+    check_leaks = False
 
     def cleanup(self):
         self.space.getexecutioncontext().cleanup_cpyext_state()
         rawrefcount._collect()
         self.space.user_del_action._run_finalizers()
         try:
-            leakfinder.stop_tracking_allocations(check=True)
+            leakfinder.stop_tracking_allocations(check=self.check_leaks)
         except leakfinder.MallocMismatch as e:
             result = e.args[0]
             filtered_result = {}

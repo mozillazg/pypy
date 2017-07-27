@@ -505,7 +505,7 @@ class W_PyCTypeObject(W_TypeObject):
 
         W_TypeObject.__init__(self, space, name,
             bases_w or [space.w_object], dict_w, force_new_layout=new_layout,
-            is_heaptype=flag_heaptype)
+            is_heaptype=flag_heaptype, is_cpytype=True)
         self.flag_cpytype = True
         # if a sequence or a mapping, then set the flag to force it
         if pto.c_tp_as_sequence and pto.c_tp_as_sequence.c_sq_item:
@@ -528,28 +528,7 @@ def init_typeobject(space):
 
 @slot_function([PyObject], lltype.Void)
 def subtype_dealloc(space, obj):
-    pto = obj.c_ob_type
-    base = pto
-    this_func_ptr = llslot(space, subtype_dealloc)
-    w_obj = from_ref(space, rffi.cast(PyObject, base))
-    # This wrapper is created on a specific type, call it w_A.
-    # We wish to call the dealloc function from one of the base classes of w_A,
-    # the first of which is not this function itself.
-    # w_obj is an instance of w_A or one of its subclasses. So climb up the
-    # inheritance chain until base.c_tp_dealloc is exactly this_func, and then
-    # continue on up until they differ.
-    #print 'subtype_dealloc, start from', rffi.charp2str(base.c_tp_name)
-    while base.c_tp_dealloc != this_func_ptr:
-        base = base.c_tp_base
-        assert base
-        #print '                 ne move to', rffi.charp2str(base.c_tp_name)
-        w_obj = from_ref(space, rffi.cast(PyObject, base))
-    while base.c_tp_dealloc == this_func_ptr:
-        base = base.c_tp_base
-        assert base
-        #print '                 eq move to', rffi.charp2str(base.c_tp_name)
-        w_obj = from_ref(space, rffi.cast(PyObject, base))
-    #print '                   end with', rffi.charp2str(base.c_tp_name)
+    base = rffi.cast(PyTypeObjectPtr, as_pyobj(space, space.w_object))
     dealloc = base.c_tp_dealloc
     # XXX call tp_del if necessary
     generic_cpy_call(space, dealloc, obj)
@@ -757,11 +736,8 @@ def type_attach(space, py_obj, w_type, w_userdata=None):
         # only for the exact type, like 'space.w_tuple' or 'space.w_list'
         pto.c_tp_dealloc = typedescr.get_dealloc().get_llhelper(space)
     else:
-        # for all subtypes, use base's dealloc (requires sorting in attach_all)
-        pto.c_tp_dealloc = pto.c_tp_base.c_tp_dealloc
-        if not pto.c_tp_dealloc:
-            # strange, but happens (ABCMeta)
-            pto.c_tp_dealloc = llslot(space, subtype_dealloc)
+        # always assign to subtype_dealloc for w_obj -> pyobj instantiation
+        pto.c_tp_dealloc = subtype_dealloc.api_func.get_llhelper(space)
 
     if builder.cpyext_type_init is not None:
         builder.cpyext_type_init.append((pto, w_type))
@@ -770,13 +746,28 @@ def type_attach(space, py_obj, w_type, w_userdata=None):
         finish_type_2(space, pto, w_type)
 
     pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)
+
+    update_all_slots(space, w_type, pto)
+
     if pto.c_tp_base:
         if pto.c_tp_base.c_tp_basicsize > pto.c_tp_basicsize:
             pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
         if pto.c_tp_itemsize < pto.c_tp_base.c_tp_itemsize:
             pto.c_tp_itemsize = pto.c_tp_base.c_tp_itemsize
 
-    update_all_slots(space, w_type, pto)
+        # XXX refactor - parts of this are done in finish_type_2 -> inherit_slots
+        if not pto.c_tp_as_number:
+            pto.c_tp_as_number = pto.c_tp_base.c_tp_as_number
+            pto.c_tp_flags |= pto.c_tp_base.c_tp_flags & Py_TPFLAGS_CHECKTYPES
+            pto.c_tp_flags |= pto.c_tp_base.c_tp_flags & Py_TPFLAGS_HAVE_INPLACEOPS
+        if not pto.c_tp_as_sequence:
+            pto.c_tp_as_sequence = pto.c_tp_base.c_tp_as_sequence
+            pto.c_tp_flags |= pto.c_tp_base.c_tp_flags & Py_TPFLAGS_HAVE_INPLACEOPS
+        if not pto.c_tp_as_mapping:
+            pto.c_tp_as_mapping = pto.c_tp_base.c_tp_as_mapping
+        #if not pto.c_tp_as_buffer: pto.c_tp_as_buffer = base.c_tp_as_buffer
+
+
     if not pto.c_tp_new:
         base_object_pyo = make_ref(space, space.w_object)
         base_object_pto = rffi.cast(PyTypeObjectPtr, base_object_pyo)
@@ -798,6 +789,9 @@ def PyType_Ready(space, pto):
     return 0
 
 def type_realize(space, py_obj):
+    """
+    Creates an interpreter type from a PyTypeObject structure.
+    """
     pto = rffi.cast(PyTypeObjectPtr, py_obj)
     assert pto.c_tp_flags & Py_TPFLAGS_READY == 0
     assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
@@ -889,20 +883,6 @@ def _type_realize(space, py_obj):
     w_obj.ready()
 
     finish_type_2(space, py_type, w_obj)
-    base = py_type.c_tp_base
-    if base:
-        # XXX refactor - parts of this are done in finish_type_2 -> inherit_slots
-        if not py_type.c_tp_as_number:
-            py_type.c_tp_as_number = base.c_tp_as_number
-            py_type.c_tp_flags |= base.c_tp_flags & Py_TPFLAGS_CHECKTYPES
-            py_type.c_tp_flags |= base.c_tp_flags & Py_TPFLAGS_HAVE_INPLACEOPS
-        if not py_type.c_tp_as_sequence:
-            py_type.c_tp_as_sequence = base.c_tp_as_sequence
-            py_type.c_tp_flags |= base.c_tp_flags & Py_TPFLAGS_HAVE_INPLACEOPS
-        if not py_type.c_tp_as_mapping:
-            py_type.c_tp_as_mapping = base.c_tp_as_mapping
-        #if not py_type.c_tp_as_buffer: py_type.c_tp_as_buffer = base.c_tp_as_buffer
-
     return w_obj
 
 def finish_type_1(space, pto, bases_w=None):

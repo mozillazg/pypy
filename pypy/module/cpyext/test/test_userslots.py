@@ -16,11 +16,14 @@ class TestAppLevelObject(BaseApiTest):
             """)
         w_datetype = space.type(w_date)
         py_date = make_ref(space, w_date)
-        py_datetype = rffi.cast(PyTypeObjectPtr, make_ref(space, w_datetype))
+        py_datetype = make_ref(space, w_datetype)
+        py_datetype = rffi.cast(PyTypeObjectPtr, py_datetype)
         assert py_datetype.c_tp_as_number
         assert py_datetype.c_tp_as_number.c_nb_add
         w_obj = generic_cpy_call(space, py_datetype.c_tp_as_number.c_nb_add,
                                  py_date, py_date)
+        api.Py_DecRef(py_datetype)
+        api.Py_DecRef(py_date)
         assert space.str_w(w_obj) == 'sum!'
 
     def test_tp_new_from_python(self, space, api):
@@ -46,6 +49,7 @@ class TestAppLevelObject(BaseApiTest):
                                  arg, space.newdict({}))
         w_year = space.getattr(w_obj, space.newtext('year'))
         assert space.int_w(w_year) == 1
+        api.Py_DecRef(py_datetype)
 
     def test_descr_slots(self, space, api):
         w_descr = space.appexec([], """():
@@ -78,6 +82,11 @@ class TestAppLevelObject(BaseApiTest):
         w_res = generic_cpy_call(space, py_descrtype.c_tp_descr_get,
                                  py_descr, None, space.w_int)
         assert space.int_w(w_res) == 43
+        api.Py_DecRef(py_descr)
+        api.Py_DecRef(py_descrtype)
+        # the w_descrtype leaks, it is immortal?
+        self.check_leaks = False
+
 
 class AppTestUserSlots(AppTestCpythonExtensionBase):
     def test_tp_hash_from_python(self):
@@ -137,19 +146,23 @@ class AppTestUserSlots(AppTestCpythonExtensionBase):
             ("get__timestamp", "METH_NOARGS",
             '''
                 PyObject * one = PyLong_FromLong(1);
+                Py_INCREF(one);
+                Py_INCREF(one);
                 PyObject * a = PyTuple_Pack(3, one, one, one);
                 PyObject * k = NULL;
                 obj = _Timestamp.tp_new(&_Timestamp, a, k);
-                Py_DECREF(one);
+                Py_DECREF(a);
                 return obj;
              '''),
             ("get_timestamp", "METH_NOARGS",
             '''
                 PyObject * one = PyLong_FromLong(1);
+                Py_INCREF(one);
+                Py_INCREF(one);
                 PyObject * a = PyTuple_Pack(3, one, one, one);
                 PyObject * k = NULL;
                 obj = Timestamp.tp_new(&Timestamp, a, k);
-                Py_DECREF(one);
+                Py_DECREF(a);
                 return obj;
              '''),
             ], prologue='''

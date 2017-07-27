@@ -170,7 +170,7 @@ class W_TypeObject(W_Root):
     @dont_look_inside
     def __init__(self, space, name, bases_w, dict_w,
                  overridetypedef=None, force_new_layout=False,
-                 is_heaptype=True):
+                 is_heaptype=True, is_cpytype=False):
         self.space = space
         self.name = name
         self.bases_w = bases_w
@@ -181,7 +181,7 @@ class W_TypeObject(W_Root):
         self.w_doc = space.w_None
         self.weak_subclasses = []
         self.flag_heaptype = is_heaptype
-        self.flag_cpytype = False
+        self.flag_cpytype = is_cpytype
         self.flag_abstract = False
         self.flag_sequence_bug_compat = False
         self.flag_map_or_seq = '?'   # '?' means "don't know, check otherwise"
@@ -1148,7 +1148,7 @@ def setup_user_defined_type(w_self, force_new_layout):
     for w_base in w_self.bases_w:
         if not isinstance(w_base, W_TypeObject):
             continue
-        w_self.flag_cpytype |= w_base.flag_cpytype
+        #w_self.flag_cpytype |= w_base.flag_cpytype
         w_self.flag_abstract |= w_base.flag_abstract
         if w_self.flag_map_or_seq == '?':
             w_self.flag_map_or_seq = w_base.flag_map_or_seq
