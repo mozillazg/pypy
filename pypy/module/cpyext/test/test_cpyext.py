@@ -102,7 +102,7 @@ class LeakCheckingTest(object):
                                    'itertools', 'time', 'binascii',
                                    'micronumpy', 'mmap'
                                    ])
-    check_leaks = False
+    check_leaks = True
 
     def cleanup(self):
         self.space.getexecutioncontext().cleanup_cpyext_state()

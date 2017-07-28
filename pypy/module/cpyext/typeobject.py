@@ -154,6 +154,7 @@ def init_memberdescrobject(space):
     make_typedescr(W_GetSetPropertyEx.typedef,
                    basestruct=PyGetSetDescrObject.TO,
                    attach=getsetdescr_attach,
+                   dealloc=getsetdescr_dealloc,
                    )
     make_typedescr(W_PyCClassMethodObject.typedef,
                    basestruct=PyMethodDescrObject.TO,
@@ -198,6 +199,13 @@ def getsetdescr_attach(space, py_obj, w_obj, w_userdata=None):
     # XXX assign to d_dname, d_type?
     assert isinstance(w_obj, W_GetSetPropertyEx)
     py_getsetdescr.c_d_getset = w_obj.getset
+
+@slot_function([PyObject], lltype.Void)
+def getsetdescr_dealloc(space, obj):
+    from pypy.module.cpyext.object import _dealloc
+    py_getsetdescr = rffi.cast(PyGetSetDescrObject, obj)
+    xxx
+    _dealloc(space, obj)
 
 def methoddescr_attach(space, py_obj, w_obj, w_userdata=None):
     py_methoddescr = rffi.cast(PyMethodDescrObject, py_obj)
@@ -655,7 +663,7 @@ def type_dealloc(space, obj):
     Py_DecRef(space, obj_pto.c_tp_bases)
     #Py_DecRef(space, obj_pto.c_tp_mro)
     Py_DecRef(space, obj_pto.c_tp_cache) # let's do it like cpython
-    #Py_DecRef(space, obj_pto.c_tp_dict)
+    Py_DecRef(space, obj_pto.c_tp_dict)
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         heaptype = rffi.cast(PyHeapTypeObject, obj)
         Py_DecRef(space, heaptype.c_ht_name)
@@ -930,10 +938,10 @@ def finish_type_2(space, pto, w_obj):
 
     if w_obj.is_cpytype():
         Py_DecRef(space, pto.c_tp_dict)
-    #w_dict = w_obj.getdict(space)
+    w_dict = w_obj.getdict(space)
     # pass in the w_obj to convert any values that are
     # unbound GetSetProperty into bound PyGetSetDescrObject
-    #pto.c_tp_dict = make_ref(space, w_dict, w_obj)
+    pto.c_tp_dict = make_ref(space, w_dict, w_obj)
 
 @cpython_api([PyTypeObjectPtr, PyTypeObjectPtr], rffi.INT_real, error=CANNOT_FAIL)
 def PyType_IsSubtype(space, a, b):

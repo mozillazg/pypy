@@ -255,6 +255,7 @@ class AppTestDictObject(AppTestCpythonExtensionBase):
             ])
         d = module.get_type_dict(1)
         assert d['real'].__get__(1, 1) == 1
+
     def test_advanced(self):
         module = self.import_extension('foo', [
             ("dict_len", "METH_O",
