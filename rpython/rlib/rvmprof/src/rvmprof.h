@@ -7,9 +7,8 @@
 
 #ifdef VMPROF_WINDOWS
 #include <crtdefs.h>
-typedef __int64 int64_t;
-typedef unsigned __int64 uint64_t;
-typedef intptr_t ssize_t;
+#include "shared/msiinttypes/inttypes.h"
+#include "shared/msiinttypes/stdint.h"
 #else
 #include <inttypes.h>
 #include <stdint.h>

@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include "vmprof.h"
 #include "machine.h"
 #include "compat.h"
@@ -8,6 +9,7 @@
 #include <time.h>
 #include <stdlib.h>
 
+
 #ifdef VMPROF_UNIX
 #include <sys/time.h>
 #include "vmprof_mt.h"
@@ -15,7 +17,9 @@
 #include <pthread.h>
 #endif
 
+#ifndef _MSC_VER
 #include "vmprof_getpc.h"
+#endif
 
 #ifdef VMPROF_LINUX
 #include <syscall.h>
@@ -109,3 +113,4 @@ int vmprof_get_itimer_type(void);
 int broadcast_signal_for_threads(void);
 int is_main_thread(void);
 #endif
+

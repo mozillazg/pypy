@@ -34,7 +34,7 @@ const char * vmp_machine_os_name(void)
 #endif
 }
 
-long vmp_fd_to_path(int fd, char * buffer, long buffer_len)
+long vmp_fd_to_path(int fd, const char * buffer, long buffer_len)
 {
 #ifdef VMPROF_LINUX
     char proffs[24];

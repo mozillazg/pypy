@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <string.h> /* for strerror */
 
 #ifdef RPYTHON_VMPROF
 #ifdef RPYTHON_LL2CTYPES
@@ -34,9 +35,11 @@ static size_t thread_count = 0;
 static size_t threads_size_step = 8;
 #endif
 
+#ifndef VMPROF_WINDOWS
 int vmprof_get_itimer_type(void) {
     return itimer_type;
 }
+#endif
 
 int vmprof_is_enabled(void) {
     return is_enabled;
@@ -62,9 +65,11 @@ void vmprof_set_profile_interval_usec(long value) {
     profile_interval_usec = value;
 }
 
+#ifndef VMPROF_WINDOWS
 int vmprof_get_signal_type(void) {
     return signal_type;
 }
+#endif
 
 char *vmprof_init(int fd, double interval, int memory,
                   int proflines, const char *interp_name, int native, int real_time)

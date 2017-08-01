@@ -23,6 +23,8 @@ separate_module_files = [
     SHARED.join('symboltable.c'),
     SHARED.join('vmprof_unix.c')
 ]
+include_dirs = [SRC, SHARED]
+
 if sys.platform.startswith('linux'):
     separate_module_files += [
        BACKTRACE.join('atomic.c'),
@@ -35,10 +37,12 @@ if sys.platform.startswith('linux'):
        BACKTRACE.join('mmapio.c'),
        BACKTRACE.join('posix.c'),
        BACKTRACE.join('sort.c'),
+       SHARED.join('vmprof_mt.c'),
     ]
     _libs = ['dl']
     compile_extra += ['-DVMPROF_UNIX']
     compile_extra += ['-DVMPROF_LINUX']
+    include_dirs.append(BACKTRACE)
 elif sys.platform == 'win32':
     compile_extra = ['-DRPYTHON_VMPROF', '-DVMPROF_WINDOWS']
     separate_module_files = [SHARED.join('vmprof_win.c')]
@@ -48,10 +52,12 @@ else:
     compile_extra += ['-DVMPROF_UNIX']
     compile_extra += ['-DVMPROF_MAC']
     _libs = []
-
+    separate_module_files += [
+       SHARED.join('vmprof_mt.c'),
+    ]
 
 eci_kwds = dict(
-    include_dirs = [SRC, SHARED, BACKTRACE],
+    include_dirs = include_dirs,
     includes = ['rvmprof.h','vmprof_stack.h'],
     libraries = _libs,
     separate_module_files = [
@@ -59,7 +65,6 @@ eci_kwds = dict(
         SHARED.join('compat.c'),
         SHARED.join('machine.c'),
         SHARED.join('vmp_stack.c'),
-        SHARED.join('vmprof_mt.c'),
         SHARED.join('vmprof_memory.c'),
         SHARED.join('vmprof_common.c'),
         # symbol table already in separate_module_files

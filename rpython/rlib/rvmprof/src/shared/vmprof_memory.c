@@ -14,7 +14,11 @@ static mach_port_t mach_task;
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifdef VMPROF_WINDOWS
+#include "shared/msiinttypes/stdint.h"
+#else
 #include <unistd.h>
+#endif
 #include <string.h>
 /* On '''normal''' Unices we can get RSS from '/proc/<pid>/status'. */
 static int proc_file = -1;
