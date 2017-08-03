@@ -569,6 +569,20 @@ class AppTestSlots(AppTestCpythonExtensionBase):
             ])
         assert module.test_type(type(None))
 
+    def test_leaking(self):
+        module = self.import_extension('foo', [
+            ("test_leak", "METH_VARARGS",
+             '''
+                 Py_RETURN_TRUE;
+             '''
+             )
+            ])
+        class C:
+            def __init__(self):
+                pass
+        # leak checker should not report errors
+        assert module.test_leak(C())
+    
     def test_tp_getattro(self):
         module = self.import_extension('foo', [
             ("test_tp_getattro", "METH_VARARGS",
