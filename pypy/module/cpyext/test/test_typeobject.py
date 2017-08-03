@@ -577,11 +577,18 @@ class AppTestSlots(AppTestCpythonExtensionBase):
              '''
              )
             ])
-        class C:
+        class C(object):
+            def dummymethod(self):
+                pass
+        class D(object):
             def __init__(self):
                 pass
-        # leak checker should not report errors
+        class E:
+            pass
+        # TODO C passes leak checker, D,E fails
         assert module.test_leak(C())
+        assert module.test_leak(D())
+        assert module.test_leak(E())
     
     def test_tp_getattro(self):
         module = self.import_extension('foo', [
