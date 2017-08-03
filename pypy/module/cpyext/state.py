@@ -59,14 +59,17 @@ class State:
         if not self.space.config.translating:
             def dealloc_trigger():
                 from pypy.module.cpyext.pyobject import PyObject, decref
-                print 'dealloc_trigger...'
+                print >>sys.stderr, 'dealloc_trigger...'
                 while True:
                     ob = rawrefcount.next_dead(PyObject)
                     if not ob:
                         break
-                    print 'deallocating PyObject', ob
+                    if ob.c_ob_type.c_tp_name:
+                        print >>sys.stderr, 'deallocating PyObject', rffi.charp2str(ob.c_ob_type.c_tp_name), ob
+                    else:
+                        print >>sys.stderr, 'deallocating PyObject (without tp_name)', ob
                     decref(space, ob)
-                print 'dealloc_trigger DONE'
+                print >>sys.stderr, 'dealloc_trigger DONE'
                 return "RETRY"
             rawrefcount.init(dealloc_trigger)
         else:

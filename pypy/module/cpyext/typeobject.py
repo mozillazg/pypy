@@ -540,22 +540,22 @@ def subtype_dealloc(space, obj):
     # w_obj is an instance of w_A or one of its subclasses. So climb up the
     # inheritance chain until base.c_tp_dealloc is exactly this_func, and then
     # continue on up until they differ.
-    #print 'subtype_dealloc, start from', rffi.charp2str(base.c_tp_name)
+    print 'subtype_dealloc, start from', rffi.charp2str(base.c_tp_name)
     while base.c_tp_dealloc != this_func_ptr:
         base = base.c_tp_base
         assert base
-        #print '                 ne move to', rffi.charp2str(base.c_tp_name)
+        print '                 ne move to', rffi.charp2str(base.c_tp_name)
         w_obj = from_ref(space, rffi.cast(PyObject, base))
     while base.c_tp_dealloc == this_func_ptr:
         base = base.c_tp_base
         assert base
-        #print '                 eq move to', rffi.charp2str(base.c_tp_name)
+        print '                 eq move to', rffi.charp2str(base.c_tp_name)
         w_obj = from_ref(space, rffi.cast(PyObject, base))
-    #print '                   end with', rffi.charp2str(base.c_tp_name)
+    print '                   end with', rffi.charp2str(base.c_tp_name)
     dealloc = base.c_tp_dealloc
     # XXX call tp_del if necessary
     generic_cpy_call(space, dealloc, obj)
-    # XXX cpy decrefs the pto here but we do it in the base-dealloc
+    # XXX cpy decrefs the pto on heaptypes here but we do it in PyObject_dealloc 
     # hopefully this does not clash with the memory model assumed in
     # extension modules
 
@@ -675,6 +675,7 @@ def type_dealloc(space, obj):
     from pypy.module.cpyext.object import _dealloc
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
+    print 'decref tp_bases', from_ref(space, obj_pto.c_tp_bases)
     Py_DecRef(space, obj_pto.c_tp_bases)
     #Py_DecRef(space, obj_pto.c_tp_mro)
     Py_DecRef(space, obj_pto.c_tp_cache) # let's do it like cpython
@@ -927,6 +928,9 @@ def finish_type_1(space, pto, bases_w=None):
         is_heaptype = bool(pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE)
         pto.c_tp_bases = make_ref(space, space.newtuple(bases_w),
                                   immortal=not is_heaptype)
+        name = rffi.charp2str(pto.c_tp_name)
+        if name == 'instance':
+            print 'incref tp_bases', from_ref(space, pto.c_tp_bases), 'on instance' 
 
 def finish_type_2(space, pto, w_obj):
     """
