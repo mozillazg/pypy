@@ -13,6 +13,7 @@ from pypy.module.cpyext.state import State
 from rpython.tool import leakfinder
 from rpython.rlib import rawrefcount
 from rpython.tool.udir import udir
+import gc
 
 only_pypy ="config.option.runappdirect and '__pypy__' not in sys.builtin_module_names"
 
@@ -113,7 +114,8 @@ def is_allowed_to_leak(space, obj):
     return is_interned_string(space, w_obj)
 
 def _get_w_obj(space, c_obj):
-    return from_ref(space, cts.cast('PyObject*', c_obj._as_ptr()))
+    py_obj = cts.cast('PyObject*', c_obj._as_ptr())
+    return from_ref(space, py_obj), py_obj
 
 class CpyextLeak(leakfinder.MallocMismatch):
     def __str__(self):
@@ -122,9 +124,21 @@ class CpyextLeak(leakfinder.MallocMismatch):
             "These objects are attached to the following W_Root objects:")
         for c_obj in self.args[0]:
             try:
-                lines.append("  %s" % (_get_w_obj(self.args[1], c_obj),))
-            except:
-                pass
+                w_obj, py_obj = _get_w_obj(self.args[1], c_obj)
+                if w_obj and py_obj.c_ob_refcnt == rawrefcount.REFCNT_FROM_PYPY:
+                    referrers = gc.get_referrers(w_obj)
+                    badboys = []
+                    for r in referrers:
+                        # trap the tuples?
+                        if isinstance(r, tuple):
+                            badboys.append(r)
+                    # look at badboys, why are there tuples of
+                    # (type, function) ?
+                    import pdb;pdb.set_trace()
+                lines.append("  %s" % (w_obj,))
+            except Exception as e:
+                lines.append(str(e))
+                lines.append("  (no W_Root object)")
         return '\n'.join(lines)
 
 

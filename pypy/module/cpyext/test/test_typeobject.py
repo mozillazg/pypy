@@ -586,8 +586,14 @@ class AppTestSlots(AppTestCpythonExtensionBase):
         class E:
             pass
         # TODO C passes leak checker, D,E fails
-        assert module.test_leak(C())
+        # in debugging code in CpyextLeak, badboys has tuple/list
+        # (<W_TypeObject 'instance' at 0x7f45d3d11410>, <FunctionWithFixedCode __getattribute__>)
+        # (<W_TypeObject 'D' at 0x7f45d31b95d0>, <Function __init__>)
+        # (<W_TypeObject 'instance' at 0x7f45d3d11410>, <FunctionWithFixedCode __setattr__>)
+        # (<W_TypeObject 'instance' at 0x7f45d3d11410>, <FunctionWithFixedCode __nonzero__>)
+        # ...
         assert module.test_leak(D())
+        assert module.test_leak(C())
         assert module.test_leak(E())
     
     def test_tp_getattro(self):

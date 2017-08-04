@@ -540,7 +540,8 @@ def subtype_dealloc(space, obj):
     # w_obj is an instance of w_A or one of its subclasses. So climb up the
     # inheritance chain until base.c_tp_dealloc is exactly this_func, and then
     # continue on up until they differ.
-    print 'subtype_dealloc, start from', rffi.charp2str(base.c_tp_name)
+    name = rffi.charp2str(base.c_tp_name)
+    print 'subtype_dealloc, start from', name
     while base.c_tp_dealloc != this_func_ptr:
         base = base.c_tp_base
         assert base
@@ -915,7 +916,6 @@ def finish_type_1(space, pto, bases_w=None):
     base = pto.c_tp_base
     base_pyo = rffi.cast(PyObject, pto.c_tp_base)
     if base and not base.c_tp_flags & Py_TPFLAGS_READY:
-        name = rffi.charp2str(cts.cast('char*', base.c_tp_name))
         type_realize(space, base_pyo)
     if base and not pto.c_ob_type: # will be filled later
         pto.c_ob_type = base.c_ob_type
