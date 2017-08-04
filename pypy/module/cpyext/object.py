@@ -61,12 +61,31 @@ def PyObject_dealloc(space, obj):
 def _dealloc(space, obj):
     # This frees an object after its refcount dropped to zero, so we
     # assert that it is really zero here.
+    from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
     assert obj.c_ob_refcnt == 0
     pto = obj.c_ob_type
     obj_voidp = rffi.cast(rffi.VOIDP, obj)
     generic_cpy_call(space, pto.c_tp_free, obj_voidp)
     if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
+        from pypy.module.cpyext.slotdefs import SLOTS
+        w_obj = from_ref(space, pto)
+        if pto.c_ob_refcnt <= REFCNT_FROM_PYPY + 1:
+            # remove the to-be-deleted type's functions from slotdef.SLOTS
+            toremove = []
+            typedef = w_obj.layout.typedef
+            for k in SLOTS.keys():
+                if k[0] is typedef:
+                    toremove.append(k)
+            for k in toremove:
+                SLOTS.pop(k)
+                print w_obj.name, k[1]
+        else:
+            print 'not releasing', w_obj.name, 'w/refcnt',pto.c_ob_refcnt - REFCNT_FROM_PYPY 
         Py_DecRef(space, rffi.cast(PyObject, pto))
+    else:
+        w_obj = from_ref(space, pto)
+        print 'no decref', w_obj.name, 'w/refcnt',pto.c_ob_refcnt - REFCNT_FROM_PYPY 
+        
 
 @cpython_api([PyTypeObjectPtr], PyObject, result_is_ll=True)
 def _PyObject_GC_New(space, type):

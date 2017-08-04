@@ -291,7 +291,7 @@ def update_all_slots(space, w_type, pto):
 
         if not slot_func_helper:
             if typedef is not None:
-                if slot_apifunc is None:
+                if slot_apifunc is None and slot_name in ('tp_new',):
                     slot_apifunc = get_slot_tp_function(space, typedef, slot_name)
             if not slot_apifunc:
                 if not we_are_translated():
