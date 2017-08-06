@@ -73,6 +73,8 @@ from rpython.rlib.rarithmetic import LONG_BIT_SHIFT
 from rpython.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
 from rpython.rlib.objectmodel import specialize
 from rpython.memory.gc.minimarkpage import out_of_memory
+from pypy.module.cpyext.api import slot_function, PyObject
+from rpython.rtyper.lltypesystem import rffi
 
 #
 # Handles the objects in 2 generations:
@@ -187,6 +189,105 @@ FORWARDSTUB = lltype.GcStruct('forwarding_stub',
                               ('forw', llmemory.Address))
 FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
 NURSARRAY = lltype.Array(llmemory.Address)
+VISIT_FUNCTYPE = rffi.CCallback([PyObject, rffi.VOIDP],
+                                rffi.INT_real)
+
+def traverse(obj, func_ptr):
+    from pypy.module.cpyext.api import generic_cpy_call
+    from pypy.module.cpyext.typeobjectdefs import visitproc
+    if obj.c_ob_type and obj.c_ob_type.c_tp_traverse:
+        visitproc_ptr = rffi.cast(visitproc, func_ptr)
+        generic_cpy_call(True, obj.c_ob_type.c_tp_traverse, obj,
+                         visitproc_ptr, rffi.cast(rffi.VOIDP, obj))
+
+def visit_mark_gray(obj, args):
+    from rpython.rlib.rawrefcount import (REFCNT_CLR_GREEN,
+                                          REFCNT_CLR_MASK,
+                                          decref)
+    decref(obj)
+    rc = obj.c_ob_refcnt
+    if rc & REFCNT_CLR_MASK != REFCNT_CLR_GREEN:
+        mark_gray_recursive(obj)
+    return rffi.cast(rffi.INT_real, 0)
+
+def mark_gray_recursive(obj):
+    from rpython.rlib.rawrefcount import (REFCNT_CLR_GRAY,
+                                          REFCNT_CLR_MASK)
+    from rpython.rtyper.annlowlevel import llhelper
+    debug_print("mark_gray_recursive", obj)
+    rc = obj.c_ob_refcnt
+    if rc & REFCNT_CLR_MASK != REFCNT_CLR_GRAY:
+        obj.c_ob_refcnt = obj.c_ob_refcnt & ~REFCNT_CLR_MASK | REFCNT_CLR_GRAY
+        func_ptr = llhelper(VISIT_FUNCTYPE, visit_mark_gray)
+        traverse(obj, func_ptr)
+
+def visit_scan_black(obj, args):
+    from rpython.rlib.rawrefcount import (REFCNT_CLR_BLACK,
+                                          REFCNT_CLR_MASK,
+                                          REFCNT_CLR_GREEN,
+                                          incref)
+    incref(obj)
+    rc = obj.c_ob_refcnt
+    if (rc & REFCNT_CLR_MASK != REFCNT_CLR_BLACK and
+       rc & REFCNT_CLR_MASK != REFCNT_CLR_GREEN):
+        scan_black_recursive(obj)
+    return rffi.cast(rffi.INT_real, 0)
+
+def scan_black_recursive(obj):
+    from rpython.rlib.rawrefcount import (REFCNT_CLR_BLACK,
+                                          REFCNT_CLR_MASK)
+    from rpython.rtyper.annlowlevel import llhelper
+    debug_print("scan_black_recursive", obj)
+    rc = obj.c_ob_refcnt
+    obj.c_ob_refcnt = rc & ~REFCNT_CLR_MASK | REFCNT_CLR_BLACK
+    func_ptr = llhelper(VISIT_FUNCTYPE, visit_scan_black)
+    traverse(obj, func_ptr)
+
+def visit_scan(obj, args):
+    scan_recursive(obj)
+    return rffi.cast(rffi.INT_real, 0)
+
+def scan_recursive(obj):
+    from rpython.rlib.rawrefcount import (REFCNT_CLR_WHITE,
+                                          REFCNT_CLR_GRAY,
+                                          REFCNT_CLR_GREEN,
+                                          REFCNT_CLR_MASK,
+                                          REFCNT_MASK)
+    from rpython.rtyper.annlowlevel import llhelper
+    debug_print("scan_recursive", obj)
+    rc = obj.c_ob_refcnt
+    if (rc & REFCNT_CLR_MASK == REFCNT_CLR_GRAY or
+       rc & REFCNT_CLR_MASK == REFCNT_CLR_GREEN):
+        if rc & REFCNT_MASK > 0 and rc & REFCNT_CLR_MASK != REFCNT_CLR_GREEN:
+            scan_black_recursive(obj)
+        else:
+            obj.c_ob_refcnt = rc & ~REFCNT_CLR_MASK | REFCNT_CLR_WHITE
+            func_ptr = llhelper(VISIT_FUNCTYPE, visit_scan)
+            traverse(obj, func_ptr)
+
+def visit_collect_white(obj, args):
+    collect_white_recursive(obj)
+    return rffi.cast(rffi.INT_real, 0)
+
+def collect_white_recursive(obj):
+    from rpython.rlib.rawrefcount import (REFCNT_CLR_WHITE,
+                                          REFCNT_CLR_BLACK,
+                                          REFCNT_CLR_MASK,
+                                          REFCNT_CYCLE_BUFFERED,
+                                          REFCNT_FROM_PYPY)
+    from pypy.module.cpyext.api import generic_cpy_call
+    from rpython.rtyper.annlowlevel import llhelper
+    debug_print("collect_white_recursive", obj)
+    rc = obj.c_ob_refcnt
+    if (rc & REFCNT_CLR_MASK == REFCNT_CLR_WHITE and
+       rc & REFCNT_CYCLE_BUFFERED == 0):
+        obj.c_ob_refcnt = rc & ~REFCNT_CLR_MASK | REFCNT_CLR_BLACK
+        func_ptr = llhelper(VISIT_FUNCTYPE, visit_collect_white)
+        traverse(obj, func_ptr)
+        if (rc & REFCNT_FROM_PYPY == 0 and
+           obj.c_ob_type and obj.c_ob_type.c_tp_free):
+            debug_print("free", obj)
+            generic_cpy_call(True, obj.c_ob_type.c_tp_free, obj)
 
 # ____________________________________________________________
 
@@ -1685,6 +1786,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
         #
         # visit the P list from rawrefcount, if enabled.
         if self.rrc_enabled:
+            self.rrc_collect_cycles()  # TODO only for testing
             self.rrc_minor_collection_trace()
         #
         # visit the "probably young" objects with finalizers.  They
@@ -2303,6 +2405,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 self.visit_all_objects()
                 #
                 if self.rrc_enabled:
+                    self.rrc_collect_cycles()
                     self.rrc_major_collection_trace()
                 #
                 ll_assert(not (self.probably_young_objects_with_finalizers
@@ -2901,13 +3004,13 @@ class IncrementalMiniMarkGC(MovingGCBase):
 
     _ADDRARRAY = lltype.Array(llmemory.Address, hints={'nolength': True})
     PYOBJ_HDR = lltype.Struct('GCHdr_PyObject',
-                              ('ob_refcnt', lltype.Signed),
-                              ('ob_pypy_link', lltype.Signed))
+                              ('c_ob_refcnt', lltype.Signed),
+                              ('c_ob_pypy_link', lltype.Signed))
     PYOBJ_HDR_PTR = lltype.Ptr(PYOBJ_HDR)
     RAWREFCOUNT_DEALLOC_TRIGGER = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
     def _pyobj(self, pyobjaddr):
-        return llmemory.cast_adr_to_ptr(pyobjaddr, self.PYOBJ_HDR_PTR)
+        return llmemory.cast_adr_to_ptr(pyobjaddr, lltype.Ptr(PyObject.TO))
 
     def rawrefcount_init(self, dealloc_trigger_callback):
         # see pypy/doc/discussion/rawrefcount.rst
@@ -2916,6 +3019,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
             self.rrc_p_list_old   = self.AddressStack()
             self.rrc_o_list_young = self.AddressStack()
             self.rrc_o_list_old   = self.AddressStack()
+            self.rrc_buffered     = self.AddressStack()
             self.rrc_p_dict       = self.AddressDict()  # non-nursery keys only
             self.rrc_p_dict_nurs  = self.AddressDict()  # nursery keys only
             self.rrc_dealloc_trigger_callback = dealloc_trigger_callback
@@ -2937,7 +3041,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
         ll_assert(self.rrc_enabled, "rawrefcount.init not called")
         obj = llmemory.cast_ptr_to_adr(gcobj)
         objint = llmemory.cast_adr_to_int(obj, "symbolic")
-        self._pyobj(pyobject).ob_pypy_link = objint
+        self._pyobj(pyobject).c_ob_pypy_link = objint
         #
         lst = self.rrc_p_list_young
         if self.is_in_nursery(obj):
@@ -2957,14 +3061,17 @@ class IncrementalMiniMarkGC(MovingGCBase):
         else:
             self.rrc_o_list_old.append(pyobject)
         objint = llmemory.cast_adr_to_int(obj, "symbolic")
-        self._pyobj(pyobject).ob_pypy_link = objint
+        self._pyobj(pyobject).c_ob_pypy_link = objint
         # there is no rrc_o_dict
+
+    def rawrefcount_buffer_pyobj(self, pyobject):
+        self.rrc_buffered.append(pyobject)
 
     def rawrefcount_mark_deallocating(self, gcobj, pyobject):
         ll_assert(self.rrc_enabled, "rawrefcount.init not called")
         obj = llmemory.cast_ptr_to_adr(gcobj)   # should be a prebuilt obj
         objint = llmemory.cast_adr_to_int(obj, "symbolic")
-        self._pyobj(pyobject).ob_pypy_link = objint
+        self._pyobj(pyobject).c_ob_pypy_link = objint
 
     def rawrefcount_from_obj(self, gcobj):
         obj = llmemory.cast_ptr_to_adr(gcobj)
@@ -2975,7 +3082,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
         return dct.get(obj)
 
     def rawrefcount_to_obj(self, pyobject):
-        obj = llmemory.cast_int_to_adr(self._pyobj(pyobject).ob_pypy_link)
+        obj = llmemory.cast_int_to_adr(self._pyobj(pyobject).c_ob_pypy_link)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def rawrefcount_next_dead(self):
@@ -2996,15 +3103,13 @@ class IncrementalMiniMarkGC(MovingGCBase):
                                       self.singleaddr)
 
     def _rrc_minor_trace(self, pyobject, singleaddr):
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
+        from rpython.rlib.rawrefcount import REFCNT_MASK
         #
-        rc = self._pyobj(pyobject).ob_refcnt
-        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_LIGHT:
+        rc = self._pyobj(pyobject).c_ob_refcnt
+        if rc & REFCNT_MASK == 0:
             pass     # the corresponding object may die
         else:
-            # force the corresponding object to be alive
-            intobj = self._pyobj(pyobject).ob_pypy_link
+            intobj = self._pyobj(pyobject).c_ob_pypy_link
             singleaddr.address[0] = llmemory.cast_int_to_adr(intobj)
             self._trace_drag_out1(singleaddr)
 
@@ -3021,14 +3126,14 @@ class IncrementalMiniMarkGC(MovingGCBase):
                                             no_o_dict)
 
     def _rrc_minor_free(self, pyobject, surviving_list, surviving_dict):
-        intobj = self._pyobj(pyobject).ob_pypy_link
+        intobj = self._pyobj(pyobject).c_ob_pypy_link
         obj = llmemory.cast_int_to_adr(intobj)
         if self.is_in_nursery(obj):
             if self.is_forwarded(obj):
                 # Common case: survives and moves
                 obj = self.get_forwarding_address(obj)
                 intobj = llmemory.cast_adr_to_int(obj, "symbolic")
-                self._pyobj(pyobject).ob_pypy_link = intobj
+                self._pyobj(pyobject).c_ob_pypy_link = intobj
                 surviving = True
                 if surviving_dict:
                     # Surviving nursery object: was originally in
@@ -3059,23 +3164,24 @@ class IncrementalMiniMarkGC(MovingGCBase):
     def _rrc_free(self, pyobject):
         from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
         from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
+        from rpython.rlib.rawrefcount import REFCNT_MASK
         #
-        rc = self._pyobj(pyobject).ob_refcnt
+        rc = self._pyobj(pyobject).c_ob_refcnt
         if rc >= REFCNT_FROM_PYPY_LIGHT:
             rc -= REFCNT_FROM_PYPY_LIGHT
-            if rc == 0:
+            if rc & REFCNT_MASK == 0:
                 lltype.free(self._pyobj(pyobject), flavor='raw')
             else:
                 # can only occur if LIGHT is used in create_link_pyobj()
-                self._pyobj(pyobject).ob_refcnt = rc
-                self._pyobj(pyobject).ob_pypy_link = 0
+                self._pyobj(pyobject).c_ob_refcnt = rc
+                self._pyobj(pyobject).c_ob_pypy_link = 0
         else:
             ll_assert(rc >= REFCNT_FROM_PYPY, "refcount underflow?")
             ll_assert(rc < int(REFCNT_FROM_PYPY_LIGHT * 0.99),
                       "refcount underflow from REFCNT_FROM_PYPY_LIGHT?")
             rc -= REFCNT_FROM_PYPY
-            self._pyobj(pyobject).ob_pypy_link = 0
-            if rc == 0:
+            self._pyobj(pyobject).c_ob_pypy_link = 0
+            if rc & REFCNT_MASK == 0:
                 self.rrc_dealloc_pending.append(pyobject)
                 # an object with refcnt == 0 cannot stay around waiting
                 # for its deallocator to be called.  Some code (lxml)
@@ -3086,22 +3192,62 @@ class IncrementalMiniMarkGC(MovingGCBase):
                 # because after a Py_INCREF()/Py_DECREF() on it, its
                 # tp_dealloc is also called!
                 rc = 1
-            self._pyobj(pyobject).ob_refcnt = rc
+            self._pyobj(pyobject).c_ob_refcnt = rc
     _rrc_free._always_inline_ = True
+
+    def rrc_collect_cycles(self):
+        self.rrc_buffered.foreach(self._rrc_cycle_mark_roots, None)
+        self.rrc_buffered.foreach(self._rrc_cycle_scan_roots, None)
+        self.rrc_buffered.foreach(self._rrc_cycle_collect_roots, None)
+
+    def _rrc_cycle_mark_roots(self, pyobject, ignore):
+        from pypy.module.cpyext.api import generic_cpy_call
+        from rpython.rlib.rawrefcount import (REFCNT_CYCLE_BUFFERED,
+                                              REFCNT_CLR_MASK,
+                                              REFCNT_CLR_PURPLE,
+                                              REFCNT_MASK,
+                                              W_MARKER_DEALLOCATING,
+                                              mark_deallocating)
+        obj = self._pyobj(pyobject)
+        rc = obj.c_ob_refcnt
+        debug_print("_rrc_cycle_mark_roots", obj)
+        if rc & REFCNT_CLR_MASK == REFCNT_CLR_PURPLE and \
+           rc & REFCNT_MASK > 0:
+            mark_gray_recursive(obj)
+        else:
+            obj.c_ob_refcnt = rc & ~REFCNT_CYCLE_BUFFERED
+            self.rrc_buffered.remove(pyobject)
+            if rc & REFCNT_MASK == 0:
+                mark_deallocating(W_MARKER_DEALLOCATING, obj)
+                generic_cpy_call(True, obj.c_ob_type.c_tp_dealloc, obj)
+
+    def _rrc_cycle_scan_roots(self, pyobject, ignore):
+        obj = self._pyobj(pyobject)
+        debug_print("_rrc_cycle_scan_roots", obj)
+        scan_recursive(obj)
+
+    def _rrc_cycle_collect_roots(self, pyobject, ignore):
+        from rpython.rlib.rawrefcount import REFCNT_CYCLE_BUFFERED
+        obj = self._pyobj(pyobject)
+        debug_print("_rrc_cycle_collect_roots", obj)
+        self.rrc_buffered.remove(pyobject)
+        obj.c_ob_refcnt = obj.c_ob_refcnt & ~REFCNT_CYCLE_BUFFERED
+        collect_white_recursive(obj)
 
     def rrc_major_collection_trace(self):
         self.rrc_p_list_old.foreach(self._rrc_major_trace, None)
 
     def _rrc_major_trace(self, pyobject, ignore):
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
-        from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
+        from rpython.rlib.rawrefcount import (REFCNT_FROM_PYPY,
+                                              REFCNT_FROM_PYPY_LIGHT,
+                                              REFCNT_MASK)
         #
-        rc = self._pyobj(pyobject).ob_refcnt
-        if rc == REFCNT_FROM_PYPY or rc == REFCNT_FROM_PYPY_LIGHT:
+        rc = self._pyobj(pyobject).c_ob_refcnt
+        if rc & REFCNT_MASK == 0:
             pass     # the corresponding object may die
         else:
             # force the corresponding object to be alive
-            intobj = self._pyobj(pyobject).ob_pypy_link
+            intobj = self._pyobj(pyobject).c_ob_pypy_link
             obj = llmemory.cast_int_to_adr(intobj)
             self.objects_to_trace.append(obj)
             self.visit_all_objects()
@@ -3131,7 +3277,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
         # This is true if the obj has one of the following two flags:
         #  * GCFLAG_VISITED: was seen during tracing
         #  * GCFLAG_NO_HEAP_PTRS: immortal object never traced (so far)
-        intobj = self._pyobj(pyobject).ob_pypy_link
+        intobj = self._pyobj(pyobject).c_ob_pypy_link
         obj = llmemory.cast_int_to_adr(intobj)
         if self.header(obj).tid & (GCFLAG_VISITED | GCFLAG_NO_HEAP_PTRS):
             surviving_list.append(pyobject)

@@ -9,7 +9,8 @@ from rpython.rtyper.lltypesystem import lltype, llmemory, rffi
 from rpython.rlib.objectmodel import we_are_translated, specialize, not_rpython
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
-from rpython.rlib import rgc
+from rpython.rlib import rgc, objectmodel
+from pypy.interpreter.baseobjspace import W_Root
 
 
 MAX_BIT = int(math.log(sys.maxint, 2))
@@ -33,6 +34,7 @@ REFCNT_CLR_PURPLE = 3 << REFCNT_CLR_OFFS  # Possible root of cycle
 REFCNT_CLR_GREEN = 4 << REFCNT_CLR_OFFS   # Acyclic
 REFCNT_CLR_RED = 5 << REFCNT_CLR_OFFS     # Cand cycle undergoing SIGMA-comp.
 REFCNT_CLR_ORANGE = 6 << REFCNT_CLR_OFFS  # Cand cycle awaiting epoch boundary
+REFCNT_CLR_MASK = 7 << REFCNT_CLR_OFFS
 
 # Cyclic reference count with overflow bit
 REFCNT_CRC_OVERFLOW = 1 << REFCNT_CRC_OFFS + REFCNT_BITS
@@ -45,6 +47,8 @@ REFCNT_MASK = (1 << REFCNT_BITS + 1) - 1
 
 
 RAWREFCOUNT_DEALLOC_TRIGGER = lltype.Ptr(lltype.FuncType([], lltype.Void))
+
+W_MARKER_DEALLOCATING = W_Root()
 
 
 def _build_pypy_link(p):
@@ -70,21 +74,41 @@ def clear_visited():
 
 _refcount_overflow = dict()
 
+def incref(pyobj):
+    if pyobj.c_ob_refcnt & REFCNT_OVERFLOW == 0:
+        pyobj.c_ob_refcnt += 1
+    else:
+        if pyobj.c_ob_refcnt & REFCNT_MASK == REFCNT_OVERFLOW:
+            pyobj.c_ob_refcnt += 1
+            overflow_new(pyobj)
+        else:
+            overflow_add(pyobj)
+
+def decref(pyobj):
+    if pyobj.c_ob_refcnt & REFCNT_OVERFLOW == 0:
+        pyobj.c_ob_refcnt -= 1
+    else:
+        if pyobj.c_ob_refcnt & REFCNT_MASK == REFCNT_OVERFLOW:
+            pyobj.c_ob_refcnt -= 1
+        elif overflow_sub(pyobj):
+            pyobj.c_ob_refcnt -= 1
+
 # TODO: if object moves, address changes!
 def overflow_new(obj):
-    _refcount_overflow[id(obj)] = 0
+    _refcount_overflow[objectmodel.current_object_addr_as_int(obj)] = 0
 def overflow_add(obj):
-    _refcount_overflow[id(obj)] += 1
+    _refcount_overflow[objectmodel.current_object_addr_as_int(obj)] += 1
 def overflow_sub(obj):
-    c = _refcount_overflow[id(obj)]
+    addr = objectmodel.current_object_addr_as_int(obj)
+    c = _refcount_overflow[addr]
     if c > 0:
-        _refcount_overflow[id(obj)] = c - 1
+        _refcount_overflow[addr] = c - 1
         return False
     else:
-        _refcount_overflow.pop(id(obj))
+        _refcount_overflow.pop(addr)
         return True
 def overflow_get(obj):
-    return _refcount_overflow[id(obj)]
+    return _refcount_overflow[objectmodel.current_object_addr_as_int(obj)]
 
 # TODO: _cyclic_refcount_overflow = dict()
 
@@ -134,6 +158,10 @@ def mark_deallocating(marker, ob):
     assert ob._obj not in _pypy2ob_rev
     assert not ob.c_ob_pypy_link
     ob.c_ob_pypy_link = _build_pypy_link(marker)
+
+@not_rpython
+def buffer_pyobj(ob):
+    pass  # TODO: implement?
 
 @not_rpython
 def from_obj(OB_PTR_TYPE, p):
@@ -318,6 +346,19 @@ class Entry(ExtRegistryEntry):
             c_func = hop.inputconst(lltype.typeOf(func_boehm_eci),
                                     func_boehm_eci)
             hop.genop('direct_call', [c_func])
+
+
+class Entry(ExtRegistryEntry):
+    _about_ = buffer_pyobj
+
+    def compute_result_annotation(self, s_ob):
+        pass
+
+    def specialize_call(self, hop):
+        name = 'gc_rawrefcount_buffer_pyobj'
+        hop.exception_cannot_occur()
+        v_ob = hop.inputarg(hop.args_r[0], arg=0)
+        hop.genop(name, [_unspec_ob(hop, v_ob)])
 
 
 class Entry(ExtRegistryEntry):

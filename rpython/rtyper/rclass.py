@@ -585,8 +585,8 @@ class InstanceRepr(Repr):
                 assert len(s_func.descriptions) == 1
                 funcdesc, = s_func.descriptions
                 graph = funcdesc.getuniquegraph()
-                #self.check_graph_of_del_does_not_call_too_much(self.rtyper,
-                #                                               graph)
+                self.check_graph_of_del_does_not_call_too_much(self.rtyper,
+                                                               graph)
                 FUNCTYPE = FuncType([Ptr(source_repr.object_type)], Void)
                 destrptr = functionptr(FUNCTYPE, graph.name,
                                        graph=graph,

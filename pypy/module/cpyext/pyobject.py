@@ -15,6 +15,10 @@ from rpython.rlib.objectmodel import specialize
 from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rtyper.annlowlevel import llhelper
 from rpython.rlib import rawrefcount
+from rpython.rlib.rawrefcount import (
+    REFCNT_MASK, REFCNT_FROM_PYPY, REFCNT_OVERFLOW, REFCNT_CYCLE_BUFFERED,
+    REFCNT_CLR_MASK, REFCNT_CLR_GREEN, REFCNT_CLR_PURPLE, 
+    W_MARKER_DEALLOCATING)
 from rpython.rlib.debug import fatalerror, debug_print
 from pypy.module.cpyext.api import slot_function
 from pypy.module.cpyext.typeobjectdefs import visitproc
@@ -190,9 +194,6 @@ def track_reference(space, py_obj, w_obj):
     py_obj.c_ob_refcnt += rawrefcount.REFCNT_FROM_PYPY
     rawrefcount.create_link_pypy(w_obj, py_obj)
 
-
-w_marker_deallocating = W_Root()
-
 def from_ref(space, ref):
     """
     Finds the interpreter object corresponding to the given reference.  If the
@@ -203,7 +204,7 @@ def from_ref(space, ref):
         return None
     w_obj = rawrefcount.to_obj(W_Root, ref)
     if w_obj is not None:
-        if w_obj is not w_marker_deallocating:
+        if w_obj is not W_MARKER_DEALLOCATING:
             return w_obj
         fatalerror(
             "*** Invalid usage of a dying CPython object ***\n"
@@ -250,7 +251,7 @@ as_pyobj._always_inline_ = 'try'
 
 def pyobj_has_w_obj(pyobj):
     w_obj = rawrefcount.to_obj(W_Root, pyobj)
-    return w_obj is not None and w_obj is not w_marker_deallocating
+    return w_obj is not None and w_obj is not W_MARKER_DEALLOCATING
 
 
 def is_pyobj(x):
@@ -270,27 +271,6 @@ class Entry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.inputconst(lltype.Bool, hop.s_result.const)
 
-def _decref(pyobj):
-    if pyobj.c_ob_refcnt & rawrefcount.REFCNT_OVERFLOW == 0:
-        pyobj.c_ob_refcnt -= 1
-    else:
-        if pyobj.c_ob_refcnt & rawrefcount.REFCNT_MASK \
-           == rawrefcount.REFCNT_OVERFLOW:
-            pyobj.c_ob_refcnt -= 1
-        elif rawrefcount.overflow_sub(pyobj):
-            pyobj.c_ob_refcnt -= 1
-
-def _incref(pyobj):
-    if pyobj.c_ob_refcnt & rawrefcount.REFCNT_OVERFLOW == 0:
-        pyobj.c_ob_refcnt += 1
-    else:
-        if pyobj.c_ob_refcnt & rawrefcount.REFCNT_MASK \
-           == rawrefcount.REFCNT_OVERFLOW:
-            pyobj.c_ob_refcnt += 1
-            rawrefcount.overflow_new(pyobj)
-        else:
-            rawrefcount.overflow_add(pyobj)
-
 @specialize.ll()
 def make_ref(space, obj, w_userdata=None):
     """Increment the reference counter of the PyObject and return it.
@@ -301,7 +281,7 @@ def make_ref(space, obj, w_userdata=None):
     else:
         pyobj = as_pyobj(space, obj, w_userdata)
     if pyobj:
-        _incref(pyobj)
+        rawrefcount.incref(pyobj)
         if not is_pyobj(obj):
             keepalive_until_here(obj)
     return pyobj
@@ -321,7 +301,7 @@ def get_w_obj_and_decref(space, obj):
         w_obj = obj
         pyobj = as_pyobj(space, w_obj)
     if pyobj:
-        _decref(pyobj)
+        rawrefcount.decref(pyobj)
         keepalive_until_here(w_obj)
     return w_obj
 
@@ -334,122 +314,30 @@ def decref(space, obj):
     if is_pyobj(obj):
         obj = rffi.cast(PyObject, obj)
         if obj:
-            _decref(obj)
-
-            if obj.c_ob_refcnt & rawrefcount.REFCNT_MASK == 0 and \
-               rawrefcount.get_trialdeletion_phase() != 1:
-                if obj.c_ob_refcnt & rawrefcount.REFCNT_FROM_PYPY == 0:
+            rawrefcount.decref(obj)
+            rc = obj.c_ob_refcnt
+            if (rc & REFCNT_MASK == 0):
+                if (rc & REFCNT_FROM_PYPY == 0 and
+                   rc & REFCNT_CLR_MASK != REFCNT_CLR_PURPLE):
                     _Py_Dealloc(space, obj)
-            elif obj.c_ob_refcnt & rawrefcount.REFCNT_CLR_GREEN == 0:
-                if rawrefcount.get_trialdeletion_phase() == 0:
-                    trial_delete(space, obj)
+            elif (rc & REFCNT_CLR_MASK != REFCNT_CLR_GREEN):
+                possible_root(space, obj)
     else:
         get_w_obj_and_decref(space, obj)
 
-@specialize.ll()
-def refcnt_overflow(space, obj):
-    if is_pyobj(obj):
-        pyobj = rffi.cast(PyObject, obj)
-    else:
-        pyobj = as_pyobj(space, obj, None)
-    if pyobj:
-        if (pyobj.c_ob_refcnt & rawrefcount.REFCNT_MASK ==
-           rawrefcount.REFCNT_OVERFLOW):
-            return rawrefcount.REFCNT_OVERFLOW
-        else:
-            return (pyobj.c_ob_refcnt & rawrefcount.REFCNT_MASK) \
-                + rawrefcount.overflow_get(pyobj)
-    return 0
-
-def traverse(space, obj, visit):
-    from pypy.module.cpyext.api import generic_cpy_call
-    if obj.c_ob_type and obj.c_ob_type.c_tp_traverse:
-        generic_cpy_call(space, obj.c_ob_type.c_tp_traverse, obj, visit,
-                         rffi.cast(rffi.VOIDP, obj))
-
-def clear(space, obj):
-    from pypy.module.cpyext.api import generic_cpy_call
-    if obj.c_ob_type:
-        generic_cpy_call(space, obj.c_ob_type.c_tp_clear, obj)
-
-@slot_function([PyObject, rffi.VOIDP], rffi.INT_real, error=-1)
-def visit_decref(space, obj, args):
-    _decref(obj)
-    debug_print("visited dec", obj, "new refcnt", obj.c_ob_refcnt)
-    if (obj not in rawrefcount.get_visited()):
-        rawrefcount.add_visited(obj)
-        from pypy.module.cpyext.slotdefs import llslot
-        traverse(space, obj, rffi.cast(visitproc, llslot(space, visit_decref)))
-    return 0
-
-@slot_function([PyObject, rffi.VOIDP], rffi.INT_real, error=-1)
-def visit_incref(space, obj, args):
-    _incref(obj)
-    debug_print("visited inc", obj, "new refcnt", obj.c_ob_refcnt)
-    if (obj not in rawrefcount.get_visited()):
-        rawrefcount.add_visited(obj)
-        from pypy.module.cpyext.slotdefs import llslot
-        traverse(space, obj, rffi.cast(visitproc, llslot(space, visit_incref)))
-    return 0
-
-@specialize.ll()
-def trial_delete(space, obj):
+def possible_root(space, obj):
+    debug_print("possible root", obj)
+    rc = obj.c_ob_refcnt
     if not obj.c_ob_type or not obj.c_ob_type.c_tp_traverse:
-        obj.c_ob_refcnt = obj.c_ob_refcnt | rawrefcount.REFCNT_CLR_GREEN
-        return
-
-    from pypy.module.cpyext.slotdefs import llslot
-    visitproc_incref = rffi.cast(visitproc, llslot(space, visit_incref))
-    visitproc_decref = rffi.cast(visitproc, llslot(space, visit_decref))
-
-    rawrefcount.set_trialdeletion_phase(1)
-
-    debug_print("trial_delete", obj, "refct after decref", obj.c_ob_refcnt)
-
-    debug_print("decref phase")
-    rawrefcount.clear_visited()
-    rawrefcount.add_visited(obj)
-    traverse(space, obj, visitproc_decref)
-
-    debug_print("checkref phase")
-    visited = []
-    alive = []
-    for visited_obj in rawrefcount.get_visited():
-        visited.append(visited_obj)
-        if visited_obj.c_ob_refcnt != 0 and \
-           visited_obj.c_ob_refcnt != rawrefcount.REFCNT_FROM_PYPY:
-            alive.append(visited_obj)
-            debug_print("alive", visited_obj)
-
-    debug_print("incref phase")
-    rawrefcount.clear_visited()
-    for alive_obj in alive:
-        if alive_obj not in rawrefcount.get_visited():
-            rawrefcount.add_visited(alive_obj)
-            traverse(space, alive_obj, visitproc_incref)
-
-    alive = []
-    for alive_obj in rawrefcount.get_visited():
-        debug_print("alive", alive_obj, alive_obj.c_ob_refcnt)
-        alive.append(alive_obj)
-
-    for reachable_obj in visited:
-        if reachable_obj not in rawrefcount.get_visited():
-            rawrefcount.add_visited(reachable_obj)
-            traverse(space, reachable_obj, visitproc_incref)
-
-    debug_print("clear phase")
-    rawrefcount.set_trialdeletion_phase(2)
-
-    for reachable_obj in visited:
-        if reachable_obj not in alive:
-            if reachable_obj.c_ob_refcnt < rawrefcount.REFCNT_FROM_PYPY \
-               and reachable_obj.c_ob_refcnt > 0:
-                debug_print("clear", reachable_obj)
-                clear(space, reachable_obj)
-
-    rawrefcount.set_trialdeletion_phase(0)
-    rawrefcount.clear_visited()
+        debug_print("mark green", obj)
+        rc = rc & ~REFCNT_CLR_MASK | REFCNT_CLR_GREEN
+    elif rc & REFCNT_CLR_MASK != REFCNT_CLR_PURPLE:
+        rc = rc & ~REFCNT_CLR_MASK | REFCNT_CLR_PURPLE
+        if rc & REFCNT_CYCLE_BUFFERED == 0:
+            debug_print("mark purple", obj)
+            rawrefcount.buffer_pyobj(obj)
+            rc = rc | REFCNT_CYCLE_BUFFERED
+    obj.c_ob_refcnt = rc
 
 @cpython_api([PyObject], lltype.Void)
 def Py_IncRef(space, obj):
@@ -462,6 +350,20 @@ def Py_DecRef(space, obj):
 @cpython_api([PyObject], lltype.SignedLongLong, error=CANNOT_FAIL)
 def _Py_RefCnt_Overflow(space, obj):
     return refcnt_overflow(space, obj)
+
+@specialize.ll()
+def refcnt_overflow(space, obj):
+    if is_pyobj(obj):
+        pyobj = rffi.cast(PyObject, obj)
+    else:
+        pyobj = as_pyobj(space, obj, None)
+    if pyobj:
+        if (pyobj.c_ob_refcnt & REFCNT_MASK == REFCNT_OVERFLOW):
+            return REFCNT_OVERFLOW
+        else:
+            return (pyobj.c_ob_refcnt & REFCNT_MASK) + \
+                rawrefcount.overflow_get(pyobj)
+    return 0
 
 @cpython_api([PyObject], lltype.Void)
 def _Py_NewReference(space, obj):
@@ -477,7 +379,7 @@ def _Py_Dealloc(space, obj):
     pto = obj.c_ob_type
     #print >>sys.stderr, "Calling dealloc slot", pto.c_tp_dealloc, "of", obj, \
     #      "'s type which is", rffi.charp2str(pto.c_tp_name)
-    rawrefcount.mark_deallocating(w_marker_deallocating, obj)
+    rawrefcount.mark_deallocating(W_MARKER_DEALLOCATING, obj)
     generic_cpy_call(space, pto.c_tp_dealloc, obj)
 
 @cpython_api([rffi.VOIDP], lltype.Signed, error=CANNOT_FAIL)

@@ -4,6 +4,7 @@ from rpython.memory.gc.incminimark import IncrementalMiniMarkGC
 from rpython.memory.gc.test.test_direct import BaseDirectGCTest
 from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
 from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
+from pypy.module.cpyext.api import PyObject, PyTypeObject
 
 PYOBJ_HDR = IncrementalMiniMarkGC.PYOBJ_HDR
 PYOBJ_HDR_PTR = IncrementalMiniMarkGC.PYOBJ_HDR_PTR
@@ -56,21 +57,22 @@ class TestRawRefCount(BaseDirectGCTest):
             self._collect(major=False)
             p1 = self.stackroots.pop()
         p1ref = lltype.cast_opaque_ptr(llmemory.GCREF, p1)
-        r1 = lltype.malloc(PYOBJ_HDR, flavor='raw', immortal=create_immortal)
-        r1.ob_refcnt = rc
-        r1.ob_pypy_link = 0
+        r1 = lltype.malloc(PyObject.TO, flavor='raw', immortal=create_immortal)
+        r1.c_ob_refcnt = rc
+        r1.c_ob_pypy_link = 0
+        r1.c_ob_type = lltype.nullptr(PyTypeObject)
         r1addr = llmemory.cast_ptr_to_adr(r1)
         if is_pyobj:
             assert not is_light
             self.gc.rawrefcount_create_link_pyobj(p1ref, r1addr)
         else:
             self.gc.rawrefcount_create_link_pypy(p1ref, r1addr)
-        assert r1.ob_refcnt == rc
-        assert r1.ob_pypy_link != 0
+        assert r1.c_ob_refcnt == rc
+        assert r1.c_ob_pypy_link != 0
 
         def check_alive(extra_refcount):
-            assert r1.ob_refcnt == rc + extra_refcount
-            assert r1.ob_pypy_link != 0
+            assert r1.c_ob_refcnt == rc + extra_refcount
+            assert r1.c_ob_pypy_link != 0
             p1ref = self.gc.rawrefcount_to_obj(r1addr)
             p1 = lltype.cast_opaque_ptr(lltype.Ptr(S), p1ref)
             assert p1.x == intval
@@ -87,13 +89,13 @@ class TestRawRefCount(BaseDirectGCTest):
         p2 = self.malloc(S)
         p2.x = 84
         p2ref = lltype.cast_opaque_ptr(llmemory.GCREF, p2)
-        r2 = lltype.malloc(PYOBJ_HDR, flavor='raw')
-        r2.ob_refcnt = 1
-        r2.ob_pypy_link = 0
+        r2 = lltype.malloc(PyObject.TO, flavor='raw')
+        r2.c_ob_refcnt = 1
+        r2.c_ob_pypy_link = 0
         r2addr = llmemory.cast_ptr_to_adr(r2)
         # p2 and r2 are not linked
-        assert r1.ob_pypy_link != 0
-        assert r2.ob_pypy_link == 0
+        assert r1.c_ob_pypy_link != 0
+        assert r2.c_ob_pypy_link == 0
         assert self.gc.rawrefcount_from_obj(p1ref) == r1addr
         assert self.gc.rawrefcount_from_obj(p2ref) == llmemory.NULL
         assert self.gc.rawrefcount_to_obj(r1addr) == p1ref
@@ -106,16 +108,16 @@ class TestRawRefCount(BaseDirectGCTest):
         p1, p1ref, r1, r1addr, check_alive = (
             self._rawrefcount_pair(42, is_light=True, create_old=old))
         check_alive(0)
-        r1.ob_refcnt += 1
+        r1.c_ob_refcnt += 1
         self._collect(major=False)
         check_alive(+1)
         self._collect(major=True)
         check_alive(+1)
-        r1.ob_refcnt -= 1
+        r1.c_ob_refcnt -= 1
         self._collect(major=False)
         p1 = check_alive(0)
         self._collect(major=True)
-        py.test.raises(RuntimeError, "r1.ob_refcnt")    # dead
+        py.test.raises(RuntimeError, "r1.c_ob_refcnt")    # dead
         py.test.raises(RuntimeError, "p1.x")            # dead
         self.gc.check_no_more_rawrefcount_state()
         assert self.trigger == []
@@ -129,7 +131,7 @@ class TestRawRefCount(BaseDirectGCTest):
         if old:
             check_alive(0)
             self._collect(major=True)
-        py.test.raises(RuntimeError, "r1.ob_refcnt")    # dead
+        py.test.raises(RuntimeError, "r1.c_ob_refcnt")    # dead
         py.test.raises(RuntimeError, "p1.x")            # dead
         self.gc.check_no_more_rawrefcount_state()
 
@@ -147,7 +149,7 @@ class TestRawRefCount(BaseDirectGCTest):
         check_alive(0)
         assert p1.x == 42
         self._collect(major=True)
-        py.test.raises(RuntimeError, "r1.ob_refcnt")    # dead
+        py.test.raises(RuntimeError, "r1.c_ob_refcnt")    # dead
         py.test.raises(RuntimeError, "p1.x")            # dead
         self.gc.check_no_more_rawrefcount_state()
 
@@ -164,18 +166,18 @@ class TestRawRefCount(BaseDirectGCTest):
         p1, p1ref, r1, r1addr, check_alive = (
             self._rawrefcount_pair(42, is_light=False, create_old=old))
         check_alive(0)
-        r1.ob_refcnt += 1
+        r1.c_ob_refcnt += 1
         self._collect(major=False)
         check_alive(+1)
         self._collect(major=True)
         check_alive(+1)
-        r1.ob_refcnt -= 1
+        r1.c_ob_refcnt -= 1
         self._collect(major=False)
         p1 = check_alive(0)
         self._collect(major=True, expected_trigger=1)
         py.test.raises(RuntimeError, "p1.x")            # dead
-        assert r1.ob_refcnt == 1       # in the pending list
-        assert r1.ob_pypy_link == 0
+        assert r1.c_ob_refcnt == 1       # in the pending list
+        assert r1.c_ob_pypy_link == 0
         assert self.gc.rawrefcount_next_dead() == r1addr
         assert self.gc.rawrefcount_next_dead() == llmemory.NULL
         assert self.gc.rawrefcount_next_dead() == llmemory.NULL
@@ -197,8 +199,8 @@ class TestRawRefCount(BaseDirectGCTest):
         assert p1.x == 42
         self._collect(major=True, expected_trigger=1)
         py.test.raises(RuntimeError, "p1.x")            # dead
-        assert r1.ob_refcnt == 1
-        assert r1.ob_pypy_link == 0
+        assert r1.c_ob_refcnt == 1
+        assert r1.c_ob_pypy_link == 0
         assert self.gc.rawrefcount_next_dead() == r1addr
         self.gc.check_no_more_rawrefcount_state()
         lltype.free(r1, flavor='raw')
@@ -214,8 +216,8 @@ class TestRawRefCount(BaseDirectGCTest):
         else:
             self._collect(major=False, expected_trigger=1)
         py.test.raises(RuntimeError, "p1.x")            # dead
-        assert r1.ob_refcnt == 1
-        assert r1.ob_pypy_link == 0
+        assert r1.c_ob_refcnt == 1
+        assert r1.c_ob_pypy_link == 0
         assert self.gc.rawrefcount_next_dead() == r1addr
         self.gc.check_no_more_rawrefcount_state()
         lltype.free(r1, flavor='raw')
@@ -232,10 +234,10 @@ class TestRawRefCount(BaseDirectGCTest):
         p1, p1ref, r1, r1addr, check_alive = (
             self._rawrefcount_pair(42, is_pyobj=True, force_external=external))
         check_alive(0)
-        r1.ob_refcnt += 1            # the pyobject is kept alive
+        r1.c_ob_refcnt += 1            # the pyobject is kept alive
         self._collect(major=False)
-        assert r1.ob_refcnt == 1     # refcnt dropped to 1
-        assert r1.ob_pypy_link == 0  # detached
+        assert r1.c_ob_refcnt == 1     # refcnt dropped to 1
+        assert r1.c_ob_pypy_link == 0  # detached
         self.gc.check_no_more_rawrefcount_state()
         lltype.free(r1, flavor='raw')
 
@@ -252,8 +254,8 @@ class TestRawRefCount(BaseDirectGCTest):
             self._collect(major=True, expected_trigger=1)
         else:
             self._collect(major=False, expected_trigger=1)
-        assert r1.ob_refcnt == 1     # refcnt 1, in the pending list
-        assert r1.ob_pypy_link == 0  # detached
+        assert r1.c_ob_refcnt == 1     # refcnt 1, in the pending list
+        assert r1.c_ob_pypy_link == 0  # detached
         assert self.gc.rawrefcount_next_dead() == r1addr
         self.gc.check_no_more_rawrefcount_state()
         lltype.free(r1, flavor='raw')
@@ -277,8 +279,8 @@ class TestRawRefCount(BaseDirectGCTest):
         assert self.trigger == []
         self._collect(major=True, expected_trigger=1)
         py.test.raises(RuntimeError, "p1.x")            # dead
-        assert r1.ob_refcnt == 1
-        assert r1.ob_pypy_link == 0
+        assert r1.c_ob_refcnt == 1
+        assert r1.c_ob_pypy_link == 0
         assert self.gc.rawrefcount_next_dead() == r1addr
         self.gc.check_no_more_rawrefcount_state()
         lltype.free(r1, flavor='raw')
@@ -289,3 +291,10 @@ class TestRawRefCount(BaseDirectGCTest):
         check_alive(0)
         self._collect(major=True)
         check_alive(0)
+
+    def test_cycle(self):
+        p1, p1ref, r1, r1addr, check_alive = (
+            self._rawrefcount_pair(42, is_pyobj=True))
+        self.gc.rawrefcount_buffer_pyobj(r1addr)
+        self.gc.rrc_collect_cycles()
+        lltype.free(r1, flavor='raw')

@@ -522,8 +522,8 @@ class FqTagEntry(ExtRegistryEntry):
         translator = hop.rtyper.annotator.translator
         fq = hop.args_s[0].const
         graph = translator._graphof(fq.finalizer_trigger.im_func)
-        #InstanceRepr.check_graph_of_del_does_not_call_too_much(hop.rtyper,
-        #                                                       graph)
+        InstanceRepr.check_graph_of_del_does_not_call_too_much(hop.rtyper,
+                                                               graph)
         hop.exception_cannot_occur()
         return hop.inputconst(lltype.Signed, hop.s_result.const)
 
