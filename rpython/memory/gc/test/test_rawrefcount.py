@@ -441,3 +441,47 @@ class TestRawRefCount(BaseDirectGCTest):
         assert r1.base.c_ob_refcnt & REFCNT_MASK == 2
         assert r2.base.c_ob_refcnt & REFCNT_MASK == 1
 
+    def test_multiple_cycles_partial_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r3 = self._rawrefcount_cycle_obj()
+        r4 = self._rawrefcount_cycle_obj()
+        r5 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r2.next = r3
+        r3.next = r1
+        r2.prev = r5
+        r5.next = r4
+        r4.next = r5
+        r5.base.c_ob_refcnt += 1
+        r4.base.c_ob_refcnt += 1
+        self._rawrefcount_buffer_obj(r1)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r3.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r4.base.c_ob_refcnt & REFCNT_MASK == 2
+        assert r5.base.c_ob_refcnt & REFCNT_MASK == 1
+
+    def test_multiple_cycles_all_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r3 = self._rawrefcount_cycle_obj()
+        r4 = self._rawrefcount_cycle_obj()
+        r5 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r2.next = r3
+        r3.next = r1
+        r2.prev = r5
+        r5.next = r4
+        r4.next = r5
+        r5.base.c_ob_refcnt += 1
+        self._rawrefcount_buffer_obj(r1)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r3.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r4.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r5.base.c_ob_refcnt & REFCNT_MASK == 0
