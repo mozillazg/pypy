@@ -3205,9 +3205,7 @@ class IncrementalMiniMarkGC(MovingGCBase):
         from rpython.rlib.rawrefcount import (REFCNT_CYCLE_BUFFERED,
                                               REFCNT_CLR_MASK,
                                               REFCNT_CLR_PURPLE,
-                                              REFCNT_MASK,
-                                              W_MARKER_DEALLOCATING,
-                                              mark_deallocating)
+                                              REFCNT_MASK)
         obj = self._pyobj(pyobject)
         rc = obj.c_ob_refcnt
         debug_print("_rrc_cycle_mark_roots", obj)
@@ -3218,8 +3216,8 @@ class IncrementalMiniMarkGC(MovingGCBase):
             obj.c_ob_refcnt = rc & ~REFCNT_CYCLE_BUFFERED
             self.rrc_buffered.remove(pyobject)
             if rc & REFCNT_MASK == 0:
-                mark_deallocating(W_MARKER_DEALLOCATING, obj)
-                generic_cpy_call(True, obj.c_ob_type.c_tp_dealloc, obj)
+                if obj.c_ob_type.c_tp_dealloc:
+                    generic_cpy_call(True, obj.c_ob_type.c_tp_dealloc, obj)
 
     def _rrc_cycle_scan_roots(self, pyobject, ignore):
         obj = self._pyobj(pyobject)

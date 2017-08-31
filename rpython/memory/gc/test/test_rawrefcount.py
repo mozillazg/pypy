@@ -2,11 +2,15 @@ import py
 from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.memory.gc.incminimark import IncrementalMiniMarkGC
 from rpython.memory.gc.test.test_direct import BaseDirectGCTest
-from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY
-from rpython.rlib.rawrefcount import REFCNT_FROM_PYPY_LIGHT
+from rpython.rlib.rawrefcount import (REFCNT_FROM_PYPY, REFCNT_FROM_PYPY_LIGHT,
+                                      REFCNT_MASK)
 from pypy.module.cpyext.api import (PyObject, PyTypeObject, PyTypeObjectPtr,
                                     PyObjectFields, cpython_struct)
 from pypy.module.cpyext.complexobject import PyComplexObject
+from rpython.rtyper.lltypesystem import rffi
+from pypy.module.cpyext.typeobjectdefs import visitproc, traverseproc
+from rpython.rtyper.annlowlevel import llhelper
+from rpython.rtyper.tool import rffi_platform
 
 PYOBJ_HDR = IncrementalMiniMarkGC.PYOBJ_HDR
 PYOBJ_HDR_PTR = IncrementalMiniMarkGC.PYOBJ_HDR_PTR
@@ -16,6 +20,17 @@ S.become(lltype.GcStruct('S',
                          ('x', lltype.Signed),
                          ('prev', lltype.Ptr(S)),
                          ('next', lltype.Ptr(S))))
+
+T = lltype.Ptr(lltype.ForwardReference())
+T.TO.become(lltype.Struct('test',
+                          ('base', PyObject.TO),
+                          ('next', T),
+                          ('prev', T),
+                          ('value', lltype.Signed)))
+
+TRAVERSE_FUNCTYPE = rffi.CCallback([PyObject, visitproc, rffi.VOIDP],
+                                   rffi.INT_real)
+t1 = lltype.malloc(PyTypeObject, flavor='raw', immortal=True)
 
 
 class TestRawRefCount(BaseDirectGCTest):
@@ -86,47 +101,38 @@ class TestRawRefCount(BaseDirectGCTest):
         return p1, p1ref, r1, r1addr, check_alive
 
     def _rawrefcount_cycle_obj(self):
-        from pypy.module.cpyext.typeobjectdefs import visitproc, traverseproc
-        from rpython.rtyper.lltypesystem import rffi
-        from rpython.rtyper.annlowlevel import llhelper
-        from rpython.rlib.rawrefcount import (REFCNT_CLR_PURPLE)
-        from rpython.rtyper.tool import rffi_platform
-
-        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
-
-        # construct test type
-        TEST_P = lltype.Ptr(lltype.ForwardReference())
-        TEST_P.TO.become(lltype.Struct('test',
-                                       ('base', PyObject.TO),
-                                       ('next', TEST_P),
-                                       ('value', lltype.Signed)))
 
         def test_tp_traverse(obj, visit, args):
-            from pypy.module.cpyext.api import generic_cpy_call
-            test = rffi.cast(TEST_P, obj)
+            test = rffi.cast(T, obj)
             vret = 0
-            if test.next is not None:
+            if llmemory.cast_ptr_to_adr(test.next).ptr is not None:
                 next = rffi.cast(PyObject, test.next)
+                vret = visit(next, args)
+                if vret != 0:
+                    return vret
+            if llmemory.cast_ptr_to_adr(test.prev).ptr is not None:
+                next = rffi.cast(PyObject, test.prev)
                 vret = visit(next, args)
                 if vret != 0:
                     return vret
             return vret
 
-        TRAVERSE_FUNCTYPE = rffi.CCallback([PyObject, visitproc, rffi.VOIDP],
-                                           rffi.INT_real)
         func_ptr = llhelper(TRAVERSE_FUNCTYPE, test_tp_traverse)
         rffi_func_ptr = rffi.cast(traverseproc, func_ptr)
-        t1 = lltype.malloc(PyTypeObject, flavor='raw', immortal=True)
         t1.c_tp_traverse = rffi_func_ptr
 
-        # initialize object
-        r1 = lltype.malloc(TEST_P.TO, flavor='raw', immortal=True)
-        r1.base.c_ob_refcnt = 1 | REFCNT_CLR_PURPLE
+        r1 = lltype.malloc(T.TO, flavor='raw', immortal=True)
         r1.base.c_ob_pypy_link = 0
         r1.base.c_ob_type = t1
-        r1addr = llmemory.cast_ptr_to_adr(r1)
+        r1.base.c_ob_refcnt = 1
+        return r1
 
-        return r1, r1addr
+    def _rawrefcount_buffer_obj(self, obj):
+        from rpython.rlib.rawrefcount import REFCNT_CLR_MASK, REFCNT_CLR_PURPLE
+        rc = obj.base.c_ob_refcnt
+        obj.base.c_ob_refcnt = rc & ~REFCNT_CLR_MASK | REFCNT_CLR_PURPLE
+        objaddr = llmemory.cast_ptr_to_adr(obj)
+        self.gc.rawrefcount_buffer_pyobj(objaddr)
 
     def test_rawrefcount_objects_basic(self, old=False):
         p1, p1ref, r1, r1addr, check_alive = (
@@ -338,16 +344,100 @@ class TestRawRefCount(BaseDirectGCTest):
         check_alive(0)
 
     def test_cycle_self_reference_free(self):
-        r1, r1addr = self._rawrefcount_cycle_obj()
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
         r1.next = r1
-        self.gc.rawrefcount_buffer_pyobj(r1addr)
+        self._rawrefcount_buffer_obj(r1)
         self.gc.rrc_collect_cycles()
-        assert r1.base.c_ob_refcnt == 0
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 0
 
     def test_cycle_self_reference_not_free(self):
-        r1, r1addr = self._rawrefcount_cycle_obj()
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
         r1.base.c_ob_refcnt += 1
         r1.next = r1
-        self.gc.rawrefcount_buffer_pyobj(r1addr)
+        self._rawrefcount_buffer_obj(r1)
         self.gc.rrc_collect_cycles()
-        assert r1.base.c_ob_refcnt == 2
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 2
+
+    def test_simple_cycle_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r2.next = r1
+        self._rawrefcount_buffer_obj(r1)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 0
+
+    def test_simple_cycle_not_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r2.next = r1
+        r2.base.c_ob_refcnt += 1
+        self._rawrefcount_buffer_obj(r1)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 1
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 2
+
+    def test_complex_cycle_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r3 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r1.prev = r2
+        r2.base.c_ob_refcnt += 1
+        r2.next = r3
+        r3.prev = r1
+        self._rawrefcount_buffer_obj(r1)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r3.base.c_ob_refcnt & REFCNT_MASK == 0
+
+    def test_complex_cycle_not_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r3 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r1.prev = r2
+        r2.base.c_ob_refcnt += 1
+        r2.next = r3
+        r3.prev = r1
+        r3.base.c_ob_refcnt += 1
+        self._rawrefcount_buffer_obj(r1)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 1
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 2
+        assert r3.base.c_ob_refcnt & REFCNT_MASK == 2
+
+    def test_cycle_2_buffered_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r2.prev = r1
+        self._rawrefcount_buffer_obj(r1)
+        self._rawrefcount_buffer_obj(r2)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 0
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 0
+
+    def test_cycle_2_buffered_not_free(self):
+        self.gc.rawrefcount_init(lambda: self.trigger.append(1))
+        r1 = self._rawrefcount_cycle_obj()
+        r2 = self._rawrefcount_cycle_obj()
+        r1.next = r2
+        r2.prev = r1
+        r1.base.c_ob_refcnt += 1
+        self._rawrefcount_buffer_obj(r1)
+        self._rawrefcount_buffer_obj(r2)
+        self.gc.rrc_collect_cycles()
+        assert r1.base.c_ob_refcnt & REFCNT_MASK == 2
+        assert r2.base.c_ob_refcnt & REFCNT_MASK == 1
+
