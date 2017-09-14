@@ -1,4 +1,7 @@
-import sys
+import sys, py
+if sys.platform == 'win32':
+    py.test.skip('vmprof disabled on windows')
+
 from rpython.tool.udir import udir
 from pypy.tool.pytest.objspace import gettestobjspace
 

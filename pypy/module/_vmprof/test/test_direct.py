@@ -5,6 +5,9 @@ try:
 except ImportError:
     py.test.skip('cffi required')
 
+if sys.platform == 'win32':
+    py.test.skip('vmprof disabled on windows')
+
 from rpython.rlib import rvmprof
 srcdir = py.path.local(rvmprof.__file__).join("..", "src")
 shareddir = srcdir.join('shared')

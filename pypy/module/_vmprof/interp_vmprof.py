@@ -3,6 +3,7 @@ from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.baseobjspace import W_Root
+from rpython.translator.platform import CompilationError
 from rpython.rlib import rvmprof, jit
 from pypy.interpreter.error import oefmt
 
@@ -11,8 +12,10 @@ from pypy.interpreter.error import oefmt
 
 _get_code = lambda frame, w_inputvalue, operr: frame.pycode
 _decorator = rvmprof.vmprof_execute_code("pypy", _get_code, W_Root)
-my_execute_frame = _decorator(PyFrame.execute_frame)
-
+try:
+    my_execute_frame = _decorator(PyFrame.execute_frame)
+except CompilationError:
+    raise rvmprof.VMProfPlatformUnsupported('compilation failed')
 
 class __extend__(PyFrame):
     def execute_frame(self, w_inputvalue=None, operr=None):
