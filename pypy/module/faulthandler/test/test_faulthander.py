@@ -1,3 +1,7 @@
+import sys, py
+if sys.platform == 'win32':
+    py.test.skip('vmprof disabled on windows')
+
 class AppTestFaultHandler:
     spaceconfig = {
         "usemodules": ["faulthandler", "_vmprof"]
