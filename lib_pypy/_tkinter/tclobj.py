@@ -2,6 +2,11 @@
 
 from .tklib_cffi import ffi as tkffi, lib as tklib
 import binascii
+try:
+    import numpy as np
+    hasNumpy = True
+except ImportError:
+    hasNumpy = False
 
 class TypeCache(object):
     def __init__(self):
@@ -86,6 +91,28 @@ def AsBignumObj(value):
     finally:
         tklib.mp_clear(bigValue)
 
+def AsObjNDArray(value):
+    # XXX there must be a better way
+    argv = tkffi.new("Tcl_Obj*[]", 3)
+    argv[0] = AsObj(' '.join([str(x) for x in value.shape]))
+    argv[1] = AsObj(value.dtype.str)
+    asstr = value.tostring()
+    argv[2] = AsObj(binascii.b2a_hex(asstr))
+    return tklib.Tcl_NewListObj(3, argv)
+
+def FromTclStringNDArray(data):
+    # unconvert data, assuming it is stringified from AsObjNDArray
+    indx1 = data.find(b'}')
+    shape = map(int, data[1:indx1].split())
+    size = np.prod(shape)
+    indx2 = data.find(b' ', indx1 + 2)
+    dtype = np.dtype(data[indx1 + 2:indx2])
+    start = indx2+1
+    stop = start + size * dtype.itemsize * 2
+    if stop > len(data):
+        raise ValueError('data too short')
+    vals = binascii.a2b_hex(data[start:stop])
+    return np.fromstring(vals, dtype=dtype).reshape(shape)
 
 def FromObj(app, value):
     """Convert a TclObj pointer into a Python object."""
@@ -175,6 +202,8 @@ def AsObj(value):
     if isinstance(value, TclObject):
         tklib.Tcl_IncrRefCount(value._value)
         return value._value
+    if hasNumpy and isinstance(value, np.ndarray):
+        return AsObjNDArray(value)
 
     return AsObj(str(value))
 
