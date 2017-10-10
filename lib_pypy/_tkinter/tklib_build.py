@@ -163,6 +163,7 @@ int Tcl_ListObjGetElements(Tcl_Interp *interp, Tcl_Obj *listPtr, int *objcPtr, T
 int Tcl_ListObjLength(Tcl_Interp* interp, Tcl_Obj* listPtr, int* intPtr);
 int Tcl_ListObjIndex(Tcl_Interp* interp, Tcl_Obj* listPtr, int index, Tcl_Obj** objPtrPtr);
 int Tcl_SplitList(Tcl_Interp* interp, char* list, int* argcPtr, const char*** argvPtr);
+char* Tcl_Merge(int argc, const char * const* argv);
 
 int Tcl_Eval(Tcl_Interp* interp, const char* script);
 int Tcl_EvalFile(Tcl_Interp* interp, const char* filename);
@@ -187,6 +188,38 @@ int Tcl_DoOneEvent(int flags);
 
 int Tk_GetNumMainWindows();
 void Tcl_FindExecutable(char *argv0);
+
+/* for matplotlib, from tkDecls.h, tk.h */
+typedef struct Tk_Window_ *Tk_Window;
+
+/*
+ * The following structure describes a block of pixels in memory:
+ */
+
+typedef struct Tk_PhotoImageBlock {
+    unsigned char *pixelPtr;	/* Pointer to the first pixel. */
+    int width;			/* Width of block, in pixels. */
+    int height;			/* Height of block, in pixels. */
+    int pitch;			/* Address difference between corresponding
+				 * pixels in successive lines. */
+    int pixelSize;		/* Address difference between successive
+				 * pixels in the same line. */
+    int offset[4];		/* Address differences between the red, green,
+				 * blue and alpha components of the pixel and
+				 * the pixel as a whole. */
+} Tk_PhotoImageBlock;
+
+
+typedef void *Tk_PhotoHandle;
+Tk_Window	Tk_MainWindow (Tcl_Interp * interp);
+Tk_PhotoHandle	Tk_FindPhoto (Tcl_Interp * interp, const char * imageName);
+void Tk_PhotoBlank(Tk_PhotoHandle);
+void Tk_PhotoPutBlock_NoComposite(Tk_PhotoHandle handle,
+        Tk_PhotoImageBlock *blockPtr, int x, int y,
+        int width, int height);
+void		Tcl_AppendResult (Tcl_Interp * interp, ...);
+
+
 """)
 
 if HAVE_WIDE_INT_TYPE:
