@@ -25,8 +25,9 @@ def test_same_file():
     print
     for file in files:
         path = file.relto(shared)
+        path = path.replace(os.sep, '/')
         url = github_raw_file("vmprof/vmprof-python", "src/%s" % path)
-        source = urllib2.urlopen(url).read()
+        source = urllib2.urlopen(url).read().replace('\r\n', '\n')
         dest = file.read()
         shortname = file.relto(RVMPROF)
         if source == dest:
