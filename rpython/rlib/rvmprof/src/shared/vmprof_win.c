@@ -1,4 +1,8 @@
 #include "vmprof_win.h"
+#ifdef RPYTHON_VMPROF
+#include "common_header.h"
+#include "structdef.h"       /* for struct pypy_threadlocal_s */
+#endif
 
 volatile int thread_started = 0;
 volatile int enabled = 0;

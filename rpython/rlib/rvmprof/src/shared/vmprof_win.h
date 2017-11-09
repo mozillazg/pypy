@@ -1,10 +1,9 @@
 #pragma once
 
-#include "windows.h"
 #include "compat.h"
+#include "windows.h"
 #include "vmp_stack.h"
 #include <tlhelp32.h>
-
 int prepare_concurrent_bufs(void);
 
 // This file has been inspired (but not copied from since the LICENSE
