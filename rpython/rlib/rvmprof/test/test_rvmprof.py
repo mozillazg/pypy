@@ -100,6 +100,8 @@ class RVMProfSamplingTest(RVMProfTest):
 
     ENTRY_POINT_ARGS = (int, float)
     def entry_point(self, value, delta_t):
+        from rpython.rlib.rthread import get_ident
+        get_ident()             # register thread_ident for win32
         code = self.MyCode('py:code:52:test_enable')
         rvmprof.register_code(code, self.MyCode.get_name)
         fd = os.open(self.tmpfilename, os.O_WRONLY | os.O_CREAT, 0666)
