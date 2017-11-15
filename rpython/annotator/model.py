@@ -47,19 +47,33 @@ class State(object):
     allow_int_to_float = True
 TLS = State()
 
+def compare_dict(d1, d2, ommit):
+    for k, v in d1.iteritems():
+        if k in ommit:
+            continue
+        if k not in d2 or v != d2[k]:
+            return False
+    for k, v in d2.iteritems():
+        if k in ommit:
+            continue
+        if k not in d1: # don't need to compare again
+            return False
+    return True
+
 class SomeObject(object):
     """The set of all objects.  Each instance stands
     for an arbitrary object about which nothing is known."""
     __metaclass__ = extendabletype
     immutable = False
     knowntype = object
+    can_union = True
 
     def __init__(self):
         assert type(self) is not SomeObject
 
     def __eq__(self, other):
         return (self.__class__ is other.__class__ and
-                self.__dict__  == other.__dict__)
+                compare_dict(self.__dict__, other.__dict__, ('can_union',)))
 
     def __ne__(self, other):
         return not (self == other)
@@ -74,7 +88,7 @@ class SomeObject(object):
         else:
             reprdict[self] = True
             try:
-                items = self.__dict__.items()
+                items = [x for x in self.__dict__.items() if x[0] != 'can_union']
                 items.sort()
                 args = []
                 for k, v in items:
@@ -269,11 +283,10 @@ class SomeStringOrUnicode(SomeObject):
         d1 = self.__dict__
         d2 = other.__dict__
         if not TLS.check_str_without_nul:
-            d1 = d1.copy()
-            d1['no_nul'] = 0
-            d2 = d2.copy()
-            d2['no_nul'] = 0
-        return d1 == d2
+            ommit = ('no_nul', 'can_union')
+        else:
+            ommit = ()
+        return compare_dict(d1, d2, ommit)
 
     def nonnoneify(self):
         return self.__class__(can_be_None=False, no_nul=self.no_nul)
@@ -341,11 +354,8 @@ class SomeList(SomeObject):
             return False
         if not self.listdef.same_as(other.listdef):
             return False
-        selfdic = self.__dict__.copy()
-        otherdic = other.__dict__.copy()
-        del selfdic['listdef']
-        del otherdic['listdef']
-        return selfdic == otherdic
+        return compare_dict(self.__dict__, other.__dict__,
+                            ('listdef', 'can_union'))
 
     def can_be_none(self):
         return True
@@ -383,11 +393,8 @@ class SomeDict(SomeObject):
             return False
         if not self.dictdef.same_as(other.dictdef):
             return False
-        selfdic = self.__dict__.copy()
-        otherdic = other.__dict__.copy()
-        del selfdic['dictdef']
-        del otherdic['dictdef']
-        return selfdic == otherdic
+        return compare_dict(self.__dict__, other.__dict__,
+                            ('dictdef', 'can_union'))
 
     def can_be_none(self):
         return True
@@ -755,8 +762,15 @@ def union(s1, s2):
         if s1 == s2:
             # Most pair(...).union() methods deal incorrectly with that case
             # when constants are involved.
-            return s1
-        return pair(s1, s2).union()
+            r = s1
+        else:
+            r = pair(s1, s2).union()
+        if not s1.can_union and not s1 == r:
+            raise AnnotatorError("Merging %s and %s forbidden" % (s2, s1))
+        if not s2.can_union and not s2 == r:
+            raise AnnotatorError("Merging %s and %s forbidden" % (s1, s2))
+        return r
+
     finally:
         TLS.no_side_effects_in_union -= 1
 
@@ -773,6 +787,17 @@ def unionof(*somevalues):
         # See comment in union() above
         if s1 != s2:
             s1 = pair(s1, s2).union()
+    for i, s in enumerate(somevalues):
+        if not s.can_union and not s == s1:
+            l = []
+            for j, _s in enumerate(somevalues):
+                if i == j:
+                    l.append("* " + repr(_s))
+                else:
+                    l.append("  " + repr(_s))
+            allargs = "\n".join(l)
+            raise AnnotatorError("Merging:\n%s\nwill produce %s, * marks strict"
+                " which cannot be generalized" % (allargs, s1))
     return s1
 
 
