@@ -1,12 +1,12 @@
 from rpython.rtyper.lltypesystem import rffi, lltype
+from rpython.rlib import rarithmetic
 from pypy.module.cpyext.api import (PyObjectFields, bootstrap_function,
     cpython_struct,
     CANNOT_FAIL, cpython_api, PyObject, build_type_checkers, CONST_STRING)
 from pypy.module.cpyext.pyobject import (
     make_typedescr, track_reference, from_ref)
-from pypy.interpreter.error import OperationError
 from rpython.rlib.rstruct import runpack
-from pypy.objspace.std.floatobject import W_FloatObject
+from pypy.objspace.std.floatobject import W_FloatObject, basestring_to_float
 
 PyFloatObjectStruct = lltype.ForwardReference()
 PyFloatObject = lltype.Ptr(PyFloatObjectStruct)
@@ -66,7 +66,10 @@ def PyFloat_FromString(space, w_obj, _):
     """Create a PyFloatObject object based on the string value in str, or
     NULL on failure.  The pend argument is ignored.  It remains only for
     backward compatibility."""
-    return space.call_function(space.w_float, w_obj)
+    # avoid space.call_function(space.w_float, w_obj) since PyFloat_FromString
+    # could be type.tp_as_number.nb_float which would recurse
+    value = basestring_to_float(space, w_obj)
+    return space.newfloat(value)
 
 @cpython_api([CONST_STRING, rffi.INT_real], rffi.DOUBLE, error=-1.0)
 def _PyFloat_Unpack4(space, ptr, le):

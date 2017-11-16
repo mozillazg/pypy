@@ -135,6 +135,28 @@ def make_compare_func(opname):
         return space.w_NotImplemented
     return func_with_new_name(_compare, 'descr_' + opname)
 
+def basestring_to_float(space, w_value):
+    def _string_to_float(space, w_source, string):
+        try:
+            return rfloat.string_to_float(string)
+        except ParseStringError as e:
+            raise wrap_parsestringerror(space, e, w_source)
+
+    if space.isinstance_w(w_value, space.w_unicode):
+        from unicodeobject import unicode_to_decimal_w
+        value = _string_to_float(space, w_value,
+                     unicode_to_decimal_w(space, w_value))
+    else:
+        try:
+            value = space.charbuf_w(w_value)
+        except OperationError as e:
+            if e.match(space, space.w_TypeError):
+                raise oefmt(
+                space.w_TypeError,
+                "float() argument must be a string or a number")
+            raise
+        value = _string_to_float(space, w_value, value)
+    return value
 
 class W_FloatObject(W_Root):
     """This is a implementation of the app-level 'float' type.
@@ -193,32 +215,14 @@ class W_FloatObject(W_Root):
     @staticmethod
     @unwrap_spec(w_x=WrappedDefault(0.0))
     def descr__new__(space, w_floattype, w_x):
-        def _string_to_float(space, w_source, string):
-            try:
-                return rfloat.string_to_float(string)
-            except ParseStringError as e:
-                raise wrap_parsestringerror(space, e, w_source)
-
         w_value = w_x     # 'x' is the keyword argument name in CPython
         if space.lookup(w_value, "__float__") is not None:
             w_obj = space.float(w_value)
             if space.is_w(w_floattype, space.w_float):
                 return w_obj
             value = space.float_w(w_obj)
-        elif space.isinstance_w(w_value, space.w_unicode):
-            from unicodeobject import unicode_to_decimal_w
-            value = _string_to_float(space, w_value,
-                                     unicode_to_decimal_w(space, w_value))
         else:
-            try:
-                value = space.charbuf_w(w_value)
-            except OperationError as e:
-                if e.match(space, space.w_TypeError):
-                    raise oefmt(
-                        space.w_TypeError,
-                        "float() argument must be a string or a number")
-                raise
-            value = _string_to_float(space, w_value, value)
+            value = basestring_to_float(space, w_value)
         w_obj = space.allocate_instance(W_FloatObject, w_floattype)
         W_FloatObject.__init__(w_obj, value)
         return w_obj
