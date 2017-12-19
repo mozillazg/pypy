@@ -210,6 +210,7 @@ def vmprof_execute_code(name, get_code_fn, result_class=None,
         try:
             _get_vmprof()
         except cintf.VMProfPlatformUnsupported:
+            func.c_name = '__vmprof_eval_vmprof'
             return func
 
         @jit.oopspec("rvmprof.jitted(unique_id)")
