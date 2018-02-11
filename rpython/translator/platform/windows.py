@@ -278,7 +278,11 @@ class MsvcPlatform(Platform):
                 mfid = 2
             out_arg = '-outputresource:%s;%s' % (exe_name, mfid)
             args = ['-nologo', '-manifest', str(temp_manifest), out_arg]
-            self._execute_c_compiler('mt.exe', args, exe_name)
+            try:
+                self._execute_c_compiler('mt.exe', args, exe_name)
+            except EnvironmentError:
+                print 'PATH is\n     ', '\n    '.join(self.c_environ['PATH'].split(';'))
+                raise
 
         return exe_name
 
