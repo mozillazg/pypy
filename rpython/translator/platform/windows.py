@@ -83,6 +83,7 @@ def _get_msvc_env(vsver, x64flag):
                                  stderr=subprocess.PIPE)
 
             stdout, stderr = popen.communicate()
+            print 'running', vcvars, "\nstderr '%s'" % stderr, '\nstdout'
             if popen.wait() != 0:
                 return None
         except:
@@ -92,6 +93,7 @@ def _get_msvc_env(vsver, x64flag):
         vcdict = {}
         for line in stdout.split("\n"):
             if '=' not in line:
+                print line
                 continue
             key, value = line.split('=', 1)
             vcdict[key] = value
@@ -277,7 +279,10 @@ class MsvcPlatform(Platform):
                 mfid = 2
             out_arg = '-outputresource:%s;%s' % (exe_name, mfid)
             args = ['-nologo', '-manifest', str(temp_manifest), out_arg]
-            self._execute_c_compiler('mt.exe', args, exe_name)
+            try:
+                self._execute_c_compiler('mt.exe', args, exe_name)
+            except EnvironmentError:
+                print '\n'.join(os.environ['PATH'].split(';'))
 
         return exe_name
 
