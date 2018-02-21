@@ -282,7 +282,7 @@ class MsvcPlatform(Platform):
             try:
                 self._execute_c_compiler('mt.exe', args, exe_name)
             except EnvironmentError:
-                paths = self.c_environ['PATH'].split(';'))
+                paths = self.c_environ['PATH'].split(';')
                 print 'paths, looking for mt.exe'
                 for p in paths:
                     print p
