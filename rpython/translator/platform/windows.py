@@ -83,7 +83,6 @@ def _get_msvc_env(vsver, x64flag):
                                  stderr=subprocess.PIPE)
 
             stdout, stderr = popen.communicate()
-            print 'running', vcvars, "\nstderr '%s'" % stderr, '\nstdout'
             if popen.wait() != 0:
                 return None
         except:
@@ -93,12 +92,14 @@ def _get_msvc_env(vsver, x64flag):
         vcdict = {}
         for line in stdout.split("\n"):
             if '=' not in line:
-                print line
                 continue
             key, value = line.split('=', 1)
             vcdict[key] = value
     env = {}
+    log.msg('got msvc environ')
     for key, value in vcdict.items():
+        if 'sdk' in key.lower():
+            log.msg('%s=%s' %(key, value))
         if key.upper() in ['PATH', 'INCLUDE', 'LIB']:
             env[key.upper()] = value
     log.msg("Updated environment with vsver %d, using x64 %s" % (vsver, x64flag,))
@@ -279,16 +280,7 @@ class MsvcPlatform(Platform):
                 mfid = 2
             out_arg = '-outputresource:%s;%s' % (exe_name, mfid)
             args = ['-nologo', '-manifest', str(temp_manifest), out_arg]
-            try:
-                self._execute_c_compiler('mt.exe', args, exe_name)
-            except EnvironmentError:
-                paths = self.c_environ['PATH'].split(';')
-                print 'paths, looking for mt.exe'
-                for p in paths:
-                    print p
-                    if 'Kit' in p:
-                        print '    \n'.join(os.listdir(p))
-                raise
+            self._execute_c_compiler('mt.exe', args, exe_name)
 
         return exe_name
 
