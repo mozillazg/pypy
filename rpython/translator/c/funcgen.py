@@ -33,7 +33,6 @@ class FunctionCodeGenerator(object):
     Collects information about a function which we have to generate
     from a flow graph.
     """
-
     def __init__(self, graph, db, exception_policy, functionname):
         self.graph = graph
         self.db = db
@@ -174,6 +173,19 @@ class FunctionCodeGenerator(object):
     def cfunction_body(self):
         graph = self.graph
 
+        # ----- for gc_enter_roots_frame
+        _seen = set()
+        for block in graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'gc_enter_roots_frame':
+                    _seen.add(tuple(op.args))
+        if _seen:
+            assert len(_seen) == 1, (
+                "multiple different gc_enter_roots_frame in %r" % (graph,))
+            for line in self.gcpolicy.enter_roots_frame(self, list(_seen)[0]):
+                yield line
+        # ----- done
+
         # Locate blocks with a single predecessor, which can be written
         # inline in place of a "goto":
         entrymap = mkentrymap(graph)
@@ -193,6 +205,7 @@ class FunctionCodeGenerator(object):
 
     def gen_block(self, block):
         if 1:      # (preserve indentation)
+            self._current_block = block
             myblocknum = self.blocknum[block]
             if block in self.inlinable_blocks:
                 # debug comment
@@ -298,7 +311,8 @@ class FunctionCodeGenerator(object):
     def gen_op(self, op):
         macro = 'OP_%s' % op.opname.upper()
         line = None
-        if op.opname.startswith('gc_') and op.opname != 'gc_load_indexed':
+        if (op.opname.startswith('gc_') and
+            op.opname not in ('gc_load_indexed', 'gc_store_indexed')):
             meth = getattr(self.gcpolicy, macro, None)
             if meth:
                 line = meth(self, op)
@@ -645,7 +659,7 @@ class FunctionCodeGenerator(object):
     OP_CAST_OPAQUE_PTR = OP_CAST_POINTER
 
     def OP_LENGTH_OF_SIMPLE_GCARRAY_FROM_OPAQUE(self, op):
-        return ('%s = *(long *)(((char *)%s) + sizeof(struct pypy_header0));'
+        return ('%s = *(long *)(((char *)%s) + RPY_SIZE_OF_GCHEADER);'
                 '  /* length_of_simple_gcarray_from_opaque */'
             % (self.expr(op.result), self.expr(op.args[0])))
 
@@ -712,6 +726,19 @@ class FunctionCodeGenerator(object):
         return (
           "%(result)s = ((%(typename)s) (((char *)%(addr)s) + "
           "%(base_ofs)s + %(scale)s * %(index)s))[0];"
+          % locals())
+
+    def OP_GC_STORE_INDEXED(self, op):
+        addr = self.expr(op.args[0])
+        index = self.expr(op.args[1])
+        value = self.expr(op.args[2])
+        scale = self.expr(op.args[3])
+        base_ofs = self.expr(op.args[4])
+        TYPE = op.args[2].concretetype
+        typename = cdecl(self.db.gettype(TYPE).replace('@', '*@'), '')
+        return (
+          "((%(typename)s) (((char *)%(addr)s) + "
+          "%(base_ofs)s + %(scale)s * %(index)s))[0] = %(value)s;"
           % locals())
 
     def OP_CAST_PRIMITIVE(self, op):
@@ -786,20 +813,27 @@ class FunctionCodeGenerator(object):
             "if (PYPY_HAVE_DEBUG_PRINTS) { fprintf(PYPY_DEBUG_FILE, %s); %s}"
             % (', '.join(argv), free_line))
 
-    def _op_debug(self, opname, arg):
-        if isinstance(arg, Constant):
-            string_literal = c_string_constant(''.join(arg.value.chars))
-            return "%s(%s);" % (opname, string_literal)
+    def _op_debug(self, macro, op):
+        v_cat, v_timestamp = op.args
+        if isinstance(v_cat, Constant):
+            string_literal = c_string_constant(''.join(v_cat.value.chars))
+            return "%s = %s(%s, %s);" % (self.expr(op.result),
+                                         macro,
+                                         string_literal,
+                                         self.expr(v_timestamp))
         else:
-            x = "%s(RPyString_AsCharP(%s));\n" % (opname, self.expr(arg))
+            x = "%s = %s(RPyString_AsCharP(%s), %s);\n" % (self.expr(op.result),
+                                                           macro,
+                                                           self.expr(v_cat),
+                                                           self.expr(v_timestamp))
             x += "RPyString_FreeCache();"
             return x
 
     def OP_DEBUG_START(self, op):
-        return self._op_debug('PYPY_DEBUG_START', op.args[0])
+        return self._op_debug('PYPY_DEBUG_START', op)
 
     def OP_DEBUG_STOP(self, op):
-        return self._op_debug('PYPY_DEBUG_STOP', op.args[0])
+        return self._op_debug('PYPY_DEBUG_STOP', op)
 
     def OP_HAVE_DEBUG_PRINTS_FOR(self, op):
         arg = op.args[0]

@@ -95,3 +95,18 @@ class AppTestFloatMacros(AppTestCpythonExtensionBase):
 
              Py_RETURN_NONE;"""),
             ])
+
+    def test_PyFloat_Check(self):
+        module = self.import_extension('foo', [
+            ("test", "METH_NOARGS",
+             """
+             PyObject* pyobj = PyFloat_FromDouble(1.0);
+             PyFloatObject* pfo = (PyFloatObject*)pyobj;
+             int res = (PyFloat_Check(pyobj) +
+                        PyFloat_CheckExact(pyobj) * 10 +
+                        PyFloat_Check(pfo) * 100 +
+                        PyFloat_CheckExact(pfo) * 1000);
+             Py_DecRef(pyobj);
+             return PyLong_FromLong(res);"""),
+            ])
+        assert module.test() == 1111

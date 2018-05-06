@@ -49,10 +49,13 @@ class _CDataMeta(type):
         else:
             return self.from_param(as_parameter)
 
+    def _build_ffiargtype(self):
+        return _shape_to_ffi_type(self._ffiargshape_)
+
     def get_ffi_argtype(self):
         if self._ffiargtype:
             return self._ffiargtype
-        self._ffiargtype = _shape_to_ffi_type(self._ffiargshape_)
+        self._ffiargtype = self._build_ffiargtype()
         return self._ffiargtype
 
     def _CData_output(self, resbuffer, base=None, index=-1):
@@ -64,8 +67,9 @@ class _CDataMeta(type):
         res = object.__new__(self)
         res.__class__ = self
         res.__dict__['_buffer'] = resbuffer
-        res.__dict__['_base'] = base
-        res.__dict__['_index'] = index
+        if base is not None:
+            res.__dict__['_base'] = base
+            res.__dict__['_index'] = index
         return res
 
     def _CData_retval(self, resbuffer):
@@ -81,7 +85,7 @@ class _CDataMeta(type):
         return False
 
     def in_dll(self, dll, name):
-        return self.from_address(dll._handle.getaddressindll(name))
+        return self.from_address(dll.__pypy_dll__.getaddressindll(name))
 
     def from_buffer(self, obj, offset=0):
         size = self._sizeofinstances()
@@ -102,7 +106,11 @@ class _CDataMeta(type):
                 % (len(buf) + offset, size + offset))
         raw_addr = buf._pypy_raw_address()
         result = self.from_address(raw_addr)
-        result._ensure_objects()['ffffffff'] = obj
+        objects = result._ensure_objects()
+        if objects is not None:
+            objects['ffffffff'] = obj
+        else:   # case e.g. of a primitive type like c_int
+            result._objects = obj
         return result
 
     def from_buffer_copy(self, obj, offset=0):
@@ -170,6 +178,10 @@ class _CData(object):
 
     def _get_buffer_value(self):
         return self._buffer[0]
+
+    def _copy_to(self, addr):
+        target = type(self).from_address(addr)._buffer
+        target[0] = self._get_buffer_value()
 
     def _to_ffi_param(self):
         if self.__class__._is_pointer_like():

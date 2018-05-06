@@ -1,3 +1,4 @@
+#pragma once
 
 typedef long Py_ssize_t;
 
@@ -213,6 +214,13 @@ struct PyMethodDef {
 };
 typedef struct PyMethodDef PyMethodDef;
 
+typedef struct {
+    PyObject_HEAD
+    PyMethodDef *m_ml; /* Description of the C function to call */
+    PyObject    *m_self; /* Passed as 'self' arg to the C func, can be NULL */
+    PyObject    *m_module; /* The __module__ attribute, can be anything */
+} PyCFunctionObject;
+
 /* from structmember.h */
 typedef struct PyMemberDef {
     /* Current version, use this */
@@ -303,5 +311,17 @@ typedef struct _typeobject {
 	/* Type attribute cache version tag. Added in version 2.6 */
 	unsigned int tp_version_tag;
 
+    /* PyPy specific extra fields: make sure that they are ALWAYS at the end,
+       for compatibility with CPython */
+    long tp_pypy_flags;
+
 } PyTypeObject;
 
+typedef struct _heaptypeobject {
+    PyTypeObject ht_type;
+    PyNumberMethods as_number;
+    PyMappingMethods as_mapping;
+    PySequenceMethods as_sequence;
+    PyBufferProcs as_buffer;
+    PyObject *ht_name, *ht_slots;
+} PyHeapTypeObject;

@@ -417,11 +417,13 @@ class TranslationDriver(object):
             translator.frozen = True
 
         standalone = self.standalone
+        get_gchooks = self.extra.get('get_gchooks', lambda: None)
+        gchooks = get_gchooks()
 
         if standalone:
             from rpython.translator.c.genc import CStandaloneBuilder
             cbuilder = CStandaloneBuilder(self.translator, self.entry_point,
-                                          config=self.config,
+                                          config=self.config, gchooks=gchooks,
                       secondary_entrypoints=
                       self.secondary_entrypoints + annotated_jit_entrypoints)
         else:
@@ -430,7 +432,8 @@ class TranslationDriver(object):
             cbuilder = CLibraryBuilder(self.translator, self.entry_point,
                                        functions=functions,
                                        name='libtesting',
-                                       config=self.config)
+                                       config=self.config,
+                                       gchooks=gchooks)
         database = cbuilder.build_database()
         self.log.info("database for generating C source was created")
         self.cbuilder = cbuilder

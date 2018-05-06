@@ -70,7 +70,12 @@ class PointerType(_CDataMeta):
         self._ffiarray = ffiarray
         self.__init__ = __init__
         self._type_ = TP
-        self._ffiargtype = _ffi.types.Pointer(TP.get_ffi_argtype())
+
+    def _build_ffiargtype(self):
+        return _ffi.types.Pointer(self._type_.get_ffi_argtype())
+
+    def _deref_ffiargtype(self):
+        return self._type_.get_ffi_argtype()
 
     from_address = cdata_from_address
 
@@ -114,7 +119,9 @@ class _Pointer(_CData):
         cobj = self._type_.from_param(value)
         if ensure_objects(cobj) is not None:
             store_reference(self, index, cobj._objects)
-        self._subarray(index)[0] = cobj._get_buffer_value()
+        address = self._buffer[0]
+        address += index * sizeof(self._type_)
+        cobj._copy_to(address)
 
     def __nonzero__(self):
         return self._buffer[0] != 0
@@ -142,6 +149,10 @@ def _cast_addr(obj, _, tp):
         ptr._buffer = tp._ffiarray(1, autofree=True)
         ptr._buffer[0] = obj._buffer
         result = ptr
+    elif isinstance(obj, bytes):
+        result = tp()
+        result._buffer[0] = buffer(obj)._pypy_raw_address()
+        return result
     elif not (isinstance(obj, _CData) and type(obj)._is_pointer_like()):
         raise TypeError("cast() argument 1 must be a pointer, not %s"
                         % (type(obj),))
