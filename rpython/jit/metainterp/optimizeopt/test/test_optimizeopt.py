@@ -7221,6 +7221,21 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         self.optimize_loop(ops, expected)
 
+    def test_record_exact_value(self):
+        ops = """
+        [p0]
+        record_exact_value(p0, ConstPtr(myptr3))
+        i1 = getfield_gc_i(p0, descr=valuedescr3)
+        escape_i(i1)
+        jump(p0)
+        """
+        expected = """
+        []
+        escape_i(7)
+        jump()
+        """
+        self.optimize_loop(ops, expected)
+
     def test_quasi_immut(self):
         ops = """
         [p0, p1, i0]
@@ -8809,7 +8824,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         i2 = int_add(i1, 1)
         i3 = int_le(i2, 13)
         guard_true(i3) [p1]
-        jump(p0, i2)      
+        jump(p0, i2)
         """
         expected = """
         [p0, i1, p1]
@@ -8824,7 +8839,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         i2 = int_add(i1, 1)
         i3 = int_le(i2, 13)
         guard_true(i3) [p1]
-        jump(p0, i2, p1)        
+        jump(p0, i2, p1)
         """
         self.optimize_loop(ops, expected, preamble)
 
@@ -8846,7 +8861,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         escape_n(i4)
         setfield_gc(p0, i1, descr=valuedescr)
         ii = same_as_i(i1)
-        jump(p0, i0, i3, i1, ii)        
+        jump(p0, i0, i3, i1, ii)
         """
         expected = """
         [p0, i0, i2, i4, i5]
@@ -8887,7 +8902,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         jump(i19)
         """
         self.optimize_loop(ops, expected, expected_short=expected_short)
- 
+
 
     def test_cached_arrayitem_write_descr(self):
         ops = """

@@ -48,6 +48,9 @@ class OptSimplify(Optimization):
     def optimize_RECORD_EXACT_CLASS(self, op):
         pass
 
+    def optimize_RECORD_EXACT_VALUE(self, op):
+        pass
+
     # def optimize_LABEL(self, op):
     #     if not self.unroll:
     #         descr = op.getdescr()

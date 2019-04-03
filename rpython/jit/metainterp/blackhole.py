@@ -590,6 +590,10 @@ class BlackholeInterpreter(object):
     def bhimpl_record_exact_class(a, b):
         pass
 
+    @arguments("r", "r")
+    def bhimpl_record_exact_value(a, b):
+        pass
+
     @arguments("i", returns="i")
     def bhimpl_int_copy(a):
         return a
