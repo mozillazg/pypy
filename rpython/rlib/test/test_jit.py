@@ -5,7 +5,7 @@ from rpython.annotator.model import UnionError
 from rpython.rlib.jit import (hint, we_are_jitted, JitDriver, elidable_promote,
     JitHintError, oopspec, isconstant, conditional_call,
     elidable, unroll_safe, dont_look_inside, conditional_call_elidable,
-    enter_portal_frame, leave_portal_frame)
+    enter_portal_frame, leave_portal_frame, record_exact_value)
 from rpython.rlib.rarithmetic import r_uint
 from rpython.rtyper.test.tool import BaseRtypingTest
 from rpython.rtyper.lltypesystem import lltype
@@ -114,6 +114,15 @@ def test_invalid_hint_combinations_error():
         @dont_look_inside
         def f():
             pass
+
+def test_record_exact_value():
+    class A(object):
+        pass
+    a = A()
+    b = A()
+    record_exact_value(a,a) # assume not crash
+    with pytest.raises(AssertionError):
+        record_exact_value(a, b)
 
 class TestJIT(BaseRtypingTest):
     def test_hint(self):
@@ -341,3 +350,12 @@ class TestJIT(BaseRtypingTest):
             leave_portal_frame()
         t = Translation(g, [])
         t.compile_c() # does not crash
+
+    def test_record_exact_value(self):
+        class A(object):
+            pass
+        def g():
+            a = A()
+            b = A()
+            record_exact_value(a,a) # assume not crash
+        self.interpret(g, [])
