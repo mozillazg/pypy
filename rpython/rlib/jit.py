@@ -1219,7 +1219,7 @@ class Entry(ExtRegistryEntry):
         from rpython.rtyper import rclass
 
         v_inst = hop.inputarg(hop.args_r[0], arg=0)
-        v_const_inst = hop.inputarg(hop.args_r[1], arg=0)
+        v_const_inst = hop.inputarg(hop.args_r[1], arg=1)
         hop.exception_is_here()
         return hop.gendirectcall(ll_record_exact_value, v_inst, v_const_inst)
 
