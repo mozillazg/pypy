@@ -22,6 +22,17 @@ class AppTestCallMethod:
             assert c.m(**{'u': 4}) == ((c,), {'u': 4})
         """)
 
+    def test_call_star(self):
+        exec("""if 1:
+            class Foo:
+                def meth(self, a1, *args, offset=42):
+                    return args, offset
+
+            ret = Foo().meth(12, **{})
+            assert type(ret[0][0]) is Foo
+            assert ret[1] == 42
+        """)
+
     def test_call_attribute(self):
         exec("""if 1:
             class C(object):
