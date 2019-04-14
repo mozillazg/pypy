@@ -22,15 +22,25 @@ class AppTestCallMethod:
             assert c.m(**{'u': 4}) == ((c,), {'u': 4})
         """)
 
-    def test_call_star(self):
+    def test_call_starstar1(self):
         exec("""if 1:
             class Foo:
-                def meth(self, a1, *args, offset=42):
-                    return args, offset
-
-            ret = Foo().meth(12, **{})
+                def meth(*args, a=2):
+                    return args, a
+            ret = Foo().meth(**{})
             assert type(ret[0][0]) is Foo
-            assert ret[1] == 42
+            assert ret[1] == 2
+        """)
+
+    def test_call_starstar2(self):
+        exec("""if 1:
+            class Foo:
+                def meth(*args, a=2, b=3):
+                    return args, a, b
+            ret = Foo().meth(**{})
+            assert type(ret[0][0]) is Foo
+            assert ret[1] == 2
+            assert ret[2] == 3
         """)
 
     def test_call_attribute(self):
