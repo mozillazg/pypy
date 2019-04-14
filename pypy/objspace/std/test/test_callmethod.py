@@ -37,9 +37,9 @@ class AppTestCallMethod:
             class Foo:
                 def meth(*args, a=2, b=3):
                     return args, a, b
-            ret = Foo().meth(**{})
+            ret = Foo().meth(**{'a':4})
             assert type(ret[0][0]) is Foo
-            assert ret[1] == 2
+            assert ret[1] == 4
             assert ret[2] == 3
         """)
 
