@@ -431,6 +431,8 @@ class UnixConsole(Console):
                             return self.event_queue.get()
                         else:
                             continue
+                    if err.errno == errno.EWOULDBLOCK:
+                        continue
                     else:
                         raise
                 else:
