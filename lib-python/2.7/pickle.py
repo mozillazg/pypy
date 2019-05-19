@@ -168,7 +168,7 @@ del x
 
 # Pickling machinery
 
-class Pickler(object):
+class Pickler:
 
     def __init__(self, file, protocol=None):
         """This takes a file-like object for writing a pickle data stream.
@@ -351,9 +351,7 @@ class Pickler(object):
             raise PicklingError("args from reduce() should be a tuple")
 
         # Assert that func is callable
-        try:
-            func.__call__
-        except AttributeError:
+        if not hasattr(func, '__call__'):
             raise PicklingError("func from reduce should be callable")
 
         save = self.save
@@ -646,10 +644,6 @@ class Pickler(object):
             # else tmp is empty, and we're done
 
     def save_dict(self, obj):
-        modict_saver = self._pickle_maybe_moduledict(obj)
-        if modict_saver is not None:
-            return self.save_reduce(*modict_saver)
-
         write = self.write
 
         if self.bin:
@@ -699,23 +693,6 @@ class Pickler(object):
                 write(SETITEM)
             # else tmp is empty, and we're done
 
-    def _pickle_maybe_moduledict(self, obj):
-        # save module dictionary as "getattr(module, '__dict__')"
-        try:
-            name = obj['__name__']
-            if type(name) is not str:
-                return None
-            themodule = sys.modules[name]
-            if type(themodule) is not ModuleType:
-                return None
-            if themodule.__dict__ is not obj:
-                return None
-        except (AttributeError, KeyError, TypeError):
-            return None
-
-        return getattr, (themodule, '__dict__')
-
-
     def save_inst(self, obj):
         cls = obj.__class__
 
@@ -755,29 +732,6 @@ class Pickler(object):
         write(BUILD)
 
     dispatch[InstanceType] = save_inst
-
-    def save_function(self, obj):
-        try:
-            return self.save_global(obj)
-        except PicklingError, e:
-            pass
-        # Check copy_reg.dispatch_table
-        reduce = dispatch_table.get(type(obj))
-        if reduce:
-            rv = reduce(obj)
-        else:
-            # Check for a __reduce_ex__ method, fall back to __reduce__
-            reduce = getattr(obj, "__reduce_ex__", None)
-            if reduce:
-                rv = reduce(self.proto)
-            else:
-                reduce = getattr(obj, "__reduce__", None)
-                if reduce:
-                    rv = reduce()
-                else:
-                    raise e
-        return self.save_reduce(obj=obj, *rv)
-    dispatch[FunctionType] = save_function
 
     def save_global(self, obj, name=None, pack=struct.pack):
         write = self.write
@@ -820,6 +774,7 @@ class Pickler(object):
         self.memoize(obj)
 
     dispatch[ClassType] = save_global
+    dispatch[FunctionType] = save_global
     dispatch[BuiltinFunctionType] = save_global
     dispatch[TypeType] = save_global
 
@@ -875,7 +830,7 @@ def whichmodule(func, funcname):
 
 # Unpickling machinery
 
-class Unpickler(object):
+class Unpickler:
 
     def __init__(self, file):
         """This takes a file-like object for reading a pickle data stream.
@@ -1384,7 +1339,6 @@ def encode_long(x):
 
 def decode_long(data):
     r"""Decode a long from a two's complement little-endian binary string.
-    This is overriden on PyPy by a RPython version that has linear complexity.
 
     >>> decode_long('')
     0L
@@ -1410,11 +1364,6 @@ def decode_long(data):
     if data[-1] >= '\x80':
         n -= 1L << (nbytes * 8)
     return n
-
-try:
-    from __pypy__ import decode_long
-except ImportError:
-    pass
 
 # Shorthands
 

@@ -14,8 +14,6 @@ class FuncAttrsTest(unittest.TestCase):
         self.b = b
 
     def cannot_set_attr(self, obj, name, value, exceptions):
-        if not test_support.check_impl_detail():
-            exceptions = (TypeError, AttributeError)
         # Helper method for other tests.
         try:
             setattr(obj, name, value)
@@ -288,13 +286,13 @@ class FunctionDictsTest(FuncAttrsTest):
     def test_delete_func_dict(self):
         try:
             del self.b.__dict__
-        except (AttributeError, TypeError):
+        except TypeError:
             pass
         else:
             self.fail("deleting function dictionary should raise TypeError")
         try:
             del self.b.func_dict
-        except (AttributeError, TypeError):
+        except TypeError:
             pass
         else:
             self.fail("deleting function dictionary should raise TypeError")

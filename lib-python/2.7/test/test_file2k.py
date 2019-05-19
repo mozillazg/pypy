@@ -15,7 +15,7 @@ except ImportError:
     threading = None
 
 from test import test_support
-from test.test_support import TESTFN, run_unittest, gc_collect, requires
+from test.test_support import TESTFN, run_unittest, requires
 from UserList import UserList
 
 class AutoFileTests(unittest.TestCase):
@@ -36,7 +36,6 @@ class AutoFileTests(unittest.TestCase):
         self.assertEqual(self.f.tell(), p.tell())
         self.f.close()
         self.f = None
-        gc_collect()
         self.assertRaises(ReferenceError, getattr, p, 'tell')
 
     def testAttributes(self):
@@ -135,12 +134,8 @@ class AutoFileTests(unittest.TestCase):
 
         for methodname in methods:
             method = getattr(self.f, methodname)
-            args = {'readinto': (bytearray(''),),
-                    'seek':     (0,),
-                    'write':    ('',),
-                    }.get(methodname, ())
             # should raise on closed file
-            self.assertRaises(ValueError, method, *args)
+            self.assertRaises(ValueError, method)
         with test_support.check_py3k_warnings():
             for methodname in deprecated_methods:
                 method = getattr(self.f, methodname)
@@ -170,7 +165,6 @@ class AutoFileTests(unittest.TestCase):
         # Remark: Do not perform more than one test per open file,
         # since that does NOT catch the readline error on Windows.
         data = 'xxx'
-        self.f.close()
         for mode in ['w', 'wb', 'a', 'ab']:
             for attr in ['read', 'readline', 'readlines']:
                 self.f = open(TESTFN, mode)
@@ -366,9 +360,8 @@ class OtherFileTests(unittest.TestCase):
                 except ValueError:
                     pass
                 else:
-                    if test_support.check_impl_detail():
-                        self.fail("%s%r after next() didn't raise ValueError" %
-                                  (methodname, args))
+                    self.fail("%s%r after next() didn't raise ValueError" %
+                                     (methodname, args))
                 f.close()
 
             # Test to see if harmless (by accident) mixing of read* and
@@ -419,7 +412,6 @@ class OtherFileTests(unittest.TestCase):
             if lines != testlines:
                 self.fail("readlines() after next() with empty buffer "
                           "failed. Got %r, expected %r" % (line, testline))
-            f.close()
             # Reading after iteration hit EOF shouldn't hurt either
             f = open(TESTFN)
             try:
@@ -504,9 +496,6 @@ class FileThreadingTests(unittest.TestCase):
         self.close_count = 0
         self.close_success_count = 0
         self.use_buffering = False
-        # to prevent running out of file descriptors on PyPy,
-        # we only keep the 50 most recent files open
-        self.all_files = [None] * 50
 
     def tearDown(self):
         if self.f:
@@ -525,10 +514,6 @@ class FileThreadingTests(unittest.TestCase):
             self.f = open(self.filename, "w+", buffering=1024*16)
         else:
             self.f = open(self.filename, "w+")
-        self.all_files.append(self.f)
-        oldf = self.all_files.pop(0)
-        if oldf is not None:
-            oldf.close()
 
     def _close_file(self):
         with self._count_lock:
@@ -569,6 +554,7 @@ class FileThreadingTests(unittest.TestCase):
 
     def _test_close_open_io(self, io_func, nb_workers=5):
         def worker():
+            self._create_file()
             funcs = itertools.cycle((
                 lambda: io_func(),
                 lambda: self._close_and_reopen_file(),
@@ -580,11 +566,7 @@ class FileThreadingTests(unittest.TestCase):
                     f()
                 except (IOError, ValueError):
                     pass
-        self._create_file()
         self._run_workers(worker, nb_workers)
-        # make sure that all files can be closed now
-        del self.all_files
-        gc_collect()
         if test_support.verbose:
             # Useful verbose statistics when tuning this test to take
             # less time to run but still ensuring that its still useful.
@@ -669,6 +651,33 @@ class FileThreadingTests(unittest.TestCase):
         def io_func():
             self.f.writelines('')
         self._test_close_open_io(io_func)
+
+    def test_iteration_torture(self):
+        # bpo-31530
+        with open(self.filename, "wb") as fp:
+            for i in xrange(2**20):
+                fp.write(b"0"*50 + b"\n")
+        with open(self.filename, "rb") as f:
+            def it():
+                for l in f:
+                    pass
+            self._run_workers(it, 10)
+
+    def test_iteration_seek(self):
+        # bpo-31530: Crash when concurrently seek and iterate over a file.
+        with open(self.filename, "wb") as fp:
+            for i in xrange(10000):
+                fp.write(b"0"*50 + b"\n")
+        with open(self.filename, "rb") as f:
+            it = iter([1] + [0]*10)  # one thread reads, others seek
+            def iterate():
+                if next(it):
+                    for l in f:
+                        pass
+                else:
+                    for i in xrange(100):
+                        f.seek(i*100, 0)
+            self._run_workers(iterate, 10)
 
 
 @unittest.skipUnless(os.name == 'posix', 'test requires a posix system.')

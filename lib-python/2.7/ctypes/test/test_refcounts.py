@@ -11,10 +11,7 @@ dll = ctypes.CDLL(_ctypes_test.__file__)
 class RefcountTestCase(unittest.TestCase):
 
     def test_1(self):
-        try:
-            from sys import getrefcount as grc
-        except ImportError:
-            return unittest.skip("no sys.getrefcount()")
+        from sys import getrefcount as grc
 
         f = dll._testfunc_callback_i_if
         f.restype = ctypes.c_int
@@ -38,10 +35,7 @@ class RefcountTestCase(unittest.TestCase):
 
 
     def test_refcount(self):
-        try:
-            from sys import getrefcount as grc
-        except ImportError:
-            return unittest.skip("no sys.getrefcount()")
+        from sys import getrefcount as grc
         def func(*args):
             pass
         # this is the standard refcount for func
@@ -90,17 +84,12 @@ class RefcountTestCase(unittest.TestCase):
 class AnotherLeak(unittest.TestCase):
     def test_callback(self):
         import sys
-        try:
-            from sys import getrefcount
-        except ImportError:
-            return unittest.skip("no sys.getrefcount()")
 
         proto = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int)
         def func(a, b):
             return a * b * 2
         f = proto(func)
 
-        gc.collect()
         a = sys.getrefcount(ctypes.c_int)
         f(1, 2)
         self.assertEqual(sys.getrefcount(ctypes.c_int), a)

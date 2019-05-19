@@ -5,6 +5,7 @@ BytesIO -- for bytes
 
 from __future__ import unicode_literals
 from __future__ import print_function
+from __future__ import absolute_import
 
 import unittest
 from test import test_support as support
@@ -673,7 +674,7 @@ class CBytesIOTest(PyBytesIOTest):
         state = memio.__getstate__()
         self.assertEqual(len(state), 3)
         bytearray(state[0]) # Check if state[0] supports the buffer interface.
-        self.assertIsInstance(state[1], (int, long))
+        self.assertIsInstance(state[1], int)
         if state[2] is not None:
             self.assertIsInstance(state[2], dict)
         memio.close()
@@ -712,7 +713,6 @@ class CStringIOTest(PyStringIOTest):
 
     # XXX: For the Python version of io.StringIO, this is highly
     # dependent on the encoding used for the underlying buffer.
-    @support.cpython_only
     def test_widechar(self):
         buf = self.buftype("\U0002030a\U00020347")
         memio = self.ioclass(buf)

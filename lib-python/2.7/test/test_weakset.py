@@ -67,7 +67,6 @@ class TestWeakSet(unittest.TestCase):
         self.assertEqual(len(self.s), len(self.d))
         self.assertEqual(len(self.fs), 1)
         del self.obj
-        test_support.gc_collect()
         self.assertEqual(len(self.fs), 0)
 
     def test_contains(self):
@@ -77,7 +76,6 @@ class TestWeakSet(unittest.TestCase):
         self.assertNotIn(1, self.s)
         self.assertIn(self.obj, self.fs)
         del self.obj
-        test_support.gc_collect()
         self.assertNotIn(SomeClass('F'), self.fs)
 
     def test_union(self):
@@ -236,7 +234,6 @@ class TestWeakSet(unittest.TestCase):
         self.assertEqual(self.s, dup)
         self.assertRaises(TypeError, self.s.add, [])
         self.fs.add(Foo())
-        test_support.gc_collect()
         self.assertTrue(len(self.fs) == 1)
         self.fs.add(self.obj)
         self.assertTrue(len(self.fs) == 1)
@@ -369,11 +366,10 @@ class TestWeakSet(unittest.TestCase):
         next(it)             # Trigger internal iteration
         # Destroy an item
         del items[-1]
-        test_support.gc_collect()
+        gc.collect()    # just in case
         # We have removed either the first consumed items, or another one
         self.assertIn(len(list(it)), [len(items), len(items) - 1])
         del it
-        test_support.gc_collect()
         # The removal has been committed
         self.assertEqual(len(s), len(items))
 
@@ -422,7 +418,7 @@ class TestWeakSet(unittest.TestCase):
         gc.collect()
         n1 = len(s)
         del it
-        test_support.gc_collect()
+        gc.collect()
         n2 = len(s)
         # one item may be kept alive inside the iterator
         self.assertIn(n1, (0, 1))
@@ -430,11 +426,11 @@ class TestWeakSet(unittest.TestCase):
 
     def test_len_race(self):
         # Extended sanity checks for len() in the face of cyclic collection
-        #self.addCleanup(gc.set_threshold, *gc.get_threshold())
+        self.addCleanup(gc.set_threshold, *gc.get_threshold())
         for th in range(1, 100):
             N = 20
-            test_support.gc_collect()
-            #gc.set_threshold(th, th, th)
+            gc.collect(0)
+            gc.set_threshold(th, th, th)
             items = [RefCycle() for i in range(N)]
             s = WeakSet(items)
             del items

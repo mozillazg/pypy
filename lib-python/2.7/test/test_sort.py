@@ -140,10 +140,7 @@ class TestBugs(unittest.TestCase):
                 return random.random() < 0.5
 
         L = [C() for i in range(50)]
-        try:
-            L.sort()
-        except ValueError:
-            pass
+        self.assertRaises(ValueError, L.sort)
 
     def test_cmpNone(self):
         # Testing None as a comparison function.
@@ -153,10 +150,8 @@ class TestBugs(unittest.TestCase):
         L.sort(None)
         self.assertEqual(L, range(50))
 
-    @test_support.impl_detail(pypy=False)
     def test_undetected_mutation(self):
         # Python 2.4a1 did not always detect mutation
-        # So does pypy...
         memorywaster = []
         for i in range(20):
             def mutating_cmp(x, y):
@@ -231,10 +226,7 @@ class TestDecorateSortUndecorate(unittest.TestCase):
             def __del__(self):
                 del data[:]
                 data[:] = range(20)
-        try:
-            data.sort(key=SortKiller)
-        except ValueError:
-            pass
+        self.assertRaises(ValueError, data.sort, key=SortKiller)
 
     def test_key_with_mutating_del_and_exception(self):
         data = range(10)

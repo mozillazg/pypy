@@ -43,8 +43,7 @@ class ReadTest(unittest.TestCase):
     mode = "r:"
 
     def setUp(self):
-        self.tar = tarfile.open(self.tarname, mode=self.mode,
-                                encoding="iso8859-1")
+        self.tar = tarfile.open(self.tarname, mode=self.mode, encoding="iso8859-1")
 
     def tearDown(self):
         self.tar.close()
@@ -62,6 +61,7 @@ class UstarReadTest(ReadTest):
     def test_fileobj_readlines(self):
         self.tar.extract("ustar/regtype", TEMPDIR)
         tarinfo = self.tar.getmember("ustar/regtype")
+        fobj1 = open(os.path.join(TEMPDIR, "ustar/regtype"), "rU")
         with open(os.path.join(TEMPDIR, "ustar/regtype"), "rU") as fobj1:
             lines1 = fobj1.readlines()
         fobj2 = self.tar.extractfile(tarinfo)
@@ -327,8 +327,8 @@ class MiscReadTest(CommonReadTest):
 
     def test_no_name_argument(self):
         with open(self.tarname, "rb") as fobj:
-            with tarfile.open(fileobj=fobj, mode=self.mode) as tar:
-                self.assertEqual(tar.name, os.path.abspath(fobj.name))
+            tar = tarfile.open(fileobj=fobj, mode=self.mode)
+            self.assertEqual(tar.name, os.path.abspath(fobj.name))
 
     def test_no_name_attribute(self):
         with open(self.tarname, "rb") as fobj:
@@ -343,8 +343,8 @@ class MiscReadTest(CommonReadTest):
             data = fobj.read()
         fobj = StringIO.StringIO(data)
         fobj.name = ""
-        with tarfile.open(fileobj=fobj, mode=self.mode) as tar:
-            self.assertEqual(tar.name, None)
+        tar = tarfile.open(fileobj=fobj, mode=self.mode)
+        self.assertEqual(tar.name, None)
 
     def test_illegal_mode_arg(self):
         with open(tmpname, 'wb'):
@@ -437,16 +437,16 @@ class MiscReadTest(CommonReadTest):
         # Test hardlink extraction (e.g. bug #857297).
         with tarfile.open(tarname, errorlevel=1, encoding="iso8859-1") as tar:
             tar.extract("ustar/regtype", TEMPDIR)
-            self.addCleanup(test_support.unlink, os.path.join(TEMPDIR, "ustar/regtype"))
+            self.addCleanup(os.remove, os.path.join(TEMPDIR, "ustar/regtype"))
 
             tar.extract("ustar/lnktype", TEMPDIR)
-            self.addCleanup(test_support.unlink, os.path.join(TEMPDIR, "ustar/lnktype"))
+            self.addCleanup(os.remove, os.path.join(TEMPDIR, "ustar/lnktype"))
             with open(os.path.join(TEMPDIR, "ustar/lnktype"), "rb") as f:
                 data = f.read()
             self.assertEqual(md5sum(data), md5_regtype)
 
             tar.extract("ustar/symtype", TEMPDIR)
-            self.addCleanup(test_support.unlink, os.path.join(TEMPDIR, "ustar/symtype"))
+            self.addCleanup(os.remove, os.path.join(TEMPDIR, "ustar/symtype"))
             with open(os.path.join(TEMPDIR, "ustar/symtype"), "rb") as f:
                 data = f.read()
             self.assertEqual(md5sum(data), md5_regtype)
@@ -549,8 +549,7 @@ class DetectReadTest(unittest.TestCase):
 
     def _testfunc_fileobj(self, name, mode):
         try:
-            with open(name, "rb") as f:
-                tar = tarfile.open(name, mode, fileobj=f)
+            tar = tarfile.open(name, mode, fileobj=open(name, "rb"))
         except tarfile.ReadError:
             self.fail()
         else:
@@ -680,7 +679,6 @@ class MemberReadTest(ReadTest):
         self._test_member(tarinfo, size=7011, chksum=md5_regtype)
 
     def test_find_pax_umlauts(self):
-        self.tar.close()
         self.tar = tarfile.open(self.tarname, mode=self.mode, encoding="iso8859-1")
         tarinfo = self.tar.getmember("pax/umlauts-\xc4\xd6\xdc\xe4\xf6\xfc\xdf")
         self._test_member(tarinfo, size=7011, chksum=md5_regtype)
@@ -712,18 +710,17 @@ class LongnameTest(ReadTest):
         offset = tarinfo.offset
         self.tar.fileobj.seek(offset)
         fobj = StringIO.StringIO(self.tar.fileobj.read(3 * 512))
-        with self.assertRaises(tarfile.ReadError):
-            tarfile.open(name="foo.tar", fileobj=fobj)
+        self.assertRaises(tarfile.ReadError, tarfile.open, name="foo.tar", fileobj=fobj)
 
     def test_header_offset(self):
         # Test if the start offset of the TarInfo object includes
         # the preceding extended header.
         longname = self.subdir + "/" + "123/" * 125 + "longname"
         offset = self.tar.getmember(longname).offset
-        with open(tarname, "rb") as fobj:
-            fobj.seek(offset)
-            tarinfo = tarfile.TarInfo.frombuf(fobj.read(512))
-            self.assertEqual(tarinfo.type, self.longnametype)
+        fobj = open(tarname)
+        fobj.seek(offset)
+        tarinfo = tarfile.TarInfo.frombuf(fobj.read(512))
+        self.assertEqual(tarinfo.type, self.longnametype)
 
 
 class GNUReadTest(LongnameTest):
@@ -1519,7 +1516,6 @@ class PaxUnicodeTest(UstarUnicodeTest):
             tar = tarfile.open(tmpname, format=self.format, encoding="ascii",
                     errors=handler)
             self.assertEqual(tar.getnames()[0], name)
-            tar.close()
 
         self.assertRaises(UnicodeError, tarfile.open, tmpname,
                 encoding="ascii", errors="strict")
@@ -1532,7 +1528,6 @@ class PaxUnicodeTest(UstarUnicodeTest):
         tar = tarfile.open(tmpname, format=self.format, encoding="iso8859-1",
                 errors="utf-8")
         self.assertEqual(tar.getnames()[0], "\xe4\xf6\xfc/" + u"\u20ac".encode("utf8"))
-        tar.close()
 
 
 class AppendTest(unittest.TestCase):
@@ -1541,7 +1536,7 @@ class AppendTest(unittest.TestCase):
     def setUp(self):
         self.tarname = tmpname
         if os.path.exists(self.tarname):
-            test_support.unlink(self.tarname)
+            os.remove(self.tarname)
 
     def _add_testfile(self, fileobj=None):
         with tarfile.open(self.tarname, "a", fileobj=fileobj) as tar:
@@ -1755,8 +1750,7 @@ class LinkEmulationTest(ReadTest):
     # the regular files they point to.
     def _test_link_extraction(self, name):
         self.tar.extract(name, TEMPDIR)
-        with open(os.path.join(TEMPDIR, name), "rb") as f:
-            data = f.read()
+        data = open(os.path.join(TEMPDIR, name), "rb").read()
         self.assertEqual(md5sum(data), md5_regtype)
 
     def test_hardlink_extraction1(self):

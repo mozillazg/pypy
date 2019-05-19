@@ -123,7 +123,7 @@ _import_symbols('SSL_ERROR_')
 _import_symbols('PROTOCOL_')
 _import_symbols('VERIFY_')
 
-from _ssl import HAS_SNI, HAS_ECDH, HAS_NPN, HAS_ALPN
+from _ssl import HAS_SNI, HAS_ECDH, HAS_NPN, HAS_ALPN, HAS_TLSv1_3
 
 from _ssl import _OPENSSL_API_VERSION
 
@@ -137,7 +137,7 @@ try:
 except NameError:
     _SSLv2_IF_EXISTS = None
 
-from socket import socket, _fileobject, error as socket_error
+from socket import socket, _fileobject, _delegate_methods, error as socket_error
 if sys.platform == "win32":
     from _ssl import enum_certificates, enum_crls
 
@@ -157,6 +157,7 @@ else:
 # (OpenSSL's default setting is 'DEFAULT:!aNULL:!eNULL')
 # Enable a better set of ciphers by default
 # This list has been explicitly chosen to:
+#   * TLS 1.3 ChaCha20 and AES-GCM cipher suites
 #   * Prefer cipher suites that offer perfect forward secrecy (DHE/ECDHE)
 #   * Prefer ECDHE over DHE for better performance
 #   * Prefer AEAD over CBC for better performance and security
@@ -168,6 +169,8 @@ else:
 #   * Disable NULL authentication, NULL encryption, 3DES and MD5 MACs
 #     for security reasons
 _DEFAULT_CIPHERS = (
+    'TLS13-AES-256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:'
+    'TLS13-AES-128-GCM-SHA256:'
     'ECDH+AESGCM:ECDH+CHACHA20:DH+AESGCM:DH+CHACHA20:ECDH+AES256:DH+AES256:'
     'ECDH+AES128:DH+AES:ECDH+HIGH:DH+HIGH:RSA+AESGCM:RSA+AES:RSA+HIGH:'
     '!aNULL:!eNULL:!MD5:!3DES'
@@ -175,6 +178,7 @@ _DEFAULT_CIPHERS = (
 
 # Restricted and more secure ciphers for the server side
 # This list has been explicitly chosen to:
+#   * TLS 1.3 ChaCha20 and AES-GCM cipher suites
 #   * Prefer cipher suites that offer perfect forward secrecy (DHE/ECDHE)
 #   * Prefer ECDHE over DHE for better performance
 #   * Prefer AEAD over CBC for better performance and security
@@ -185,6 +189,8 @@ _DEFAULT_CIPHERS = (
 #   * Disable NULL authentication, NULL encryption, MD5 MACs, DSS, RC4, and
 #     3DES for security reasons
 _RESTRICTED_SERVER_CIPHERS = (
+    'TLS13-AES-256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:'
+    'TLS13-AES-128-GCM-SHA256:'
     'ECDH+AESGCM:ECDH+CHACHA20:DH+AESGCM:DH+CHACHA20:ECDH+AES256:DH+AES256:'
     'ECDH+AES128:DH+AES:ECDH+HIGH:DH+HIGH:RSA+AESGCM:RSA+AES:RSA+HIGH:'
     '!aNULL:!eNULL:!MD5:!DSS:!RC4:!3DES'
@@ -418,32 +424,16 @@ def create_default_context(purpose=Purpose.SERVER_AUTH, cafile=None,
     if not isinstance(purpose, _ASN1Object):
         raise TypeError(purpose)
 
+    # SSLContext sets OP_NO_SSLv2, OP_NO_SSLv3, OP_NO_COMPRESSION,
+    # OP_CIPHER_SERVER_PREFERENCE, OP_SINGLE_DH_USE and OP_SINGLE_ECDH_USE
+    # by default.
     context = SSLContext(PROTOCOL_TLS)
-
-    # SSLv2 considered harmful.
-    context.options |= OP_NO_SSLv2
-
-    # SSLv3 has problematic security and is only required for really old
-    # clients such as IE6 on Windows XP
-    context.options |= OP_NO_SSLv3
-
-    # disable compression to prevent CRIME attacks (OpenSSL 1.0+)
-    context.options |= getattr(_ssl, "OP_NO_COMPRESSION", 0)
 
     if purpose == Purpose.SERVER_AUTH:
         # verify certs and host name in client mode
         context.verify_mode = CERT_REQUIRED
         context.check_hostname = True
     elif purpose == Purpose.CLIENT_AUTH:
-        # Prefer the server's ciphers by default so that we get stronger
-        # encryption
-        context.options |= getattr(_ssl, "OP_CIPHER_SERVER_PREFERENCE", 0)
-
-        # Use single use keys in order to improve forward secrecy
-        context.options |= getattr(_ssl, "OP_SINGLE_DH_USE", 0)
-        context.options |= getattr(_ssl, "OP_SINGLE_ECDH_USE", 0)
-
-        # disallow ciphers with known vulnerabilities
         context.set_ciphers(_RESTRICTED_SERVER_CIPHERS)
 
     if cafile or capath or cadata:
@@ -469,12 +459,10 @@ def _create_unverified_context(protocol=PROTOCOL_TLS, cert_reqs=None,
     if not isinstance(purpose, _ASN1Object):
         raise TypeError(purpose)
 
+    # SSLContext sets OP_NO_SSLv2, OP_NO_SSLv3, OP_NO_COMPRESSION,
+    # OP_CIPHER_SERVER_PREFERENCE, OP_SINGLE_DH_USE and OP_SINGLE_ECDH_USE
+    # by default.
     context = SSLContext(protocol)
-    # SSLv2 considered harmful.
-    context.options |= OP_NO_SSLv2
-    # SSLv3 has problematic security and is only required for really old
-    # clients such as IE6 on Windows XP
-    context.options |= OP_NO_SSLv3
 
     if cert_reqs is not None:
         context.verify_mode = cert_reqs
@@ -567,12 +555,14 @@ class SSLSocket(socket):
         if sock.getsockopt(SOL_SOCKET, SO_TYPE) != SOCK_STREAM:
             raise NotImplementedError("only stream sockets are supported")
         socket.__init__(self, _sock=sock._sock)
-
-        # "close" the original socket: it is not usable any more. which should
-        # not actually call the operating system's close() because the
-        # reference counter is greater than 1 (we hold one too).
-        sock._sock._drop()
-
+        # The initializer for socket overrides the methods send(), recv(), etc.
+        # in the instancce, which we don't need -- but we want to provide the
+        # methods defined in SSLSocket.
+        for attr in _delegate_methods:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                pass
         if server_side and server_hostname:
             raise ValueError("server_hostname can only be specified "
                              "in client mode")
@@ -622,8 +612,8 @@ class SSLSocket(socket):
         self._sslobj.context = ctx
 
     def dup(self):
-        raise NotImplemented("Can't dup() %s instances" %
-                             self.__class__.__name__)
+        raise NotImplementedError("Can't dup() %s instances" %
+                                  self.__class__.__name__)
 
     def _checkClosed(self, msg=None):
         # raise an exception here if you wish to check for spurious closes
@@ -896,18 +886,10 @@ class SSLSocket(socket):
         works with the SSL connection.  Just use the code
         from the socket module."""
 
+        self._makefile_refs += 1
         # close=True so as to decrement the reference count when done with
         # the file-like object.
         return _fileobject(self, mode, bufsize, close=True)
-
-    def _reuse(self):
-        self._makefile_refs += 1
-
-    def _drop(self):
-        if self._makefile_refs < 1:
-            self.close()
-        else:
-            self._makefile_refs -= 1
 
     def get_channel_binding(self, cb_type="tls-unique"):
         """Get channel binding data for current connection.  Raise ValueError

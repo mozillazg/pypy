@@ -1,7 +1,7 @@
 import py
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import oefmt
-from pypy.interpreter.gateway import interp2app, ObjSpace
+from pypy.interpreter.gateway import interp2app, ObjSpace, unwrap_spec
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.executioncontext import AsyncAction, report_error
 from rpython.rlib import jit, rgc
@@ -305,6 +305,16 @@ def getweakrefs(space, w_obj):
     if lifeline is not None:
         lifeline.traverse(_get_weakrefs, result)
     return space.newlist(result)
+
+def _remove_dead_weakref(space, w_dict, w_key):
+    """"_remove_dead_weakref(dict, key) -- atomically remove key from dict
+        if it points to a dead weakref.
+    """
+    if not space.isinstance_w(w_dict, space.w_dict):
+        raise oefmt(space.w_TypeError,
+            '_remove_dead_weakref() argument 1 must be dict, not %R', w_dict)
+    raise oefmt(space.w_NotImplementedError, "Not implemented yet") 
+    # CPython uses a PyDict_DelItemIf(dct, key, is_dead_weakref)
 
 #_________________________________________________________________
 # Proxy

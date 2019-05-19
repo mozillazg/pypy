@@ -75,7 +75,7 @@ varnames: ()
 cellvars: ()
 freevars: ()
 nlocals: 0
-flags: 1048643
+flags: 67
 consts: ("'doc string'", 'None')
 
 """
@@ -83,7 +83,6 @@ consts: ("'doc string'", 'None')
 import unittest
 import weakref
 from test.test_support import run_doctest, run_unittest, cpython_only
-from test.test_support import gc_collect
 
 
 def consts(t):
@@ -180,7 +179,6 @@ class CodeWeakRefTest(unittest.TestCase):
         coderef = weakref.ref(f.__code__, callback)
         self.assertTrue(bool(coderef()))
         del f
-        gc_collect()
         self.assertFalse(bool(coderef()))
         self.assertTrue(self.called)
 

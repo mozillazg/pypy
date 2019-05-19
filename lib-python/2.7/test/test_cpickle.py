@@ -9,7 +9,6 @@ from test.pickletester import (AbstractUnpickleTests,
                                AbstractPicklerUnpicklerObjectTests,
                                BigmemPickleTests)
 from test import test_support
-from test.test_pickle import PickleTests, UnpicklerTests
 
 class cStringIOMixin:
     output = input = cStringIO.StringIO
@@ -52,15 +51,10 @@ class cPickleTests(AbstractUnpickleTests, AbstractPickleTests,
 
     error = cPickle.BadPickleGet
     module = cPickle
-    if test_support.check_impl_detail(pypy=True):
-        bad_stack_errors = (IndexError, cPickle.UnpicklingError)
-        bad_mark_errors = PickleTests.bad_mark_errors
-        truncated_errors = PickleTests.truncated_errors
-    else:
-        bad_stack_errors = (cPickle.UnpicklingError,)
-        bad_mark_errors = (EOFError,)
-        truncated_errors = (cPickle.UnpicklingError, EOFError,
-                            AttributeError, ValueError)
+    bad_stack_errors = (cPickle.UnpicklingError,)
+    bad_mark_errors = (EOFError,)
+    truncated_errors = (cPickle.UnpicklingError, EOFError,
+                        AttributeError, ValueError)
 
 class cPickleUnpicklerTests(AbstractUnpickleTests):
 
@@ -73,15 +67,10 @@ class cPickleUnpicklerTests(AbstractUnpickleTests):
             self.close(f)
 
     error = cPickle.BadPickleGet
-    if test_support.check_impl_detail(pypy=True):
-        bad_stack_errors = (IndexError, cPickle.UnpicklingError)
-        bad_mark_errors = UnpicklerTests.bad_mark_errors
-        truncated_errors = UnpicklerTests.truncated_errors
-    else:
-        bad_stack_errors = (cPickle.UnpicklingError,)
-        bad_mark_errors = (EOFError,)
-        truncated_errors = (cPickle.UnpicklingError, EOFError,
-                            AttributeError, ValueError)
+    bad_stack_errors = (cPickle.UnpicklingError,)
+    bad_mark_errors = (EOFError,)
+    truncated_errors = (cPickle.UnpicklingError, EOFError,
+                        AttributeError, ValueError)
 
 class cStringIOCUnpicklerTests(cStringIOMixin, cPickleUnpicklerTests):
     pass
@@ -185,9 +174,7 @@ class cPickleFastPicklerTests(AbstractPickleTests):
 for name in dir(AbstractPickleTests):
     if name.startswith('test_recursive_'):
         func = getattr(AbstractPickleTests, name)
-        if (test_support.check_impl_detail(pypy=True) or
-            '_subclass' in name and '_and_inst' not in name):
-            # PyPy's cPickle matches pure python pickle's behavior here
+        if '_subclass' in name and '_and_inst' not in name:
             assert_args = RuntimeError, 'maximum recursion depth exceeded'
         else:
             assert_args = ValueError, "can't pickle cyclic objects"

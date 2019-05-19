@@ -670,11 +670,10 @@ class UnicodeTest(
                 meth('\xff')
             with self.assertRaises(TypeError) as cm:
                 meth(['f'])
-            if test_support.check_impl_detail():
-                exc = str(cm.exception)
-                self.assertIn('unicode', exc)
-                self.assertIn('str', exc)
-                self.assertIn('tuple', exc)
+            exc = str(cm.exception)
+            self.assertIn('unicode', exc)
+            self.assertIn('str', exc)
+            self.assertIn('tuple', exc)
 
     @test_support.run_with_locale('LC_ALL', 'de_DE', 'fr_FR')
     def test_format_float(self):
@@ -1296,8 +1295,7 @@ class UnicodeTest(
     @unittest.skipIf(sys.maxint > (1 << 32) or struct.calcsize('P') != 4,
                      'only applies to 32-bit platforms')
     def test_expandtabs_overflows_gracefully(self):
-        self.assertRaises((OverflowError, MemoryError),
-                          u't\tt\t'.expandtabs, sys.maxint)
+        self.assertRaises(OverflowError, u't\tt\t'.expandtabs, sys.maxint)
 
     def test__format__(self):
         def test(value, format, expected):
@@ -1652,10 +1650,10 @@ class UnicodeTest(
         # when a string allocation fails with a MemoryError.
         # This used to crash the interpreter,
         # or leak references when the number was smaller.
-        charwidth = 2   # pypy: the char \u0123 is stored in two utf-8 bytes
+        charwidth = 4 if sys.maxunicode >= 0x10000 else 2
         # Note: sys.maxsize is half of the actual max allocation because of
         # the signedness of Py_ssize_t.
-        alloc = lambda: u"\u0123" * (sys.maxsize // charwidth * 2)
+        alloc = lambda: u"a" * (sys.maxsize // charwidth * 2)
         self.assertRaises(MemoryError, alloc)
         self.assertRaises(MemoryError, alloc)
 
@@ -1677,10 +1675,6 @@ class CAPITest(unittest.TestCase):
     # Test PyUnicode_FromFormat()
     def test_from_format(self):
         test_support.import_module('ctypes')
-        try:
-            from ctypes import pythonapi
-        except ImportError:
-            self.skipTest( "no pythonapi in ctypes")
         from ctypes import (
             pythonapi, py_object, sizeof,
             c_int, c_long, c_longlong, c_ssize_t,
@@ -1820,7 +1814,7 @@ class CAPITest(unittest.TestCase):
                      b'repr=%V', None, b'abc\xff')
 
         # not supported: copy the raw format string. these tests are just here
-        # to check for crashs and should not be considered as specifications
+        # to check for crashes and should not be considered as specifications
         check_format(u'%s',
                      b'%1%s', b'abc')
         check_format(u'%1abc',
@@ -1829,6 +1823,12 @@ class CAPITest(unittest.TestCase):
                      b'%+i', c_int(10))
         check_format(u'%s',
                      b'%.%s', b'abc')
+
+        # Issue #33817: empty strings
+        check_format(u'',
+                     b'')
+        check_format(u'',
+                     b'%s', b'')
 
     @test_support.cpython_only
     def test_encode_decimal(self):

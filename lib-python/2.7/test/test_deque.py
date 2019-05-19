@@ -110,7 +110,7 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(deque('abc', maxlen=4).maxlen, 4)
         self.assertEqual(deque('abc', maxlen=2).maxlen, 2)
         self.assertEqual(deque('abc', maxlen=0).maxlen, 0)
-        with self.assertRaises((AttributeError, TypeError)):
+        with self.assertRaises(AttributeError):
             d = deque('abc')
             d.maxlen = 10
 
@@ -353,10 +353,7 @@ class TestBasic(unittest.TestCase):
         for match in (True, False):
             d = deque(['ab'])
             d.extend([MutateCmp(d, match), 'c'])
-            # On CPython we get IndexError: deque mutated during remove().
-            # Why is it an IndexError during remove() only???
-            # On PyPy it is a RuntimeError, as in the other operations.
-            self.assertRaises((IndexError, RuntimeError), d.remove, 'c')
+            self.assertRaises(IndexError, d.remove, 'c')
             self.assertEqual(d, deque())
 
     def test_repr(self):
@@ -518,7 +515,7 @@ class TestBasic(unittest.TestCase):
                 container = reversed(deque([obj, 1]))
             obj.x = iter(container)
             del obj, container
-            test_support.gc_collect()
+            gc.collect()
             self.assertTrue(ref() is None, "Cycle was not collected")
 
     check_sizeof = test_support.check_sizeof
@@ -651,7 +648,6 @@ class TestSubclass(unittest.TestCase):
         p = weakref.proxy(d)
         self.assertEqual(str(p), str(d))
         d = None
-        test_support.gc_collect()
         self.assertRaises(ReferenceError, str, p)
 
     def test_strange_subclass(self):
@@ -662,6 +658,21 @@ class TestSubclass(unittest.TestCase):
         d2 = X([4,5,6])
         d1 == d2   # not clear if this is supposed to be True or False,
                    # but it used to give a SystemError
+
+    @test_support.cpython_only
+    def test_bug_31608(self):
+        # The interpreter used to crash in specific cases where a deque
+        # subclass returned a non-deque.
+        class X(deque):
+            pass
+        d = X()
+        def bad___new__(cls, *args, **kwargs):
+            return [42]
+        X.__new__ = bad___new__
+        with self.assertRaises(TypeError):
+            d * 42  # shouldn't crash
+        with self.assertRaises(TypeError):
+            d + deque([1, 2, 3])  # shouldn't crash
 
 
 class SubclassWithKwargs(deque):

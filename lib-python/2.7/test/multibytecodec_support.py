@@ -1,4 +1,4 @@
-# test_multibytecodec_support.py
+# multibytecodec_support.py
 #   Common Unittest Routines for CJK codecs
 #
 
@@ -119,8 +119,8 @@ class TestBase:
         def myreplace(exc):
             return (u'x', sys.maxint + 1)
         codecs.register_error("test.cjktest", myreplace)
-        self.assertRaises((IndexError, OverflowError), self.encode,
-                          self.unmappedunicode, 'test.cjktest')
+        self.assertRaises(IndexError, self.encode, self.unmappedunicode,
+                          'test.cjktest')
 
     def test_callback_None_index(self):
         def myreplace(exc):
@@ -364,7 +364,7 @@ class TestBase_Mapping(unittest.TestCase):
                 self.assertRaises(UnicodeError, func, self.encoding, scheme)
 
 def load_teststring(name):
-    dir = test_support.findfile('cjkencodings')
+    dir = os.path.join(os.path.dirname(__file__), 'cjkencodings')
     with open(os.path.join(dir, name + '.txt'), 'rb') as f:
         encoded = f.read()
     with open(os.path.join(dir, name + '-utf8.txt'), 'rb') as f:

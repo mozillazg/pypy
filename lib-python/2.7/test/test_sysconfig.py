@@ -7,8 +7,7 @@ import shutil
 import subprocess
 from copy import copy, deepcopy
 
-from test.test_support import (run_unittest, TESTFN, unlink, get_attribute,
-                               import_module, check_impl_detail)
+from test.test_support import run_unittest, TESTFN, unlink, get_attribute
 
 import sysconfig
 from sysconfig import (get_paths, get_platform, get_config_vars,
@@ -222,15 +221,6 @@ class TestSysConfig(unittest.TestCase):
                                            '-dynamic -DNDEBUG -g -O3'%(arch,))
 
             self.assertEqual(get_platform(), 'macosx-10.4-%s'%(arch,))
-        
-        # macosx with ARCHFLAGS set and empty _CONFIG_VARS
-        os.environ['ARCHFLAGS'] = '-arch i386'
-        sysconfig._CONFIG_VARS = None
-        
-        # this will attempt to recreate the _CONFIG_VARS based on environment 
-        # variables; used to check a problem with the PyPy's _init_posix
-        # implementation; see: issue 705
-        get_config_vars() 
 
         # linux debian sarge
         os.name = 'posix'
@@ -246,18 +236,13 @@ class TestSysConfig(unittest.TestCase):
 
     def test_get_config_h_filename(self):
         config_h = sysconfig.get_config_h_filename()
-        # import_module skips the test when the CPython C Extension API
-        # appears to not be supported
-        self.assertTrue(os.path.isfile(config_h) or
-                        not import_module('_testcapi'), config_h)
+        self.assertTrue(os.path.isfile(config_h), config_h)
 
     def test_get_scheme_names(self):
         wanted = ('nt', 'nt_user', 'os2', 'os2_home', 'osx_framework_user',
-                  'posix_home', 'posix_prefix', 'posix_user', 'pypy')
+                  'posix_home', 'posix_prefix', 'posix_user')
         self.assertEqual(get_scheme_names(), wanted)
 
-    @unittest.skipIf(check_impl_detail(pypy=True),
-                     'Test is not PyPy compatible')
     @unittest.skipIf(sys.platform.startswith('win'),
                      'Test is not Windows compatible')
     def test_get_makefile_filename(self):

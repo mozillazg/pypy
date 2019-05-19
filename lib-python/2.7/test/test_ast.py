@@ -195,10 +195,6 @@ class AST_Tests(unittest.TestCase):
                 self._assertTrueorder(value, parent_pos)
 
     def test_AST_objects(self):
-        if not test_support.check_impl_detail():
-            # PyPy also provides a __dict__ to the ast.AST base class.
-            return
-
         x = ast.AST()
         self.assertEqual(x._fields, ())
 
@@ -251,7 +247,7 @@ class AST_Tests(unittest.TestCase):
 
     def test_field_attr_existence(self):
         for name, item in ast.__dict__.iteritems():
-            if isinstance(item, type) and name != 'AST' and name[0].isupper(): # XXX: pypy does not allow abstract ast class instanciation
+            if isinstance(item, type) and name != 'AST' and name[0].isupper():
                 x = item()
                 if isinstance(x, ast.AST):
                     self.assertEqual(type(x._fields), tuple)
@@ -377,16 +373,14 @@ class AST_Tests(unittest.TestCase):
         ast.fix_missing_locations(m)
         with self.assertRaises(TypeError) as cm:
             compile(m, "<test>", "exec")
-        if test_support.check_impl_detail():
-            self.assertIn("identifier must be of type str", str(cm.exception))
+        self.assertIn("identifier must be of type str", str(cm.exception))
 
     def test_invalid_string(self):
         m = ast.Module([ast.Expr(ast.Str(43))])
         ast.fix_missing_locations(m)
         with self.assertRaises(TypeError) as cm:
             compile(m, "<test>", "exec")
-        if test_support.check_impl_detail():
-            self.assertIn("string must be of type str or uni", str(cm.exception))
+        self.assertIn("string must be of type str or uni", str(cm.exception))
 
 
 class ASTHelpers_Test(unittest.TestCase):

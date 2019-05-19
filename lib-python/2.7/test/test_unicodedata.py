@@ -204,6 +204,19 @@ class UnicodeFunctionsTest(UnicodeDatabaseTest):
         b = u'C\u0338' * 20  + u'\xC7'
         self.assertEqual(self.db.normalize('NFC', a), b)
 
+    def test_issue29456(self):
+        # Fix #29456
+        u1176_str_a = u'\u1100\u1176\u11a8'
+        u1176_str_b = u'\u1100\u1176\u11a8'
+        u11a7_str_a = u'\u1100\u1175\u11a7'
+        u11a7_str_b = u'\uae30\u11a7'
+        u11c3_str_a = u'\u1100\u1175\u11c3'
+        u11c3_str_b = u'\uae30\u11c3'
+        self.assertEqual(self.db.normalize('NFC', u1176_str_a), u1176_str_b)
+        self.assertEqual(self.db.normalize('NFC', u11a7_str_a), u11a7_str_b)
+        self.assertEqual(self.db.normalize('NFC', u11c3_str_a), u11c3_str_b)
+
+
     def test_east_asian_width(self):
         eaw = self.db.east_asian_width
         self.assertRaises(TypeError, eaw, 'a')
@@ -233,12 +246,10 @@ class UnicodeMiscTest(UnicodeDatabaseTest):
         # been loaded in this process.
         popen = subprocess.Popen(args, stderr=subprocess.PIPE)
         popen.wait()
-        self.assertIn(popen.returncode, [0, 1]) # at least it did not segfault
-        if test.test_support.check_impl_detail():
-            self.assertEqual(popen.returncode, 1)
-            error = "SyntaxError: (unicode error) \N escapes not supported " \
-                "(can't load unicodedata module)"
-            self.assertIn(error, popen.stderr.read())
+        self.assertEqual(popen.returncode, 1)
+        error = "SyntaxError: (unicode error) \N escapes not supported " \
+            "(can't load unicodedata module)"
+        self.assertIn(error, popen.stderr.read())
 
     def test_decimal_numeric_consistent(self):
         # Test that decimal and numeric are consistent,

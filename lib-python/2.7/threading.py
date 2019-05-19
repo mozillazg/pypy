@@ -36,10 +36,6 @@ _start_new_thread = thread.start_new_thread
 _allocate_lock = thread.allocate_lock
 _get_ident = thread.get_ident
 ThreadError = thread.error
-try:
-    _CRLock = thread.RLock
-except AttributeError:
-    _CRLock = None
 del thread
 
 
@@ -124,9 +120,7 @@ def RLock(*args, **kwargs):
     acquired it.
 
     """
-    if _CRLock is None or args or kwargs:
-        return _PyRLock(*args, **kwargs)
-    return _CRLock(_active)
+    return _RLock(*args, **kwargs)
 
 class _RLock(_Verbose):
     """A reentrant lock must be released by the thread that acquired it. Once a
@@ -244,8 +238,6 @@ class _RLock(_Verbose):
     def _is_owned(self):
         return self.__owner == _get_ident()
 
-_PyRLock = _RLock
-
 
 def Condition(*args, **kwargs):
     """Factory function that returns a new condition variable object.
@@ -349,33 +341,22 @@ class _Condition(_Verbose):
                 if __debug__:
                     self._note("%s.wait(): got it", self)
             else:
-                # PyPy patch: use _py3k_acquire()
-                if timeout > 0:
-                    try:
-                        gotit = waiter._py3k_acquire(True, timeout)
-                    except OverflowError:
-                        # bah, in Python 3, acquire(True, timeout) raises
-                        # OverflowError if the timeout is too huge.  For
-                        # forward-compatibility reasons we do the same.
-                        waiter.acquire()
-                        gotit = True
-                    except AttributeError:
-                        # someone patched the 'waiter' class, probably.
-                        # Fall back to the standard CPython logic.
-                        # See the CPython lib for the comments about it...
-                        endtime = _time() + timeout
-                        delay = 0.0005 # 500 us -> initial delay of 1 ms
-                        while True:
-                            gotit = waiter.acquire(0)
-                            if gotit:
-                                break
-                            remaining = endtime - _time()
-                            if remaining <= 0:
-                                break
-                            delay = min(delay * 2, remaining, .05)
-                            _sleep(delay)
-                else:
-                    gotit = waiter.acquire(False)
+                # Balancing act:  We can't afford a pure busy loop, so we
+                # have to sleep; but if we sleep the whole timeout time,
+                # we'll be unresponsive.  The scheme here sleeps very
+                # little at first, longer as time goes on, but never longer
+                # than 20 times per second (or the timeout time remaining).
+                endtime = _time() + timeout
+                delay = 0.0005 # 500 us -> initial delay of 1 ms
+                while True:
+                    gotit = waiter.acquire(0)
+                    if gotit:
+                        break
+                    remaining = endtime - _time()
+                    if remaining <= 0:
+                        break
+                    delay = min(delay * 2, remaining, .05)
+                    _sleep(delay)
                 if not gotit:
                     if __debug__:
                         self._note("%s.wait(%s): timed out", self, timeout)

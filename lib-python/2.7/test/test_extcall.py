@@ -90,19 +90,19 @@ Verify clearing of SF bug #733667
 
     >>> class Nothing: pass
     ...
-    >>> g(*Nothing())                     #doctest: +ELLIPSIS
+    >>> g(*Nothing())
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after * must be an iterable, not instance
+    TypeError: g() argument after * must be an iterable, not instance
 
     >>> class Nothing:
     ...     def __len__(self): return 5
     ...
 
-    >>> g(*Nothing())                     #doctest: +ELLIPSIS
+    >>> g(*Nothing())
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after * must be an iterable, not instance
+    TypeError: g() argument after * must be an iterable, not instance
 
     >>> class Nothing():
     ...     def __len__(self): return 5
@@ -165,70 +165,72 @@ What about willful misconduct?
       ...
     TypeError: g() got multiple values for keyword argument 'x'
 
-    >>> f(**{1:2})                             #doctest: +ELLIPSIS
+    >>> f(**{1:2})
     Traceback (most recent call last):
       ...
-    TypeError: ...keywords must be strings
+    TypeError: f() keywords must be strings
 
     >>> h(**{'e': 2})
     Traceback (most recent call last):
       ...
     TypeError: h() got an unexpected keyword argument 'e'
 
-    >>> h(*h)                                  #doctest: +ELLIPSIS
+    >>> h(*h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after * must be an iterable, not function
+    TypeError: h() argument after * must be an iterable, not function
 
-    >>> h(1, *h)                               #doctest: +ELLIPSIS
+    >>> h(1, *h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after * must be an iterable, not function
+    TypeError: h() argument after * must be an iterable, not function
 
-    >>> dir(*h)                                #doctest: +ELLIPSIS
+    >>> dir(*h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after * must be an iterable, not function
+    TypeError: dir() argument after * must be an iterable, not function
 
-    >>> None(*h)                               #doctest: +ELLIPSIS
+    >>> None(*h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after * must be an iterable, not function
+    TypeError: NoneType object argument after * must be an iterable, \
+not function
 
-    >>> h(**h)                                 #doctest: +ELLIPSIS
+    >>> h(**h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after ** must be a mapping, not function
+    TypeError: h() argument after ** must be a mapping, not function
 
-    >>> h(**[])                                #doctest: +ELLIPSIS
+    >>> h(**[])
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after ** must be a mapping, not list
+    TypeError: h() argument after ** must be a mapping, not list
 
-    >>> h(a=1, **h)                            #doctest: +ELLIPSIS
+    >>> h(a=1, **h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after ** must be a mapping, not function
+    TypeError: h() argument after ** must be a mapping, not function
 
-    >>> h(a=1, **[])                           #doctest: +ELLIPSIS
+    >>> h(a=1, **[])
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after ** must be a mapping, not list
+    TypeError: h() argument after ** must be a mapping, not list
 
-    >>> dir(**h)                               #doctest: +ELLIPSIS
+    >>> dir(**h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after ** must be a mapping, not function
+    TypeError: dir() argument after ** must be a mapping, not function
 
-    >>> None(**h)                              #doctest: +ELLIPSIS
+    >>> None(**h)
     Traceback (most recent call last):
       ...
-    TypeError: ...argument after ** must be a mapping, not function
+    TypeError: NoneType object argument after ** must be a mapping, \
+not function
 
-    >>> dir(b=1, **{'b': 1})                   #doctest: +ELLIPSIS
+    >>> dir(b=1, **{'b': 1})
     Traceback (most recent call last):
       ...
-    TypeError: ...got multiple values for keyword argument 'b'
+    TypeError: dir() got multiple values for keyword argument 'b'
 
 Another helper function
 
@@ -276,10 +278,10 @@ TypeError if te dictionary is not empty
     ...     False
     True
 
-    >>> id(1, **{'foo': 1})                 #doctest: +ELLIPSIS
+    >>> id(1, **{'foo': 1})
     Traceback (most recent call last):
       ...
-    TypeError: id() ... keyword argument...
+    TypeError: id() takes no keyword arguments
 
 A corner case of keyword dictionary items being deleted during
 the function call setup. See <http://bugs.python.org/issue2016>.

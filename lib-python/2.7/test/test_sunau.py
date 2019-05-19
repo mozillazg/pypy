@@ -94,7 +94,7 @@ class SunauULAWTest(SunauTest, unittest.TestCase):
 
 def test_main():
     run_unittest(SunauPCM8Test, SunauPCM16Test, SunauPCM16Test,
-                 SunauPCM32Test)#, SunauULAWTest)  unimpl funcs in lib_pypy/audioop.py
+                 SunauPCM32Test, SunauULAWTest)
 
 if __name__ == "__main__":
     test_main()

@@ -40,10 +40,6 @@ import tokenize
 import linecache
 from operator import attrgetter
 from collections import namedtuple
-try:
-    from cpyext import is_cpyext_function as _is_cpyext_function
-except ImportError:
-    _is_cpyext_function = lambda obj: False
 
 # These constants are from Include/code.h.
 CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS = 0x1, 0x2, 0x4, 0x8
@@ -207,7 +203,7 @@ def isframe(object):
         f_locals        local namespace seen by this frame
         f_restricted    0 or 1 if frame is in restricted execution mode
         f_trace         tracing function for this frame, or None"""
-    return isinstance(object, (types.FrameType, types.FakeFrameType))
+    return isinstance(object, types.FrameType)
 
 def iscode(object):
     """Return true if the object is a code object.
@@ -234,7 +230,7 @@ def isbuiltin(object):
         __doc__         documentation string
         __name__        original name of this function or method
         __self__        instance to which a method is bound, or None"""
-    return isinstance(object, types.BuiltinFunctionType) or _is_cpyext_function(object)
+    return isinstance(object, types.BuiltinFunctionType)
 
 def isroutine(object):
     """Return true if the object is any kind of function or method."""
@@ -692,8 +688,15 @@ def getsourcelines(object):
     raised if the source code cannot be retrieved."""
     lines, lnum = findsource(object)
 
-    if ismodule(object): return lines, 0
-    else: return getblock(lines[lnum:]), lnum + 1
+    if istraceback(object):
+        object = object.tb_frame
+
+    # for module or frame that corresponds to module, return all source lines
+    if (ismodule(object) or
+        (isframe(object) and object.f_code.co_name == "<module>")):
+        return lines, 0
+    else:
+        return getblock(lines[lnum:]), lnum + 1
 
 def getsource(object):
     """Return the text of the source code for an object.
@@ -752,15 +755,8 @@ def getargs(co):
     'varargs' and 'varkw' are the names of the * and ** arguments or None."""
 
     if not iscode(co):
-        if hasattr(len, 'func_code') and type(co) is type(len.func_code):
-            # PyPy extension: built-in function objects have a func_code too.
-            # There is no co_code on it, but co_argcount and co_varnames and
-            # co_flags are present.
-            pass
-        else:
-            raise TypeError('{!r} is not a code object'.format(co))
+        raise TypeError('{!r} is not a code object'.format(co))
 
-    code = getattr(co, 'co_code', '')
     nargs = co.co_argcount
     names = co.co_varnames
     args = list(names[:nargs])
@@ -770,18 +766,21 @@ def getargs(co):
     for i in range(nargs):
         if args[i][:1] in ('', '.'):
             stack, remain, count = [], [], []
-            while step < len(code):
-                op = ord(code[step])
+            while step < len(co.co_code):
+                op = ord(co.co_code[step])
                 step = step + 1
                 if op >= dis.HAVE_ARGUMENT:
                     opname = dis.opname[op]
-                    value = ord(code[step]) + ord(code[step+1])*256
+                    value = ord(co.co_code[step]) + ord(co.co_code[step+1])*256
                     step = step + 2
                     if opname in ('UNPACK_TUPLE', 'UNPACK_SEQUENCE'):
                         remain.append(value)
                         count.append(value)
-                    elif opname == 'STORE_FAST':
-                        stack.append(names[value])
+                    elif opname in ('STORE_FAST', 'STORE_DEREF'):
+                        if opname == 'STORE_FAST':
+                            stack.append(names[value])
+                        else:
+                            stack.append(co.co_cellvars[value])
 
                         # Special case for sublists of length 1: def foo((bar))
                         # doesn't generate the UNPACK_TUPLE bytecode, so if
@@ -822,9 +821,7 @@ def getargspec(func):
 
     if ismethod(func):
         func = func.im_func
-    if not (isfunction(func) or
-            isbuiltin(func) and hasattr(func, 'func_code')):
-            # PyPy extension: this works for built-in functions too
+    if not isfunction(func):
         raise TypeError('{!r} is not a Python function'.format(func))
     args, varargs, varkw = getargs(func.func_code)
     return ArgSpec(args, varargs, varkw, func.func_defaults)

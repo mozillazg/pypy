@@ -12,8 +12,7 @@ from functools import wraps
 from UserList import UserList
 
 from test.test_support import TESTFN, check_warnings, run_unittest, make_bad_fd
-from test.test_support import py3k_bytes as bytes, cpython_only
-from test.test_support import gc_collect
+from test.test_support import py3k_bytes as bytes, cpython_only, check_py3k_warnings
 from test.script_helper import run_python
 
 from _io import FileIO as _FileIO
@@ -36,7 +35,6 @@ class AutoFileTests(unittest.TestCase):
         self.assertEqual(self.f.tell(), p.tell())
         self.f.close()
         self.f = None
-        gc_collect()
         self.assertRaises(ReferenceError, getattr, p, 'tell')
 
     def testSeekTell(self):
@@ -103,6 +101,10 @@ class AutoFileTests(unittest.TestCase):
         self.assertEqual(self.f.readline(None), b"hi\n")
         self.assertEqual(self.f.readlines(None), [b"bye\n", b"abc"])
 
+    def testWriteUnicode(self):
+        with check_py3k_warnings():
+            self.f.write(u'')
+
     def testRepr(self):
         self.assertEqual(repr(self.f), "<_io.FileIO name=%r mode='%s'>"
                                        % (self.f.name, self.f.mode))
@@ -140,16 +142,12 @@ class AutoFileTests(unittest.TestCase):
             method = getattr(self.f, methodname)
             # should raise on closed file
             self.assertRaises(ValueError, method)
-        # methods with one argument
-        self.assertRaises(ValueError, self.f.readinto, 0)
-        self.assertRaises(ValueError, self.f.write, 0)
-        self.assertRaises(ValueError, self.f.seek, 0)
 
-        self.assertRaises(TypeError, self.f.readinto)
+        self.assertRaises(ValueError, self.f.readinto) # XXX should be TypeError?
         self.assertRaises(ValueError, self.f.readinto, bytearray(1))
-        self.assertRaises(TypeError, self.f.seek)
+        self.assertRaises(ValueError, self.f.seek)
         self.assertRaises(ValueError, self.f.seek, 0)
-        self.assertRaises(TypeError, self.f.write)
+        self.assertRaises(ValueError, self.f.write)
         self.assertRaises(ValueError, self.f.write, b'')
         self.assertRaises(TypeError, self.f.writelines)
         self.assertRaises(ValueError, self.f.writelines, b'')
@@ -216,7 +214,7 @@ class AutoFileTests(unittest.TestCase):
 
     @ClosedFDRaises
     def testErrnoOnClosedWrite(self, f):
-        f.write('a')
+        f.write(b'a')
 
     @ClosedFDRaises
     def testErrnoOnClosedSeek(self, f):

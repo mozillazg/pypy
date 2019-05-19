@@ -54,9 +54,9 @@ class TestPartial(unittest.TestCase):
         self.assertEqual(p.args, (1, 2))
         self.assertEqual(p.keywords, dict(a=10, b=20))
         # attributes should not be writable
-        self.assertRaises((TypeError, AttributeError), setattr, p, 'func', map)
-        self.assertRaises((TypeError, AttributeError), setattr, p, 'args', (1, 2))
-        self.assertRaises((TypeError, AttributeError), setattr, p, 'keywords', dict(a=1, b=2))
+        self.assertRaises(TypeError, setattr, p, 'func', map)
+        self.assertRaises(TypeError, setattr, p, 'args', (1, 2))
+        self.assertRaises(TypeError, setattr, p, 'keywords', dict(a=1, b=2))
 
         p = self.partial(hex)
         try:
@@ -147,7 +147,6 @@ class TestPartial(unittest.TestCase):
         p = proxy(f)
         self.assertEqual(f.func, p.func)
         f = None
-        test_support.gc_collect()
         self.assertRaises(ReferenceError, getattr, p, 'func')
 
     def test_with_bound_and_unbound_methods(self):
@@ -272,7 +271,6 @@ class TestPartial(unittest.TestCase):
             f.__setstate__((capture, (), {}, {}))
 
     # Issue 6083: Reference counting bug
-    @unittest.skipUnless(test_support.check_impl_detail(), "ref counting")
     def test_setstate_refcount(self):
         class BadSequence:
             def __len__(self):
@@ -321,7 +319,7 @@ class TestUpdateWrapper(unittest.TestCase):
                       updated=functools.WRAPPER_UPDATES):
         # Check attributes were assigned
         for name in assigned:
-            self.assertTrue(getattr(wrapper, name) == getattr(wrapped, name), name)
+            self.assertTrue(getattr(wrapper, name) is getattr(wrapped, name))
         # Check attributes were updated
         for name in updated:
             wrapper_attr = getattr(wrapper, name)
@@ -601,6 +599,67 @@ class TestTotalOrdering(unittest.TestCase):
                 raise TypeError
         with self.assertRaises(TypeError):
             TestTO(8) <= ()
+
+    def test_bug_25732(self):
+        @functools.total_ordering
+        class A:
+            def __init__(self, value):
+                self.value = value
+            def __gt__(self, other):
+                return self.value > other.value
+            def __eq__(self, other):
+                return self.value == other.value
+            def __hash__(self):
+                return hash(self.value)
+        self.assertTrue(A(1) != A(2))
+        self.assertFalse(A(1) != A(1))
+
+        @functools.total_ordering
+        class A(object):
+            def __init__(self, value):
+                self.value = value
+            def __gt__(self, other):
+                return self.value > other.value
+            def __eq__(self, other):
+                return self.value == other.value
+            def __hash__(self):
+                return hash(self.value)
+        self.assertTrue(A(1) != A(2))
+        self.assertFalse(A(1) != A(1))
+
+        @functools.total_ordering
+        class A:
+            def __init__(self, value):
+                self.value = value
+            def __gt__(self, other):
+                return self.value > other.value
+            def __eq__(self, other):
+                return self.value == other.value
+            def __ne__(self, other):
+                raise RuntimeError(self, other)
+            def __hash__(self):
+                return hash(self.value)
+        with self.assertRaises(RuntimeError):
+            A(1) != A(2)
+        with self.assertRaises(RuntimeError):
+            A(1) != A(1)
+
+        @functools.total_ordering
+        class A(object):
+            def __init__(self, value):
+                self.value = value
+            def __gt__(self, other):
+                return self.value > other.value
+            def __eq__(self, other):
+                return self.value == other.value
+            def __ne__(self, other):
+                raise RuntimeError(self, other)
+            def __hash__(self):
+                return hash(self.value)
+        with self.assertRaises(RuntimeError):
+            A(1) != A(2)
+        with self.assertRaises(RuntimeError):
+            A(1) != A(1)
 
 def test_main(verbose=None):
     test_classes = (

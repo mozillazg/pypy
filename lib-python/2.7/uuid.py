@@ -45,7 +45,6 @@ Typical usage:
 """
 
 import os
-import struct
 
 __author__ = 'Ka-Ping Yee <ping@zesty.ca>'
 
@@ -128,39 +127,25 @@ class UUID(object):
         overriding the given 'hex', 'bytes', 'bytes_le', 'fields', or 'int'.
         """
 
+        if [hex, bytes, bytes_le, fields, int].count(None) != 4:
+            raise TypeError('need one of hex, bytes, bytes_le, fields, or int')
         if hex is not None:
-            if (bytes is not None or bytes_le is not None or
-                    fields is not None or int is not None):
-                raise TypeError('if the hex argument is given, bytes,'
-                                ' bytes_le, fields,  and int need to be None')
             hex = hex.replace('urn:', '').replace('uuid:', '')
             hex = hex.strip('{}').replace('-', '')
             if len(hex) != 32:
                 raise ValueError('badly formed hexadecimal UUID string')
             int = long(hex, 16)
-        elif bytes_le is not None:
-            if bytes is not None or fields is not None or int is not None:
-                raise TypeError('if the bytes_le argument is given, bytes,'
-                                ' fields, and int need to be None')
+        if bytes_le is not None:
             if len(bytes_le) != 16:
                 raise ValueError('bytes_le is not a 16-char string')
             bytes = (bytes_le[3] + bytes_le[2] + bytes_le[1] + bytes_le[0] +
                      bytes_le[5] + bytes_le[4] + bytes_le[7] + bytes_le[6] +
                      bytes_le[8:])
-            int = (struct.unpack('>Q', bytes[:8])[0] << 64 |
-                   struct.unpack('>Q', bytes[8:])[0])
-        elif bytes is not None:
-            if fields is not None or int is not None:
-                raise TypeError('if the bytes argument is given, fields '
-                                'and int need to be None')
+        if bytes is not None:
             if len(bytes) != 16:
                 raise ValueError('bytes is not a 16-char string')
-            int = (struct.unpack('>Q', bytes[:8])[0] << 64 |
-                   struct.unpack('>Q', bytes[8:])[0])
-        elif fields is not None:
-            if int is not None:
-                raise TypeError('if the fields argument is given, int needs'
-                                ' to be None')
+            int = long(('%02x'*16) % tuple(map(ord, bytes)), 16)
+        if fields is not None:
             if len(fields) != 6:
                 raise ValueError('fields is not a 6-tuple')
             (time_low, time_mid, time_hi_version,
@@ -180,12 +165,9 @@ class UUID(object):
             clock_seq = (clock_seq_hi_variant << 8L) | clock_seq_low
             int = ((time_low << 96L) | (time_mid << 80L) |
                    (time_hi_version << 64L) | (clock_seq << 48L) | node)
-        elif int is not None:
+        if int is not None:
             if not 0 <= int < 1<<128L:
                 raise ValueError('int is out of range (need a 128-bit value)')
-        else:
-            raise TypeError('one of hex, bytes, bytes_le, fields,'
-                            ' or int need to be not None')
         if version is not None:
             if not 1 <= version <= 5:
                 raise ValueError('illegal version number')
@@ -195,7 +177,7 @@ class UUID(object):
             # Set the version number.
             int &= ~(0xf000 << 64L)
             int |= version << 76L
-        object.__setattr__(self, 'int', int)
+        self.__dict__['int'] = int
 
     def __cmp__(self, other):
         if isinstance(other, UUID):
@@ -357,8 +339,9 @@ def _find_mac(command, args, hw_identifiers, get_index):
 def _ifconfig_getnode():
     """Get the hardware address on Unix by running ifconfig."""
     # This works on Linux ('' or '-a'), Tru64 ('-av'), but not all Unixes.
+    keywords = ('hwaddr', 'ether', 'address:', 'lladdr')
     for args in ('', '-a', '-av'):
-        mac = _find_mac('ifconfig', args, ['hwaddr', 'ether'], lambda i: i+1)
+        mac = _find_mac('ifconfig', args, keywords, lambda i: i+1)
         if mac:
             return mac
 
@@ -371,7 +354,20 @@ def _arp_getnode():
         return None
 
     # Try getting the MAC addr from arp based on our IP address (Solaris).
-    return _find_mac('arp', '-an', [ip_addr], lambda i: -1)
+    mac = _find_mac('arp', '-an', [ip_addr], lambda i: -1)
+    if mac:
+        return mac
+
+    # This works on OpenBSD
+    mac = _find_mac('arp', '-an', [ip_addr], lambda i: i+1)
+    if mac:
+        return mac
+
+    # This works on Linux, FreeBSD and NetBSD
+    mac = _find_mac('arp', '-an', ['(%s)' % ip_addr],
+                    lambda i: i+2)
+    if mac:
+        return mac
 
 def _lanscan_getnode():
     """Get the hardware address on Unix by running lanscan."""
@@ -423,7 +419,7 @@ def _ipconfig_getnode():
         with pipe:
             for line in pipe:
                 value = line.split(':')[-1].strip().lower()
-                if re.match('([0-9a-f][0-9a-f]-){5}[0-9a-f][0-9a-f]', value):
+                if re.match('(?:[0-9a-f][0-9a-f]-){5}[0-9a-f][0-9a-f]$', value):
                     return int(value.replace('-', ''), 16)
 
 def _netbios_getnode():
@@ -475,8 +471,6 @@ try:
             continue
         if hasattr(lib, 'uuid_generate_time'):
             _uuid_generate_time = lib.uuid_generate_time
-            _uuid_generate_time.argtypes = [ctypes.c_char * 16]
-            _uuid_generate_time.restype = None
             break
     del _libnames
 
@@ -506,9 +500,6 @@ try:
         lib = None
     _UuidCreate = getattr(lib, 'UuidCreateSequential',
                           getattr(lib, 'UuidCreate', None))
-    if _UuidCreate is not None:
-        _UuidCreate.argtypes = [ctypes.c_char * 16]
-        _UuidCreate.restype = ctypes.c_int
 except:
     pass
 
@@ -531,6 +522,11 @@ def _random_getnode():
 
 _node = None
 
+_NODE_GETTERS_WIN32 = [_windll_getnode, _netbios_getnode, _ipconfig_getnode]
+
+_NODE_GETTERS_UNIX = [_unixdll_getnode, _ifconfig_getnode, _arp_getnode,
+                      _lanscan_getnode, _netstat_getnode]
+
 def getnode():
     """Get the hardware address as a 48-bit positive integer.
 
@@ -546,18 +542,19 @@ def getnode():
 
     import sys
     if sys.platform == 'win32':
-        getters = [_windll_getnode, _netbios_getnode, _ipconfig_getnode]
+        getters = _NODE_GETTERS_WIN32
     else:
-        getters = [_unixdll_getnode, _ifconfig_getnode, _arp_getnode,
-                   _lanscan_getnode, _netstat_getnode]
+        getters = _NODE_GETTERS_UNIX
 
     for getter in getters + [_random_getnode]:
         try:
             _node = getter()
         except:
             continue
-        if _node is not None:
+        if (_node is not None) and (0 <= _node < (1 << 48)):
             return _node
+    assert False, '_random_getnode() returned invalid value: {}'.format(_node)
+
 
 _last_timestamp = None
 

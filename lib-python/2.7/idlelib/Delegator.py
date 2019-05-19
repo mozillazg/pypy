@@ -12,14 +12,6 @@ class Delegator:
         self.__cache.add(name)
         return attr
 
-    def __nonzero__(self):
-        # this is needed for PyPy: else, if self.delegate is None, the
-        # __getattr__ above picks NoneType.__nonzero__, which returns
-        # False. Thus, bool(Delegator()) is False as well, but it's not what
-        # we want.  On CPython, bool(Delegator()) is True because NoneType
-        # does not have __nonzero__
-        return True
-
     def resetcache(self):
         for key in self.__cache:
             try:

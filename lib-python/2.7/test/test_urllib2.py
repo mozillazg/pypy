@@ -285,15 +285,12 @@ class MockHTTPResponse:
         self.reason = reason
     def read(self):
         return ''
-    def _reuse(self): pass
-    def _drop(self): pass
 
 class MockHTTPClass:
     def __init__(self):
         self.req_headers = []
         self.data = None
         self.raise_on_endheaders = False
-        self.sock = None
         self._tunnel_headers = {}
 
     def __call__(self, host, timeout=socket._GLOBAL_DEFAULT_TIMEOUT):

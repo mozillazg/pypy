@@ -257,7 +257,7 @@ def get_pydoc_html(module):
 def get_pydoc_link(module):
     "Returns a documentation web link of a module"
     dirname = os.path.dirname
-    basedir = dirname(dirname(__file__))
+    basedir = dirname(dirname(os.path.realpath(__file__)))
     doc = pydoc.TextDoc()
     loc = doc.getdocloc(module, basedir=basedir)
     return loc
@@ -441,10 +441,11 @@ class PydocImportTest(PydocBaseTest):
         modname = 'testmod_xyzzy'
         testpairs = (
             ('i_am_not_here', 'i_am_not_here'),
-            ('test.i_am_not_here_either', 'test.i_am_not_here_either'),
-            ('test.i_am_not_here.neither_am_i', 'test.i_am_not_here'),
-            ('i_am_not_here.{}'.format(modname), 'i_am_not_here'),
-            ('test.{}'.format(modname), 'test.{}'.format(modname)),
+            ('test.i_am_not_here_either', 'i_am_not_here_either'),
+            ('test.i_am_not_here.neither_am_i', 'i_am_not_here.neither_am_i'),
+            ('i_am_not_here.{}'.format(modname),
+             'i_am_not_here.{}'.format(modname)),
+            ('test.{}'.format(modname), modname),
             )
 
         sourcefn = os.path.join(TESTFN, modname) + os.extsep + "py"

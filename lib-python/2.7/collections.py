@@ -24,19 +24,6 @@ import sys as _sys
 import heapq as _heapq
 from itertools import repeat as _repeat, chain as _chain, starmap as _starmap
 from itertools import imap as _imap
-try:
-    from __pypy__ import newdict
-except ImportError:
-    assert '__pypy__' not in _sys.builtin_module_names
-    newdict = lambda _ : {}
-try:
-    from __pypy__ import reversed_dict as _reversed_dict
-except ImportError:
-    _reversed_dict = None     # don't have ordered dicts
-try:
-    from __pypy__ import dict_popitem_first as _dict_popitem_first
-except ImportError:
-    _dict_popitem_first = None
 
 try:
     from thread import get_ident as _get_ident
@@ -48,104 +35,8 @@ except ImportError:
 ### OrderedDict
 ################################################################################
 
-if _dict_popitem_first is None:
-    def _dict_popitem_first(self):
-        it = dict.iteritems(self)
-        try:
-            k, v = it.next()
-        except StopIteration:
-            raise KeyError('dictionary is empty')
-        dict.__delitem__(self, k)
-        return (k, v)
-
-
 class OrderedDict(dict):
-    '''Dictionary that remembers insertion order.
-
-    In PyPy all dicts are ordered anyway.  This is mostly useful as a
-    placeholder to mean "this dict must be ordered even on CPython".
-
-    Known difference: iterating over an OrderedDict which is being
-    concurrently modified raises RuntimeError in PyPy.  In CPython
-    instead we get some behavior that appears reasonable in some
-    cases but is nonsensical in other cases.  This is officially
-    forbidden by the CPython docs, so we forbid it explicitly for now.
-    '''
-
-    def __reversed__(self):
-        return _reversed_dict(self)
-
-    def popitem(self, last=True):
-        '''od.popitem() -> (k, v), return and remove a (key, value) pair.
-        Pairs are returned in LIFO order if last is true or FIFO order if false.
-
-        '''
-        if last:
-            return dict.popitem(self)
-        else:
-            return _dict_popitem_first(self)
-
-    def __repr__(self, _repr_running={}):
-        'od.__repr__() <==> repr(od)'
-        call_key = id(self), _get_ident()
-        if call_key in _repr_running:
-            return '...'
-        _repr_running[call_key] = 1
-        try:
-            if not self:
-                return '%s()' % (self.__class__.__name__,)
-            return '%s(%r)' % (self.__class__.__name__, self.items())
-        finally:
-            del _repr_running[call_key]
-
-    def __reduce__(self):
-        'Return state information for pickling'
-        items = [[k, self[k]] for k in self]
-        inst_dict = vars(self).copy()
-        if inst_dict:
-            return (self.__class__, (items,), inst_dict)
-        return self.__class__, (items,)
-
-    def copy(self):
-        'od.copy() -> a shallow copy of od'
-        return self.__class__(self)
-
-    def __eq__(self, other):
-        '''od.__eq__(y) <==> od==y.  Comparison to another OD is order-sensitive
-        while comparison to a regular mapping is order-insensitive.
-
-        '''
-        if isinstance(other, OrderedDict):
-            return dict.__eq__(self, other) and all(_imap(_eq, self, other))
-        return dict.__eq__(self, other)
-
-    def __ne__(self, other):
-        'od.__ne__(y) <==> od!=y'
-        return not self == other
-
-    # -- the following methods support python 3.x style dictionary views --
-
-    def viewkeys(self):
-        "od.viewkeys() -> a set-like object providing a view on od's keys"
-        return KeysView(self)
-
-    def viewvalues(self):
-        "od.viewvalues() -> an object providing a view on od's values"
-        return ValuesView(self)
-
-    def viewitems(self):
-        "od.viewitems() -> a set-like object providing a view on od's items"
-        return ItemsView(self)
-
-
-def _compat_with_unordered_dicts():
-    # This returns the methods needed in OrderedDict in case the base
-    # 'dict' class is not actually ordered, like on top of CPython or
-    # old PyPy or PyPy-STM.
-
-    # ===== Original comments and code follows      =====
-    # ===== The unmodified methods are not repeated =====
-
+    'Dictionary that remembers insertion order'
     # An inherited dict maps keys to values.
     # The inherited dict provides __getitem__, __len__, __contains__, and get.
     # The remaining methods are order-aware.
@@ -156,12 +47,17 @@ def _compat_with_unordered_dicts():
     # The sentinel element never gets deleted (this simplifies the algorithm).
     # Each link is stored as a list of length three:  [PREV, NEXT, KEY].
 
-    def __init__(self, *args, **kwds):
+    def __init__(*args, **kwds):
         '''Initialize an ordered dictionary.  The signature is the same as
         regular dictionaries, but keyword arguments are not recommended because
         their insertion order is arbitrary.
 
         '''
+        if not args:
+            raise TypeError("descriptor '__init__' of 'OrderedDict' object "
+                            "needs an argument")
+        self = args[0]
+        args = args[1:]
         if len(args) > 1:
             raise TypeError('expected at most 1 arguments, got %d' % len(args))
         try:
@@ -282,6 +178,19 @@ def _compat_with_unordered_dicts():
         value = self.pop(key)
         return key, value
 
+    def __repr__(self, _repr_running={}):
+        'od.__repr__() <==> repr(od)'
+        call_key = id(self), _get_ident()
+        if call_key in _repr_running:
+            return '...'
+        _repr_running[call_key] = 1
+        try:
+            if not self:
+                return '%s()' % (self.__class__.__name__,)
+            return '%s(%r)' % (self.__class__.__name__, self.items())
+        finally:
+            del _repr_running[call_key]
+
     def __reduce__(self):
         'Return state information for pickling'
         items = [[k, self[k]] for k in self]
@@ -291,6 +200,10 @@ def _compat_with_unordered_dicts():
         if inst_dict:
             return (self.__class__, (items,), inst_dict)
         return self.__class__, (items,)
+
+    def copy(self):
+        'od.copy() -> a shallow copy of od'
+        return self.__class__(self)
 
     @classmethod
     def fromkeys(cls, iterable, value=None):
@@ -303,12 +216,33 @@ def _compat_with_unordered_dicts():
             self[key] = value
         return self
 
-    return locals()
+    def __eq__(self, other):
+        '''od.__eq__(y) <==> od==y.  Comparison to another OD is order-sensitive
+        while comparison to a regular mapping is order-insensitive.
 
-if _reversed_dict is None:
-    for _key, _value in _compat_with_unordered_dicts().items():
-        setattr(OrderedDict, _key, _value)
-    del _key, _value
+        '''
+        if isinstance(other, OrderedDict):
+            return dict.__eq__(self, other) and all(_imap(_eq, self, other))
+        return dict.__eq__(self, other)
+
+    def __ne__(self, other):
+        'od.__ne__(y) <==> od!=y'
+        return not self == other
+
+    # -- the following methods support python 3.x style dictionary views --
+
+    def viewkeys(self):
+        "od.viewkeys() -> a set-like object providing a view on od's keys"
+        return KeysView(self)
+
+    def viewvalues(self):
+        "od.viewvalues() -> an object providing a view on od's values"
+        return ValuesView(self)
+
+    def viewitems(self):
+        "od.viewitems() -> a set-like object providing a view on od's items"
+        return ItemsView(self)
+
 
 ################################################################################
 ### namedtuple
@@ -365,7 +299,7 @@ class {typename}(tuple):
 _repr_template = '{name}=%r'
 
 _field_template = '''\
-    {name} = _property(lambda self: self[{index:d}], doc='Alias for field number {index:d}')
+    {name} = _property(_itemgetter({index:d}), doc='Alias for field number {index:d}')
 '''
 
 def namedtuple(typename, field_names, verbose=False, rename=False):
@@ -446,11 +380,8 @@ def namedtuple(typename, field_names, verbose=False, rename=False):
 
     # Execute the template string in a temporary namespace and support
     # tracing utilities by setting a value for frame.f_globals['__name__']
-    namespace = newdict('module')
-    namespace['__name__'] = 'namedtuple_%s' % typename
-    namespace['OrderedDict'] = OrderedDict
-    namespace['_property'] = property
-    namespace['_tuple'] = tuple
+    namespace = dict(_itemgetter=_itemgetter, __name__='namedtuple_%s' % typename,
+                     OrderedDict=OrderedDict, _property=property, _tuple=tuple)
     try:
         exec class_definition in namespace
     except SyntaxError as e:

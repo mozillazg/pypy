@@ -4,7 +4,6 @@ import os as _os, sys as _sys
 
 __version__ = "1.1.0"
 
-import _ffi
 from _ctypes import Union, Structure, Array
 from _ctypes import _Pointer
 from _ctypes import CFuncPtr as _CFuncPtr
@@ -343,6 +342,10 @@ class CDLL(object):
     """
     _func_flags_ = _FUNCFLAG_CDECL
     _func_restype_ = c_int
+    # default values for repr
+    _name = '<uninitialized>'
+    _handle = 0
+    _FuncPtr = None
 
     def __init__(self, name, mode=DEFAULT_MODE, handle=None,
                  use_errno=False,
@@ -360,16 +363,9 @@ class CDLL(object):
         self._FuncPtr = _FuncPtr
 
         if handle is None:
-            handle = 0
-        if flags & _FUNCFLAG_CDECL:
-            pypy_dll = _ffi.CDLL(name, mode, handle)
+            self._handle = _dlopen(self._name, mode)
         else:
-            pypy_dll = _ffi.WinDLL(name, mode, handle)
-        self.__pypy_dll__ = pypy_dll
-        handle = int(pypy_dll)
-        if _sys.maxint > 2 ** 32:
-            handle = int(handle)   # long -> int
-        self._handle = handle
+            self._handle = handle
 
     def __repr__(self):
         return "<%s '%s', handle %x at %x>" % \
@@ -390,13 +386,12 @@ class CDLL(object):
             func.__name__ = name_or_ordinal
         return func
 
-# Not in PyPy
-#class PyDLL(CDLL):
-#    """This class represents the Python library itself.  It allows
-#    accessing Python API functions.  The GIL is not released, and
-#    Python exceptions are handled correctly.
-#    """
-#    _func_flags_ = _FUNCFLAG_CDECL | _FUNCFLAG_PYTHONAPI
+class PyDLL(CDLL):
+    """This class represents the Python library itself.  It allows
+    accessing Python API functions.  The GIL is not released, and
+    Python exceptions are handled correctly.
+    """
+    _func_flags_ = _FUNCFLAG_CDECL | _FUNCFLAG_PYTHONAPI
 
 if _os.name in ("nt", "ce"):
 
@@ -449,8 +444,15 @@ class LibraryLoader(object):
         return self._dlltype(name)
 
 cdll = LibraryLoader(CDLL)
-# not on PyPy
-#pydll = LibraryLoader(PyDLL)
+pydll = LibraryLoader(PyDLL)
+
+if _os.name in ("nt", "ce"):
+    pythonapi = PyDLL("python dll", None, _sys.dllhandle)
+elif _sys.platform == "cygwin":
+    pythonapi = PyDLL("libpython%d.%d.dll" % _sys.version_info[:2])
+else:
+    pythonapi = PyDLL(None)
+
 
 if _os.name in ("nt", "ce"):
     windll = LibraryLoader(WinDLL)
@@ -496,12 +498,9 @@ def PYFUNCTYPE(restype, *argtypes):
         _flags_ = _FUNCFLAG_CDECL | _FUNCFLAG_PYTHONAPI
     return CFunctionType
 
+_cast = PYFUNCTYPE(py_object, c_void_p, py_object, py_object)(_cast_addr)
 def cast(obj, typ):
-    try:
-        c_void_p.from_param(obj)
-    except TypeError, e:
-        raise ArgumentError(str(e))
-    return _cast_addr(obj, obj, typ)
+    return _cast(obj, obj, typ)
 
 _string_at = PYFUNCTYPE(py_object, c_void_p, c_int)(_string_at_addr)
 def string_at(ptr, size=-1):

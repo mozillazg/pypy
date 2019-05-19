@@ -46,6 +46,8 @@ the setsockopt() and getsockopt() methods.
 
 import _socket
 from _socket import *
+from functools import partial
+from types import MethodType
 
 try:
     import _ssl
@@ -100,7 +102,6 @@ __all__.extend(os._get_exports_list(_socket))
 
 
 _realsocket = socket
-_type = type
 
 # WSA error codes
 if sys.platform.lower().startswith("win"):
@@ -149,34 +150,6 @@ def getfqdn(name=''):
             name = hostname
     return name
 
-class RefCountingWarning(UserWarning):
-    pass
-
-def _do_reuse_or_drop(socket, methname):
-    try:
-        method = getattr(socket, methname)
-    except (AttributeError, TypeError):
-        warnings.warn("""'%s' object has no _reuse/_drop methods
-{{
-    You make use (or a library you are using makes use) of the internal
-    classes '_socketobject' and '_fileobject' in socket.py, initializing
-    them with custom objects.  On PyPy, these custom objects need two
-    extra methods, _reuse() and _drop(), that maintain an explicit
-    reference counter.  When _drop() has been called as many times as
-    _reuse(), then the object should be freed.
-
-    Without these methods, you get the warning here.  This is to
-    prevent the following situation: if your (or the library's) code
-    relies on reference counting for prompt closing, then on PyPy, the
-    __del__ method will be called later than on CPython.  You can
-    easily end up in a situation where you open and close a lot of
-    (high-level) '_socketobject' or '_fileobject', but the (low-level)
-    custom objects will accumulate before their __del__ are called.
-    You quickly risk running out of file descriptors, for example.
-}}""" % (socket.__class__.__name__,), RefCountingWarning, stacklevel=3)
-    else:
-        method()
-
 
 _socketmethods = (
     'bind', 'connect', 'connect_ex', 'fileno', 'listen',
@@ -190,6 +163,11 @@ if os.name == "nt":
 if sys.platform == "riscos":
     _socketmethods = _socketmethods + ('sleeptaskw',)
 
+# All the method names that must be delegated to either the real socket
+# object or the _closedsocket object.
+_delegate_methods = ("recv", "recvfrom", "recv_into", "recvfrom_into",
+                     "send", "sendto")
+
 class _closedsocket(object):
     __slots__ = []
     def _dummy(*args):
@@ -197,8 +175,6 @@ class _closedsocket(object):
     # All _delegate_methods must also be initialized here.
     send = recv = recv_into = sendto = recvfrom = recvfrom_into = _dummy
     __getattr__ = _dummy
-    def _drop(self):
-        pass
 
 # Wrapper around platform socket objects. This implements
 # a platform-independent dup() functionality. The
@@ -208,54 +184,27 @@ class _socketobject(object):
 
     __doc__ = _realsocket.__doc__
 
-    __slots__ = ["_sock", "__weakref__"]
+    __slots__ = ["_sock", "__weakref__"] + list(_delegate_methods)
 
     def __init__(self, family=AF_INET, type=SOCK_STREAM, proto=0, _sock=None):
         if _sock is None:
             _sock = _realsocket(family, type, proto)
-        else:
-            _do_reuse_or_drop(_sock, '_reuse')
-
         self._sock = _sock
+        for method in _delegate_methods:
+            setattr(self, method, getattr(_sock, method))
 
-    def send(self, data, flags=0):
-        return self._sock.send(data, flags)
-    send.__doc__ = _realsocket.send.__doc__
-
-    def recv(self, buffersize, flags=0):
-        return self._sock.recv(buffersize, flags)
-    recv.__doc__ = _realsocket.recv.__doc__
-
-    def recv_into(self, buffer, nbytes=0, flags=0):
-        return self._sock.recv_into(buffer, nbytes, flags)
-    recv_into.__doc__ = _realsocket.recv_into.__doc__
-
-    def recvfrom(self, buffersize, flags=0):
-        return self._sock.recvfrom(buffersize, flags)
-    recvfrom.__doc__ = _realsocket.recvfrom.__doc__
-
-    def recvfrom_into(self, buffer, nbytes=0, flags=0):
-        return self._sock.recvfrom_into(buffer, nbytes, flags)
-    recvfrom_into.__doc__ = _realsocket.recvfrom_into.__doc__
-
-    def sendto(self, data, param2, param3=None):
-        if param3 is None:
-            return self._sock.sendto(data, param2)
-        else:
-            return self._sock.sendto(data, param2, param3)
-    sendto.__doc__ = _realsocket.sendto.__doc__
-
-    def close(self):
-        s = self._sock
+    def close(self, _closedsocket=_closedsocket,
+              _delegate_methods=_delegate_methods, setattr=setattr):
+        # This function should not reference any globals. See issue #808164.
         self._sock = _closedsocket()
-        _do_reuse_or_drop(s, '_drop')
+        dummy = self._sock._dummy
+        for method in _delegate_methods:
+            setattr(self, method, dummy)
     close.__doc__ = _realsocket.close.__doc__
 
     def accept(self):
         sock, addr = self._sock.accept()
-        sockobj = _socketobject(_sock=sock)
-        _do_reuse_or_drop(sock, '_drop') # already a copy in the _socketobject()
-        return sockobj, addr
+        return _socketobject(_sock=sock), addr
     accept.__doc__ = _realsocket.accept.__doc__
 
     def dup(self):
@@ -275,26 +224,15 @@ class _socketobject(object):
     type = property(lambda self: self._sock.type, doc="the socket type")
     proto = property(lambda self: self._sock.proto, doc="the socket protocol")
 
-    # Delegate many calls to the raw socket object.
-    _s = ("def %(name)s(self, %(args)s): return self._sock.%(name)s(%(args)s)\n\n"
-          "%(name)s.__doc__ = _realsocket.%(name)s.__doc__\n")
-    for _m in _socketmethods:
-        # yupi! we're on pypy, all code objects have this interface
-        argcount = getattr(_realsocket, _m).im_func.func_code.co_argcount - 1
-        exec _s % {'name': _m, 'args': ', '.join('arg%d' % i for i in range(argcount))}
-    del _m, _s, argcount
+def meth(name,self,*args):
+    return getattr(self._sock,name)(*args)
 
-    # Delegation methods with default arguments, that the code above
-    # cannot handle correctly
-    def sendall(self, data, flags=0):
-        self._sock.sendall(data, flags)
-    sendall.__doc__ = _realsocket.sendall.__doc__
-
-    def getsockopt(self, level, optname, buflen=None):
-        if buflen is None:
-            return self._sock.getsockopt(level, optname)
-        return self._sock.getsockopt(level, optname, buflen)
-    getsockopt.__doc__ = _realsocket.getsockopt.__doc__
+for _m in _socketmethods:
+    p = partial(meth,_m)
+    p.__name__ = _m
+    p.__doc__ = getattr(_realsocket,_m).__doc__
+    m = MethodType(p,None,_socketobject)
+    setattr(_socketobject,_m,m)
 
 socket = SocketType = _socketobject
 
@@ -310,7 +248,6 @@ class _fileobject(object):
                  "_close"]
 
     def __init__(self, sock, mode='rb', bufsize=-1, close=False):
-        _do_reuse_or_drop(sock, '_reuse')
         self._sock = sock
         self.mode = mode # Not actually used in this version
         if bufsize < 0:
@@ -345,13 +282,9 @@ class _fileobject(object):
             if self._sock:
                 self.flush()
         finally:
-            s = self._sock
+            if self._close:
+                self._sock.close()
             self._sock = None
-            if s is not None:
-                if self._close:
-                    s.close()
-                else:
-                    _do_reuse_or_drop(s, '_drop')
 
     def __del__(self):
         try:

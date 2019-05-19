@@ -22,8 +22,7 @@ class Test_Csv(unittest.TestCase):
     """
     def _test_arg_valid(self, ctor, arg):
         self.assertRaises(TypeError, ctor)
-        # PyPy gets an AttributeError instead of a TypeError
-        self.assertRaises((TypeError, AttributeError), ctor, None)
+        self.assertRaises(TypeError, ctor, None)
         self.assertRaises(TypeError, ctor, arg, bad_attr = 0)
         self.assertRaises(TypeError, ctor, arg, delimiter = 0)
         self.assertRaises(TypeError, ctor, arg, delimiter = 'XX')
@@ -57,13 +56,10 @@ class Test_Csv(unittest.TestCase):
         self.assertEqual(obj.dialect.skipinitialspace, False)
         self.assertEqual(obj.dialect.strict, False)
         # Try deleting or changing attributes (they are read-only)
-        self.assertRaises((TypeError, AttributeError), delattr, obj.dialect,
-                          'delimiter')
-        self.assertRaises((TypeError, AttributeError), setattr, obj.dialect,
-                          'delimiter', ':')
+        self.assertRaises(TypeError, delattr, obj.dialect, 'delimiter')
+        self.assertRaises(TypeError, setattr, obj.dialect, 'delimiter', ':')
         self.assertRaises(AttributeError, delattr, obj.dialect, 'quoting')
-        # PyPy gets a TypeError instead of an AttributeError
-        self.assertRaises((AttributeError, TypeError), setattr, obj.dialect,
+        self.assertRaises(AttributeError, setattr, obj.dialect,
                           'quoting', None)
 
     def test_reader_attrs(self):
@@ -150,8 +146,7 @@ class Test_Csv(unittest.TestCase):
             os.unlink(name)
 
     def test_write_arg_valid(self):
-        # PyPy gets a TypeError instead of a csv.Error for "not a sequence"
-        self._write_error_test((csv.Error, TypeError), None)
+        self._write_error_test(csv.Error, None)
         self._write_test((), '')
         self._write_test([None], '""')
         self._write_error_test(csv.Error, [None], quoting = csv.QUOTE_NONE)
@@ -914,7 +909,7 @@ class TestDialectValidity(unittest.TestCase):
         with self.assertRaises(csv.Error) as cm:
             mydialect()
         self.assertEqual(str(cm.exception),
-                         '"quotechar" must be a 1-character string')
+                         '"quotechar" must be an 1-character string')
 
         mydialect.quotechar = 4
         with self.assertRaises(csv.Error) as cm:
@@ -937,13 +932,13 @@ class TestDialectValidity(unittest.TestCase):
         with self.assertRaises(csv.Error) as cm:
             mydialect()
         self.assertEqual(str(cm.exception),
-                         '"delimiter" must be a 1-character string')
+                         '"delimiter" must be an 1-character string')
 
         mydialect.delimiter = ""
         with self.assertRaises(csv.Error) as cm:
             mydialect()
         self.assertEqual(str(cm.exception),
-                         '"delimiter" must be a 1-character string')
+                         '"delimiter" must be an 1-character string')
 
         mydialect.delimiter = u","
         with self.assertRaises(csv.Error) as cm:
@@ -1040,6 +1035,15 @@ Stonecutters Seafood and Chop House+ Lemont+ IL+ 12/19/02+ Week Back
         self.assertEqual(sniffer.has_header(self.sample8), False)
         self.assertEqual(sniffer.has_header(self.header2 + self.sample8),
                          True)
+
+    def test_guess_quote_and_delimiter(self):
+        sniffer = csv.Sniffer()
+        for header in (";'123;4';", "'123;4';", ";'123;4'", "'123;4'"):
+            dialect = sniffer.sniff(header, ",;")
+            self.assertEqual(dialect.delimiter, ';')
+            self.assertEqual(dialect.quotechar, "'")
+            self.assertIs(dialect.doublequote, False)
+            self.assertIs(dialect.skipinitialspace, False)
 
     def test_sniff(self):
         sniffer = csv.Sniffer()

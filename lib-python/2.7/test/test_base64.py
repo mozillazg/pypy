@@ -79,10 +79,8 @@ class BaseXYTestCase(unittest.TestCase):
         eq(base64.b64encode('\xd3V\xbeo\xf7\x1d', altchars='*$'), '01a*b$cd')
         # Non-bytes
         eq(base64.b64encode(bytearray('abcd')), 'YWJjZA==')
-        if test_support.check_impl_detail():
-            # only raises in CPython's optional strop.maketrans
-            self.assertRaises(TypeError, base64.b64encode,
-                              '\xd3V\xbeo\xf7\x1d', altchars=bytearray('*$'))
+        self.assertRaises(TypeError, base64.b64encode,
+                          '\xd3V\xbeo\xf7\x1d', altchars=bytearray('*$'))
         # Test standard alphabet
         eq(base64.standard_b64encode("www.python.org"), "d3d3LnB5dGhvbi5vcmc=")
         eq(base64.standard_b64encode("a"), "YQ==")

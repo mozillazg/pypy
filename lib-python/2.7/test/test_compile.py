@@ -7,7 +7,6 @@ from test import script_helper
 import os
 import tempfile
 import textwrap
-from test.test_support import check_impl_detail
 
 class TestSpecifics(unittest.TestCase):
 
@@ -144,13 +143,12 @@ def g():
         self.assertEqual(m.results, ('z', g))
         exec 'z = locals()' in g, m
         self.assertEqual(m.results, ('z', m))
-        if check_impl_detail():
-            try:
-                exec 'z = b' in m
-            except TypeError:
-                pass
-            else:
-                self.fail('Did not validate globals as a real dict')
+        try:
+            exec 'z = b' in m
+        except TypeError:
+            pass
+        else:
+            self.fail('Did not validate globals as a real dict')
 
         class A:
             "Non-mapping"
@@ -394,7 +392,7 @@ if 1:
             'from sys import stdin)',
             'from sys import stdin, stdout,\nstderr',
             'from sys import stdin si',
-            'from sys import stdin,'
+            'from sys import stdin,',
             'from sys import (*)',
             'from sys import (stdin,, stdout, stderr)',
             'from sys import (stdin, stdout),',
@@ -568,13 +566,7 @@ if 1:
             fn = os.path.join(tmpd, "bad.py")
             with open(fn, "wb") as fp:
                 fp.write(src)
-            try:
-                rc, out, err = script_helper.assert_python_failure(fn)
-            except AssertionError:
-                if check_impl_detail(pypy=True):
-                    # as long as we don't crash
-                    return
-                raise
+            rc, out, err = script_helper.assert_python_failure(fn)
         finally:
             test_support.rmtree(tmpd)
         self.assertIn(b"Non-ASCII", err)

@@ -58,7 +58,7 @@ class UnixCCompiler(CCompiler):
     executables = {'preprocessor' : None,
                    'compiler'     : ["cc"],
                    'compiler_so'  : ["cc"],
-                   'compiler_cxx' : ["c++"],  # pypy: changed, 'cc' is bogus
+                   'compiler_cxx' : ["cc"],
                    'linker_so'    : ["cc", "-shared"],
                    'linker_exe'   : ["cc"],
                    'archiver'     : ["ar", "-cr"],
@@ -66,22 +66,7 @@ class UnixCCompiler(CCompiler):
                   }
 
     if sys.platform[:6] == "darwin":
-        import platform
-        if platform.machine() == 'i386':
-            if platform.architecture()[0] == '32bit':
-                arch = 'i386'
-            else:
-                arch = 'x86_64'
-        else:
-            # just a guess
-            arch = platform.machine()
         executables['ranlib'] = ["ranlib"]
-        executables['linker_so'] += ['-undefined', 'dynamic_lookup']
-
-        for k, v in executables.iteritems():
-            if v and v[0] == 'cc':
-                v += ['-arch', arch]
-
 
     # Needed for the filename generation methods provided by the base
     # class, CCompiler.  NB. whoever instantiates/uses a particular
@@ -226,19 +211,7 @@ class UnixCCompiler(CCompiler):
         return "-L" + dir
 
     def _is_gcc(self, compiler_name):
-        # XXX PyPy workaround, look at the big comment below for more
-        # context. On CPython, the hack below works fine because
-        # `compiler_name` contains the name of the actual compiler which was
-        # used at compile time (e.g. 'x86_64-linux-gnu-gcc' on my machine).
-        # PyPy hardcodes it to 'cc', so the hack doesn't work, and the end
-        # result is that we pass the wrong option to the compiler.
-        #
-        # The workaround is to *always* pretend to be GCC if we are on Linux:
-        # this should cover the vast majority of real systems, including the
-        # ones which use clang (which understands the '-Wl,-rpath' syntax as
-        # well)
-        return (sys.platform == "linux2" or
-                "gcc" in compiler_name or "g++" in compiler_name)
+        return "gcc" in compiler_name or "g++" in compiler_name
 
     def runtime_library_dir_option(self, dir):
         # XXX Hackish, at the very least.  See Python bug #445902:
@@ -298,7 +271,7 @@ class UnixCCompiler(CCompiler):
             #       usr/lib/libedit.tbd
             # vs
             #   /usr/lib/libedit.dylib
-            cflags = sysconfig.get_config_var('CFLAGS') or ''
+            cflags = sysconfig.get_config_var('CFLAGS')
             m = re.search(r'-isysroot\s+(\S+)', cflags)
             if m is None:
                 sysroot = '/'
@@ -322,10 +295,6 @@ class UnixCCompiler(CCompiler):
                 static = os.path.join(sysroot, dir[1:], static_f)
                 xcode_stub = os.path.join(sysroot, dir[1:], xcode_stub_f)
 
-            # PyPy extension here: 'shared' usually ends in something
-            # like '.pypy-41.so'.  Try without the '.pypy-41' part too.
-            shared_no_pypy = re.sub(r'[.]pypy[^.]+([.][^.]+)$', r'\1', shared)
-
             # We're second-guessing the linker here, with not much hard
             # data to go on: GCC seems to prefer the shared library, so I'm
             # assuming that *all* Unix C compilers do.  And of course I'm
@@ -336,8 +305,6 @@ class UnixCCompiler(CCompiler):
                 return xcode_stub
             elif os.path.exists(shared):
                 return shared
-            elif os.path.exists(shared_no_pypy):
-                return shared_no_pypy
             elif os.path.exists(static):
                 return static
 

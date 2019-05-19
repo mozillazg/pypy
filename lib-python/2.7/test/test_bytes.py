@@ -4,6 +4,7 @@ XXX This is a mess.  Common tests should be unified with string_tests.py (and
 the latter should be modernized).
 """
 
+import array
 import os
 import re
 import sys
@@ -58,11 +59,49 @@ class BaseBytesTest(unittest.TestCase):
         self.assertRaises(IndexError, lambda: b[-sys.maxint-2])
         self.assertRaises(IndexError, lambda: b[-10**100])
 
-    def test_from_list(self):
-        ints = list(range(256))
-        b = self.type2test(i for i in ints)
+    def test_from_iterable(self):
+        b = self.type2test(range(256))
         self.assertEqual(len(b), 256)
-        self.assertEqual(list(b), ints)
+        self.assertEqual(list(b), list(range(256)))
+
+        # Non-sequence iterable.
+        b = self.type2test({42})
+        self.assertEqual(b, b"*")
+        b = self.type2test({43, 45})
+        self.assertIn(tuple(b), {(43, 45), (45, 43)})
+
+        # Iterator that has a __length_hint__.
+        b = self.type2test(iter(range(256)))
+        self.assertEqual(len(b), 256)
+        self.assertEqual(list(b), list(range(256)))
+
+        # Iterator that doesn't have a __length_hint__.
+        b = self.type2test(i for i in range(256) if i % 2)
+        self.assertEqual(len(b), 128)
+        self.assertEqual(list(b), list(range(256))[1::2])
+
+        # Sequence without __iter__.
+        class S:
+            def __getitem__(self, i):
+                return (1, 2, 3)[i]
+        b = self.type2test(S())
+        self.assertEqual(b, b"\x01\x02\x03")
+
+    def test_from_tuple(self):
+        # There is a special case for tuples.
+        b = self.type2test(tuple(range(256)))
+        self.assertEqual(len(b), 256)
+        self.assertEqual(list(b), list(range(256)))
+        b = self.type2test((1, 2, 3))
+        self.assertEqual(b, b"\x01\x02\x03")
+
+    def test_from_list(self):
+        # There is a special case for lists.
+        b = self.type2test(list(range(256)))
+        self.assertEqual(len(b), 256)
+        self.assertEqual(list(b), list(range(256)))
+        b = self.type2test([1, 2, 3])
+        self.assertEqual(b, b"\x01\x02\x03")
 
     def test_from_index(self):
         b = self.type2test([Indexable(), Indexable(1), Indexable(254),
@@ -70,6 +109,20 @@ class BaseBytesTest(unittest.TestCase):
         self.assertEqual(list(b), [0, 1, 254, 255])
         self.assertRaises(ValueError, self.type2test, [Indexable(-1)])
         self.assertRaises(ValueError, self.type2test, [Indexable(256)])
+
+    def test_from_buffer(self):
+        a = self.type2test(array.array('B', [1, 2, 3]))
+        self.assertEqual(a, b"\x01\x02\x03")
+        a = self.type2test(b"\x01\x02\x03")
+        self.assertEqual(a, b"\x01\x02\x03")
+
+        # Issues #29159 and #34974.
+        # Fallback when __index__ raises a TypeError
+        class B(bytes):
+            def __index__(self):
+                raise TypeError
+
+        self.assertEqual(self.type2test(B(b"foobar")), b"foobar")
 
     def test_from_ssize(self):
         self.assertEqual(self.type2test(0), b'')
@@ -102,6 +155,20 @@ class BaseBytesTest(unittest.TestCase):
         self.assertRaises(ValueError, self.type2test, [sys.maxint])
         self.assertRaises(ValueError, self.type2test, [sys.maxint+1])
         self.assertRaises(ValueError, self.type2test, [10**100])
+
+    def test_constructor_exceptions(self):
+        # Issue #34974: bytes and bytearray constructors replace unexpected
+        # exceptions.
+        class BadInt:
+            def __index__(self):
+                1//0
+        self.assertRaises(ZeroDivisionError, self.type2test, BadInt())
+        self.assertRaises(ZeroDivisionError, self.type2test, [BadInt()])
+
+        class BadIterable:
+            def __iter__(self):
+                1//0
+        self.assertRaises(ZeroDivisionError, self.type2test, BadIterable())
 
     def test_compare(self):
         b1 = self.type2test([1, 2, 3])
@@ -336,8 +403,16 @@ class BaseBytesTest(unittest.TestCase):
         self.assertEqual(b.replace(b'i', b'a'), b'massassappa')
         self.assertEqual(b.replace(b'ss', b'x'), b'mixixippi')
 
+    def test_replace_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').replace, 32, b'')
+
     def test_split_string_error(self):
         self.assertRaises(TypeError, self.type2test(b'a b').split, u' ')
+        self.assertRaises(TypeError, self.type2test(b'a b').rsplit, u' ')
+
+    def test_split_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').split, 32)
+        self.assertRaises(TypeError, self.type2test(b'a b').rsplit, 32)
 
     def test_split_unicodewhitespace(self):
         for b in (b'a\x1Cb', b'a\x1Db', b'a\x1Eb', b'a\x1Fb'):
@@ -345,9 +420,6 @@ class BaseBytesTest(unittest.TestCase):
             self.assertEqual(b.split(), [b])
         b = self.type2test(b"\x09\x0A\x0B\x0C\x0D\x1C\x1D\x1E\x1F")
         self.assertEqual(b.split(), [b'\x1c\x1d\x1e\x1f'])
-
-    def test_rsplit_string_error(self):
-        self.assertRaises(TypeError, self.type2test(b'a b').rsplit, u' ')
 
     def test_rsplit_unicodewhitespace(self):
         b = self.type2test(b"\x09\x0A\x0B\x0C\x0D\x1C\x1D\x1E\x1F")
@@ -364,6 +436,14 @@ class BaseBytesTest(unittest.TestCase):
         self.assertEqual(b.rpartition(b'i'), (b'mississipp', b'i', b''))
         self.assertEqual(b.rpartition(b'w'), (b'', b'', b'mississippi'))
 
+    def test_partition_string_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').partition, u' ')
+        self.assertRaises(TypeError, self.type2test(b'a b').rpartition, u' ')
+
+    def test_partition_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').partition, 32)
+        self.assertRaises(TypeError, self.type2test(b'a b').rpartition, 32)
+
     def test_pickling(self):
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             for b in b"", b"a", b"abc", b"\xffab\x80", b"\0\0\377\0\0":
@@ -378,9 +458,19 @@ class BaseBytesTest(unittest.TestCase):
         self.assertEqual(self.type2test(b'abc').rstrip(memoryview(b'ac')), b'ab')
 
     def test_strip_string_error(self):
-        self.assertRaises(TypeError, self.type2test(b'abc').strip, u'b')
-        self.assertRaises(TypeError, self.type2test(b'abc').lstrip, u'b')
-        self.assertRaises(TypeError, self.type2test(b'abc').rstrip, u'b')
+        self.assertRaises(TypeError, self.type2test(b'abc').strip, u'ac')
+        self.assertRaises(TypeError, self.type2test(b'abc').lstrip, u'ac')
+        self.assertRaises(TypeError, self.type2test(b'abc').rstrip, u'ac')
+
+    def test_strip_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b' abc ').strip, 32)
+        self.assertRaises(TypeError, self.type2test(b' abc ').lstrip, 32)
+        self.assertRaises(TypeError, self.type2test(b' abc ').rstrip, 32)
+
+    def test_xjust_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'abc').center, 7, 32)
+        self.assertRaises(TypeError, self.type2test(b'abc').ljust, 7, 32)
+        self.assertRaises(TypeError, self.type2test(b'abc').rjust, 7, 32)
 
     def test_ord(self):
         b = self.type2test(b'\0A\x7f\x80\xff')
@@ -649,7 +739,6 @@ class ByteArrayTest(BaseBytesTest):
         self.assertEqual(b, b1)
         self.assertTrue(b is b1)
 
-    @test.test_support.impl_detail("undocumented bytes.__alloc__()")
     def test_alloc(self):
         b = bytearray()
         alloc = b.__alloc__()
@@ -662,7 +751,6 @@ class ByteArrayTest(BaseBytesTest):
             if alloc not in seq:
                 seq.append(alloc)
 
-    @test.test_support.impl_detail("undocumented bytes.__alloc__()")
     def test_init_alloc(self):
         b = bytearray()
         def g():
@@ -802,8 +890,6 @@ class ByteArrayTest(BaseBytesTest):
         self.assertEqual(b, b"")
         self.assertEqual(c, b"")
 
-    @test.test_support.impl_detail(
-        "resizing semantics of CPython rely on refcounting")
     def test_resize_forbidden(self):
         # #4509: can't resize a bytearray when there are buffer exports, even
         # if it wouldn't reallocate the underlying buffer.
@@ -835,26 +921,6 @@ class ByteArrayTest(BaseBytesTest):
             b[1:-1:2] = b""
         self.assertRaises(BufferError, delslice)
         self.assertEqual(b, orig)
-
-    @test.test_support.impl_detail("resizing semantics", cpython=False)
-    def test_resize_forbidden_non_cpython(self):
-        # on non-CPython implementations, we cannot prevent changes to
-        # bytearrays just because there are buffers around.  Instead,
-        # we get (on PyPy) a buffer that follows the changes and resizes.
-        b = bytearray(range(10))
-        for v in [memoryview(b), buffer(b)]:
-            b[5] = 99
-            self.assertIn(v[5], (99, chr(99)))
-            b[5] = 100
-            b += b
-            b += b
-            b += b
-            self.assertEquals(len(v), 80)
-            self.assertIn(v[5], (100, chr(100)))
-            self.assertIn(v[79], (9, chr(9)))
-            del b[10:]
-            self.assertRaises(IndexError, lambda: v[10])
-            self.assertEquals(len(v), 10)
 
     def test_empty_bytearray(self):
         # Issue #7561: operations on empty bytearrays could crash in many

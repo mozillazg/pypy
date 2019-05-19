@@ -360,7 +360,7 @@ class CoverageResults:
         try:
             outfile = open(path, "w")
         except IOError, err:
-            print >> sys.stderr, ("trace: Could not open %r for writing: %s"
+            print >> sys.stderr, ("trace: Could not open %r for writing: %s "
                                   "- skipping" % (path, err))
             return 0, 0
 
@@ -551,10 +551,6 @@ class Trace:
             if len(funcs) == 1:
                 dicts = [d for d in gc.get_referrers(funcs[0])
                              if isinstance(d, dict)]
-                if len(dicts) == 0:
-                    # PyPy may store functions directly on the class
-                    # (more exactly: the container is not a Python object)
-                    dicts = funcs
                 if len(dicts) == 1:
                     classes = [c for c in gc.get_referrers(dicts[0])
                                    if hasattr(c, "__bases__")]

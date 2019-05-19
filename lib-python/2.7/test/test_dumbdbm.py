@@ -105,11 +105,9 @@ class DumbDBMTestCase(unittest.TestCase):
         f.close()
 
         # Mangle the file by adding \r before each newline
-        with open(_fname + '.dir') as f:
-            data = f.read()
+        data = open(_fname + '.dir').read()
         data = data.replace('\n', '\r\n')
-        with open(_fname + '.dir', 'wb') as f:
-            f.write(data)
+        open(_fname + '.dir', 'wb').write(data)
 
         f = dumbdbm.open(_fname)
         self.assertEqual(f['1'], 'hello')

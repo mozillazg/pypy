@@ -2,6 +2,7 @@
 import unittest
 import UserDict
 import test_support
+import sys
 
 
 class BasicTestMappingProtocol(unittest.TestCase):
@@ -535,10 +536,7 @@ class TestMappingProtocol(BasicTestMappingProtocol):
                     self.assertEqual(va, int(ka))
                     kb, vb = tb = b.popitem()
                     self.assertEqual(vb, int(kb))
-                    if copymode < 0 and test_support.check_impl_detail():
-                        # popitem() is not guaranteed to be deterministic on
-                        # all implementations
-                        self.assertEqual(ta, tb)
+                    self.assertTrue(not(copymode < 0 and ta != tb))
                 self.assertTrue(not a)
                 self.assertTrue(not b)
 
@@ -647,6 +645,14 @@ class TestHashMappingProtocol(TestMappingProtocol):
 
         d = self._full_mapping({1: BadRepr()})
         self.assertRaises(Exc, repr, d)
+
+    def test_repr_deep(self):
+        d = self._empty_mapping()
+        for i in range(sys.getrecursionlimit() + 100):
+            d0 = d
+            d = self._empty_mapping()
+            d[1] = d0
+        self.assertRaises(RuntimeError, repr, d)
 
     def test_le(self):
         self.assertTrue(not (self._empty_mapping() < self._empty_mapping()))

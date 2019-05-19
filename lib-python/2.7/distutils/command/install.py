@@ -83,13 +83,6 @@ INSTALL_SCHEMES = {
         'scripts': '$userbase/bin',
         'data'   : '$userbase',
         },
-    'pypy': {
-        'purelib': '$base/site-packages',
-        'platlib': '$base/site-packages',
-        'headers': '$base/include',
-        'scripts': '$base/bin',
-        'data'   : '$base',
-        },
     }
 
 # The keys to an installation scheme; if any new types of files are to be
@@ -474,9 +467,6 @@ class install (Command):
 
     def select_scheme (self, name):
         # it's the caller's problem if they supply a bad name!
-        if (hasattr(sys, 'pypy_version_info') and
-            not name.endswith(('_user', '_home'))):
-            name = 'pypy'
         scheme = INSTALL_SCHEMES[name]
         for key in SCHEME_KEYS:
             attrname = 'install_' + key

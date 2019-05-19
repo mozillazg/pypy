@@ -40,8 +40,7 @@ class TestNumbers(unittest.TestCase):
 
         c1, c2 = complex(3, 2), complex(4,1)
         # XXX: This is not ideal, but see the comment in math_trunc().
-        # Modified to suit PyPy, which gives TypeError in all cases
-        self.assertRaises((AttributeError, TypeError), math.trunc, c1)
+        self.assertRaises(AttributeError, math.trunc, c1)
         self.assertRaises(TypeError, float, c1)
         self.assertRaises(TypeError, int, c1)
 

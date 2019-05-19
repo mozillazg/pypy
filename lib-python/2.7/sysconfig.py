@@ -7,32 +7,22 @@ from os.path import pardir, realpath
 
 _INSTALL_SCHEMES = {
     'posix_prefix': {
-        'stdlib': '{base}/lib/{implementation_lower}{py_version_short}',
-        'platstdlib': '{platbase}/lib/{implementation_lower}{py_version_short}',
-        'purelib': '{base}/lib/{implementation_lower}{py_version_short}/site-packages',
-        'platlib': '{platbase}/lib/{implementation_lower}{py_version_short}/site-packages',
-        'include': '{base}/include/{implementation_lower}{py_version_short}',
-        'platinclude': '{platbase}/include/{implementation_lower}{py_version_short}',
+        'stdlib': '{base}/lib/python{py_version_short}',
+        'platstdlib': '{platbase}/lib/python{py_version_short}',
+        'purelib': '{base}/lib/python{py_version_short}/site-packages',
+        'platlib': '{platbase}/lib/python{py_version_short}/site-packages',
+        'include': '{base}/include/python{py_version_short}',
+        'platinclude': '{platbase}/include/python{py_version_short}',
         'scripts': '{base}/bin',
         'data': '{base}',
         },
     'posix_home': {
-        'stdlib': '{base}/lib/{implementation_lower}',
-        'platstdlib': '{base}/lib/{implementation_lower}',
-        'purelib': '{base}/lib/{implementation_lower}',
-        'platlib': '{base}/lib/{implementation_lower}',
-        'include': '{base}/include/{implementation_lower}',
-        'platinclude': '{base}/include/{implementation_lower}',
-        'scripts': '{base}/bin',
-        'data'   : '{base}',
-        },
-    'pypy': {
-        'stdlib': '{base}/lib-{implementation_lower}/{py_version_short}',
-        'platstdlib': '{base}/lib-{implementation_lower}/{py_version_short}',
-        'purelib': '{base}/site-packages',
-        'platlib': '{base}/site-packages',
-        'include': '{base}/include',
-        'platinclude': '{base}/include',
+        'stdlib': '{base}/lib/python',
+        'platstdlib': '{base}/lib/python',
+        'purelib': '{base}/lib/python',
+        'platlib': '{base}/lib/python',
+        'include': '{base}/include/python',
+        'platinclude': '{base}/include/python',
         'scripts': '{base}/bin',
         'data'   : '{base}',
         },
@@ -57,37 +47,37 @@ _INSTALL_SCHEMES = {
         'data'   : '{base}',
         },
     'os2_home': {
-        'stdlib': '{userbase}/lib/{implementation_lower}{py_version_short}',
-        'platstdlib': '{userbase}/lib/{implementation_lower}{py_version_short}',
-        'purelib': '{userbase}/lib/{implementation_lower}{py_version_short}/site-packages',
-        'platlib': '{userbase}/lib/{implementation_lower}{py_version_short}/site-packages',
-        'include': '{userbase}/include/{implementation_lower}{py_version_short}',
+        'stdlib': '{userbase}/lib/python{py_version_short}',
+        'platstdlib': '{userbase}/lib/python{py_version_short}',
+        'purelib': '{userbase}/lib/python{py_version_short}/site-packages',
+        'platlib': '{userbase}/lib/python{py_version_short}/site-packages',
+        'include': '{userbase}/include/python{py_version_short}',
         'scripts': '{userbase}/bin',
         'data'   : '{userbase}',
         },
     'nt_user': {
-        'stdlib': '{userbase}/{implementation}{py_version_nodot}',
-        'platstdlib': '{userbase}/{implementation}{py_version_nodot}',
-        'purelib': '{userbase}/{implementation}{py_version_nodot}/site-packages',
-        'platlib': '{userbase}/{implementation}{py_version_nodot}/site-packages',
-        'include': '{userbase}/{implementation}{py_version_nodot}/Include',
+        'stdlib': '{userbase}/Python{py_version_nodot}',
+        'platstdlib': '{userbase}/Python{py_version_nodot}',
+        'purelib': '{userbase}/Python{py_version_nodot}/site-packages',
+        'platlib': '{userbase}/Python{py_version_nodot}/site-packages',
+        'include': '{userbase}/Python{py_version_nodot}/Include',
         'scripts': '{userbase}/Scripts',
         'data'   : '{userbase}',
         },
     'posix_user': {
-        'stdlib': '{userbase}/lib/{implementation_lower}{py_version_short}',
-        'platstdlib': '{userbase}/lib/{implementation_lower}{py_version_short}',
-        'purelib': '{userbase}/lib/{implementation_lower}{py_version_short}/site-packages',
-        'platlib': '{userbase}/lib/{implementation_lower}{py_version_short}/site-packages',
-        'include': '{userbase}/include/{implementation_lower}{py_version_short}',
+        'stdlib': '{userbase}/lib/python{py_version_short}',
+        'platstdlib': '{userbase}/lib/python{py_version_short}',
+        'purelib': '{userbase}/lib/python{py_version_short}/site-packages',
+        'platlib': '{userbase}/lib/python{py_version_short}/site-packages',
+        'include': '{userbase}/include/python{py_version_short}',
         'scripts': '{userbase}/bin',
         'data'   : '{userbase}',
         },
     'osx_framework_user': {
-        'stdlib': '{userbase}/lib/{implementation_lower}',
-        'platstdlib': '{userbase}/lib/{implementation_lower}',
-        'purelib': '{userbase}/lib/{implementation_lower}/site-packages',
-        'platlib': '{userbase}/lib/{implementation_lower}/site-packages',
+        'stdlib': '{userbase}/lib/python',
+        'platstdlib': '{userbase}/lib/python',
+        'purelib': '{userbase}/lib/python/site-packages',
+        'platlib': '{userbase}/lib/python/site-packages',
         'include': '{userbase}/include',
         'scripts': '{userbase}/bin',
         'data'   : '{userbase}',
@@ -103,11 +93,6 @@ _PREFIX = os.path.normpath(sys.prefix)
 _EXEC_PREFIX = os.path.normpath(sys.exec_prefix)
 _CONFIG_VARS = None
 _USER_BASE = None
-
-def _get_implementation():
-    if '__pypy__' in sys.builtin_module_names:
-        return 'PyPy'
-    return 'Python'
 
 def _safe_realpath(path):
     try:
@@ -127,6 +112,11 @@ if os.name == "nt" and "pcbuild" in _PROJECT_BASE[-8:].lower():
 # PC/VS7.1
 if os.name == "nt" and "\\pc\\v" in _PROJECT_BASE[-10:].lower():
     _PROJECT_BASE = _safe_realpath(os.path.join(_PROJECT_BASE, pardir, pardir))
+# PC/VS9.0/amd64
+if (os.name == "nt"
+   and os.path.basename(os.path.dirname(os.path.dirname(_PROJECT_BASE))).lower() == "pc"
+   and os.path.basename(os.path.dirname(_PROJECT_BASE)).lower() == "vs9.0"):
+    _PROJECT_BASE = _safe_realpath(os.path.join(_PROJECT_BASE, pardir, pardir, pardir))
 # PC/AMD64
 if os.name == "nt" and "\\pcbuild\\amd64" in _PROJECT_BASE[-14:].lower():
     _PROJECT_BASE = _safe_realpath(os.path.join(_PROJECT_BASE, pardir, pardir))
@@ -177,9 +167,7 @@ def _expand_vars(scheme, vars):
     return res
 
 def _get_default_scheme():
-    if '__pypy__' in sys.builtin_module_names:
-        return 'pypy'
-    elif os.name == 'posix':
+    if os.name == 'posix':
         # the default scheme for posix is posix_prefix
         return 'posix_prefix'
     return os.name
@@ -369,6 +357,7 @@ def _generate_posix_vars():
 
 def _init_posix(vars):
     """Initialize the module as appropriate for POSIX systems."""
+    # _sysconfigdata is generated at build time, see _generate_posix_vars()
     from _sysconfigdata import build_time_vars
     vars.update(build_time_vars)
 
@@ -481,9 +470,6 @@ def get_config_vars(*args):
         _CONFIG_VARS['base'] = _PREFIX
         _CONFIG_VARS['platbase'] = _EXEC_PREFIX
         _CONFIG_VARS['projectbase'] = _PROJECT_BASE
-        _CONFIG_VARS['implementation'] = _get_implementation()
-        _CONFIG_VARS['implementation_lower'] = _get_implementation().lower()
-        _CONFIG_VARS['LIBRARY'] = ''
 
         if os.name in ('nt', 'os2'):
             _init_non_posix(_CONFIG_VARS)
@@ -521,15 +507,6 @@ def get_config_vars(*args):
         if sys.platform == 'darwin':
             import _osx_support
             _osx_support.customize_config_vars(_CONFIG_VARS)
-
-        # PyPy:
-        import imp
-        for suffix, mode, type_ in imp.get_suffixes():
-            if type_ == imp.C_EXTENSION:
-                _CONFIG_VARS['SOABI'] = suffix.split('.')[1]
-                break
-        _CONFIG_VARS['INCLUDEPY'] = os.path.join(_CONFIG_VARS['prefix'],
-                                                 'include')
 
     if args:
         vals = []
@@ -662,8 +639,6 @@ def _main():
     _print_dict('Paths', get_paths())
     print
     _print_dict('Variables', get_config_vars())
-    print
-    _print_dict('User', get_paths('%s_user' % os.name))
 
 
 if __name__ == '__main__':

@@ -136,14 +136,9 @@ try:
     __get_hash = __get_openssl_constructor
     algorithms_available = algorithms_available.union(
         _hashlib.openssl_md_meth_names)
-except ImportError as e:
+except ImportError:
     new = __py_new
     __get_hash = __get_builtin_constructor
-    # added by PyPy
-    import warnings
-    warnings.warn("The _hashlib module is not available, falling back "
-                  "to a much slower implementation (%s)" % str(e),
-                  RuntimeWarning)
 
 for __func_name in __always_supported:
     # try them all, some may not work due to the OpenSSL

@@ -841,7 +841,7 @@ replaced with any other string:
     ...     >>> x = 12
     ...     >>> print x//0
     ...     Traceback (most recent call last):
-    ...     ZeroDivisionError: integer division by zero
+    ...     ZeroDivisionError: integer division or modulo by zero
     ...     '''
     >>> test = doctest.DocTestFinder().find(f)[0]
     >>> doctest.DocTestRunner(verbose=False).run(test)
@@ -858,7 +858,7 @@ unexpected exception:
     ...     >>> print 'pre-exception output', x//0
     ...     pre-exception output
     ...     Traceback (most recent call last):
-    ...     ZeroDivisionError: integer division by zero
+    ...     ZeroDivisionError: integer division or modulo by zero
     ...     '''
     >>> test = doctest.DocTestFinder().find(f)[0]
     >>> doctest.DocTestRunner(verbose=False).run(test)
@@ -869,7 +869,7 @@ unexpected exception:
         print 'pre-exception output', x//0
     Exception raised:
         ...
-        ZeroDivisionError: integer division by zero
+        ZeroDivisionError: integer division or modulo by zero
     TestResults(failed=1, attempted=2)
 
 Exception messages may contain newlines:
@@ -1064,7 +1064,7 @@ unexpected exception:
     Exception raised:
         Traceback (most recent call last):
         ...
-        ZeroDivisionError: integer division by zero
+        ZeroDivisionError: integer division or modulo by zero
     TestResults(failed=1, attempted=1)
 """
     def displayhook(): r"""
@@ -2010,7 +2010,7 @@ def test_pdb_set_trace_nested():
     > <doctest foo-bär@baz[1]>(1)<module>()
     -> calls_set_trace()
     (Pdb) print foo
-    *** NameError: global name 'foo' is not defined
+    *** NameError: name 'foo' is not defined
     (Pdb) continue
     TestResults(failed=0, attempted=2)
 """
@@ -2340,7 +2340,7 @@ def test_unittest_reportflags():
           favorite_color
       Exception raised:
           ...
-          NameError: global name 'favorite_color' is not defined
+          NameError: name 'favorite_color' is not defined
       <BLANKLINE>
       <BLANKLINE>
 
@@ -2355,7 +2355,11 @@ def test_unittest_reportflags():
     Then the default eporting options are ignored:
 
       >>> result = suite.run(unittest.TestResult())
-      >>> print result.failures[0][1] # doctest: +ELLIPSIS
+
+    *NOTE*: These doctest are intentionally not placed in raw string to depict
+    the trailing whitespace using `\x20` in the diff below.
+
+      >>> print(result.failures[0][1]) # doctest: +ELLIPSIS
       Traceback ...
       Failed example:
           favorite_color
@@ -2368,7 +2372,7 @@ def test_unittest_reportflags():
       Differences (ndiff with -expected +actual):
             a
           - <BLANKLINE>
-          +
+          +\x20
             b
       <BLANKLINE>
       <BLANKLINE>
@@ -2400,7 +2404,7 @@ We don't want `-v` in sys.argv for these tests.
         favorite_color
     Exception raised:
         ...
-        NameError: global name 'favorite_color' is not defined
+        NameError: name 'favorite_color' is not defined
     **********************************************************************
     1 items had failures:
        1 of   2 in test_doctest.txt
@@ -2493,7 +2497,7 @@ parameter:
         favorite_color
     Exception raised:
         ...
-        NameError: global name 'favorite_color' is not defined
+        NameError: name 'favorite_color' is not defined
     TestResults(failed=1, attempted=2)
     >>> doctest.master = None  # Reset master.
 
@@ -2716,6 +2720,47 @@ def old_test4(): """
         >>> doctest.testmod(m1, verbose=False)
         TestResults(failed=0, attempted=4)
 """
+
+def test_no_trailing_whitespace_stripping():
+    r"""
+    The fancy reports had a bug for a long time where any trailing whitespace on
+    the reported diff lines was stripped, making it impossible to see the
+    differences in line reported as different that differed only in the amount of
+    trailing whitespace.  The whitespace still isn't particularly visible unless
+    you use NDIFF, but at least it is now there to be found.
+
+    *NOTE*: This snippet was intentionally put inside a raw string to get rid of
+    leading whitespace error in executing the example below
+
+    >>> def f(x):
+    ...     r'''
+    ...     >>> print('\n'.join(['a    ', 'b']))
+    ...     a
+    ...     b
+    ...     '''
+    """
+    """
+    *NOTE*: These doctest are not placed in raw string to depict the trailing whitespace
+    using `\x20`
+
+    >>> test = doctest.DocTestFinder().find(f)[0]
+    >>> flags = doctest.REPORT_NDIFF
+    >>> doctest.DocTestRunner(verbose=False, optionflags=flags).run(test)
+    ... # doctest: +ELLIPSIS
+    **********************************************************************
+    File ..., line 3, in f
+    Failed example:
+        print('\n'.join(['a    ', 'b']))
+    Differences (ndiff with -expected +actual):
+        - a
+        + a
+          b
+    TestResults(failed=1, attempted=1)
+
+    *NOTE*: `\x20` is for checking the trailing whitespace on the +a line above.
+    We cannot use actual spaces there, as a commit hook prevents from committing
+    patches that contain trailing whitespace. More info on Issue 24746.
+    """
 
 ######################################################################
 ## Main

@@ -21,6 +21,9 @@ except ImportError:
     _socket = None
 
 
+MAIN_TIMEOUT = 60.0
+
+
 def try_address(host, port=0, family=socket.AF_INET):
     """Try to bind a socket on the given host:port and return True
     if that has been possible."""
@@ -35,7 +38,7 @@ def try_address(host, port=0, family=socket.AF_INET):
 
 HOST = test_support.HOST
 MSG = b'Michael Gilfix was here\n'
-SUPPORTS_IPV6 = socket.has_ipv6 and try_address('::1', family=socket.AF_INET6)
+SUPPORTS_IPV6 = test_support.IPV6_ENABLED
 
 try:
     import thread
@@ -268,7 +271,6 @@ class GeneralModuleTests(unittest.TestCase):
         self.assertEqual(p.fileno(), s.fileno())
         s.close()
         s = None
-        test_support.gc_collect()
         try:
             p.fileno()
         except ReferenceError:
@@ -310,34 +312,32 @@ class GeneralModuleTests(unittest.TestCase):
             s.sendto(u'\u2620', sockname)
         with self.assertRaises(TypeError) as cm:
             s.sendto(5j, sockname)
-        self.assertIn('complex', str(cm.exception))
+        self.assertIn('not complex', str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             s.sendto('foo', None)
-        self.assertIn('NoneType', str(cm.exception))
+        self.assertIn('not NoneType', str(cm.exception))
         # 3 args
         with self.assertRaises(UnicodeEncodeError):
             s.sendto(u'\u2620', 0, sockname)
         with self.assertRaises(TypeError) as cm:
             s.sendto(5j, 0, sockname)
-        self.assertIn('complex', str(cm.exception))
+        self.assertIn('not complex', str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             s.sendto('foo', 0, None)
-        if test_support.check_impl_detail():
-            self.assertIn('not NoneType', str(cm.exception))
+        self.assertIn('not NoneType', str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             s.sendto('foo', 'bar', sockname)
-        self.assertIn('integer', str(cm.exception))
+        self.assertIn('an integer is required', str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             s.sendto('foo', None, None)
-        if test_support.check_impl_detail():
-            self.assertIn('an integer is required', str(cm.exception))
+        self.assertIn('an integer is required', str(cm.exception))
         # wrong number of args
         with self.assertRaises(TypeError) as cm:
             s.sendto('foo')
-        self.assertIn(' given)', str(cm.exception))
+        self.assertIn('(1 given)', str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             s.sendto('foo', 0, sockname, 4)
-        self.assertIn(' given)', str(cm.exception))
+        self.assertIn('(4 given)', str(cm.exception))
 
 
     def testCrucialConstants(self):
@@ -413,10 +413,10 @@ class GeneralModuleTests(unittest.TestCase):
             socket.htonl(k)
             socket.htons(k)
         for k in bad_values:
-            self.assertRaises((OverflowError, ValueError), socket.ntohl, k)
-            self.assertRaises((OverflowError, ValueError), socket.ntohs, k)
-            self.assertRaises((OverflowError, ValueError), socket.htonl, k)
-            self.assertRaises((OverflowError, ValueError), socket.htons, k)
+            self.assertRaises(OverflowError, socket.ntohl, k)
+            self.assertRaises(OverflowError, socket.ntohs, k)
+            self.assertRaises(OverflowError, socket.htonl, k)
+            self.assertRaises(OverflowError, socket.htons, k)
 
     def testGetServBy(self):
         eq = self.assertEqual
@@ -456,8 +456,8 @@ class GeneralModuleTests(unittest.TestCase):
         if udpport is not None:
             eq(socket.getservbyport(udpport, 'udp'), service)
         # Make sure getservbyport does not accept out of range ports.
-        self.assertRaises((OverflowError, ValueError), socket.getservbyport, -1)
-        self.assertRaises((OverflowError, ValueError), socket.getservbyport, 65536)
+        self.assertRaises(OverflowError, socket.getservbyport, -1)
+        self.assertRaises(OverflowError, socket.getservbyport, 65536)
 
     def testDefaultTimeout(self):
         # Testing default timeout
@@ -635,8 +635,8 @@ class GeneralModuleTests(unittest.TestCase):
         port = test_support.find_unused_port()
         big_port = port + 65536
         neg_port = port - 65536
-        self.assertRaises((OverflowError, ValueError), sock.bind, (HOST, big_port))
-        self.assertRaises((OverflowError, ValueError), sock.bind, (HOST, neg_port))
+        self.assertRaises(OverflowError, sock.bind, (HOST, big_port))
+        self.assertRaises(OverflowError, sock.bind, (HOST, neg_port))
         # Since find_unused_port() is inherently subject to race conditions, we
         # call it a couple times if necessary.
         for i in itertools.count():
@@ -736,6 +736,7 @@ class GeneralModuleTests(unittest.TestCase):
                 self.assertRaises(socket.timeout, c.sendall,
                                   b"x" * test_support.SOCK_MAX_SIZE)
         finally:
+            signal.alarm(0)
             signal.signal(signal.SIGALRM, old_alarm)
             c.close()
             s.close()
@@ -949,6 +950,7 @@ class BasicSocketPairTest(SocketPairTest):
 class NonBlockingTCPTests(ThreadedTCPSocketTest):
 
     def __init__(self, methodName='runTest'):
+        self.event = threading.Event()
         ThreadedTCPSocketTest.__init__(self, methodName=methodName)
 
     def testSetBlocking(self):
@@ -984,21 +986,27 @@ class NonBlockingTCPTests(ThreadedTCPSocketTest):
     def testAccept(self):
         # Testing non-blocking accept
         self.serv.setblocking(0)
-        try:
+
+        # connect() didn't start: non-blocking accept() fails
+        with self.assertRaises(socket.error):
             conn, addr = self.serv.accept()
-        except socket.error:
-            pass
-        else:
-            self.fail("Error trying to do non-blocking accept.")
-        read, write, err = select.select([self.serv], [], [])
-        if self.serv in read:
-            conn, addr = self.serv.accept()
-            conn.close()
-        else:
+
+        self.event.set()
+
+        read, write, err = select.select([self.serv], [], [], MAIN_TIMEOUT)
+        if self.serv not in read:
             self.fail("Error trying to do accept after select.")
 
+        # connect() completed: non-blocking accept() doesn't block
+        conn, addr = self.serv.accept()
+        self.addCleanup(conn.close)
+        self.assertIsNone(conn.gettimeout())
+
     def _testAccept(self):
-        time.sleep(0.1)
+        # don't connect before event is set to check
+        # that non-blocking accept() raises socket.error
+        self.event.wait()
+
         self.cli.connect((HOST, self.port))
 
     def testConnect(self):
@@ -1013,25 +1021,32 @@ class NonBlockingTCPTests(ThreadedTCPSocketTest):
     def testRecv(self):
         # Testing non-blocking recv
         conn, addr = self.serv.accept()
+        self.addCleanup(conn.close)
         conn.setblocking(0)
-        try:
+
+        # the server didn't send data yet: non-blocking recv() fails
+        with self.assertRaises(socket.error):
             msg = conn.recv(len(MSG))
-        except socket.error:
-            pass
-        else:
-            self.fail("Error trying to do non-blocking recv.")
-        read, write, err = select.select([conn], [], [])
-        if conn in read:
-            msg = conn.recv(len(MSG))
-            conn.close()
-            self.assertEqual(msg, MSG)
-        else:
+
+        self.event.set()
+
+        read, write, err = select.select([conn], [], [], MAIN_TIMEOUT)
+        if conn not in read:
             self.fail("Error during select call to non-blocking socket.")
+
+        # the server sent data yet: non-blocking recv() doesn't block
+        msg = conn.recv(len(MSG))
+        self.assertEqual(msg, MSG)
 
     def _testRecv(self):
         self.cli.connect((HOST, self.port))
-        time.sleep(0.1)
-        self.cli.send(MSG)
+
+        # don't send anything before event is set to check
+        # that non-blocking recv() raises socket.error
+        self.event.wait()
+
+        # send data: recv() will no longer block
+        self.cli.sendall(MSG)
 
 @unittest.skipUnless(thread, 'Threading required for this test.')
 class FileObjectClassTestCase(SocketConnectedTest):
@@ -1149,9 +1164,6 @@ class FileObjectInterruptedTestCase(unittest.TestCase):
 
         def recv(self, size):
             return self._recv_step.next()()
-
-        def _reuse(self): pass
-        def _drop(self): pass
 
     @staticmethod
     def _raise_eintr():
@@ -1363,6 +1375,10 @@ class NetworkConnectionNoServer(unittest.TestCase):
         expected_errnos = [ errno.ECONNREFUSED, ]
         if hasattr(errno, 'ENETUNREACH'):
             expected_errnos.append(errno.ENETUNREACH)
+        if hasattr(errno, 'EADDRNOTAVAIL'):
+            # bpo-31910: socket.create_connection() fails randomly
+            # with EADDRNOTAVAIL on Travis CI
+            expected_errnos.append(errno.EADDRNOTAVAIL)
 
         self.assertIn(cm.exception.errno, expected_errnos)
 
@@ -1485,8 +1501,6 @@ class Urllib2FileobjectTest(unittest.TestCase):
             closed = False
             def flush(self): pass
             def close(self): self.closed = True
-            def _reuse(self): pass
-            def _drop(self): pass
 
         # must not close unless we request it: the original use of _fileobject
         # by module socket requires that the underlying socket not be closed until
@@ -1537,8 +1551,8 @@ class TCPTimeoutTest(SocketTCPTest):
             raise Alarm
         old_alarm = signal.signal(signal.SIGALRM, alarm_handler)
         try:
-            signal.alarm(2)    # POSIX allows alarm to be up to 1 second early
             try:
+                signal.alarm(2)    # POSIX allows alarm to be up to 1 second early
                 foo = self.serv.accept()
             except socket.timeout:
                 self.fail("caught timeout instead of Alarm")
@@ -1715,9 +1729,17 @@ def isTipcAvailable():
     """
     if not hasattr(socket, "AF_TIPC"):
         return False
-    if not os.path.isfile("/proc/modules"):
-        return False
-    with open("/proc/modules") as f:
+    try:
+        f = open("/proc/modules")
+    except IOError as e:
+        # It's ok if the file does not exist, is a directory or if we
+        # have not the permission to read it. In any other case it's a
+        # real error, so raise it again.
+        if e.errno in (errno.ENOENT, errno.EISDIR, errno.EACCES):
+            return False
+        else:
+            raise
+    with f:
         for line in f:
             if line.startswith("tipc "):
                 return True

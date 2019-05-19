@@ -74,12 +74,15 @@ def _reduce_method(m):
         return getattr, (m.im_self, m.im_func.func_name)
 ForkingPickler.register(type(ForkingPickler.save), _reduce_method)
 
-if type(list.append) is not type(ForkingPickler.save):
-    # Some python implementations have unbound methods even for builtin types
-    def _reduce_method_descriptor(m):
-        return getattr, (m.__objclass__, m.__name__)
-    ForkingPickler.register(type(list.append), _reduce_method_descriptor)
-    ForkingPickler.register(type(int.__add__), _reduce_method_descriptor)
+def _reduce_method_descriptor(m):
+    return getattr, (m.__objclass__, m.__name__)
+ForkingPickler.register(type(list.append), _reduce_method_descriptor)
+ForkingPickler.register(type(int.__add__), _reduce_method_descriptor)
+
+#def _reduce_builtin_function_or_method(m):
+#    return getattr, (m.__self__, m.__name__)
+#ForkingPickler.register(type(list().append), _reduce_builtin_function_or_method)
+#ForkingPickler.register(type(int().__add__), _reduce_builtin_function_or_method)
 
 try:
     from functools import partial
@@ -402,7 +405,8 @@ else:
         if _logger is not None:
             d['log_level'] = _logger.getEffectiveLevel()
 
-        if not WINEXE and not WINSERVICE:
+        if not WINEXE and not WINSERVICE and \
+           not d['sys_argv'][0].lower().endswith('pythonservice.exe'):
             main_path = getattr(sys.modules['__main__'], '__file__', None)
             if not main_path and sys.argv[0] not in ('', '-c'):
                 main_path = sys.argv[0]

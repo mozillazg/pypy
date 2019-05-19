@@ -3,7 +3,7 @@
 import linecache
 import unittest
 import os.path
-from test import test_support as support
+from test import support
 
 
 FILENAME = linecache.__file__
@@ -11,7 +11,7 @@ INVALID_NAME = '!@$)(!@#_1'
 EMPTY = ''
 TESTS = 'inspect_fodder inspect_fodder2 mapping_tests'
 TESTS = TESTS.split()
-TEST_PATH = os.path.dirname(support.__file__)
+TEST_PATH = support.TEST_HOME_DIR
 MODULES = "linecache abc".split()
 MODULE_PATH = os.path.dirname(FILENAME)
 
@@ -54,13 +54,13 @@ class LineCacheTests(unittest.TestCase):
 
         # Check whether lines correspond to those from file iteration
         for entry in TESTS:
-            filename = support.findfile( entry + '.py')
+            filename = os.path.join(TEST_PATH, entry) + '.py'
             for index, line in enumerate(open(filename)):
                 self.assertEqual(line, getline(filename, index + 1))
 
         # Check module loading
         for entry in MODULES:
-            filename = support.findfile( entry + '.py')
+            filename = os.path.join(MODULE_PATH, entry) + '.py'
             for index, line in enumerate(open(filename)):
                 self.assertEqual(line, getline(filename, index + 1))
 
@@ -78,7 +78,7 @@ class LineCacheTests(unittest.TestCase):
     def test_clearcache(self):
         cached = []
         for entry in TESTS:
-            filename = support.findfile( entry + '.py')
+            filename = os.path.join(TEST_PATH, entry) + '.py'
             cached.append(filename)
             linecache.getline(filename, 1)
 

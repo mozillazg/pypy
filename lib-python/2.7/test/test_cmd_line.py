@@ -9,7 +9,6 @@ from test.script_helper import (
     assert_python_ok, assert_python_failure, spawn_python, kill_python,
     python_exit_code
 )
-from test.test_support import check_impl_detail
 
 
 class CmdLineTest(unittest.TestCase):
@@ -75,7 +74,7 @@ class CmdLineTest(unittest.TestCase):
         p.stdin.write('Timer\n')
         p.stdin.write('exit()\n')
         data = kill_python(p)
-        self.assertIn('1 loop', data)
+        self.assertTrue(data.startswith('1 loop'))
         self.assertIn('__main__.Timer', data)
 
     def test_run_code(self):
@@ -99,8 +98,7 @@ class CmdLineTest(unittest.TestCase):
             code = 'print(hash("spam"))'
             data = self.start_python('-R', '-c', code)
             hashes.append(data)
-        if check_impl_detail(pypy=False):  # PyPy does not really implement it!
-            self.assertNotEqual(hashes[0], hashes[1])
+        self.assertNotEqual(hashes[0], hashes[1])
 
         # Verify that sys.flags contains hash_randomization
         code = 'import sys; print sys.flags'

@@ -41,6 +41,7 @@ General notes on the underlying Mersenne Twister core generator:
 
 from __future__ import division
 from warnings import warn as _warn
+from types import MethodType as _MethodType, BuiltinMethodType as _BuiltinMethodType
 from math import log as _log, exp as _exp, pi as _pi, e as _e, ceil as _ceil
 from math import sqrt as _sqrt, acos as _acos, cos as _cos, sin as _sin
 from os import urandom as _urandom
@@ -97,12 +98,14 @@ class Random(_random.Random):
         self.gauss_next = None
 
     def seed(self, a=None):
-        """Initialize internal state from hashable object.
+        """Initialize internal state of the random number generator.
 
         None or no argument seeds from current time or from an operating
         system specific randomness source if available.
 
-        If a is not None or an int or long, hash(a) is used instead.
+        If a is not None or is an int or long, hash(a) is used instead.
+        Hash values for some types are nondeterministic when the
+        PYTHONHASHSEED environment variable is enabled.
         """
 
         if a is None:
@@ -240,7 +243,8 @@ class Random(_random.Random):
 
         return self.randrange(a, b+1)
 
-    def _randbelow(self, n, _log=_log, _int=int, _maxwidth=1L<<BPF):
+    def _randbelow(self, n, _log=_log, _int=int, _maxwidth=1L<<BPF,
+                   _Method=_MethodType, _BuiltinMethod=_BuiltinMethodType):
         """Return a random int in the range [0,n)
 
         Handles the case where n has more bits than returned
@@ -255,8 +259,7 @@ class Random(_random.Random):
             # Only call self.getrandbits if the original random() builtin method
             # has not been overridden or if a new getrandbits() was supplied.
             # This assures that the two methods correspond.
-            if (self.random == super(Random, self).random or
-                    getrandbits != super(Random, self).getrandbits):
+            if type(self.random) is _BuiltinMethod or type(getrandbits) is _Method:
                 k = _int(1.00001 + _log(n-1, 2.0))   # 2**k > n-1 > 2**(k-2)
                 r = getrandbits(k)
                 while r >= n:

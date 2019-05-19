@@ -3,8 +3,7 @@
 import platform
 import unittest
 from test.test_support import fcmp, have_unicode, TESTFN, unlink, \
-                              run_unittest, check_py3k_warnings, \
-                              check_impl_detail
+                              run_unittest, check_py3k_warnings
 import warnings
 from operator import neg
 
@@ -398,16 +397,12 @@ class BuiltinTest(unittest.TestCase):
         self.assertEqual(eval('dir()', g, m), list('xyz'))
         self.assertEqual(eval('globals()', g, m), g)
         self.assertEqual(eval('locals()', g, m), m)
-        # on top of CPython, the first dictionary (the globals) has to
-        # be a real dict.  This is not the case on top of PyPy.
-        if check_impl_detail(pypy=False):
-            self.assertRaises(TypeError, eval, 'a', m)
-
+        self.assertRaises(TypeError, eval, 'a', m)
         class A:
             "Non-mapping"
             pass
         m = A()
-        self.assertRaises((TypeError, AttributeError), eval, 'a', g, m)
+        self.assertRaises(TypeError, eval, 'a', g, m)
 
         # Verify that dict subclasses work as well
         class D(dict):
@@ -1064,8 +1059,7 @@ class BuiltinTest(unittest.TestCase):
             def __cmp__(self, other):
                 raise RuntimeError
             __hash__ = None # Invalid cmp makes this unhashable
-        if check_impl_detail(cpython=True):
-            self.assertRaises(RuntimeError, range, a, a + 1, badzero(1))
+        self.assertRaises(RuntimeError, range, a, a + 1, badzero(1))
 
         # Reject floats.
         self.assertRaises(TypeError, range, 1., 1., 1.)
@@ -1599,18 +1593,28 @@ class BuiltinTest(unittest.TestCase):
         self.assertRaises(ValueError, x.translate, "1", 1)
         self.assertRaises(TypeError, x.translate, "1"*256, 1)
 
+
+def create_exec_script(filename):
+    with open(filename, 'w') as f:
+        f.write('z = z+1\n')
+        f.write('z = z*2\n')
+
+
 class TestExecFile(unittest.TestCase):
     # Done outside of the method test_z to get the correct scope
     z = 0
-    f = open(TESTFN, 'w')
-    f.write('z = z+1\n')
-    f.write('z = z*2\n')
-    f.close()
-    with check_py3k_warnings(("execfile.. not supported in 3.x",
-                              DeprecationWarning)):
-        execfile(TESTFN)
+    try:
+        create_exec_script(TESTFN)
+        with check_py3k_warnings(("execfile.. not supported in 3.x",
+                                  DeprecationWarning)):
+            execfile(TESTFN)
+    finally:
+        unlink(TESTFN)
 
     def test_execfile(self):
+        self.addCleanup(unlink, TESTFN)
+        create_exec_script(TESTFN)
+
         globals = {'a': 1, 'b': 2}
         locals = {'b': 200, 'c': 300}
 
@@ -1767,7 +1771,7 @@ class TestType(unittest.TestCase):
 
         A = type('A', (), {})
         self.assertEqual(A.__doc__, None)
-        with self.assertRaises((AttributeError, TypeError)):
+        with self.assertRaises(AttributeError):
             A.__doc__ = 'x'
 
     def test_bad_args(self):
@@ -1795,9 +1799,8 @@ class TestType(unittest.TestCase):
             type('A', (B,), {})
 
     def test_bad_slots(self):
-        if not check_impl_detail(pypy=True):
-            with self.assertRaises(TypeError):
-                type('A', (long,), {'__slots__': 'x'})
+        with self.assertRaises(TypeError):
+            type('A', (long,), {'__slots__': 'x'})
         with self.assertRaises(TypeError):
             type('A', (), {'__slots__': ''})
         with self.assertRaises(TypeError):

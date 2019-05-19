@@ -71,8 +71,8 @@ if os.name == "ce":
         return name
 
 if os.name == "posix" and sys.platform == "darwin":
+    from ctypes.macholib.dyld import dyld_find as _dyld_find
     def find_library(name):
-        from ctypes.macholib.dyld import dyld_find as _dyld_find
         possible = ['lib%s.dylib' % name,
                     '%s.dylib' % name,
                     '%s.framework/%s' % (name, name)]
@@ -85,10 +85,9 @@ if os.name == "posix" and sys.platform == "darwin":
 
 elif os.name == "posix":
     # Andreas Degert's find functions, using gcc, /sbin/ldconfig, objdump
-    import re, errno
+    import re, tempfile, errno
 
     def _findLib_gcc(name):
-        import tempfile
         # Run GCC's linker with the -t (aka --trace) option and examine the
         # library name it prints out. The GCC command will fail because we
         # haven't supplied a proper program with main(), but that does not

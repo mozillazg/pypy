@@ -10,5 +10,6 @@ class Module(MixedModule):
         'ReferenceType': 'interp__weakref.W_Weakref',
         'ProxyType': 'interp__weakref.W_Proxy', 
         'CallableProxyType': 'interp__weakref.W_CallableProxy',
-        'proxy': 'interp__weakref.proxy'
+        'proxy': 'interp__weakref.proxy',
+        '_remove_dead_weakref': 'interp__weakref._remove_dead_weakref',
     }

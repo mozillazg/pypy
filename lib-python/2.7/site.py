@@ -91,10 +91,7 @@ def abs__file__():
         if hasattr(m, '__loader__'):
             continue   # don't mess with a PEP 302-supplied __file__
         try:
-            prev = m.__file__
-            new = os.path.abspath(m.__file__)
-            if prev != new:
-                m.__file__ = new
+            m.__file__ = os.path.abspath(m.__file__)
         except (AttributeError, OSError):
             pass
 
@@ -280,7 +277,6 @@ def getsitepackages():
     will find its `site-packages` subdirectory depending on the system
     environment, and will return a list of full paths.
     """
-    is_pypy = '__pypy__' in sys.builtin_module_names
     sitepackages = []
     seen = set()
 
@@ -291,10 +287,6 @@ def getsitepackages():
 
         if sys.platform in ('os2emx', 'riscos'):
             sitepackages.append(os.path.join(prefix, "Lib", "site-packages"))
-        elif is_pypy:
-            from distutils.sysconfig import get_python_lib
-            sitedir = get_python_lib(standard_lib=False, prefix=prefix)
-            sitepackages.append(sitedir)
         elif os.sep == '/':
             sitepackages.append(os.path.join(prefix, "lib",
                                         "python" + sys.version[:3],
@@ -422,32 +414,22 @@ class _Printer(object):
                 if key == 'q':
                     break
 
-##def setcopyright():
-##    """Set 'copyright' and 'credits' in __builtin__"""
-##    __builtin__.copyright = _Printer("copyright", sys.copyright)
-##    if sys.platform[:4] == 'java':
-##        __builtin__.credits = _Printer(
-##            "credits",
-##            "Jython is maintained by the Jython developers (www.jython.org).")
-##    else:
-##        __builtin__.credits = _Printer("credits", """\
-##    Thanks to CWI, CNRI, BeOpen.com, Zope Corporation and a cast of thousands
-##    for supporting Python development.  See www.python.org for more information.""")
-##    here = os.path.dirname(os.__file__)
-##    __builtin__.license = _Printer(
-##        "license", "See http://www.python.org/%.3s/license.html" % sys.version,
-##        ["LICENSE.txt", "LICENSE"],
-##        [os.path.join(here, os.pardir), here, os.curdir])
-
 def setcopyright():
-    # XXX this is the PyPy-specific version.  Should be unified with the above.
+    """Set 'copyright' and 'credits' in __builtin__"""
     __builtin__.copyright = _Printer("copyright", sys.copyright)
-    __builtin__.credits = _Printer(
-        "credits",
-        "PyPy is maintained by the PyPy developers: http://pypy.org/")
+    if sys.platform[:4] == 'java':
+        __builtin__.credits = _Printer(
+            "credits",
+            "Jython is maintained by the Jython developers (www.jython.org).")
+    else:
+        __builtin__.credits = _Printer("credits", """\
+    Thanks to CWI, CNRI, BeOpen.com, Zope Corporation and a cast of thousands
+    for supporting Python development.  See www.python.org for more information.""")
+    here = os.path.dirname(os.__file__)
     __builtin__.license = _Printer(
-        "license",
-        "See https://bitbucket.org/pypy/pypy/src/default/LICENSE")
+        "license", "See https://www.python.org/psf/license/",
+        ["LICENSE.txt", "LICENSE"],
+        [os.path.join(here, os.pardir), here, os.curdir])
 
 
 class _Helper(object):
@@ -473,7 +455,7 @@ def aliasmbcs():
     if sys.platform == 'win32':
         import locale, codecs
         enc = locale.getdefaultlocale()[1]
-        if enc is not None and enc.startswith('cp'):            # "cp***" ?
+        if enc.startswith('cp'):            # "cp***" ?
             try:
                 codecs.lookup(enc)
             except LookupError:
@@ -529,20 +511,9 @@ def execusercustomize():
                 "'import usercustomize' failed; use -v for traceback"
 
 
-def import_builtin_stuff():
-    """PyPy specific: pre-import a few built-in modules, because
-    some programs actually rely on them to be in sys.modules :-("""
-    # encodings is imported sometimes but not always by app_main
-    import encodings
-    import exceptions
-    if 'zipimport' in sys.builtin_module_names:
-        import zipimport
-
-
 def main():
     global ENABLE_USER_SITE
 
-    import_builtin_stuff()
     abs__file__()
     known_paths = removeduppaths()
     if ENABLE_USER_SITE is None:

@@ -689,7 +689,6 @@ class TestCopy(unittest.TestCase):
         self.assertEqual(v[c], d)
         self.assertEqual(len(v), 2)
         del c, d
-        test_support.gc_collect()
         self.assertEqual(len(v), 1)
         x, y = C(), C()
         # The underlying containers are decoupled
@@ -719,7 +718,6 @@ class TestCopy(unittest.TestCase):
         self.assertEqual(v[a].i, b.i)
         self.assertEqual(v[c].i, d.i)
         del c
-        test_support.gc_collect()
         self.assertEqual(len(v), 1)
 
     def test_deepcopy_weakvaluedict(self):
@@ -743,7 +741,6 @@ class TestCopy(unittest.TestCase):
         self.assertTrue(t is d)
         del x, y, z, t
         del d
-        test_support.gc_collect()
         self.assertEqual(len(v), 1)
 
     def test_deepcopy_bound_method(self):

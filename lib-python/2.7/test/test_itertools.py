@@ -802,6 +802,7 @@ class TestBasicOps(unittest.TestCase):
                 (10, 20, 3),
                 (10, 3, 20),
                 (10, 20),
+                (10, 10),
                 (10, 3),
                 (20,)
                 ]:
@@ -826,6 +827,10 @@ class TestBasicOps(unittest.TestCase):
         self.assertEqual(list(islice(it, 3)), range(3))
         self.assertEqual(list(it), range(3, 10))
 
+        it = iter(range(10))
+        self.assertEqual(list(islice(it, 3, 3)), [])
+        self.assertEqual(list(it), range(3, 10))
+
         # Test invalid arguments
         self.assertRaises(TypeError, islice, xrange(10))
         self.assertRaises(TypeError, islice, xrange(10), 1, 2, 3, 4)
@@ -833,11 +838,11 @@ class TestBasicOps(unittest.TestCase):
         self.assertRaises(ValueError, islice, xrange(10), 1, -5, -1)
         self.assertRaises(ValueError, islice, xrange(10), 1, 10, -1)
         self.assertRaises(ValueError, islice, xrange(10), 1, 10, 0)
-        self.assertRaises((ValueError, TypeError), islice, xrange(10), 'a')
-        self.assertRaises((ValueError, TypeError), islice, xrange(10), 'a', 1)
-        self.assertRaises((ValueError, TypeError), islice, xrange(10), 1, 'a')
-        self.assertRaises((ValueError, TypeError), islice, xrange(10), 'a', 1, 1)
-        self.assertRaises((ValueError, TypeError), islice, xrange(10), 1, 'a', 1)
+        self.assertRaises(ValueError, islice, xrange(10), 'a')
+        self.assertRaises(ValueError, islice, xrange(10), 'a', 1)
+        self.assertRaises(ValueError, islice, xrange(10), 1, 'a')
+        self.assertRaises(ValueError, islice, xrange(10), 'a', 1, 1)
+        self.assertRaises(ValueError, islice, xrange(10), 1, 'a', 1)
         self.assertEqual(len(list(islice(count(), 1, 10, maxsize))), 1)
 
         # Issue #10323:  Less islice in a predictable state
@@ -927,17 +932,9 @@ class TestBasicOps(unittest.TestCase):
         self.assertRaises(TypeError, tee, [1,2], 3, 'x')
 
         # tee object should be instantiable
-        if test_support.check_impl_detail():
-            # XXX I (arigo) would argue that 'type(a)(iterable)' has
-            # ill-defined semantics: it always return a fresh tee object,
-            # but depending on whether 'iterable' is itself a tee object
-            # or not, it is ok or not to continue using 'iterable' after
-            # the call.  I cannot imagine why 'type(a)(non_tee_object)'
-            # would be useful, as 'iter(non_tee_obect)' is equivalent
-            # as far as I can see.
-            a, b = tee('abc')
-            c = type(a)('def')
-            self.assertEqual(list(c), list('def'))
+        a, b = tee('abc')
+        c = type(a)('def')
+        self.assertEqual(list(c), list('def'))
 
         # test long-lagged and multi-way split
         a, b, c = tee(xrange(2000), 3)
@@ -975,7 +972,6 @@ class TestBasicOps(unittest.TestCase):
         p = weakref.proxy(a)
         self.assertEqual(getattr(p, '__class__'), type(b))
         del a
-        test_support.gc_collect()
         self.assertRaises(ReferenceError, getattr, p, '__class__')
 
     # Issue 13454: Crash when deleting backward iterator from tee()
@@ -1091,6 +1087,48 @@ class TestExamples(unittest.TestCase):
 
     def test_takewhile(self):
         self.assertEqual(list(takewhile(lambda x: x<5, [1,4,6,4,1])), [1,4])
+
+
+class TestPurePythonRoughEquivalents(unittest.TestCase):
+
+    @staticmethod
+    def islice(iterable, *args):
+        s = slice(*args)
+        start, stop, step = s.start or 0, s.stop or sys.maxint, s.step or 1
+        it = iter(xrange(start, stop, step))
+        try:
+            nexti = next(it)
+        except StopIteration:
+            # Consume *iterable* up to the *start* position.
+            for i, element in izip(xrange(start), iterable):
+                pass
+            return
+        try:
+            for i, element in enumerate(iterable):
+                if i == nexti:
+                    yield element
+                    nexti = next(it)
+        except StopIteration:
+            # Consume to *stop*.
+            for i, element in izip(xrange(i + 1, stop), iterable):
+                pass
+
+    def test_islice_recipe(self):
+        self.assertEqual(list(self.islice('ABCDEFG', 2)), list('AB'))
+        self.assertEqual(list(self.islice('ABCDEFG', 2, 4)), list('CD'))
+        self.assertEqual(list(self.islice('ABCDEFG', 2, None)), list('CDEFG'))
+        self.assertEqual(list(self.islice('ABCDEFG', 0, None, 2)), list('ACEG'))
+        # Test items consumed.
+        it = iter(xrange(10))
+        self.assertEqual(list(self.islice(it, 3)), range(3))
+        self.assertEqual(list(it), range(3, 10))
+        it = iter(xrange(10))
+        self.assertEqual(list(self.islice(it, 3, 3)), [])
+        self.assertEqual(list(it), range(3, 10))
+        # Test that slice finishes in predictable state.
+        c = count()
+        self.assertEqual(list(self.islice(c, 1, 3, 50)), [1])
+        self.assertEqual(next(c), 3)
 
 
 class TestGC(unittest.TestCase):
@@ -1408,7 +1446,6 @@ class TestVariousIteratorArgs(unittest.TestCase):
 
 class LengthTransparency(unittest.TestCase):
 
-    @test_support.impl_detail("__length_hint__() API is undocumented")
     def test_repeat(self):
         from test.test_iterlen import len
         self.assertEqual(len(repeat(None, 50)), 50)
@@ -1474,6 +1511,39 @@ class RegressionTests(unittest.TestCase):
         hist = []
         self.assertRaises(AssertionError, list, cycle(gen1()))
         self.assertEqual(hist, [0,1])
+
+    def test_long_chain_of_empty_iterables(self):
+        # Make sure itertools.chain doesn't run into recursion limits when
+        # dealing with long chains of empty iterables. Even with a high
+        # number this would probably only fail in Py_DEBUG mode.
+        it = chain.from_iterable(() for unused in xrange(10000000))
+        with self.assertRaises(StopIteration):
+            next(it)
+
+    def test_issue30347_1(self):
+        def f(n):
+            if n == 5:
+                list(b)
+            return n != 6
+        for (k, b) in groupby(range(10), f):
+            list(b)  # shouldn't crash
+
+    def test_issue30347_2(self):
+        class K(object):
+            i = 0
+            def __init__(self, v):
+                pass
+            def __eq__(self, other):
+                K.i += 1
+                if K.i == 1:
+                    next(g, None)
+                return True
+            def __hash__(self):
+                return 1
+        g = next(groupby(range(10), K))[1]
+        for j in range(2):
+            next(g, None)  # shouldn't crash
+
 
 class SubclassWithKwargsTest(unittest.TestCase):
     def test_keywords_in_subclass(self):
@@ -1553,6 +1623,17 @@ Samuele
 >>> def tabulate(function, start=0):
 ...     "Return function(0), function(1), ..."
 ...     return imap(function, count(start))
+
+>>> import collections
+>>> def consume(iterator, n=None):
+...     "Advance the iterator n-steps ahead. If n is None, consume entirely."
+...     # Use functions that consume iterators at C speed.
+...     if n is None:
+...         # feed the entire iterator into a zero-length deque
+...         collections.deque(iterator, maxlen=0)
+...     else:
+...         # advance to the empty slice starting at position n
+...         next(islice(iterator, n, n), None)
 
 >>> def nth(iterable, n, default=None):
 ...     "Returns the nth item or a default value"
@@ -1655,6 +1736,14 @@ perform as purported.
 >>> list(islice(tabulate(lambda x: 2*x), 4))
 [0, 2, 4, 6]
 
+>>> it = iter(xrange(10))
+>>> consume(it, 3)
+>>> next(it)
+3
+>>> consume(it)
+>>> next(it, 'Done')
+'Done'
+
 >>> nth('abcde', 3)
 'd'
 
@@ -1730,7 +1819,8 @@ __test__ = {'libreftest' : libreftest}
 def test_main(verbose=None):
     test_classes = (TestBasicOps, TestVariousIteratorArgs, TestGC,
                     RegressionTests, LengthTransparency,
-                    SubclassWithKwargsTest, TestExamples)
+                    SubclassWithKwargsTest, TestExamples,
+                    TestPurePythonRoughEquivalents)
     test_support.run_unittest(*test_classes)
 
     # verify reference counting

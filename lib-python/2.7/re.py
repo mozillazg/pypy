@@ -225,7 +225,7 @@ _cache_repl = {}
 
 _pattern_type = type(sre_compile.compile("", 0))
 
-_MAXCACHE = 1000
+_MAXCACHE = 100
 
 def _compile(*key):
     # internal: compile pattern

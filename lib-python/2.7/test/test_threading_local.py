@@ -168,9 +168,8 @@ class BaseLocalTest:
         obj = cls()
         obj.x = 5
         self.assertEqual(obj.__dict__, {'x': 5})
-        if support.check_impl_detail():
-            with self.assertRaises(AttributeError):
-                obj.__dict__ = {}
+        with self.assertRaises(AttributeError):
+            obj.__dict__ = {}
         with self.assertRaises(AttributeError):
             del obj.__dict__
 

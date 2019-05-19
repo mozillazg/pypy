@@ -8,7 +8,7 @@ extensions ASAP)."""
 
 __revision__ = "$Id$"
 
-import sys, os, string, re, imp
+import sys, os, string, re
 from types import *
 from site import USER_BASE, USER_SITE
 from distutils.core import Command
@@ -32,11 +32,6 @@ extension_name_re = re.compile \
 def show_compilers ():
     from distutils.ccompiler import show_compilers
     show_compilers()
-
-def _get_c_extension_suffix():
-    for ext, mod, typ in imp.get_suffixes():
-        if typ == imp.C_EXTENSION:
-            return ext
 
 
 class build_ext (Command):
@@ -197,13 +192,8 @@ class build_ext (Command):
 
             # Append the source distribution include and library directories,
             # this allows distutils on windows to work in the source tree
-            if 0:
-                # pypy has no PC directory
-                self.include_dirs.append(os.path.join(sys.exec_prefix, 'PC'))
-            if 1:
-                # pypy has no PCBuild directory
-                pass
-            elif MSVC_VERSION == 9:
+            self.include_dirs.append(os.path.join(sys.exec_prefix, 'PC'))
+            if MSVC_VERSION == 9:
                 # Use the .lib files for the correct architecture
                 if self.plat_name == 'win32':
                     suffix = ''
@@ -376,7 +366,7 @@ class build_ext (Command):
             ext_name, build_info = ext
 
             log.warn(("old-style (ext_name, build_info) tuple found in "
-                      "ext_modules for extension '%s'"
+                      "ext_modules for extension '%s' "
                       "-- please convert to Extension instance" % ext_name))
 
             if not (isinstance(ext_name, str) and
@@ -683,22 +673,10 @@ class build_ext (Command):
         # OS/2 has an 8 character module (extension) limit :-(
         if os.name == "os2":
             ext_path[len(ext_path) - 1] = ext_path[len(ext_path) - 1][:8]
-        # PyPy tweak: first try to get the C extension suffix from
-        # 'imp'.  If it fails we fall back to the 'SO' config var, like
-        # the previous version of this code did.  This should work for
-        # CPython too.  The point is that on PyPy with cpyext, the
-        # config var 'SO' is just ".so" but we want to return
-        # ".pypy-VERSION.so" instead.  Note a further tweak for cffi's
-        # embedding mode: if EXT_SUFFIX is also defined, use that
-        # directly.
-        so_ext = get_config_var('EXT_SUFFIX')
-        if so_ext is None:
-            so_ext = _get_c_extension_suffix()
-            if so_ext is None:
-                so_ext = get_config_var('SO')     # fall-back
-            # extensions in debug_mode are named 'module_d.pyd' under windows
-            if os.name == 'nt' and self.debug:
-                so_ext = '_d.pyd'
+        # extensions in debug_mode are named 'module_d.pyd' under windows
+        so_ext = get_config_var('SO')
+        if os.name == 'nt' and self.debug:
+            return os.path.join(*ext_path) + '_d' + so_ext
         return os.path.join(*ext_path) + so_ext
 
     def get_export_symbols (self, ext):
@@ -717,17 +695,24 @@ class build_ext (Command):
         shared extension.  On most platforms, this is just 'ext.libraries';
         on Windows and OS/2, we add the Python library (eg. python20.dll).
         """
-        # For PyPy, we must not add any such Python library, on any platform
-        if "__pypy__" in sys.builtin_module_names:
-            return ext.libraries
-        # The python library is always needed on Windows.
+        # The python library is always needed on Windows.  For MSVC, this
+        # is redundant, since the library is mentioned in a pragma in
+        # pyconfig.h that MSVC groks.  The other Windows compilers all seem
+        # to need it mentioned explicitly, though, so that's what we do.
+        # Append '_d' to the python import library on debug builds.
         if sys.platform == "win32":
-            template = "python%d%d"
-            pythonlib = (template %
-                   (sys.hexversion >> 24, (sys.hexversion >> 16) & 0xff))
-            # don't extend ext.libraries, it may be shared with other
-            # extensions, it is a reference to the original list
-            return ext.libraries + [pythonlib]
+            from distutils.msvccompiler import MSVCCompiler
+            if not isinstance(self.compiler, MSVCCompiler):
+                template = "python%d%d"
+                if self.debug:
+                    template = template + '_d'
+                pythonlib = (template %
+                       (sys.hexversion >> 24, (sys.hexversion >> 16) & 0xff))
+                # don't extend ext.libraries, it may be shared with other
+                # extensions, it is a reference to the original list
+                return ext.libraries + [pythonlib]
+            else:
+                return ext.libraries
         elif sys.platform == "os2emx":
             # EMX/GCC requires the python library explicitly, and I
             # believe VACPP does as well (though not confirmed) - AIM Apr01

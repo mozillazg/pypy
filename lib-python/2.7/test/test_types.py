@@ -1,8 +1,7 @@
 # Python test set -- part 6, built-in types
 
 from test.test_support import run_unittest, have_unicode, run_with_locale, \
-                              check_py3k_warnings, \
-                              impl_detail, check_impl_detail
+                              check_py3k_warnings
 import unittest
 import sys
 import locale
@@ -290,14 +289,9 @@ class TypesTests(unittest.TestCase):
         # array.array() returns an object that does not implement a char buffer,
         # something which int() uses for conversion.
         import array
-        try: int(buffer(array.array('c', '5')))
+        try: int(buffer(array.array('c')))
         except TypeError: pass
-        else:
-            if check_impl_detail():
-                self.fail("char buffer (at C level) not working")
-            #else:
-            #   it works on PyPy, which does not have the distinction
-            #   between char buffer and binary buffer.  XXX fine enough?
+        else: self.fail("char buffer (at C level) not working")
 
     def test_int__format__(self):
         def test(i, format_spec, result):
@@ -747,7 +741,6 @@ class TypesTests(unittest.TestCase):
         for code in 'xXobns':
             self.assertRaises(ValueError, format, 0, ',' + code)
 
-    @impl_detail("the types' internal size attributes are CPython-only")
     def test_internal_sizes(self):
         self.assertGreater(object.__basicsize__, 0)
         self.assertGreater(tuple.__itemsize__, 0)

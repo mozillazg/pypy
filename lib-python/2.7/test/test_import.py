@@ -12,8 +12,7 @@ import textwrap
 import shutil
 
 from test.test_support import (unlink, TESTFN, unload, run_unittest, rmtree,
-                               is_jython, check_warnings, EnvironmentVarGuard,
-                               impl_detail, check_impl_detail)
+                               is_jython, check_warnings, EnvironmentVarGuard)
 from test import symlink_support
 from test import script_helper
 
@@ -86,8 +85,7 @@ class ImportTests(unittest.TestCase):
                 self.assertEqual(mod.b, b,
                     "module loaded (%s) but contents invalid" % mod)
             finally:
-                if check_impl_detail(pypy=False):
-                    unlink(source)
+                unlink(source)
 
             try:
                 if not sys.dont_write_bytecode:
@@ -164,8 +162,7 @@ class ImportTests(unittest.TestCase):
             m2 = __import__(TESTFN)
             self.assertEqual(m2.x, 'rewritten')
             # Now delete the source file and check the pyc was rewritten
-            if check_impl_detail(pypy=False):
-                unlink(fname)
+            unlink(fname)
             unload(TESTFN)
             m3 = __import__(TESTFN)
             self.assertEqual(m3.x, 'rewritten')
@@ -208,16 +205,13 @@ class ImportTests(unittest.TestCase):
         # Compile & remove .py file, we only need .pyc (or .pyo).
         with open(filename, 'r') as f:
             py_compile.compile(filename)
-        if check_impl_detail(pypy=False):
-            # pypy refuses to import a .pyc if the .py does not exist
-            unlink(filename)
+        unlink(filename)
 
         # Need to be able to load from current dir.
         sys.path.append('')
 
         # This used to crash.
         exec 'import ' + module
-        reload(longlist)
 
         # Cleanup.
         del sys.path[-1]
@@ -406,20 +400,19 @@ class ImportTests(unittest.TestCase):
     def test_replace_parent_in_sys_modules(self):
         dir_name = os.path.abspath(TESTFN)
         os.mkdir(dir_name)
-        try:
-            pkg_dir = os.path.join(dir_name, 'sa')
-            os.mkdir(pkg_dir)
-            with open(os.path.join(pkg_dir, '__init__.py'), 'w') as init_file:
-                init_file.write("import v1")
-            with open(os.path.join(pkg_dir, 'v1.py'), 'w') as v1_file:
-                v1_file.write("import sys;"
-                              "sys.modules['sa'] = sys.modules[__name__];"
-                              "import sa")
-            sys.path.insert(0, dir_name)
-            # a segfault means the test failed!
-            import sa
-        finally:
-            rmtree(dir_name)
+        self.addCleanup(rmtree, dir_name)
+        pkg_dir = os.path.join(dir_name, 'sa')
+        os.mkdir(pkg_dir)
+        with open(os.path.join(pkg_dir, '__init__.py'), 'w') as init_file:
+            init_file.write("import v1")
+        with open(os.path.join(pkg_dir, 'v1.py'), 'w') as v1_file:
+            v1_file.write("import sys;"
+                          "sys.modules['sa'] = sys.modules[__name__];"
+                          "import sa")
+        sys.path.insert(0, dir_name)
+        self.addCleanup(sys.path.pop, 0)
+        # a segfault means the test failed!
+        import sa
 
     def test_fromlist_type(self):
         with self.assertRaises(TypeError) as cm:
@@ -491,7 +484,6 @@ func_filename = func.func_code.co_filename
         self.assertEqual(mod.code_filename, self.file_name)
         self.assertEqual(mod.func_filename, self.file_name)
 
-    @impl_detail("pypy refuses to import without a .py source", pypy=False)
     def test_module_without_source(self):
         target = "another_module.py"
         py_compile.compile(self.file_name, dfile=target)
@@ -556,7 +548,7 @@ class PathsTests(unittest.TestCase):
         try:
             os.listdir(unc)
         except OSError as e:
-            if e.errno in (errno.EPERM, errno.EACCES):
+            if e.errno in (errno.EPERM, errno.EACCES, errno.ENOENT):
                 # See issue #15338
                 self.skipTest("cannot access administrative share %r" % (unc,))
             raise

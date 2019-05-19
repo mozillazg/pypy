@@ -101,11 +101,6 @@ def _gettextwriter(out, encoding):
     return _UnbufferedTextIOWrapper(buffer, encoding=encoding,
                                    errors='xmlcharrefreplace',
                                    newline='\n')
-# PyPy: moved this class outside the function above
-class _UnbufferedTextIOWrapper(io.TextIOWrapper):
-    def write(self, s):
-        super(_UnbufferedTextIOWrapper, self).write(s)
-        self.flush()
 
 
 class _UnbufferedTextIOWrapper(io.TextIOWrapper):

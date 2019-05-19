@@ -190,7 +190,7 @@ Specification: Generators and Exception Propagation
       File "<stdin>", line 1, in ?
       File "<stdin>", line 2, in g
       File "<stdin>", line 2, in f
-    ZeroDivisionError: integer division by zero
+    ZeroDivisionError: integer division or modulo by zero
     >>> k.next()  # and the generator cannot be resumed
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
@@ -398,10 +398,7 @@ And more, added later.
 0
 >>> type(i.gi_frame)
 <type 'frame'>
-
-PyPy prints "readonly attribute 'gi_running'" so ignore the exception detail
-
->>> i.gi_running = 42 # doctest: +IGNORE_EXCEPTION_DETAIL
+>>> i.gi_running = 42
 Traceback (most recent call last):
   ...
 TypeError: readonly attribute
@@ -737,16 +734,14 @@ syntax_tests = """
 ...     yield 1
 Traceback (most recent call last):
   ..
-  File "<doctest test.test_generators.__test__.syntax[0]>", line 3
-SyntaxError: 'return' with argument inside generator
+SyntaxError: 'return' with argument inside generator (<doctest test.test_generators.__test__.syntax[0]>, line 3)
 
 >>> def f():
 ...     yield 1
 ...     return 22
 Traceback (most recent call last):
   ..
-  File "<doctest test.test_generators.__test__.syntax[1]>", line 3
-SyntaxError: 'return' with argument inside generator
+SyntaxError: 'return' with argument inside generator (<doctest test.test_generators.__test__.syntax[1]>, line 3)
 
 "return None" is not the same as "return" in a generator:
 
@@ -755,8 +750,7 @@ SyntaxError: 'return' with argument inside generator
 ...     return None
 Traceback (most recent call last):
   ..
-  File "<doctest test.test_generators.__test__.syntax[2]>", line 3
-SyntaxError: 'return' with argument inside generator
+SyntaxError: 'return' with argument inside generator (<doctest test.test_generators.__test__.syntax[2]>, line 3)
 
 These are fine:
 
@@ -885,9 +879,7 @@ These are fine:
 ...     if 0:
 ...         yield 2             # because it's a generator (line 10)
 Traceback (most recent call last):
-  ...
-  File "<doctest test.test_generators.__test__.syntax[24]>", line 10
-SyntaxError: 'return' with argument inside generator
+SyntaxError: 'return' with argument inside generator (<doctest test.test_generators.__test__.syntax[24]>, line 10)
 
 This one caused a crash (see SF bug 567538):
 
@@ -1505,8 +1497,6 @@ True
 """
 
 coroutine_tests = """\
->>> from test.test_support import gc_collect
-
 Sending a value into a started generator:
 
 >>> def f():
@@ -1534,13 +1524,7 @@ Yield by itself yields None:
 [None]
 
 
-
-An obscene abuse of a yield expression within a generator expression:
-
->>> list((yield 21) for i in range(4))
-[21, None, 21, None, 21, None, 21, None]
-
-And a more sane, but still weird usage:
+Yield is allowed only in the outermost iterable in generator expression:
 
 >>> def f(): list(i for i in [(yield 26)])
 >>> type(f())
@@ -1581,14 +1565,13 @@ SyntaxError: 'yield' outside function
 >>> def f(): return lambda x=(yield): 1
 Traceback (most recent call last):
   ...
-  File "<doctest test.test_generators.__test__.coroutine[22]>", line 1
-SyntaxError: 'return' with argument inside generator
+SyntaxError: 'return' with argument inside generator (<doctest test.test_generators.__test__.coroutine[21]>, line 1)
 
 >>> def f(): x = yield = y
 Traceback (most recent call last):
   ...
   File "<doctest test.test_generators.__test__.coroutine[23]>", line 1
-SyntaxError: can't assign to yield expression
+SyntaxError: assignment to yield expression not possible
 
 >>> def f(): (yield bar) = y
 Traceback (most recent call last):
@@ -1677,7 +1660,7 @@ ValueError: 7
 >>> f().throw("abc")     # throw on just-opened generator
 Traceback (most recent call last):
   ...
-TypeError: exceptions must be old-style classes or derived from BaseException, not str
+TypeError: exceptions must be classes, or instances, not str
 
 Now let's try closing a generator:
 
@@ -1709,7 +1692,7 @@ And finalization:
 
 >>> g = f()
 >>> g.next()
->>> del g; gc_collect()
+>>> del g
 exiting
 
 >>> class context(object):
@@ -1720,7 +1703,7 @@ exiting
 ...          yield
 >>> g = f()
 >>> g.next()
->>> del g; gc_collect()
+>>> del g
 exiting
 
 
@@ -1733,7 +1716,7 @@ GeneratorExit is not caught by except Exception:
 
 >>> g = f()
 >>> g.next()
->>> del g; gc_collect()
+>>> del g
 finally
 
 
@@ -1759,7 +1742,6 @@ Our ill-behaved code should be invoked during GC:
 >>> g = f()
 >>> g.next()
 >>> del g
->>> gc_collect()
 >>> sys.stderr.getvalue().startswith(
 ...     "Exception RuntimeError: 'generator ignored GeneratorExit' in "
 ... )
@@ -1796,7 +1778,7 @@ enclosing function a generator:
 >>> type(f())
 <type 'generator'>
 
->>> def f(): x=(i for i in (yield) if (yield))
+>>> def f(): x=(i for i in (yield) if i)
 >>> type(f())
 <type 'generator'>
 
@@ -1824,8 +1806,6 @@ refleaks_tests = """
 Prior to adding cycle-GC support to itertools.tee, this code would leak
 references. We add it to the standard suite so the routine refleak-tests
 would trigger if it starts being uncleanable again.
-
->>> from test.test_support import gc_collect
 
 >>> import itertools
 >>> def leak():
@@ -1878,10 +1858,9 @@ to test.
 ...
 ...     l = Leaker()
 ...     del l
-...     gc_collect()
 ...     err = sys.stderr.getvalue().strip()
 ...     err.startswith(
-...         "Exception RuntimeError: RuntimeError() in "
+...         "Exception RuntimeError: RuntimeError() in <"
 ...     )
 ...     err.endswith("> ignored")
 ...     len(err.splitlines())
@@ -1898,6 +1877,16 @@ test_generators just happened to be the test that drew these out.
 
 """
 
+crash_test = """
+>>> def foo(): yield
+>>> gen = foo()
+>>> gen.next()
+>>> print gen.gi_frame.f_restricted  # This would segfault.
+False
+
+"""
+
+
 __test__ = {"tut":      tutorial_tests,
             "pep":      pep_tests,
             "email":    email_tests,
@@ -1907,6 +1896,7 @@ __test__ = {"tut":      tutorial_tests,
             "weakref":  weakref_tests,
             "coroutine":  coroutine_tests,
             "refleaks": refleaks_tests,
+            "crash": crash_test,
             }
 
 # Magic test name that regrtest.py invokes *after* importing this module.

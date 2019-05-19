@@ -5,7 +5,6 @@ A testcase which accesses *values* in a dll.
 import unittest
 import sys
 from ctypes import *
-from ctypes.test import xfail
 
 import _ctypes_test
 
@@ -26,7 +25,6 @@ class ValuesTestCase(unittest.TestCase):
 class PythonValuesTestCase(unittest.TestCase):
     """This test only works when python itself is a dll/shared library"""
 
-    @xfail
     def test_optimizeflag(self):
         # This test accesses the Py_OptimizeFlag intger, which is
         # exported by the Python dll.
@@ -43,7 +41,6 @@ class PythonValuesTestCase(unittest.TestCase):
         else:
             self.assertEqual(opt, 2)
 
-    @xfail
     def test_frozentable(self):
         # Python exports a PyImport_FrozenModules symbol. This is a
         # pointer to an array of struct _frozen entries.  The end of the
@@ -78,7 +75,6 @@ class PythonValuesTestCase(unittest.TestCase):
         from ctypes import _pointer_type_cache
         del _pointer_type_cache[struct_frozen]
 
-    @xfail
     def test_undefined(self):
         self.assertRaises(ValueError, c_int.in_dll, pythonapi,
                           "Undefined_Symbol")

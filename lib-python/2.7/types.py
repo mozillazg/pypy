@@ -71,31 +71,15 @@ except TypeError:
     FrameType = type(tb.tb_frame)
     del tb
 
-# PyPy extension
-try:
-    FakeFrameType = type(next(sys._current_frames().itervalues()))
-except (AttributeError, StopIteration):
-    FakeFrameType = FrameType
-
 SliceType = slice
 EllipsisType = type(Ellipsis)
 
 DictProxyType = type(TypeType.__dict__)
 NotImplementedType = type(NotImplemented)
 
-#
-# On CPython, FunctionType.__code__ is a 'getset_descriptor', but
-# FunctionType.__globals__ is a 'member_descriptor', just like app-level
-# slots.  On PyPy, all descriptors of built-in types are
-# 'getset_descriptor', but the app-level slots are 'member_descriptor'
-# as well.  (On Jython the situation might still be different.)
-#
-# Note that MemberDescriptorType was equal to GetSetDescriptorType in
-# PyPy <= 6.0.
-#
+# For Jython, the following two types are identical
 GetSetDescriptorType = type(FunctionType.func_code)
-class _C(object): __slots__ = 's'
-MemberDescriptorType = type(_C.s)
+MemberDescriptorType = type(FunctionType.func_globals)
 
 del sys, _f, _g, _C, _x                           # Not for export
 

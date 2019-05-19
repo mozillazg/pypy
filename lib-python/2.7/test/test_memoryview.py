@@ -12,6 +12,7 @@ from test import test_support
 import io
 import copy
 import pickle
+import warnings
 
 
 class AbstractMemoryTests:
@@ -28,8 +29,7 @@ class AbstractMemoryTests:
     def check_getitem_with_type(self, tp):
         item = self.getitem_type
         b = tp(self._source)
-        if hasattr(sys, 'getrefcount'):
-            oldrefcount = sys.getrefcount(b)
+        oldrefcount = sys.getrefcount(b)
         m = self._view(b)
         self.assertEqual(m[0], item(b"a"))
         self.assertIsInstance(m[0], bytes)
@@ -46,8 +46,7 @@ class AbstractMemoryTests:
         self.assertRaises(TypeError, lambda: m[0.0])
         self.assertRaises(TypeError, lambda: m["a"])
         m = None
-        if hasattr(sys, 'getrefcount'):
-            self.assertEqual(sys.getrefcount(b), oldrefcount)
+        self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_getitem(self):
         for tp in self._types:
@@ -69,8 +68,7 @@ class AbstractMemoryTests:
         if not self.ro_type:
             self.skipTest("no read-only type to test")
         b = self.ro_type(self._source)
-        if hasattr(sys, 'getrefcount'):
-            oldrefcount = sys.getrefcount(b)
+        oldrefcount = sys.getrefcount(b)
         m = self._view(b)
         def setitem(value):
             m[0] = value
@@ -78,16 +76,14 @@ class AbstractMemoryTests:
         self.assertRaises(TypeError, setitem, 65)
         self.assertRaises(TypeError, setitem, memoryview(b"a"))
         m = None
-        if hasattr(sys, 'getrefcount'):
-            self.assertEqual(sys.getrefcount(b), oldrefcount)
+        self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_setitem_writable(self):
         if not self.rw_type:
             self.skipTest("no writable type to test")
         tp = self.rw_type
         b = self.rw_type(self._source)
-        if hasattr(sys, 'getrefcount'):
-            oldrefcount = sys.getrefcount(b)
+        oldrefcount = sys.getrefcount(b)
         m = self._view(b)
         m[0] = tp(b"0")
         self._check_contents(tp, b, b"0bcdef")
@@ -123,8 +119,7 @@ class AbstractMemoryTests:
         self.assertRaises(ValueError, setitem, slice(0,2), b"a")
 
         m = None
-        if hasattr(sys, 'getrefcount'):
-            self.assertEqual(sys.getrefcount(b), oldrefcount)
+        self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_delitem(self):
         for tp in self._types:
@@ -300,7 +295,6 @@ class BaseMemorySliceTests:
     def _check_contents(self, tp, obj, contents):
         self.assertEqual(obj[1:7], tp(contents))
 
-    @unittest.skipUnless(hasattr(sys, 'getrefcount'), "Reference counting")
     def test_refs(self):
         for tp in self._types:
             m = memoryview(tp(self._source))
@@ -366,15 +360,20 @@ class BytesMemorySliceSliceTest(unittest.TestCase,
 class OtherTest(unittest.TestCase):
     def test_copy(self):
         m = memoryview(b'abc')
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypeError), warnings.catch_warnings():
+            warnings.filterwarnings('ignore', ".*memoryview", DeprecationWarning)
             copy.copy(m)
 
-    # See issue #22995
-    ## def test_pickle(self):
-    ##     m = memoryview(b'abc')
-    ##     for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-    ##         with self.assertRaises(TypeError):
-    ##             pickle.dumps(m, proto)
+    @test_support.cpython_only
+    def test_pickle(self):
+        m = memoryview(b'abc')
+        for proto in range(2):
+            with self.assertRaises(TypeError):
+                pickle.dumps(m, proto)
+        with test_support.check_py3k_warnings(
+                (".*memoryview", DeprecationWarning)):
+            pickle.dumps(m, 2)
+
 
 
 def test_main():

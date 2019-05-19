@@ -71,6 +71,10 @@ if mswindows:
 else:
     import select
     _has_poll = hasattr(select, 'poll')
+    try:
+        import threading
+    except ImportError:
+        threading = None
     import fcntl
     import pickle
 
@@ -335,21 +339,6 @@ class Popen(object):
         """Create new Popen instance."""
         _cleanup()
 
-        # --- PyPy hack, see _pypy_install_libs_after_virtualenv() ---
-        # match arguments passed by different versions of virtualenv
-        if args[1:] in (
-            ['-c', 'import sys; print(sys.prefix)'],        # 1.6 10ba3f3c
-            ['-c', "\nimport sys\nprefix = sys.prefix\n"    # 1.7 0e9342ce
-             "if sys.version_info[0] == 3:\n"
-             "    prefix = prefix.encode('utf8')\n"
-             "if hasattr(sys.stdout, 'detach'):\n"
-             "    sys.stdout = sys.stdout.detach()\n"
-             "elif hasattr(sys.stdout, 'buffer'):\n"
-             "    sys.stdout = sys.stdout.buffer\nsys.stdout.write(prefix)\n"],
-            ['-c', 'import sys;out=sys.stdout;getattr(out, "buffer"'
-             ', out).write(sys.prefix.encode("utf-8"))']):  # 1.7.2 a9454bce
-            _pypy_install_libs_after_virtualenv(args[0])
-
         if not isinstance(bufsize, (int, long)):
             raise TypeError("bufsize must be an integer")
 
@@ -516,63 +505,54 @@ class Popen(object):
             c2pread, c2pwrite = None, None
             errread, errwrite = None, None
 
-            ispread = False
             if stdin is None:
                 p2cread = _subprocess.GetStdHandle(_subprocess.STD_INPUT_HANDLE)
                 if p2cread is None:
                     p2cread, _ = _subprocess.CreatePipe(None, 0)
-                    ispread = True
             elif stdin == PIPE:
                 p2cread, p2cwrite = _subprocess.CreatePipe(None, 0)
-                ispread = True
-            elif isinstance(stdin, int):
+            elif isinstance(stdin, (int, long)):
                 p2cread = msvcrt.get_osfhandle(stdin)
             else:
                 # Assuming file-like object
                 p2cread = msvcrt.get_osfhandle(stdin.fileno())
-            p2cread = self._make_inheritable(p2cread, ispread)
+            p2cread = self._make_inheritable(p2cread)
             # We just duplicated the handle, it has to be closed at the end
             to_close.add(p2cread)
             if stdin == PIPE:
                 to_close.add(p2cwrite)
 
-            ispwrite = False
             if stdout is None:
                 c2pwrite = _subprocess.GetStdHandle(_subprocess.STD_OUTPUT_HANDLE)
                 if c2pwrite is None:
                     _, c2pwrite = _subprocess.CreatePipe(None, 0)
-                    ispwrite = True
             elif stdout == PIPE:
                 c2pread, c2pwrite = _subprocess.CreatePipe(None, 0)
-                ispwrite = True
-            elif isinstance(stdout, int):
+            elif isinstance(stdout, (int, long)):
                 c2pwrite = msvcrt.get_osfhandle(stdout)
             else:
                 # Assuming file-like object
                 c2pwrite = msvcrt.get_osfhandle(stdout.fileno())
-            c2pwrite = self._make_inheritable(c2pwrite, ispwrite)
+            c2pwrite = self._make_inheritable(c2pwrite)
             # We just duplicated the handle, it has to be closed at the end
             to_close.add(c2pwrite)
             if stdout == PIPE:
                 to_close.add(c2pread)
 
-            ispwrite = False
             if stderr is None:
                 errwrite = _subprocess.GetStdHandle(_subprocess.STD_ERROR_HANDLE)
                 if errwrite is None:
                     _, errwrite = _subprocess.CreatePipe(None, 0)
-                    ispwrite = True
             elif stderr == PIPE:
                 errread, errwrite = _subprocess.CreatePipe(None, 0)
-                ispwrite = True
             elif stderr == STDOUT:
                 errwrite = c2pwrite
-            elif isinstance(stderr, int):
+            elif isinstance(stderr, (int, long)):
                 errwrite = msvcrt.get_osfhandle(stderr)
             else:
                 # Assuming file-like object
                 errwrite = msvcrt.get_osfhandle(stderr.fileno())
-            errwrite = self._make_inheritable(errwrite, ispwrite)
+            errwrite = self._make_inheritable(errwrite)
             # We just duplicated the handle, it has to be closed at the end
             to_close.add(errwrite)
             if stderr == PIPE:
@@ -583,16 +563,11 @@ class Popen(object):
                     errread, errwrite), to_close
 
 
-        def _make_inheritable(self, handle, close=False):
+        def _make_inheritable(self, handle):
             """Return a duplicate of handle, which is inheritable"""
-            dupl = _subprocess.DuplicateHandle(_subprocess.GetCurrentProcess(),
+            return _subprocess.DuplicateHandle(_subprocess.GetCurrentProcess(),
                                 handle, _subprocess.GetCurrentProcess(), 0, 1,
                                 _subprocess.DUPLICATE_SAME_ACCESS)
-            # PyPy: If the initial handle was obtained with CreatePipe,
-            # close it.
-            if close:
-                handle.Close()
-            return dupl
 
 
         def _find_w9xpopen(self):
@@ -749,10 +724,11 @@ class Popen(object):
                         if e.errno == errno.EPIPE:
                             # communicate() should ignore broken pipe error
                             pass
-                        elif (e.errno == errno.EINVAL
-                              and self.poll() is not None):
-                            # Issue #19612: stdin.write() fails with EINVAL
-                            # if the process already exited before the write
+                        elif e.errno == errno.EINVAL:
+                            # bpo-19612, bpo-30418: On Windows, stdin.write()
+                            # fails with EINVAL if the child process exited or
+                            # if the child process is still running but closed
+                            # the pipe.
                             pass
                         else:
                             raise
@@ -829,7 +805,7 @@ class Popen(object):
             elif stdin == PIPE:
                 p2cread, p2cwrite = self.pipe_cloexec()
                 to_close.update((p2cread, p2cwrite))
-            elif isinstance(stdin, int):
+            elif isinstance(stdin, (int, long)):
                 p2cread = stdin
             else:
                 # Assuming file-like object
@@ -840,7 +816,7 @@ class Popen(object):
             elif stdout == PIPE:
                 c2pread, c2pwrite = self.pipe_cloexec()
                 to_close.update((c2pread, c2pwrite))
-            elif isinstance(stdout, int):
+            elif isinstance(stdout, (int, long)):
                 c2pwrite = stdout
             else:
                 # Assuming file-like object
@@ -856,7 +832,7 @@ class Popen(object):
                     errwrite = c2pwrite
                 else: # child's stdout is not set, use parent's stdout
                     errwrite = sys.__stdout__.fileno()
-            elif isinstance(stderr, int):
+            elif isinstance(stderr, (int, long)):
                 errwrite = stderr
             else:
                 # Assuming file-like object
@@ -906,6 +882,21 @@ class Popen(object):
                         pass
 
 
+        # Used as a bandaid workaround for https://bugs.python.org/issue27448
+        # to prevent multiple simultaneous subprocess launches from interfering
+        # with one another and leaving gc disabled.
+        if threading:
+            _disabling_gc_lock = threading.Lock()
+        else:
+            class _noop_context_manager(object):
+                # A dummy context manager that does nothing for the rare
+                # user of a --without-threads build.
+                def __enter__(self): pass
+                def __exit__(self, *args): pass
+
+            _disabling_gc_lock = _noop_context_manager()
+
+
         def _execute_child(self, args, executable, preexec_fn, close_fds,
                            cwd, env, universal_newlines,
                            startupinfo, creationflags, shell, to_close,
@@ -937,10 +928,12 @@ class Popen(object):
             errpipe_read, errpipe_write = self.pipe_cloexec()
             try:
                 try:
-                    gc_was_enabled = gc.isenabled()
-                    # Disable gc to avoid bug where gc -> file_dealloc ->
-                    # write to stderr -> hang.  http://bugs.python.org/issue1336
-                    gc.disable()
+                    with self._disabling_gc_lock:
+                        gc_was_enabled = gc.isenabled()
+                        # Disable gc to avoid bug where gc -> file_dealloc ->
+                        # write to stderr -> hang.
+                        # https://bugs.python.org/issue1336
+                        gc.disable()
                     try:
                         self.pid = os.fork()
                     except:
@@ -1014,9 +1007,10 @@ class Popen(object):
                             exc_value.child_traceback = ''.join(exc_lines)
                             os.write(errpipe_write, pickle.dumps(exc_value))
 
-                        # This exitcode won't be reported to applications, so it
-                        # really doesn't matter what we return.
-                        os._exit(255)
+                        finally:
+                            # This exitcode won't be reported to applications, so it
+                            # really doesn't matter what we return.
+                            os._exit(255)
 
                     # Parent
                     if gc_was_enabled:
@@ -1055,13 +1049,16 @@ class Popen(object):
 
         def _handle_exitstatus(self, sts, _WIFSIGNALED=os.WIFSIGNALED,
                 _WTERMSIG=os.WTERMSIG, _WIFEXITED=os.WIFEXITED,
-                _WEXITSTATUS=os.WEXITSTATUS):
+                _WEXITSTATUS=os.WEXITSTATUS, _WIFSTOPPED=os.WIFSTOPPED,
+                _WSTOPSIG=os.WSTOPSIG):
             # This method is called (indirectly) by __del__, so it cannot
             # refer to anything outside of its local scope.
             if _WIFSIGNALED(sts):
                 self.returncode = -_WTERMSIG(sts)
             elif _WIFEXITED(sts):
                 self.returncode = _WEXITSTATUS(sts)
+            elif _WIFSTOPPED(sts):
+                self.returncode = -_WSTOPSIG(sts)
             else:
                 # Should never happen
                 raise RuntimeError("Unknown child exit status!")
@@ -1280,27 +1277,6 @@ class Popen(object):
             """Kill the process with SIGKILL
             """
             self.send_signal(signal.SIGKILL)
-
-
-def _pypy_install_libs_after_virtualenv(target_executable):
-    # https://bitbucket.org/pypy/pypy/issue/1922/future-proofing-virtualenv
-    #
-    # PyPy 2.4.1 turned --shared on by default.  This means the pypy binary
-    # depends on the 'libpypy-c.so' shared library to be able to run.
-    # The virtualenv code existing at the time did not account for this
-    # and would break.  Try to detect that we're running under such a
-    # virtualenv in the "Testing executable with" phase and copy the
-    # library ourselves.
-    caller = sys._getframe(2)
-    if ('virtualenv_version' in caller.f_globals and
-                  'copyfile' in caller.f_globals):
-        dest_dir = sys.pypy_resolvedirof(target_executable)
-        src_dir = sys.pypy_resolvedirof(sys.executable)
-        for libname in ['libpypy-c.so', 'libpypy-c.dylib', 'libpypy-c.dll']:
-            dest_library = os.path.join(dest_dir, libname)
-            src_library = os.path.join(src_dir, libname)
-            if os.path.exists(src_library):
-                caller.f_globals['copyfile'](src_library, dest_library)
 
 
 def _demo_posix():

@@ -2,7 +2,6 @@ import unittest
 from test import test_support as support
 from test.test_support import TESTFN, run_unittest, import_module, unlink, requires
 import binascii
-import os
 import pickle
 import random
 from test.test_support import precisionbigmemtest, _1G, _4G
@@ -128,7 +127,14 @@ class ExceptionTestCase(unittest.TestCase):
 
 class BaseCompressTestCase(object):
     def check_big_compress_buffer(self, size, compress_func):
-        data = os.urandom(size)
+        _1M = 1024 * 1024
+        fmt = "%%0%dx" % (2 * _1M)
+        # Generate 10MB worth of random, and expand it by repeating it.
+        # The assumption is that zlib's memory is not big enough to exploit
+        # such spread out redundancy.
+        data = ''.join([binascii.a2b_hex(fmt % random.getrandbits(8 * _1M))
+                        for i in range(10)])
+        data = data * (size // len(data) + 1)
         try:
             compress_func(data)
         finally:

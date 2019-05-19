@@ -11,13 +11,11 @@ import sys
 from test import test_support as support
 from test.test_support import TestFailed, verbose, have_unicode, TESTFN
 try:
-    from test.test_support import _2G, _1M, precisionbigmemtest, impl_detail
+    from test.test_support import _2G, _1M, precisionbigmemtest
 except ImportError:
     # this import might fail when run on older Python versions by test_xpickle
     _2G = _1M = 0
     def precisionbigmemtest(*args, **kwargs):
-        return lambda self: None
-    def impl_detail(*args, **kwargs):
         return lambda self: None
 
 # Tests that try a number of pickle protocols should have a
@@ -149,6 +147,17 @@ class E(C):
 class H(object):
     pass
 
+class MyErr(Exception):
+    def __init__(self):
+        pass
+
+class I:
+    def __init__(self, *args, **kwargs):
+        raise MyErr()
+
+    def __getinitargs__(self):
+        return ()
+
 # Hashable mutable key
 class K(object):
     def __init__(self, value):
@@ -167,6 +176,8 @@ __main__.E = E
 E.__module__ = "__main__"
 __main__.H = H
 H.__module__ = "__main__"
+__main__.I = I
+I.__module__ = "__main__"
 __main__.K = K
 K.__module__ = "__main__"
 
@@ -624,6 +635,36 @@ class AbstractUnpickleTests(unittest.TestCase):
                        'X\n'
                        'q\x00oq\x01}q\x02b.').replace('X', xname)
             self.assert_is_copy(X(*args), self.loads(pickle2))
+
+    def test_load_classic_instance_error(self):
+        # Issue #28925.
+        # Protocol 0 (text mode pickle):
+        """
+         0: (    MARK
+         1: i        INST       '__main__ I' (MARK at 0)
+        13: (    MARK
+        14: d        DICT       (MARK at 13)
+        15: b    BUILD
+        16: .    STOP
+        """
+        pickle0 = ('(i__main__\n'
+                   'I\n'
+                   '(db.')
+        self.assertRaises(MyErr, self.loads, pickle0)
+
+        # Protocol 1 (binary mode pickle)
+        """
+         0: (    MARK
+         1: c        GLOBAL     '__main__ I'
+        13: o        OBJ        (MARK at 0)
+        14: }    EMPTY_DICT
+        15: b    BUILD
+        16: .    STOP
+        """
+        pickle1 = ('(c__main__\n'
+                   'I\n'
+                   'o}b.')
+        self.assertRaises(MyErr, self.loads, pickle1)
 
     def test_load_str(self):
         # From Python 2: pickle.dumps('a\x00\xa0', protocol=0)
@@ -1478,7 +1519,6 @@ class AbstractPickleTests(unittest.TestCase):
                              "Failed protocol %d: %r != %r"
                              % (proto, obj, loaded))
 
-    @impl_detail("pypy does not store attribute names", pypy=False)
     def test_attribute_name_interning(self):
         # Test that attribute names of pickled objects are interned when
         # unpickling.
@@ -1700,7 +1740,6 @@ class AbstractPickleModuleTests(unittest.TestCase):
         s = StringIO.StringIO("X''.")
         self.assertRaises(EOFError, self.module.load, s)
 
-    @impl_detail("no full restricted mode in pypy", pypy=False)
     def test_restricted(self):
         # issue7128: cPickle failed in restricted mode
         builtins = {self.module.__name__: self.module,

@@ -1,8 +1,7 @@
 from ctypes import *
-from ctypes.test import need_symbol, xfail
+from ctypes.test import need_symbol
 import unittest
 import os
-import sys
 
 import ctypes
 import _ctypes_test
@@ -117,28 +116,23 @@ class BitFieldTest(unittest.TestCase):
     def test_nonint_types(self):
         # bit fields are not allowed on non-integer types.
         result = self.fail_fields(("a", c_char_p, 1))
-        self.assertEqual(result[0], TypeError)
-        self.assertIn('bit fields not allowed for type', result[1])
+        self.assertEqual(result, (TypeError, 'bit fields not allowed for type c_char_p'))
 
         result = self.fail_fields(("a", c_void_p, 1))
-        self.assertEqual(result[0], TypeError)
-        self.assertIn('bit fields not allowed for type', result[1])
+        self.assertEqual(result, (TypeError, 'bit fields not allowed for type c_void_p'))
 
         if c_int != c_long:
             result = self.fail_fields(("a", POINTER(c_int), 1))
-            self.assertEqual(result[0], TypeError)
-            self.assertIn('bit fields not allowed for type', result[1])
+            self.assertEqual(result, (TypeError, 'bit fields not allowed for type LP_c_int'))
 
         result = self.fail_fields(("a", c_char, 1))
-        self.assertEqual(result[0], TypeError)
-        self.assertIn('bit fields not allowed for type', result[1])
+        self.assertEqual(result, (TypeError, 'bit fields not allowed for type c_char'))
 
         class Dummy(Structure):
             _fields_ = []
 
         result = self.fail_fields(("a", Dummy, 1))
-        self.assertEqual(result[0], TypeError)
-        self.assertIn('bit fields not allowed for type', result[1])
+        self.assertEqual(result, (TypeError, 'bit fields not allowed for type Dummy'))
 
     @need_symbol('c_wchar')
     def test_c_wchar(self):
@@ -272,13 +266,12 @@ class BitFieldTest(unittest.TestCase):
             _fields_ = [("a", c_uint32, 24),
                         ("b", c_uint32, 4),
                         ("c", c_uint32, 4)]
-        import array
-        b = array.array("c", '\x00' * 4)
+        b = bytearray(4)
         x = Little.from_buffer(b)
         x.a = 0xabcdef
         x.b = 1
         x.c = 2
-        self.assertEqual(b.tostring(), b'\xef\xcd\xab\x21')
+        self.assertEqual(b, b'\xef\xcd\xab\x21')
 
     @need_symbol('c_uint32')
     def test_uint32_swap_big_endian(self):
@@ -287,19 +280,12 @@ class BitFieldTest(unittest.TestCase):
             _fields_ = [("a", c_uint32, 24),
                         ("b", c_uint32, 4),
                         ("c", c_uint32, 4)]
-        import array
-        b = array.array("c", '\x00' * 4)
+        b = bytearray(4)
         x = Big.from_buffer(b)
         x.a = 0xabcdef
         x.b = 1
         x.c = 2
-        self.assertEqual(b.tostring(), b'\xab\xcd\xef\x12')
-
-    # see issue #1213, on big endian it fails for the little endian case
-    if sys.byteorder == 'little':
-        test_uint32_swap_big_endian = xfail(test_uint32_swap_big_endian)
-    elif sys.byteorder == 'big':
-        test_uint32_swap_little_endian = xfail(test_uint32_swap_little_endian)
+        self.assertEqual(b, b'\xab\xcd\xef\x12')
 
 if __name__ == "__main__":
     unittest.main()

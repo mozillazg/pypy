@@ -43,12 +43,11 @@ def formatwarning(message, category, filename, lineno, line=None):
         unicodetype = unicode
     except NameError:
         unicodetype = ()
-    template = "%s: %s: %s\n"
     try:
         message = str(message)
     except UnicodeEncodeError:
-        template = unicode(template)
-    s = template % (lineno, category.__name__, message)
+        pass
+    s =  "%s: %s: %s\n" % (lineno, category.__name__, message)
     line = linecache.getline(filename, lineno) if line is None else line
     if line:
         line = line.strip()
@@ -85,10 +84,10 @@ def filterwarnings(action, message="", category=Warning, module="", lineno=0,
            "category must be a class"
     assert issubclass(category, Warning), "category must be a Warning subclass"
     assert isinstance(module, basestring), "module must be a string"
-    assert isinstance(lineno, int) and lineno >= 0, \
+    assert isinstance(lineno, (int, long)) and lineno >= 0, \
            "lineno must be an int >= 0"
     item = (action, re.compile(message, re.I), category,
-            re.compile(module), lineno)
+            re.compile(module), int(lineno))
     if append:
         filters.append(item)
     else:
@@ -106,9 +105,9 @@ def simplefilter(action, category=Warning, lineno=0, append=0):
     """
     assert action in ("error", "ignore", "always", "default", "module",
                       "once"), "invalid action: %r" % (action,)
-    assert isinstance(lineno, int) and lineno >= 0, \
+    assert isinstance(lineno, (int, long)) and lineno >= 0, \
            "lineno must be an int >= 0"
-    item = (action, None, category, None, lineno)
+    item = (action, None, category, None, int(lineno))
     if append:
         filters.append(item)
     else:
@@ -182,8 +181,6 @@ def _getcategory(category):
         module = category[:i]
         klass = category[i+1:]
         try:
-            if not module:
-                raise ImportError   # instead of the ValueError we'd get
             m = __import__(module, None, None, [klass])
         except ImportError:
             raise _OptionError("invalid module name: %r" % (module,))

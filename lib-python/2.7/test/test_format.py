@@ -253,7 +253,7 @@ class FormatTest(unittest.TestCase):
             try:
                 testformat(formatstr, args)
             except exception, exc:
-                if str(exc) == excmsg or not test_support.check_impl_detail():
+                if str(exc) == excmsg:
                     if verbose:
                         print "yes"
                 else:
@@ -283,16 +283,13 @@ class FormatTest(unittest.TestCase):
         test_exc(u'no format', u'1', TypeError,
                  "not all arguments converted during string formatting")
 
-        if test_support.check_impl_detail():
-            # __oct__() is called if Foobar inherits from 'long', but
-            # not, say, 'object' or 'int' or 'str'.  This seems strange
-            # enough to consider it a complete implementation detail.
-            class Foobar(long):
-                def __oct__(self):
-                    # Returning a non-string should not blow up.
-                    return self + 1
-            test_exc('%o', Foobar(), TypeError,
-                     "expected string or Unicode object, long found")
+        class Foobar(long):
+            def __oct__(self):
+                # Returning a non-string should not blow up.
+                return self + 1
+
+        test_exc('%o', Foobar(), TypeError,
+                 "expected string or Unicode object, long found")
 
         if maxsize == 2**31-1:
             # crashes 2.2.1 and earlier:
@@ -337,10 +334,8 @@ class FormatTest(unittest.TestCase):
             except exc:
                 pass
             else:
-                if test_support.check_impl_detail():
-                    self.fail('%s not raised for %r format of %r' %
-                              (exc.__name__, fmt, result))
-                #else (PyPy): at least it didn't explode, good enough
+                self.fail('%s not raised for %r format of %r' %
+                          (exc.__name__, fmt, result))
 
 
 def test_main():

@@ -32,9 +32,8 @@ class StringArrayTestCase(unittest.TestCase):
         buf.value = "Hello, World"
         self.assertEqual(buf.value, "Hello, World")
 
-        if test_support.check_impl_detail():
-            self.assertRaises(TypeError, setattr, buf, "value", memoryview("Hello, World"))
-            self.assertRaises(TypeError, setattr, buf, "value", memoryview("abc"))
+        self.assertRaises(TypeError, setattr, buf, "value", memoryview("Hello, World"))
+        self.assertRaises(TypeError, setattr, buf, "value", memoryview("abc"))
         self.assertRaises(ValueError, setattr, buf, "raw", memoryview("x" * 100))
 
     def test_c_buffer_raw(self, memoryview=memoryview):
@@ -42,8 +41,7 @@ class StringArrayTestCase(unittest.TestCase):
 
         buf.raw = memoryview("Hello, World")
         self.assertEqual(buf.value, "Hello, World")
-        if test_support.check_impl_detail():
-            self.assertRaises(TypeError, setattr, buf, "value", memoryview("abc"))
+        self.assertRaises(TypeError, setattr, buf, "value", memoryview("abc"))
         self.assertRaises(ValueError, setattr, buf, "raw", memoryview("x" * 100))
 
     def test_c_buffer_deprecated(self):
@@ -62,6 +60,13 @@ class StringArrayTestCase(unittest.TestCase):
         buf = BUF()
 ##        print BUF.from_param(c_char_p("python"))
 ##        print BUF.from_param(BUF(*"pyth"))
+
+    def test_del_segfault(self):
+        BUF = c_char * 4
+        buf = BUF()
+        with self.assertRaises(AttributeError):
+            del buf.raw
+
 
 @need_symbol('c_wchar')
 class WStringArrayTestCase(unittest.TestCase):
