@@ -12,6 +12,15 @@ from pypy.objspace.std.dictmultiobject import (
 from pypy.objspace.std.typeobject import MutableCell
 
 
+class UninitedType(W_Root):
+  pass
+
+class MutatedType(W_Root):
+  pass
+
+w_uninited_type = UninitedType()
+w_mutated_type  = MutatedType()
+
 erase_item, unerase_item = rerased.new_erasing_pair("mapdict storage item")
 erase_map,  unerase_map = rerased.new_erasing_pair("map")
 erase_list, unerase_list = rerased.new_erasing_pair("mapdict storage list")
@@ -40,6 +49,16 @@ class AbstractAttribute(object):
         assert isinstance(terminator, Terminator)
         self.terminator = terminator
 
+    def record_type_info(self, w_value):
+        # if already mutated, no need to record
+        if self.value_type is w_mutated_type.__class__:
+            return
+        if self.value_type is UninitedType:
+            self.value_type = w_value.__class__ # record type info
+        else:
+            if self.value_type is not w_value.__class__:
+                self.value_type = w_mutated_type.__class__ # type mutated
+
     def read(self, obj, name, index):
         attr = self.find_map_attr(name, index)
         if attr is None:
@@ -51,7 +70,12 @@ class AbstractAttribute(object):
         ):
             return self._pure_mapdict_read_storage(obj, attr.storageindex)
         else:
-            return obj._mapdict_read_storage(attr.storageindex)
+            value = obj._mapdict_read_storage(attr.storageindex)
+            value_type = attr.value_type
+            if value_type is not w_mutated_type.__class__ and value_type is not UninitedType:
+                assert value is not None
+                jit.record_exact_class(value, value_type)
+            return value
 
     @jit.elidable
     def _pure_mapdict_read_storage(self, obj, storageindex):
@@ -63,6 +87,7 @@ class AbstractAttribute(object):
             return self.terminator._write_terminator(obj, name, index, w_value)
         if not attr.ever_mutated:
             attr.ever_mutated = True
+        attr.record_type_info(w_value)
         obj._mapdict_write_storage(attr.storageindex, w_value)
         return True
 
@@ -242,6 +267,7 @@ class AbstractAttribute(object):
                     stack_index += 2
                     current = current.back
             attr._switch_map_and_write_storage(obj, w_value)
+            attr.record_type_info(w_value)
 
             if not stack_index:
                 return
@@ -374,7 +400,7 @@ class DevolvedDictTerminator(Terminator):
         return Terminator.set_terminator(self, obj, terminator)
 
 class PlainAttribute(AbstractAttribute):
-    _immutable_fields_ = ['name', 'index', 'storageindex', 'back', 'ever_mutated?', 'order']
+    _immutable_fields_ = ['name', 'index', 'storageindex', 'back', 'ever_mutated?', 'order', 'value_type?']
 
     def __init__(self, name, index, back):
         AbstractAttribute.__init__(self, back.space, back.terminator)
@@ -385,6 +411,7 @@ class PlainAttribute(AbstractAttribute):
         self._size_estimate = self.length() * NUM_DIGITS_POW2
         self.ever_mutated = False
         self.order = len(back.cache_attrs) if back.cache_attrs else 0
+        self.value_type = UninitedType
 
     def _copy_attr(self, obj, new_obj):
         w_value = self.read(obj, self.name, self.index)
