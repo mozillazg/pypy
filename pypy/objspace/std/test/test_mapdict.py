@@ -529,6 +529,47 @@ def test_size_prediction():
                 obj.setdictvalue(space, a, 50)
         assert c.terminator.size_estimate() in [(i + 10) // 2, (i + 11) // 2]
 
+def test_value_type():
+    c = Class()
+    obj = c.instantiate()
+    obj.setdictvalue(space, "a", 10)
+    # Added an integer, so the outter most attribute
+    # has type 'int'
+    assert obj.map.value_type is type(10)
+    obj.setdictvalue(space, "a", "cornell")
+    # Since we are storing both a string and an int into
+    # slot "a", the value_type should be mutated_type
+    assert obj.map.value_type is w_mutated_type.__class__
+
+def test_value_type_reordering():
+    c = Class()
+    obj1 = c.instantiate()
+    obj2 = c.instantiate()
+
+    obj1.setdictvalue(space, "a", 10)
+    obj1.setdictvalue(space, "b", 10)
+    # now obj1's map is
+    # < b: int < a: int < terminal
+    obj2.setdictvalue(space, "b", "cornell")
+    # now obj2's map is
+    # < b: string < terminal
+    # Both of them should have well-behaving value_type
+    assert obj1.map.value_type is type(10)
+    assert obj1.map.back.value_type is type(10)
+    assert obj2.map.value_type is type("cornell")
+    assert obj1.map.terminator is obj2.map.terminator
+
+    # Now we add an "a" attribute into obj2, then during
+    # reordering, the type mismatch should be caught
+    obj2.setdictvalue(space, "a", 10)
+    assert obj1.map.value_type is w_mutated_type.__class__
+    assert obj2.map.value_type is w_mutated_type.__class__
+    assert obj1.map is obj2.map
+    # However, the "a" attribute should be intact
+    assert obj1.map.back is obj2.map.back
+    assert obj1.map.back.value_type is type(10)
+    assert obj2.map.back.value_type is type(10)
+
 # ___________________________________________________________
 # dict tests
 
