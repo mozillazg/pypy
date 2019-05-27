@@ -40,7 +40,7 @@ LIMIT_MAP_ATTRIBUTES = 80
 
 
 class AbstractAttribute(object):
-    _immutable_fields_ = ['terminator']
+    _immutable_fields_ = ['terminator', 'value_type?']
     cache_attrs = None
     _size_estimate = 0
 
@@ -48,6 +48,7 @@ class AbstractAttribute(object):
         self.space = space
         assert isinstance(terminator, Terminator)
         self.terminator = terminator
+        self.value_type = UninitedType
 
     def record_type_info(self, w_value):
         # if already mutated, no need to record
@@ -400,7 +401,7 @@ class DevolvedDictTerminator(Terminator):
         return Terminator.set_terminator(self, obj, terminator)
 
 class PlainAttribute(AbstractAttribute):
-    _immutable_fields_ = ['name', 'index', 'storageindex', 'back', 'ever_mutated?', 'order', 'value_type?']
+    _immutable_fields_ = ['name', 'index', 'storageindex', 'back', 'ever_mutated?', 'order']
 
     def __init__(self, name, index, back):
         AbstractAttribute.__init__(self, back.space, back.terminator)
@@ -411,7 +412,6 @@ class PlainAttribute(AbstractAttribute):
         self._size_estimate = self.length() * NUM_DIGITS_POW2
         self.ever_mutated = False
         self.order = len(back.cache_attrs) if back.cache_attrs else 0
-        self.value_type = UninitedType
 
     def _copy_attr(self, obj, new_obj):
         w_value = self.read(obj, self.name, self.index)
