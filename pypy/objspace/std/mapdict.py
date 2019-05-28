@@ -2,6 +2,7 @@ import weakref, sys
 
 from rpython.rlib import jit, objectmodel, debug, rerased
 from rpython.rlib.rarithmetic import intmask, r_uint
+from rpython.rlib.objectmodel import instantiate
 
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.dictmultiobject import (
@@ -10,6 +11,7 @@ from pypy.objspace.std.dictmultiobject import (
     W_DictObject, BytesDictStrategy, UnicodeDictStrategy
 )
 from pypy.objspace.std.typeobject import MutableCell
+from pypy.objspace.std.objectobject import W_ObjectObject
 
 
 class UninitedType(W_Root):
@@ -38,17 +40,33 @@ NUM_DIGITS_POW2 = 1 << NUM_DIGITS
 # dict)
 LIMIT_MAP_ATTRIBUTES = 80
 
+#class AbstractAttribute_MetaBase(object):
+#    _immutable_fields_ = ['is_terminal?']
+#
+#    def __init__(self):
+#        self.is_terminal = True
+#
+#class UninitedMap(AbstractAttribute_MetaBase):
+#    pass
+#
+#class MutatedMap(AbstractAttribute_MetaBase):
+#    pass
+#
+#uninited_map = instantiate(UninitedMap)
+#mutated_map  = instantiate(MutatedMap)
 
 class AbstractAttribute(object):
-    _immutable_fields_ = ['terminator', 'value_type?']
+    _immutable_fields_ = ['terminator', 'value_type?', 'value_map?', 'is_terminal?']
     cache_attrs = None
     _size_estimate = 0
 
     def __init__(self, space, terminator):
+        #AbstractAttribute_MetaBase.__init__(self)
         self.space = space
         assert isinstance(terminator, Terminator)
         self.terminator = terminator
         self.value_type = UninitedType
+        self.is_terminal = True
 
     def record_type_info(self, w_value):
         # if already mutated, no need to record
@@ -59,6 +77,17 @@ class AbstractAttribute(object):
         else:
             if self.value_type is not w_value.__class__:
                 self.value_type = w_mutated_type.__class__ # type mutated
+                return
+        # if value_map has already mutated, no need to record
+        if self.value_map is mutated_map:
+            return
+        if isinstance(w_value, W_ObjectObject):
+            if self.value_map is uninited_map:
+                self.value_map = w_value._get_mapdict_map()
+            else:
+                if self.value_map is not w_value._get_mapdict_map():
+                    self.value_map = mutated_map
+        return
 
     def read(self, obj, name, index):
         attr = self.find_map_attr(name, index)
@@ -76,6 +105,10 @@ class AbstractAttribute(object):
             if value_type is not w_mutated_type.__class__ and value_type is not UninitedType:
                 assert value is not None
                 jit.record_exact_class(value, value_type)
+                if isinstance(value, W_ObjectObject):
+                    inner_map = attr.value_map
+                    if inner_map is not mutated_map and inner_map is not uninited_map and inner_map.is_terminal:
+                        jit.record_exact_value(value.map, inner_map)
             return value
 
     @jit.elidable
@@ -85,6 +118,8 @@ class AbstractAttribute(object):
     def write(self, obj, name, index, w_value):
         attr = self.find_map_attr(name, index)
         if attr is None:
+            if self.is_terminal:
+                self.is_terminal = False
             return self.terminator._write_terminator(obj, name, index, w_value)
         if not attr.ever_mutated:
             attr.ever_mutated = True
@@ -293,6 +328,8 @@ class AbstractAttribute(object):
     def __repr__(self):
         return "<%s>" % (self.__class__.__name__,)
 
+uninited_map = instantiate(AbstractAttribute)
+mutated_map  = instantiate(AbstractAttribute)
 
 class Terminator(AbstractAttribute):
     _immutable_fields_ = ['w_cls']
@@ -412,6 +449,7 @@ class PlainAttribute(AbstractAttribute):
         self._size_estimate = self.length() * NUM_DIGITS_POW2
         self.ever_mutated = False
         self.order = len(back.cache_attrs) if back.cache_attrs else 0
+        self.value_map  = uninited_map
 
     def _copy_attr(self, obj, new_obj):
         w_value = self.read(obj, self.name, self.index)
