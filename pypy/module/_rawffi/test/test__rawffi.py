@@ -288,11 +288,15 @@ class AppTestFfi:
         if not self.iswin32:
             skip("win32 specific")
         import _rawffi
-        lib = _rawffi.CDLL(self.lib_name)
-        # This will call the ordinal function numbered 1
-        # my compiler seems to order them alphabetically:
-        # AAA_first_ordinal_function
-        assert lib.ptr(1, [], 'i')()[0] == 42
+        lib = _rawffi.LoadLibrary(self.lib_name)
+        try:
+            # This will call the ordinal function numbered 1
+            # my compiler seems to order them alphabetically:
+            # AAA_first_ordinal_function
+            assert lib.ptr(1, [], 'i')()[0] == 42
+        finally:
+            assert _rawffi.FreeLibrary(lib) == 0
+        
 
     def test_getchar(self):
         import _rawffi

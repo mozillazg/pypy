@@ -658,11 +658,26 @@ def set_errno(space, w_errno):
 if sys.platform == 'win32':
     # see also
     # https://bitbucket.org/pypy/pypy/issue/1944/ctypes-on-windows-getlasterror
+
     def get_last_error(space):
         return space.newint(rwin32.GetLastError_alt_saved())
     @unwrap_spec(error=int)
     def set_last_error(space, error):
         rwin32.SetLastError_alt_saved(error)
+
+    @unwrap_spec(name='fsencode_or_none')
+    def LoadLibrary(space, name):
+        with rffi.scoped_str2charp(libname) as ll_libname:
+            try:
+                return dlopen(ll_libname)
+            except DLOpenError as e:
+                raise wrap_dlopenerror(space, e, name or "<None>")
+            except OSError as e:
+                raise wrap_oserror(space, e)
+
+    def FreeLibrary(space, w_handle):
+        return rwin32.FreeLibrary(space.int_w(w_handle))
+        
 else:
     # always have at least a dummy version of these functions
     # (https://bugs.pypy.org/issue1242)

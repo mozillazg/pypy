@@ -31,6 +31,9 @@ class Module(MixedModule):
         'SegfaultException'  : 'space.new_exception_class("_rawffi.SegfaultException")',
         'exit'               : 'interp_exit.exit',
     }
+    if sys.platform == 'win32':
+        interpleveldefs['LoadLibrary'] = 'interp_rawffi.LoadLibrary'
+        interpleveldefs['FreeLibrary'] = 'interp_rawffi.FreeLibrary'
 
     appleveldefs = {
     }

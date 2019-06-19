@@ -16,7 +16,7 @@ from _ctypes.union import Union
 import os as _os
 
 if _os.name in ("nt", "ce"):
-    from _rawffi import FormatError
+    from _rawffi import FormatError, FreeLibrary, LoadLibrary
     from _rawffi import check_HRESULT as _check_HRESULT
 
     try: from __pypy__ import builtinify
@@ -34,7 +34,6 @@ if _os.name in ("nt", "ce"):
 
     del builtinify
 
-    LoadLibrary = dlopen
 
 from _rawffi import FUNCFLAG_STDCALL, FUNCFLAG_CDECL, FUNCFLAG_PYTHONAPI
 from _rawffi import FUNCFLAG_USE_ERRNO, FUNCFLAG_USE_LASTERROR
