@@ -1,6 +1,7 @@
 """ Low-level interface to clibffi
 """
 
+import sys
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.module._rawffi import alt
 
