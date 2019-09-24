@@ -64,6 +64,11 @@ def PyErr_SetNone(space, w_type):
     """This is a shorthand for PyErr_SetObject(type, Py_None)."""
     PyErr_SetObject(space, w_type, space.w_None)
 
+if os.name == 'nt':
+    @cpython_api([rffi.INT_real], lltype.Void, error=CANNOT_FAIL)
+    def PyErr_SetFromWindowsErr(space, err):
+        PyErr_SetObject(space, space.w_OSError, space.newint(err))
+
 @cpython_api([], PyObject, result_borrowed=True)
 def PyErr_Occurred(space):
     state = space.fromcache(State)
@@ -211,16 +216,16 @@ def PyErr_SetFromErrnoWithFilenameObject(space, w_type, w_value):
     Return value: always NULL."""
     # XXX Doesn't actually do anything with PyErr_CheckSignals.
     errno = rffi.cast(lltype.Signed, rposix._get_errno())
-    msg = _strerror(errno)
+    msg, lgt = _strerror(errno)
     if w_value:
         w_error = space.call_function(w_type,
                                       space.newint(errno),
-                                      space.newunicode(msg),
+                                      space.newtext(msg, lgt),
                                       w_value)
     else:
         w_error = space.call_function(w_type,
                                       space.newint(errno),
-                                      space.newunicode(msg))
+                                      space.newtext(msg, lgt))
     raise OperationError(w_type, w_error)
 
 @cpython_api([], rffi.INT_real, error=-1)

@@ -8,7 +8,7 @@ from rpython.rlib import jit, rweakref, clibffi
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rtyper.tool import rffi_platform
 
-from pypy.module import _cffi_backend
+from pypy.module._cffi_backend.moduledef import FFI_DEFAULT_ABI
 from pypy.module._cffi_backend import (ctypeobj, ctypeprim, ctypeptr,
     ctypearray, ctypestruct, ctypevoid, ctypeenum)
 
@@ -368,6 +368,16 @@ def complete_struct_or_union(space, w_ctype, w_fields, w_ignored=None,
                 raise oefmt(space.w_TypeError,
                             "field '%s.%s' has ctype '%s' of unknown size",
                             w_ctype.name, fname, ftype.name)
+        elif isinstance(ftype, ctypestruct.W_CTypeStructOrUnion):
+            ftype.force_lazy_struct()
+            # GCC (or maybe C99) accepts var-sized struct fields that are not
+            # the last field of a larger struct.  That's why there is no
+            # check here for "last field": we propagate the flag
+            # '_with_var_array' to any struct that contains either an open-
+            # ended array or another struct that recursively contains an
+            # open-ended array.
+            if ftype._with_var_array:
+                with_var_array = True
         #
         if is_union:
             boffset = 0         # reset each field at offset 0
@@ -419,7 +429,6 @@ def complete_struct_or_union(space, w_ctype, w_fields, w_ignored=None,
                 # a nested anonymous struct or union
                 # note: it seems we only get here with ffi.verify()
                 srcfield2names = {}
-                ftype.force_lazy_struct()
                 for name, srcfld in ftype._fields_dict.items():
                     srcfield2names[srcfld] = name
                 for srcfld in ftype._fields_list:
@@ -540,10 +549,11 @@ def complete_struct_or_union(space, w_ctype, w_fields, w_ignored=None,
                 if sflags & SF_GCC_BIG_ENDIAN:
                     bitshift = 8 * ftype.size - fbitsize- bitshift
 
-                fld = ctypestruct.W_CField(ftype, field_offset_bytes,
-                                           bitshift, fbitsize, fflags)
-                fields_list.append(fld)
-                fields_dict[fname] = fld
+                if fname != '':
+                    fld = ctypestruct.W_CField(ftype, field_offset_bytes,
+                                               bitshift, fbitsize, fflags)
+                    fields_list.append(fld)
+                    fields_dict[fname] = fld
 
         if boffset > boffsetmax:
             boffsetmax = boffset
@@ -646,7 +656,7 @@ def new_enum_type(space, name, w_enumerators, w_enumvalues, w_basectype):
 
 @unwrap_spec(w_fresult=ctypeobj.W_CType, ellipsis=int, abi=int)
 def new_function_type(space, w_fargs, w_fresult, ellipsis=0,
-                      abi=_cffi_backend.FFI_DEFAULT_ABI):
+                      abi=FFI_DEFAULT_ABI):
     fargs = []
     for w_farg in space.fixedview(w_fargs):
         if not isinstance(w_farg, ctypeobj.W_CType):

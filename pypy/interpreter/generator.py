@@ -38,14 +38,12 @@ class GeneratorOrCoroutine(W_Root):
         # 'qualname' is a unicode string
         if self._qualname is not None:
             return self._qualname
-        return self.get_name().decode('utf-8')
+        return self.get_name()
 
     def descr__repr__(self, space):
         addrstring = self.getaddrstring(space)
-        return space.newunicode(u"<%s object %s at 0x%s>" %
-                          (self.KIND_U,
-                           self.get_qualname(),
-                           unicode(addrstring)))
+        return space.newtext("<%s object %s at 0x%s>" %
+                          (self.KIND, self.get_qualname(), addrstring))
 
     def descr_send(self, w_arg):
         """send(arg) -> send 'arg' into generator/coroutine,
@@ -229,7 +227,7 @@ return next yielded value or raise StopIteration."""
             e2.chain_exceptions_from_cause(space, e)
             raise e2
         else:
-            space.warn(space.newunicode(u"generator '%s' raised StopIteration"
+            space.warn(space.newtext("generator '%s' raised StopIteration"
                                         % self.get_qualname()),
                        space.w_DeprecationWarning)
 
@@ -329,11 +327,11 @@ return next yielded value or raise StopIteration."""
                         "__name__ must be set to a string object")
 
     def descr__qualname__(self, space):
-        return space.newunicode(self.get_qualname())
+        return space.newtext(self.get_qualname())
 
     def descr_set__qualname__(self, space, w_name):
         try:
-            self._qualname = space.unicode_w(w_name)
+            self._qualname = space.utf8_w(w_name)
         except OperationError as e:
             if e.match(space, space.w_TypeError):
                 raise oefmt(space.w_TypeError,
@@ -422,8 +420,8 @@ class Coroutine(GeneratorOrCoroutine):
            self.frame is not None and \
            self.frame.last_instr == -1:
             space = self.space
-            msg = u"coroutine '%s' was never awaited" % self.get_qualname()
-            space.warn(space.newunicode(msg), space.w_RuntimeWarning)
+            msg = "coroutine '%s' was never awaited" % self.get_qualname()
+            space.warn(space.newtext(msg), space.w_RuntimeWarning)
         GeneratorOrCoroutine._finalize_(self)
 
 
@@ -663,15 +661,7 @@ class AsyncGenABase(W_Root):
         return self.do_send(w_arg)
 
     def descr_throw(self, w_type, w_val=None, w_tb=None):
-        space = self.space
-        if self.state == self.ST_CLOSED:
-            raise OperationError(space.w_StopIteration, space.w_None)
-        try:
-            w_value = self.async_gen.throw(w_type, w_val, w_tb)
-            return self.unwrap_value(w_value)
-        except OperationError as e:
-            self.state = self.ST_CLOSED
-            raise
+        return self.do_throw(w_type, w_val, w_tb)
 
     def descr_close(self):
         self.state = self.ST_CLOSED
@@ -712,6 +702,17 @@ class AsyncGenASend(AsyncGenABase):
 
         try:
             w_value = self.async_gen.send_ex(w_arg_or_err)
+            return self.unwrap_value(w_value)
+        except OperationError as e:
+            self.state = self.ST_CLOSED
+            raise
+
+    def do_throw(self, w_type, w_val, w_tb):
+        space = self.space
+        if self.state == self.ST_CLOSED:
+            raise OperationError(space.w_StopIteration, space.w_None)
+        try:
+            w_value = self.async_gen.throw(w_type, w_val, w_tb)
             return self.unwrap_value(w_value)
         except OperationError as e:
             self.state = self.ST_CLOSED
@@ -758,21 +759,34 @@ class AsyncGenAThrow(AsyncGenABase):
                 w_value = self.async_gen.send_ex(w_arg_or_err)
             return self.unwrap_value(w_value)
         except OperationError as e:
-            if e.match(space, space.w_StopAsyncIteration):
-                self.state = self.ST_CLOSED
-                if self.w_exc_type is None:
-                    # When aclose() is called we don't want to propagate
-                    # StopAsyncIteration; just raise StopIteration, signalling
-                    # that 'aclose()' is done.
-                    raise OperationError(space.w_StopIteration, space.w_None)
-            if e.match(space, space.w_GeneratorExit):
-                self.state = self.ST_CLOSED
-                # Ignore this error.
-                raise OperationError(space.w_StopIteration, space.w_None)
-            raise
+            self.handle_error(e)
 
-    def descr_throw(self, w_type, w_val=None, w_tb=None):
+    def do_throw(self, w_type, w_val, w_tb):
+        space = self.space
         if self.state == self.ST_INIT:
             raise OperationError(self.space.w_RuntimeError,
-                self.space.newtext("can't do async_generator.athrow().throw()"))
-        return AsyncGenABase.descr_throw(self, w_type, w_val, w_tb)
+                space.newtext("can't do async_generator.athrow().throw()"))
+        if self.state == self.ST_CLOSED:
+            raise OperationError(space.w_StopIteration, space.w_None)
+        try:
+            w_value = self.async_gen.throw(w_type, w_val, w_tb)
+            return self.unwrap_value(w_value)
+        except OperationError as e:
+            self.handle_error(e)
+
+    def handle_error(self, e):
+        space = self.space
+        self.state = self.ST_CLOSED
+        if (e.match(space, space.w_StopAsyncIteration) or
+                    e.match(space, space.w_StopIteration)):
+            if self.w_exc_type is None:
+                # When aclose() is called we don't want to propagate
+                # StopAsyncIteration or GeneratorExit; just raise
+                # StopIteration, signalling that this 'aclose()' await
+                # is done.
+                raise OperationError(space.w_StopIteration, space.w_None)
+        if e.match(space, space.w_GeneratorExit):
+            if self.w_exc_type is None:
+                # Ignore this error.
+                raise OperationError(space.w_StopIteration, space.w_None)
+        raise e

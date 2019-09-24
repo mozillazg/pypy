@@ -25,7 +25,6 @@ from pypy.tool import stdlib_opcode
 for op in '''DUP_TOP POP_TOP SETUP_LOOP SETUP_EXCEPT SETUP_FINALLY SETUP_WITH
 SETUP_ASYNC_WITH POP_BLOCK END_FINALLY'''.split():
     globals()[op] = stdlib_opcode.opmap[op]
-HAVE_ARGUMENT = stdlib_opcode.HAVE_ARGUMENT
 
 class FrameDebugData(object):
     """ A small object that holds debug data for tracing
@@ -70,7 +69,7 @@ class PyFrame(W_Root):
     f_generator_nowref       = None               # (only one of the two attrs)
     last_instr               = -1
     f_backref                = jit.vref_None
-    
+
     escaped                  = False  # see mark_as_escaped()
     debugdata                = None
 
@@ -80,7 +79,7 @@ class PyFrame(W_Root):
     lastblock = None
 
     # other fields:
-    
+
     # builtin - builtin cache, only if honor__builtins__ is True
     # defaults to False
 
@@ -491,14 +490,32 @@ class PyFrame(W_Root):
             depth -= 1
         self.valuestackdepth = finaldepth
 
-    def make_arguments(self, nargs, methodcall=False):
-        return Arguments(
-                self.space, self.peekvalues(nargs), methodcall=methodcall)
+    def _guess_function_name_parens(self, fnname=None, w_function=None):
+        """ Returns 'funcname()' from either a function name fnname or a
+        wrapped callable w_function. If it's not a function or a method, returns
+        'Classname object'"""
+        # CPython has a similar function, PyEval_GetFuncName
+        from pypy.interpreter.function import Function, Method
+        if fnname is not None:
+            return fnname + '()'
+        if w_function is None:
+            return None
+        if isinstance(w_function, Function):
+            return w_function.name + '()'
+        if isinstance(w_function, Method):
+            return self._guess_function_name_parens(None, w_function.w_function)
+        return w_function.getname(self.space) + ' object'
 
-    def argument_factory(self, arguments, keywords, keywords_w, w_star, w_starstar, methodcall=False):
+    def make_arguments(self, nargs, methodcall=False, w_function=None, fnname=None):
+        fnname_parens = self._guess_function_name_parens(fnname, w_function)
+        return Arguments(
+                self.space, self.peekvalues(nargs), methodcall=methodcall, fnname_parens=fnname_parens)
+
+    def argument_factory(self, arguments, keywords, keywords_w, w_star, w_starstar, methodcall=False, w_function=None, fnname=None):
+        fnname_parens = self._guess_function_name_parens(fnname, w_function)
         return Arguments(
                 self.space, arguments, keywords, keywords_w, w_star,
-                w_starstar, methodcall=methodcall)
+                w_starstar, methodcall=methodcall, fnname_parens=fnname_parens)
 
     def hide(self):
         return self.pycode.hidden_applevel
@@ -666,7 +683,10 @@ class PyFrame(W_Root):
             lnotab = self.pycode.co_lnotab
             for offset in xrange(0, len(lnotab), 2):
                 addr += ord(lnotab[offset])
-                line += ord(lnotab[offset + 1])
+                line_offset = ord(lnotab[offset + 1])
+                if line_offset >= 0x80:
+                    line_offset -= 0x100
+                line += line_offset
                 if line >= new_lineno:
                     new_lasti = addr
                     new_lineno = line
@@ -739,6 +759,7 @@ class PyFrame(W_Root):
         delta_iblock = min_delta_iblock = 0    # see below for comment
         addr = min_addr
         while addr < max_addr:
+            assert addr & 1 == 0
             op = ord(code[addr])
 
             if op in (SETUP_LOOP, SETUP_EXCEPT, SETUP_FINALLY, SETUP_WITH,
@@ -749,10 +770,7 @@ class PyFrame(W_Root):
                 if delta_iblock < min_delta_iblock:
                     min_delta_iblock = delta_iblock
 
-            if op >= HAVE_ARGUMENT:
-                addr += 3
-            else:
-                addr += 1
+            addr += 2
 
         # 'min_delta_iblock' is <= 0; its absolute value is the number of
         # blocks we exit.  'go_iblock' is the delta number of blocks

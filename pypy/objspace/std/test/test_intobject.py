@@ -533,6 +533,19 @@ class AppTestInt(object):
             assert n == 1
             assert type(n) is int
 
+    def test_trunc_returns_int_subclass_2(self):
+        class BadInt:
+            def __int__(self):
+                return True
+
+        class TruncReturnsBadInt:
+            def __trunc__(self):
+                return BadInt()
+        bad_int = TruncReturnsBadInt()
+        n = int(bad_int)
+        assert n == 1
+        assert type(n) is int
+
     def test_int_before_string(self):
         class Integral(str):
             def __int__(self):
@@ -588,7 +601,9 @@ class AppTestInt(object):
     def test_int_error_msg_surrogate(self):
         value = u'123\ud800'
         e = raises(ValueError, int, value)
-        assert str(e.value) == "invalid literal for int() with base 10: %r" % value
+        assert str(e.value) == u"invalid literal for int() with base 10: %r" % value
+        e = raises(ValueError, int, value, 10)
+        assert str(e.value) == u"invalid literal for int() with base 10: %r" % value
 
     def test_non_numeric_input_types(self):
         # Test possible non-numeric types for the argument x, including
@@ -709,6 +724,40 @@ class AppTestInt(object):
         assert m is False
         assert len(log) == 2
 
+    def test_deprecation_warning_2(self):
+        import warnings, _operator
+        class BadInt(int):
+            def __int__(self):
+                return self
+            def __index__(self):
+                return self
+        bad = BadInt(1)
+        with warnings.catch_warnings(record=True) as log:
+            warnings.simplefilter("always", DeprecationWarning)
+            n = int(bad)
+            m = _operator.index(bad)  # no warning
+        assert n == 1 and type(n) is int
+        assert m is bad
+        assert len(log) == 1
+        assert log[0].message.args[0].startswith('__int__')
+
+    def test_deprecation_warning_3(self):
+        import warnings, _operator
+        class BadInt(int):
+            def __int__(self):
+                return self
+            def __index__(self):
+                return self
+        bad = BadInt(2**100)
+        with warnings.catch_warnings(record=True) as log:
+            warnings.simplefilter("always", DeprecationWarning)
+            n = int(bad)
+            m = _operator.index(bad)  # no warning
+        assert n == bad and type(n) is int
+        assert m is bad
+        assert len(log) == 1
+        assert log[0].message.args[0].startswith('__int__')
+
     def test_int_nonstr_with_base(self):
         assert int(b'100', 2) == 4
         assert int(bytearray(b'100'), 2) == 4
@@ -737,6 +786,19 @@ class AppTestInt(object):
         raises(ValueError, int, '07777777777777777777777777777777777777', 0)
         raises(ValueError, int, '00000000000000000000000000000000000007', 0)
         raises(ValueError, int, '00000000000000000077777777777777777777', 0)
+
+    def test_some_rops(self):
+        b = 2 ** 31
+        x = -b
+        assert x.__rsub__(2) == (2 + b)
+
+    def test_round_special_method(self):
+        assert 567 .__round__(-1) == 570
+        assert 567 .__round__() == 567
+        import sys
+        if '__pypy__' in sys.builtin_module_names:
+            assert 567 .__round__(None) == 567    # fails on CPython
+
 
 class AppTestIntShortcut(AppTestInt):
     spaceconfig = {"objspace.std.intshortcut": True}

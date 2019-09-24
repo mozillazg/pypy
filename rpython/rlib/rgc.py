@@ -690,6 +690,13 @@ class MoveOutOfNurseryEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('gc_move_out_of_nursery', hop.args_v, resulttype=hop.r_result)
 
+@jit.dont_look_inside
+def increase_root_stack_depth(new_depth):
+    """Shadowstack: make sure the size of the shadowstack is at least
+    'new_depth' pointers."""
+    from rpython.rtyper.lltypesystem.lloperation import llop
+    llop.gc_increase_root_stack_depth(lltype.Void, new_depth)
+
 # ____________________________________________________________
 
 
@@ -827,6 +834,11 @@ def toggle_gcflag_extra(gcref):
     except KeyError:
         _gcflag_extras.add(gcref)
 toggle_gcflag_extra._subopnum = 3
+
+@not_rpython
+def get_gcflag_dummy(gcref):
+    return False
+get_gcflag_dummy._subopnum = 4
 
 def assert_no_more_gcflags():
     if not we_are_translated():
@@ -1072,7 +1084,8 @@ class Entry(ExtRegistryEntry):
         return hop.genop('gc_typeids_list', [], resulttype = hop.r_result)
 
 class Entry(ExtRegistryEntry):
-    _about_ = (has_gcflag_extra, get_gcflag_extra, toggle_gcflag_extra)
+    _about_ = (has_gcflag_extra, get_gcflag_extra, toggle_gcflag_extra,
+               get_gcflag_dummy)
     def compute_result_annotation(self, s_arg=None):
         from rpython.annotator.model import s_Bool
         return s_Bool
@@ -1406,6 +1419,11 @@ def resizable_list_supporting_raw_ptr(lst):
     return _ResizableListSupportingRawPtr(lst)
 
 def nonmoving_raw_ptr_for_resizable_list(lst):
+    if must_split_gc_address_space():
+        raise ValueError
+    return _nonmoving_raw_ptr_for_resizable_list(lst)
+
+def _nonmoving_raw_ptr_for_resizable_list(lst):
     assert isinstance(lst, _ResizableListSupportingRawPtr)
     return lst._nonmoving_raw_ptr_for_resizable_list()
 
@@ -1450,7 +1468,7 @@ class Entry(ExtRegistryEntry):
         return hop.inputarg(hop.args_r[0], 0)
 
 class Entry(ExtRegistryEntry):
-    _about_ = nonmoving_raw_ptr_for_resizable_list
+    _about_ = _nonmoving_raw_ptr_for_resizable_list
 
     def compute_result_annotation(self, s_list):
         from rpython.rtyper.lltypesystem import lltype, rffi

@@ -7,7 +7,6 @@ from pypy.module.cpyext.api import (
 from pypy.module.cpyext.pyobject import (
     PyObject, PyObjectP, from_ref, incref, decref,
     get_typedescr, hack_for_result_often_existing_obj)
-from pypy.module.cpyext.typeobject import PyTypeObjectPtr
 from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
 from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.objspace.std.bytesobject import invoke_bytes_method
@@ -231,7 +230,7 @@ def PyObject_Unicode(space, w_obj):
     the Python expression unicode(o).  Called by the unicode() built-in
     function."""
     if w_obj is None:
-        return space.newunicode(u"<NULL>")
+        return space.newutf8("<NULL>", 6)
     return space.call_function(space.w_unicode, w_obj)
 
 @cpython_api([PyObject, PyObject, rffi.INT_real], PyObject)
@@ -267,7 +266,7 @@ def PyObject_RichCompareBool(space, w_o1, w_o2, opid_int):
         if opid == Py_EQ:
             return 1
         if opid == Py_NE:
-            return 0 
+            return 0
     w_res = PyObject_RichCompare(space, w_o1, w_o2, opid_int)
     return int(space.is_true(w_res))
 

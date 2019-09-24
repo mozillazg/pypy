@@ -16,7 +16,6 @@ USEMODULES = ['binascii', 'posix', 'signal', 'struct', 'time']
 if os.name != 'nt':
     USEMODULES += ['fcntl', 'select', '_posixsubprocess', '_socket']
 else:
-    USEMODULES += ['_rawffi', 'thread']
     USEMODULES += ['_rawffi', 'thread', 'signal', '_cffi_backend']
 
 def setup_module(mod):
@@ -24,6 +23,8 @@ def setup_module(mod):
     mod.path = udir.join('posixtestfile.txt')
     mod.path.write("this is a test")
     mod.path2 = udir.join('test_posix2-')
+    mod.path3 = udir.join('unlinktestfile.txt')
+    mod.path3.write("delete me!")
     pdir = udir.ensure('posixtestdir', dir=True)
     pdir.join('file1').write("test1")
     os.chmod(str(pdir.join('file1')), 0o600)
@@ -67,6 +68,7 @@ class AppTestPosix:
         cls.w_os = space.appexec([], "(): import os as m ; return m")
         cls.w_path = space.wrap(str(path))
         cls.w_path2 = space.wrap(str(path2))
+        cls.w_path3 = space.wrap(str(path3))
         cls.w_pdir = space.wrap(str(pdir))
         cls.w_bytes_dir = space.newbytes(str(bytes_dir))
         cls.w_esurrogate_dir = space.newbytes(str(esurrogate_dir))
@@ -93,10 +95,19 @@ class AppTestPosix:
             cls.w_confstr_result = space.wrap(os.confstr(confstr_name))
         cls.w_SIGABRT = space.wrap(signal.SIGABRT)
         cls.w_python = space.wrap(sys.executable)
+        cls.w_platform = space.wrap(sys.platform)
         if hasattr(os, 'major'):
             cls.w_expected_major_12345 = space.wrap(os.major(12345))
             cls.w_expected_minor_12345 = space.wrap(os.minor(12345))
         cls.w_udir = space.wrap(str(udir))
+        cls.w_Path = space.appexec([], """():
+            class Path:
+                def __init__(self, _path):
+                    self._path =_path
+                def __fspath__(self):
+                    return self._path
+            return Path
+            """) 
 
     def setup_method(self, meth):
         if getattr(meth, 'need_sparse_files', False):
@@ -212,7 +223,7 @@ class AppTestPosix:
             assert exc.value.filename == "nonexistentdir/nonexistentfile"
 
         excinfo = raises(TypeError, self.posix.stat, None)
-        assert "can't specify None" in str(excinfo.value)
+        assert "should be string, bytes, os.PathLike or integer, not None" in str(excinfo.value)
         excinfo = raises(TypeError, self.posix.stat, 2.)
         assert "should be string, bytes, os.PathLike or integer, not float" in str(excinfo.value)
         raises(ValueError, self.posix.stat, -1)
@@ -289,6 +300,7 @@ class AppTestPosix:
                 assert 0
 
     def test_functions_raise_error(self):
+        import sys
         def ex(func, *args):
             try:
                 func(*args)
@@ -306,10 +318,12 @@ class AppTestPosix:
         ex(self.posix.write, UNUSEDFD, b"x")
         ex(self.posix.close, UNUSEDFD)
         #UMPF cpython raises IOError ex(self.posix.ftruncate, UNUSEDFD, 123)
-        ex(self.posix.fstat, UNUSEDFD)
-        ex(self.posix.stat, "qweqwehello")
-        # how can getcwd() raise?
-        ex(self.posix.dup, UNUSEDFD)
+        if sys.platform == 'win32' and self.runappdirect:
+            # XXX kills the host interpreter untranslated
+            ex(self.posix.fstat, UNUSEDFD)
+            ex(self.posix.stat, "qweqwehello")
+            # how can getcwd() raise?
+            ex(self.posix.dup, UNUSEDFD)
 
     def test_getcwd(self):
         os, posix = self.os, self.posix
@@ -392,13 +406,10 @@ class AppTestPosix:
 
     def test_unlink(self):
         os = self.posix
-        path = self.path
+        path = self.path3
         with open(path, 'wb'):
             pass
-        class Path:
-            def __fspath__(self):
-                return path
-        os.unlink(Path())
+        os.unlink(path)
 
     def test_times(self):
         """
@@ -592,7 +603,6 @@ class AppTestPosix:
         # using startfile in app_startfile creates global state
         test_popen.dont_track_allocations = True
         test_popen_with.dont_track_allocations = True
-        test_popen_child_fds.dont_track_allocations = True
 
     if hasattr(__import__(os.name), '_getfullpathname'):
         def test__getfullpathname(self):
@@ -1071,8 +1081,10 @@ class AppTestPosix:
         os.closerange(start, stop)
         for fd in fds:
             os.close(fd)     # should not have been closed
-        for fd in range(start, stop):
-            raises(OSError, os.fstat, fd)   # should have been closed
+        if self.platform == 'win32' and self.runappdirect:
+            # XXX kills the host interpreter untranslated
+            for fd in range(start, stop):
+                raises(OSError, os.fstat, fd)   # should have been closed
 
     if hasattr(os, 'chown'):
         def test_chown(self):
@@ -1189,15 +1201,19 @@ class AppTestPosix:
                 skip("encoding not good enough")
             dest = bytes_dir + b"/file.txt"
             posix.symlink(bytes_dir + b"/somefile", dest)
-            with open(dest) as f:
-                data = f.read()
-                assert data == "who cares?"
-            #
-            posix.unlink(dest)
+            try:
+                with open(dest) as f:
+                    data = f.read()
+                    assert data == "who cares?"
+            finally:
+                posix.unlink(dest)
             posix.symlink(memoryview(bytes_dir + b"/somefile"), dest)
-            with open(dest) as f:
-                data = f.read()
-                assert data == "who cares?"
+            try:
+                with open(dest) as f:
+                    data = f.read()
+                    assert data == "who cares?"
+            finally:
+                posix.unlink(dest)
 
         # XXX skip test if dir_fd is unsupported
         def test_symlink_fd(self):
@@ -1211,6 +1227,20 @@ class AppTestPosix:
             finally:
                 posix.close(f)
                 posix.unlink(bytes_dir + '/somelink'.encode())
+
+        def test_symlink_fspath(self):
+            posix = self.posix
+            bytes_dir = self.bytes_dir
+            if bytes_dir is None:
+                skip("encoding not good enough")
+            dest = self.Path(bytes_dir + b"/file.txt")
+            posix.symlink(self.Path(bytes_dir + b"/somefile"), dest)
+            try:
+                with open(dest) as f:
+                    data = f.read()
+                    assert data == "who cares?"
+            finally:
+                posix.unlink(dest)
     else:
         def test_symlink(self):
             posix = self.posix
@@ -1430,16 +1460,26 @@ class AppTestPosix:
         fname = self.path2 + 'rename.txt'
         with open(fname, "w") as f:
             f.write("this is a rename test")
+        str_name = str(self.pdir) + '/test_rename.txt'
+        os.rename(fname, str_name)
+        with open(str_name) as f:
+            assert f.read() == 'this is a rename test'
+        os.rename(str_name, fname)
         unicode_name = str(self.udir) + u'/test\u03be.txt'
         os.rename(fname, unicode_name)
         with open(unicode_name) as f:
             assert f.read() == 'this is a rename test'
         os.rename(unicode_name, fname)
+        
+        os.rename(bytes(fname, 'utf-8'), bytes(str_name, 'utf-8'))
+        with open(str_name) as f:
+            assert f.read() == 'this is a rename test'
+        os.rename(str_name, fname)
         with open(fname) as f:
             assert f.read() == 'this is a rename test'
         os.unlink(fname)
 
-        
+
     def test_device_encoding(self):
         import sys
         encoding = self.posix.device_encoding(sys.stdout.fileno())
@@ -1513,6 +1553,7 @@ class AppTestPosix:
                 return 4
 
         raises(TypeError, self.posix.fspath, WrongSample())
+        raises(OSError, self.posix.replace, self.Path('nonexistentfile1'), 'bok')
 
     if hasattr(rposix, 'getxattr'):
         def test_xattr_simple(self):

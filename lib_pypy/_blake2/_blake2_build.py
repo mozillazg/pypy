@@ -4,12 +4,19 @@ import platform
 
 from cffi import FFI
 
-IS_ARM = platform.machine().startswith('arm')
-if IS_ARM:
-    # XXX Choose neon accelaration
+IS_WIN = sys.platform == 'win32'
+if IS_WIN:
+    BLAKE2_USE_SSE = True
+    extra_compile_args = []
+    define_macros = [('__SSE2__', '1')]
+elif platform.machine().startswith('x86'):
+    BLAKE2_USE_SSE = True
+    extra_compile_args = ['-msse2']
     define_macros = []
 else:
-    define_macros = [('__SSE2__', '1')]
+    BLAKE2_USE_SSE = False
+    extra_compile_args = []
+    define_macros = []
     
     
 
@@ -74,14 +81,20 @@ void* addressof_node_offset(blake_param *S) {
 
 
 _libdir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'impl'))
+if BLAKE2_USE_SSE:
+    sourcesB=[os.path.join(_libdir, 'blake2b.c'), ]
+    sourcesS=[os.path.join(_libdir, 'blake2s.c'), ]
+else:    
+    sourcesB=[os.path.join(_libdir, 'blake2b-ref.c'), ]
+    sourcesS=[os.path.join(_libdir, 'blake2s-ref.c'), ]
 
 blake2b_ffi = FFI()
 blake2b_ffi.cdef(blake_cdef)
 blake2b_ffi.set_source(
     '_blake2b_cffi', blake2b_source,
-    sources=[os.path.join(_libdir, 'blake2b.c'),
-            ],
+    sources=sourcesB,
     include_dirs=[_libdir],
+    extra_compile_args=extra_compile_args,
     define_macros=define_macros,
 )
 
@@ -95,9 +108,9 @@ blake2s_ffi = FFI()
 blake2s_ffi.cdef(blake_cdef)
 blake2s_ffi.set_source(
     '_blake2s_cffi', _replace_b2s(blake2b_source),
-    sources=[os.path.join(_libdir, 'blake2s.c'),
-            ],
+    sources=sourcesS,
     include_dirs=[_libdir],
+    extra_compile_args=extra_compile_args,
     define_macros=define_macros,
 )
 

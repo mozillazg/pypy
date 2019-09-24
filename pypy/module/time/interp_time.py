@@ -5,7 +5,7 @@ from pypy.interpreter.error import (OperationError, oefmt,
 from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.timeutils import (
     SECS_TO_NS, MS_TO_NS, US_TO_NS, monotonic as _monotonic, timestamp_w)
-from pypy.interpreter.unicodehelper import decode_utf8, encode_utf8
+from pypy.interpreter.unicodehelper import decode_utf8sp
 from rpython.rtyper.lltypesystem import lltype
 from rpython.rlib.rarithmetic import (
     intmask, r_ulonglong, r_longfloat, widen, ovfcheck, ovfcheck_float_to_int)
@@ -459,8 +459,8 @@ def _init_timezone(space):
 
     _set_module_object(space, "timezone", space.newint(timezone))
     _set_module_object(space, 'daylight', space.newint(daylight))
-    tzname_w = [space.newunicode(tzname[0].decode('latin-1')),
-                space.newunicode(tzname[1].decode('latin-1'))]
+    tzname_w = [space.newtext(tzname[0]),
+                space.newtext(tzname[1])]
     _set_module_object(space, 'tzname', space.newtuple(tzname_w))
     _set_module_object(space, 'altzone', space.newint(altzone))
 
@@ -528,6 +528,9 @@ def _get_inttime(space, w_seconds):
         seconds = pytime.time()
     else:
         seconds = space.float_w(w_seconds)
+        if math.isnan(seconds):
+            raise oefmt(space.w_ValueError,
+                        "Invalid value Nan (not a number)")
     #
     t = rffi.cast(rffi.TIME_T, seconds)
     #
@@ -554,9 +557,8 @@ def _tm_to_tuple(space, t):
 
     if HAS_TM_ZONE:
         # CPython calls PyUnicode_DecodeLocale here should we do the same?
-        tm_zone = decode_utf8(space, rffi.charp2str(t.c_tm_zone),
-                              allow_surrogates=True)
-        extra = [space.newunicode(tm_zone),
+        tm_zone, lgt, pos = decode_utf8sp(space, rffi.charp2str(t.c_tm_zone))
+        extra = [space.newtext(tm_zone, lgt),
                  space.newint(rffi.getintfield(t, 'c_tm_gmtoff'))]
         w_time_tuple = space.newtuple(time_tuple + extra)
     else:
@@ -579,7 +581,7 @@ def _gettmarg(space, w_tup, allowNone=True):
         lltype.free(t_ref, flavor='raw')
         if not pbuf:
             raise OperationError(space.w_ValueError,
-                                 space.newunicode(_get_error_msg()))
+                                 space.newtext(*_get_error_msg()))
         return pbuf
 
     tup_w = space.fixedview(w_tup)
@@ -616,7 +618,7 @@ def _gettmarg(space, w_tup, allowNone=True):
             # it saves the string that is later deleted when this
             # function is called again. A refactoring of this module
             # could remove this
-            tm_zone = encode_utf8(space, space.unicode_w(tup_w[9]), allow_surrogates=True)
+            tm_zone = space.utf8_w(tup_w[9])
             malloced_str = rffi.str2charp(tm_zone, track_allocation=False)
             if old_tm_zone != lltype.nullptr(rffi.CCHARP.TO):
                 rffi.free_charp(old_tm_zone, track_allocation=False)
@@ -678,8 +680,7 @@ def time(space, w_info=None):
                         _setinfo(space, w_info, "clock_gettime(CLOCK_REALTIME)",
                                  res, False, True)
                 return space.newfloat(_timespec_to_seconds(timespec))
-    else:
-        return gettimeofday(space, w_info)
+    return gettimeofday(space, w_info)
 
 def ctime(space, w_seconds=None):
     """ctime([seconds]) -> string
@@ -745,7 +746,7 @@ def gmtime(space, w_seconds=None):
 
     if not p:
         raise OperationError(space.w_ValueError,
-                             space.newunicode(_get_error_msg()))
+                             space.newtext(*_get_error_msg()))
     return _tm_to_tuple(space, p)
 
 def localtime(space, w_seconds=None):
@@ -763,7 +764,7 @@ def localtime(space, w_seconds=None):
 
     if not p:
         raise OperationError(space.w_OSError,
-                             space.newunicode(_get_error_msg()))
+                             space.newtext(*_get_error_msg()))
     return _tm_to_tuple(space, p)
 
 def mktime(space, w_tup):
