@@ -1007,18 +1007,14 @@ class W_UnicodeObject(W_Root):
 
         if forward:
             res_index = self._utf8.find(w_sub._utf8, start_index, end_index)
-            if res_index < 0:
-                return None
-            res = self._byte_to_index(res_index)
-            assert res >= 0
-            return space.newint(res)
         else:
             res_index = self._utf8.rfind(w_sub._utf8, start_index, end_index)
-            if res_index < 0:
-                return None
-            res = self._byte_to_index(res_index)
-            assert res >= 0
-            return space.newint(res)
+        if res_index < 0:
+            return None
+        res = self._byte_to_index(res_index)
+        assert res >= 0
+        jit.promote(res >= 0)  # always true!
+        return space.newint(res)
 
     def _unwrap_and_compute_idx_params(self, space, w_start, w_end):
         # unwrap start and stop indices, optimized for the case where
