@@ -916,6 +916,10 @@ class W_UnicodeObject(W_Root):
         start = self._index_to_byte(index)
         # we must not inline next_codepoint_pos, otherwise we produce a guard!
         end = self.next_codepoint_pos_dont_look_inside(start)
+        if not self.is_ascii():
+            storage = self._get_index_storage()
+            jit.record_known_result(
+                end, rutf8.codepoint_position_at_index, self._utf8, storage, index + 1)
         return W_UnicodeObject(self._utf8[start:end], 1)
 
     @jit.unroll_safe
@@ -950,8 +954,15 @@ class W_UnicodeObject(W_Root):
         if self.is_ascii():
             assert index >= 0
             return index
-        return rutf8.codepoint_position_at_index(
-            self._utf8, self._get_index_storage(), index)
+        storage = self._get_index_storage()
+        res = rutf8.codepoint_position_at_index(
+            self._utf8, storage, index)
+        # this hint can't be done in codepoint_position_at_index, because there
+        # the length is not available
+        jit.record_known_result(
+            index, rutf8._codepoint_index_at_byte_position,
+            self._utf8, storage, res, self._len())
+        return res
 
     def _codepoints_in_utf8(self, start, end):
         if self.is_ascii():

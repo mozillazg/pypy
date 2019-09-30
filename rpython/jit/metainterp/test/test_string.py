@@ -1,3 +1,4 @@
+# encoding: utf-8
 import py
 
 from rpython.jit.metainterp.test.support import LLJitMixin
@@ -988,3 +989,43 @@ class TestLLtypeUnicode(TestLLtype):
             d = {s: s + s}
             return len(d[s])
         assert self.interp_operations(f, [222]) == 6
+
+    def test_codepoint_index_at_byte_position_record_known_result(self):
+        from rpython.rlib import rutf8
+        jitdriver = JitDriver(greens=['x'], reds=['z', 'res'])
+        s1 = u"abceüf".encode("utf-8")
+        s2 = u"def////ä".encode("utf-8")
+
+        @dont_look_inside
+        def pick(x):
+            if x > 0:
+                return s1
+            else:
+                return s2
+
+        def f(x):
+            z = 0
+            res = 0
+            search = "e" * 5 + "f" * 10
+            while z < 10:
+                jitdriver.jit_merge_point(x=x, res=res, z=z)
+                s = pick(x)
+                # the following lines emulate unicode.find
+                byteindex = s.find(search[z])
+                assert byteindex >= 0
+                storage = rutf8.create_utf8_index_storage(s, len(s) - 1)
+                index = rutf8.codepoint_index_at_byte_position(s, storage, byteindex, len(s) - 1)
+                # then we use the resulting codepoint index in conjunction with
+                # the string to get at a byte index
+                b = rutf8.codepoint_position_at_index(s, storage, index)
+                # now comes the annoying part: the two rutf8 calls can only be
+                # removed by the backend! so we can't directly test that they
+                # are gone, so we use the following trick:
+                res += b - byteindex # 0! the optimizer cannot find out without record_known_result
+                z += 1
+            return b
+        f(1)
+        res = self.meta_interp(f, [1], backendopt=True)
+        assert res == f(1)
+        self.check_simple_loop(int_sub=1)
+

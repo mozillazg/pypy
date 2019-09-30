@@ -591,7 +591,6 @@ def codepoint_at_index(utf8, storage, index):
         bytepos = next_codepoint_pos(utf8, bytepos)
     return codepoint_at_pos(utf8, bytepos)
 
-@jit.elidable
 def codepoint_index_at_byte_position(utf8, storage, bytepos, num_codepoints):
     """ Return the character index for which
     codepoint_position_at_index(index) == bytepos.
@@ -599,6 +598,12 @@ def codepoint_index_at_byte_position(utf8, storage, bytepos, num_codepoints):
     logarithmic in the length of the string, plus some constant that
     is not tiny either.
     """
+    res = _codepoint_index_at_byte_position(utf8, storage, bytepos, num_codepoints)
+    jit.record_known_result(bytepos, codepoint_position_at_index, utf8, storage, res)
+    return res
+
+@jit.elidable
+def _codepoint_index_at_byte_position(utf8, storage, bytepos, num_codepoints):
     if bytepos < 0:
         return bytepos
     # binary search on elements of storage
