@@ -545,13 +545,20 @@ def create_utf8_index_storage(utf8, utf8len):
         break
     return storage
 
-@jit.elidable
 def codepoint_position_at_index(utf8, storage, index):
     """ Return byte index of a character inside utf8 encoded string, given
     storage of type UTF8_INDEX_STORAGE.  The index must be smaller than
     or equal to the utf8 length: if needed, check explicitly before calling
     this function.
     """
+    res = _codepoint_position_at_index(utf8, storage, index)
+    # tell the jit about the invariants of the result
+    jit.record_exact_value(res >= 0, True)
+    jit.record_exact_value(res < len(utf8), True)
+    return res
+
+@jit.elidable
+def _codepoint_position_at_index(utf8, storage, index):
     current = index >> 6
     ofs = ord(storage[current].ofs[(index >> 2) & 0x0F])
     bytepos = storage[current].baseindex + ofs
@@ -599,7 +606,10 @@ def codepoint_index_at_byte_position(utf8, storage, bytepos, num_codepoints):
     is not tiny either.
     """
     res = _codepoint_index_at_byte_position(utf8, storage, bytepos, num_codepoints)
-    jit.record_known_result(bytepos, codepoint_position_at_index, utf8, storage, res)
+    jit.record_known_result(bytepos, _codepoint_position_at_index, utf8, storage, res)
+    # tell the JIT that there are no bounds checks needed on the resulting indices
+    jit.record_exact_value(res >= 0, True)
+    jit.record_exact_value(res < num_codepoints, True)
     return res
 
 @jit.elidable

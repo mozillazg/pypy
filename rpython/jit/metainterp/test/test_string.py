@@ -1053,9 +1053,14 @@ class TestLLtypeUnicode(TestLLtype):
                 s = pick(x)
                 # the following lines emulate unicode.find
                 byteindex = s.find(search[z])
-                assert byteindex >= 0
+                if byteindex < 0:
+                    return -1001
                 storage = rutf8.create_utf8_index_storage(s, len(s) - 1)
                 index = rutf8.codepoint_index_at_byte_position(s, storage, byteindex, len(s) - 1)
+                if index < 0:  # no guard
+                    return -1000
+                if index >= len(s) - 1:  # no guard
+                    return -1004
                 # then we use the resulting codepoint index in conjunction with
                 # the string to get at a byte index
                 b = rutf8.codepoint_position_at_index(s, storage, index)
@@ -1068,5 +1073,5 @@ class TestLLtypeUnicode(TestLLtype):
         f(1)
         res = self.meta_interp(f, [1], backendopt=True)
         assert res == f(1)
-        self.check_simple_loop(int_sub=1)
+        self.check_simple_loop(int_sub=1, guard_false=1)
 

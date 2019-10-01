@@ -760,7 +760,7 @@ class W_UnicodeObject(W_Root):
         assert stop >= 0
         byte_start = 0
         for i in range(start):
-            byte_start = next_codepoint_pos_dont_look_inside(self._utf8, byte_start)
+            byte_start = self.next_codepoint_pos_dont_look_inside(byte_start)
         byte_stop = len(self._utf8)
         for i in range(self._len() - stop):
             byte_stop = prev_codepoint_pos_dont_look_inside(self._utf8, byte_stop)
@@ -920,7 +920,7 @@ class W_UnicodeObject(W_Root):
         if not self.is_ascii():
             storage = self._get_index_storage()
             jit.record_known_result(
-                end, rutf8.codepoint_position_at_index, self._utf8, storage, index + 1)
+                end, rutf8._codepoint_position_at_index, self._utf8, storage, index + 1)
         return W_UnicodeObject(self._utf8[start:end], 1)
 
     @jit.unroll_safe
@@ -952,6 +952,7 @@ class W_UnicodeObject(W_Root):
         return self._length == len(self._utf8)
 
     def _index_to_byte(self, index):
+        assert 0 <= index < self._len()
         if self.is_ascii():
             assert index >= 0
             return index
@@ -974,6 +975,7 @@ class W_UnicodeObject(W_Root):
         """ this returns index such that self._index_to_byte(index) == bytepos
         NB: this is slow! roughly logarithmic with a big constant
         """
+        assert 0 <= bytepos < len(self._utf8)
         if self.is_ascii():
             return bytepos
         return rutf8.codepoint_index_at_byte_position(
@@ -982,7 +984,10 @@ class W_UnicodeObject(W_Root):
     def next_codepoint_pos_dont_look_inside(self, pos):
         if self.is_ascii():
             return pos + 1
-        return next_codepoint_pos_dont_look_inside(self._utf8, pos)
+        res = next_codepoint_pos_dont_look_inside(self._utf8, pos)
+        jit.record_exact_value(res >= 0, True)
+        jit.record_exact_value(res <= len(self._utf8), True)
+        return res
 
     def prev_codepoint_pos_dont_look_inside(self, pos):
         if self.is_ascii():
@@ -1013,7 +1018,6 @@ class W_UnicodeObject(W_Root):
         if res_index < 0:
             return None
         res = self._byte_to_index(res_index)
-        jit.promote(res >= 0)  # always true!
         assert res >= 0
         return space.newint(res)
 
