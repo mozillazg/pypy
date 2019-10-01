@@ -102,6 +102,7 @@ class W_UnicodeObject(W_Root):
         return space.text_w(encode_object(space, self, 'ascii', 'strict'))
 
     def utf8_w(self, space):
+        jit.record_known_result(self._length, rutf8._check_utf8, self._utf8, True, 0, -1)
         return self._utf8
 
     def readbuf_w(self, space):
@@ -1012,8 +1013,8 @@ class W_UnicodeObject(W_Root):
         if res_index < 0:
             return None
         res = self._byte_to_index(res_index)
-        assert res >= 0
         jit.promote(res >= 0)  # always true!
+        assert res >= 0
         return space.newint(res)
 
     def _unwrap_and_compute_idx_params(self, space, w_start, w_end):
