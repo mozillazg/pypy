@@ -990,7 +990,48 @@ class TestLLtypeUnicode(TestLLtype):
             return len(d[s])
         assert self.interp_operations(f, [222]) == 6
 
-    def test_codepoint_index_at_byte_position_record_known_result(self):
+    def test_str_find(self):
+        jitdriver = JitDriver(greens=['x'], reds=['z', 'res'])
+        s1 = "aaaaaaef"
+        s2 = "aaaaaaaaaaaaaaaaaaaaeebbbbbbbbbbbbbbbbbbef"
+
+        @dont_look_inside
+        def pick(x):
+            if x > 0:
+                return s1
+            else:
+                return s2
+
+        @dont_look_inside
+        def pick_s(z):
+            if z < 5:
+                return "e"
+            return "ef"
+
+        def f(x):
+            z = 0
+            res = 0
+            while z < 10:
+                jitdriver.jit_merge_point(x=x, res=res, z=z)
+                s = pick(x)
+                # the following lines emulate unicode.find
+                byteindex = s.find(pick_s(x))
+                if byteindex < 0:
+                    return -1001
+                if byteindex >= len(s):  # no guard
+                    return -106
+                res += ord(s[byteindex])
+                z += 1
+            return res
+        res = self.meta_interp(f, [1], backendopt=True)
+        assert res == f(1)
+        self.check_simple_loop(guard_false=1)  # only one guard, to check for -1
+        res = self.meta_interp(f, [10], backendopt=True)
+        assert res == f(10)
+        # one guard to check whether the search string is len == 1, one to check for result -1
+        self.check_simple_loop(guard_false=2)
+
+    def test_codepoint_index_at_byte_position_record_known_result_and_invariants(self):
         from rpython.rlib import rutf8
         jitdriver = JitDriver(greens=['x'], reds=['z', 'res'])
         s1 = u"abceüf".encode("utf-8")

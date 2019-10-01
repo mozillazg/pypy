@@ -721,16 +721,22 @@ class LLHelpers(AbstractLLHelpers):
     def ll_find(s1, s2, start, end):
         if start < 0:
             start = 0
-        if end > len(s1.chars):
-            end = len(s1.chars)
+        n = len(s1.chars)
+        if end > n:
+            end = n
         if end - start < 0:
             return -1
 
         m = len(s2.chars)
         if m == 1:
-            return LLHelpers.ll_find_char(s1, s2.chars[0], start, end)
+            res = LLHelpers.ll_find_char(s1, s2.chars[0], start, end)
+            jit.record_exact_value(res < end, True)
+            return res
 
-        return LLHelpers.ll_search(s1, s2, start, end, FAST_FIND)
+        res = LLHelpers.ll_search(s1, s2, start, end, FAST_FIND)
+        jit.record_exact_value(res < end, True)
+        jit.record_exact_value(res + m <= n, True)
+        return res
 
     @staticmethod
     @signature(types.any(), types.any(), types.int(), types.int(), returns=types.int())
