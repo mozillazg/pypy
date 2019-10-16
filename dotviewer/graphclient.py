@@ -95,8 +95,8 @@ def send_graph_messages(io, messages):
     except EOFError:
         ioerror = ioerror or IOError("connection unexpectedly closed "
                                      "(graphserver crash?)")
-    #if ioerror is not None:
-    #    raise ioerror
+    if ioerror is not None:
+        raise ioerror
 
 def send_error(io, e):
     try:
