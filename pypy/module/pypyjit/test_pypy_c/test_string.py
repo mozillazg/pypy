@@ -271,7 +271,6 @@ class TestString(BaseTestPyPyC):
         def main(n):
             b = b'ab\xc3\xa4\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa7\xe2\x80\x8d\xf0\x9f\x91\xa6'
             u = b.decode("utf-8") * 1000
-            global s
             count = 0
             while u:
                 u = u[1:] # ID: index
@@ -293,7 +292,6 @@ class TestString(BaseTestPyPyC):
     def test_decode_encode(self):
         log = self.run("""
         def main(n):
-            global s
             u = b'ab\xc3\xa4\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa7\xe2\x80\x8d\xf0\x9f\x91\xa6'.decode("utf-8")
             count = 0
             for i in range(n):
@@ -308,4 +306,69 @@ class TestString(BaseTestPyPyC):
         assert loop.match_by_id('decode', '''
             i95 = int_ge(i86, 0)
             guard_true(i95, descr=...)
+        ''')
+
+    def test_access_two_indices_in_a_row(self):
+        log = self.run("""
+        def main(n):
+            u = b'ab\xc3\xa4\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa7\xe2\x80\x8d\xf0\x9f\x91\xa6'.decode("utf-8")
+            u *= 100
+            for i in range(len(u) - 1):
+                u[i]
+                u[i + 1] # ID: second
+        """, [10000])
+        loop, = log.loops_by_filename(self.filepath)
+        # There is no _codepoint_position_at_index call here! It's deduced as
+        # the result of the next_codepoint_pos of the previous indexing.
+        assert loop.match_by_id('second', '''
+            i80 = int_ge(i70, i39)
+            guard_false(i80, descr=...)
+            i82 = call_i(ConstClass(next_codepoint_pos_dont_look_inside), p40, i77, descr=...)
+            i84 = int_add(i65, 2)
+            i85 = int_sub(i82, i77)
+            guard_not_invalidated(descr=...)
+            --TICK--
+        ''')
+
+    def test_find_dont_convert_back_and_forth(self):
+        log = self.run("""
+        def main(n):
+            u = b'ab\xc3\xa4\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x91\xa7\xe2\x80\x8d\xf0\x9f\x91\xa6a'.decode("utf-8")
+            u *= 100
+            for i in range(len(u) - 1):
+                u[u.find(u"a", i)]  # ID: find
+        """, [10000])
+        loop, = log.loops_by_filename(self.filepath)
+        assert loop.match_by_id('find', '''
+            setfield_gc(p16, i91, descr=...)
+            guard_not_invalidated(descr=...)
+            i92 = int_is_zero(i86)
+            guard_false(i92, descr=...)
+            i93 = int_gt(i86, i44)
+            guard_false(i93, descr=...)
+            p95 = cond_call_value_r(p66, ConstClass(W_UnicodeObject._compute_index_storage), p12, descr=...)
+            guard_no_exception(descr=...)
+            i97 = call_i(ConstClass(_codepoint_position_at_index), p47, p95, i86, descr=...)
+            guard_no_exception(descr=...)
+            i99 = int_lt(i97, 0)
+            guard_false(i99, descr=...)
+            i100 = int_sub(i48, i97)
+            i102 = int_lt(i100, 0)
+            guard_false(i102, descr=...)
+            i105 = call_i(ConstClass(ll_find_char__rpy_stringPtr_Char_Signed_Signed), p47, 97, i97, i48, descr=...)
+            i107 = int_lt(i105, 0)
+            guard_false(i107, descr=...)
+            p108 = getfield_gc_r(p12, descr=...)
+
+            # This call converts the byte position that is the result of the
+            # find call back to a codepoint position.
+            i110 = call_i(ConstClass(_codepoint_index_at_byte_position), p47, p95, i105, i44, descr=...)
+
+            # There is no call to codepoint_position_at_index here! It's
+            # deduced as the reverse of _codepoint_index_at_byte_position.
+            guard_no_exception(descr=...)
+            i112 = call_i(ConstClass(next_codepoint_pos_dont_look_inside), p47, i105, descr=...)
+            i114 = int_add(i110, 1)
+            i115 = int_sub(i112, i105)
+            --TICK--
         ''')
