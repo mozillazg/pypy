@@ -956,7 +956,7 @@ class W_UnicodeObject(W_Root):
         return self._length == len(self._utf8)
 
     def _index_to_byte(self, index):
-        assert 0 <= index < self._len()
+        assert 0 <= index <= self._len()
         if self.is_ascii():
             assert index >= 0
             return index
@@ -979,7 +979,7 @@ class W_UnicodeObject(W_Root):
         """ this returns index such that self._index_to_byte(index) == bytepos
         NB: this is slow! roughly logarithmic with a big constant
         """
-        assert 0 <= bytepos < len(self._utf8)
+        assert 0 <= bytepos <= len(self._utf8)
         if self.is_ascii():
             return bytepos
         return rutf8.codepoint_index_at_byte_position(
@@ -988,6 +988,8 @@ class W_UnicodeObject(W_Root):
     def next_codepoint_pos_dont_look_inside(self, pos):
         if self.is_ascii():
             return pos + 1
+        jit.record_exact_value(pos >= 0, True)
+        jit.record_exact_value(pos < len(self._utf8), True)
         res = next_codepoint_pos_dont_look_inside(self._utf8, pos)
         jit.record_exact_value(res >= 0, True)
         jit.record_exact_value(res <= len(self._utf8), True)
