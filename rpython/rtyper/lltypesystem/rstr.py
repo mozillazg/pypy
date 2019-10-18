@@ -728,14 +728,15 @@ class LLHelpers(AbstractLLHelpers):
             return -1
 
         m = len(s2.chars)
-        if m == 1:
+        if m <= 1:
+            if m == 0:
+                return start
             res = LLHelpers.ll_find_char(s1, s2.chars[0], start, end)
             jit.record_exact_value(res < end, True)
             return res
 
         res = LLHelpers.ll_search(s1, s2, start, end, FAST_FIND)
         jit.record_exact_value(res < end, True)
-        jit.record_exact_value(res + m <= n, True)
         return res
 
     @staticmethod
@@ -749,10 +750,17 @@ class LLHelpers(AbstractLLHelpers):
             return -1
 
         m = len(s2.chars)
-        if m == 1:
-            return LLHelpers.ll_rfind_char(s1, s2.chars[0], start, end)
+        if m <= 1:
+            if m == 0:
+                return end
+            LLHelpers.ll_find_char(s1, s2.chars[0], start, end)
+            res = LLHelpers.ll_rfind_char(s1, s2.chars[0], start, end)
+            jit.record_exact_value(res < end, True)
+            return res
 
-        return LLHelpers.ll_search(s1, s2, start, end, FAST_RFIND)
+        res = LLHelpers.ll_search(s1, s2, start, end, FAST_RFIND)
+        jit.record_exact_value(res < end, True)
+        return res
 
     @classmethod
     def ll_count(cls, s1, s2, start, end):
