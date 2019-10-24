@@ -367,6 +367,9 @@ class TestString(BaseTestPyPyC):
             # There is no call to codepoint_position_at_index here! It's
             # deduced as the reverse of _codepoint_index_at_byte_position.
             guard_no_exception(descr=...)
+            i111 = int_ge(i110, i44)
+            guard_false(i111, descr=...)
+
             i112 = call_i(ConstClass(next_codepoint_pos_dont_look_inside), p47, i105, descr=...)
             i114 = int_add(i110, 1)
             i115 = int_sub(i112, i105)
