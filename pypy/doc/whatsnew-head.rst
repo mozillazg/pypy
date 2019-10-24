@@ -9,3 +9,9 @@ What's new in PyPy2.7 7.3+
 
 Fix segfault when calling descr-methods with no arguments
 
+
+.. branch: record-known-result
+
+Improve reasoning of the JIT about utf-8 index manipulation. Add a generic
+framework to give hints that help the JIT reason about elidable calls and
+more generically, other invariants of the code.
