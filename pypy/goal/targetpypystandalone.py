@@ -268,6 +268,10 @@ class PyPyTarget(object):
         # expose the following variables to ease debugging
         global space, entry_point
 
+        # the default is _dummy_importlib for tests, but we really want
+        # _frozen_importlib when translating
+        config.objspace.usemodules._frozen_importlib = True
+
         if config.objspace.allworkingmodules:
             from pypy.config.pypyoption import enable_allworkingmodules
             enable_allworkingmodules(config)
@@ -413,4 +417,3 @@ class PyPyTarget(object):
         ns['get_gchooks'] = self.get_gchooks
 
 PyPyTarget().interface(globals())
-

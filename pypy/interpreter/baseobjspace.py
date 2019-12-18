@@ -671,7 +671,10 @@ class ObjSpace(object):
             self.fromcache(State).build_api()
         self.getbuiltinmodule('sys')
         self.getbuiltinmodule('_imp')
-        self.getbuiltinmodule('_frozen_importlib')
+        if self.config.objspace.usemodules._frozen_importlib:
+            self.getbuiltinmodule('_frozen_importlib')
+        if self.config.objspace.usemodules._dummy_importlib:
+            self.getbuiltinmodule('_dummy_importlib')
         self.getbuiltinmodule('builtins')
         for mod in self.builtin_modules.values():
             mod.setup_after_space_initialization()
