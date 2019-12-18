@@ -14,9 +14,12 @@ all_modules = [p.basename for p in modulepath.listdir()
                and p.join('__init__.py').check()
                and not p.basename.startswith('test')]
 
+# _dummy_importlib is automatically removed when you specify
+# --importlib=_frozen_importlib, which is the default when translating
 essential_modules = set([
     "exceptions", "_io", "sys", "builtins", "posix", "_warnings",
-    "itertools", "_frozen_importlib", "operator", "_locale", "struct",
+    "itertools", "operator", "_locale", "struct",
+    "_dummy_importlib",
 ])
 if sys.platform == "win32":
     essential_modules.add("_winreg")
@@ -103,6 +106,8 @@ module_dependencies = {
     'cpyext': [('objspace.usemodules.array', True)],
     '_cppyy': [('objspace.usemodules.cpyext', True)],
     'faulthandler': [('objspace.usemodules._vmprof', True)],
+    '_dummy_importlib': [('objspace.usemodules._frozen_importlib', False)],
+    '_frozen_importlib': [('objspace.usemodules._dummy_importlib', False)],
     }
 module_suggests = {
     # the reason you want _rawffi is for ctypes, which
