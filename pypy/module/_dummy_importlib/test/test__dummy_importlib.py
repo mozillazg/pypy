@@ -19,3 +19,7 @@ class AppTestDummyImportlib:
     def test_import_lib_pypy(self):
         import _structseq
         assert hasattr(_structseq, 'structseq_new')
+
+    def test_import_package(self):
+        import collections
+        assert hasattr(collections, 'namedtuple')

@@ -21,9 +21,15 @@ def importhook(space, name, w_globals=None,
     for w_item in space.unpackiterable(w_path):
         item = space.fsdecode_w(w_item)
         d = py.path.local(item)
+        #
         pyfile = d.join(name + '.py')
         if pyfile.check(file=True):
             return import_pyfile(space, name, pyfile)
+        #
+        pydir = d.join(name)
+        pyinit = pydir.join('__init__.py')
+        if pydir.check(dir=True) and pyinit.check(file=True):
+            return import_pyfile(space, name, pyinit)
 
 
     err = """
