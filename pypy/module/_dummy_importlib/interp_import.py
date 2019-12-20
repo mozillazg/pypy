@@ -46,7 +46,10 @@ def dummy_importhook(space, name, w_globals=None,
         raise OperationError(space.w_ImportError, space.newtext(new_message))
 
 
-# the following code has been copied/pasted/adapted from default
+# ============================================================================
+# the following code has been copied/pasted/adapted from the default branch:
+# pypy/module/imp/importing.py
+# ============================================================================
 
 _WIN32 = sys.platform == 'win32'
 
