@@ -14,8 +14,8 @@ all_modules = [p.basename for p in modulepath.listdir()
                and p.join('__init__.py').check()
                and not p.basename.startswith('test')]
 
-# _dummy_importlib is automatically removed when you specify
-# --importlib=_frozen_importlib, which is the default when translating
+# _dummy_importlib is automatically removed when you specify enable
+# _fronzen_importlib, which is the default when translating
 essential_modules = set([
     "exceptions", "_io", "sys", "builtins", "posix", "_warnings",
     "itertools", "operator", "_locale", "struct",
