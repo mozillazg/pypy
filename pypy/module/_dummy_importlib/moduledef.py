@@ -13,7 +13,7 @@ class Module(MixedModule):
         """NOT_RPYTHON"""
         super(Module, self).install()
         self.w_import = self.space.wrap(
-            interp2app(interp_import.importhook, app_name='__dummy_import__'))
+            interp2app(interp_import.dummy_importhook, app_name='__dummy_import__'))
 
     def startup(self, space):
         """Copy our __import__ to builtins."""

@@ -12,6 +12,9 @@ def test_default_is_dummy_importlib():
 
 class AppTestDummyImportlib:
 
+    def test_no_frozen_importlib(self):
+        raises(ImportError, "import _frozen_importlib")
+
     def test_import_builtin(self):
         import sys
         import operator
@@ -21,3 +24,21 @@ class AppTestDummyImportlib:
     def test_import_from_sys_path(self):
         import keyword # this is a module from lib-python
         assert keyword.iskeyword('def')
+
+    def test_error_message_on_ImportError(self):
+        try:
+            import i_dont_exist
+        except ImportError as e:
+            message = str(e)
+            assert 'i_dont_exist' in message
+            assert 'spaceconfig' in message
+
+
+class AppTestNoDummyImportlib:
+    spaceconfig = {'usemodules': ['_frozen_importlib']}
+
+    def test_no_dummy_importlib(self):
+        try:
+            import _dummy_importlib
+        except ImportError as e:
+            assert 'spaceconfig' not in str(e)

@@ -22,6 +22,32 @@ from rpython.rlib.streamio import StreamErrors
 from rpython.rlib.objectmodel import we_are_translated, specialize
 from pypy.module.sys.version import PYPY_VERSION
 
+
+@unwrap_spec(name='text0', level=int)
+def dummy_importhook(space, name, w_globals=None,
+                     w_locals=None, w_fromlist=None, level=-1):
+    try:
+        return importhook(space, name, w_globals, w_locals, w_fromlist, level)
+    except OperationError as e:
+        if not e.match(space, space.w_ImportError):
+            raise
+        w_value = e.get_w_value(space)
+        message = space.text_w(space.str(w_value))
+        new_message = """%s
+
+        You are using _dummy_importlib: this is not supposed to be a
+        fully-compatible importing library, but it contains just enough logic to
+        run most of the tests.  If you are experiencing problems with it, consider
+        adding more logic, or to switch to the fully-working _frozen_importlib by
+        adding this line to your AppTest class:
+
+            spaceconfig = {'usemodules': ['_frozen_importlib']}
+        """ % message
+        raise OperationError(space.w_ImportError, space.newtext(new_message))
+
+
+# the following code has been copied/pasted/adapted from default
+
 _WIN32 = sys.platform == 'win32'
 
 SEARCH_ERROR = 0
