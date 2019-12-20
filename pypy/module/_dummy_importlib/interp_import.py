@@ -1,5 +1,10 @@
 """
-Implementation of the interpreter-level default import logic.
+This is mostly a copy&paste from pypy/module/imp/importing.py in the
+default branch, adapted to work on pypy3.  This module is NOT meant to be
+translated and probably the logic is slightly different than the real logic
+needed for Python3.  However, since it is written at interp-level, it is much
+faster than _frozen_importlib which is written at applevel, which makes
+running tests much faster.
 """
 
 import sys, os, stat
@@ -36,6 +41,15 @@ SO = '.pyd' if _WIN32 else '.so'
 # and cffi so's. If we do have to update it, we'd likely need a way to
 # split the two usages again.
 DEFAULT_SOABI = 'pypy-%d%d' % PYPY_VERSION[:2]
+
+# on default this is an attribute of space defined in baseobjspace.py: here
+# it's no longer on the space, we we copied&pasted this from baseobjspace
+MODULES_THAT_ALWAYS_SHADOW = dict.fromkeys([
+    '__builtin__', '__pypy__', '_ast', '_codecs', '_sre', '_warnings',
+    '_weakref', 'errno', 'exceptions', 'gc', 'imp', 'marshal',
+    'posix', 'nt', 'pwd', 'signal', 'sys', 'thread', 'zipimport',
+], None)
+
 
 @specialize.memo()
 def get_so_extension(space):
@@ -77,8 +91,6 @@ def has_init_module(space, filepart):
     init = os.path.join(filepart, "__init__")
     if path_exists(init + ".py"):
         return True
-    if space.config.objspace.lonepycfiles and path_exists(init + ".pyc"):
-        return True
     return False
 
 def find_modtype(space, filepart):
@@ -96,18 +108,6 @@ def find_modtype(space, filepart):
         pyfile = filepart + ".pyw"
         if file_exists(pyfile):
             return PY_SOURCE, ".pyw", "U"
-
-    # The .py file does not exist.  By default on PyPy, lonepycfiles
-    # is False: if a .py file does not exist, we don't even try to
-    # look for a lone .pyc file.
-    # The "imp" module does not respect this, and is allowed to find
-    # lone .pyc files.
-    # check the .pyc file
-    if space.config.objspace.lonepycfiles:
-        pycfile = filepart + ".pyc"
-        if file_exists(pycfile):
-            # existing .pyc file
-            return PY_COMPILED, ".pyc", "rb"
 
     if has_so_extension(space):
         so_extension = get_so_extension(space)
@@ -520,6 +520,7 @@ W_NullImporter.typedef = TypeDef(
     find_module=interp2app(W_NullImporter.find_module_w),
     )
 
+
 class FindInfo:
     def __init__(self, modtype, filename, stream,
                  suffix="", filemode="", w_loader=None):
@@ -556,7 +557,7 @@ def find_module(space, modulename, w_modulename, partname, w_path,
             # could possibly be; a "pseudo-extension module" does not, and
             # is only loaded at the point in sys.path where we find
             # '.../lib_pypy/__extensions__'.
-            if modulename in space.MODULES_THAT_ALWAYS_SHADOW:
+            if modulename in MODULES_THAT_ALWAYS_SHADOW:
                 return delayed_builtin
             w_lib_extensions = space.sys.get_state(space).w_lib_extensions
         w_path = space.sys.get('path')
