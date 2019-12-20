@@ -33,6 +33,18 @@ class AppTestDummyImportlib:
             assert 'i_dont_exist' in message
             assert 'spaceconfig' in message
 
+    def test_dont_import_importlib(self):
+        try:
+            import imp
+        except ImportError as e:
+            message = str(e)
+            assert message.startswith('Importing importlib and/or imp is not allowed')
+        try:
+            import importlib
+        except ImportError as e:
+            message = str(e)
+            assert message.startswith('Importing importlib and/or imp is not allowed')
+
 
 class AppTestNoDummyImportlib:
     spaceconfig = {'usemodules': ['_frozen_importlib']}

@@ -26,6 +26,16 @@ from pypy.module.sys.version import PYPY_VERSION
 @unwrap_spec(name='text0', level=int)
 def dummy_importhook(space, name, w_globals=None,
                      w_locals=None, w_fromlist=None, level=-1):
+    if name.startswith('importlib'):
+        message = """Importing importlib and/or imp is not allowed.
+        You are using _dummy_importlib, because the full importlib is too slow
+        for tests. Consider rewriting your code to avoid importing importlib
+        and/or imp, or add this line to your AppTest class:
+
+            spaceconfig = {'usemodules': ['_frozen_importlib']}
+        """
+        raise OperationError(space.w_ImportError, space.newtext(message))
+
     try:
         return importhook(space, name, w_globals, w_locals, w_fromlist, level)
     except OperationError as e:
