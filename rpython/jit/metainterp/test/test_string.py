@@ -1075,3 +1075,33 @@ class TestLLtypeUnicode(TestLLtype):
         assert res == f(1)
         self.check_simple_loop(int_sub=1, guard_false=1)
 
+    def test_int_to_str_and_back(self):
+        driver = JitDriver(greens = [], reds = ['n', 'res'])
+
+        def f(n):
+            res = 0
+            while n < 21:
+                driver.jit_merge_point(n=n, res=res)
+                n += 1
+                res += int(str(n))
+            return res
+
+        res = self.meta_interp(f, [1], backendopt=True)
+        assert res == f(1)
+        self.check_simple_loop(call_r=1, call_i=0)
+
+    def test_rbigint_to_str_and_back(self):
+        from rpython.rlib.rbigint import rbigint
+        driver = JitDriver(greens = [], reds = ['n', 'res'])
+
+        def f(n):
+            res = rbigint.fromint(0)
+            while n < 21:
+                driver.jit_merge_point(n=n, res=res)
+                n += 1
+                res = res.add(rbigint.fromstr(res.str(), 10))
+            return res.int_and_(0xffff).toint()
+
+        res = self.meta_interp(f, [1], backendopt=True)
+        assert res == f(1)
+        self.check_simple_loop(call_r=2) # one add, one str, the fromstr is gone

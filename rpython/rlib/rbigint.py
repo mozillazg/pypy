@@ -509,8 +509,13 @@ class rbigint(object):
             return self.format(BASE10, suffix="L")
         return str(x) + "L"
 
-    @jit.elidable
     def str(self):
+        res = self._str_impl()
+        jit.record_known_result(self, rbigint.fromstr, res, 10, False)
+        return res
+
+    @jit.elidable
+    def _str_impl(self):
         try:
             x = self.toint()
         except OverflowError:
