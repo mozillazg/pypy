@@ -32,14 +32,10 @@ IMP_HOOK = 9
 
 SO = '.pyd' if _WIN32 else '.so'
 
-# this used to change for every minor version, but no longer does: there
-# is little point any more, as the so's tend to be cross-version-
-# compatible, more so than between various versions of CPython.  Be
-# careful if we need to update it again: it is now used for both cpyext
-# and cffi so's.  If we do have to update it, we'd likely need a way to
+# Be careful update when changing this: it is now used for both cpyext
+# and cffi so's. If we do have to update it, we'd likely need a way to
 # split the two usages again.
-#DEFAULT_SOABI = 'pypy-%d%d' % PYPY_VERSION[:2]
-DEFAULT_SOABI = 'pypy-41'
+DEFAULT_SOABI = 'pypy-%d%d' % PYPY_VERSION[:2]
 
 @specialize.memo()
 def get_so_extension(space):
@@ -452,14 +448,19 @@ def find_in_meta_path(space, w_modulename, w_path):
             return w_loader
 
 def _getimporter(space, w_pathitem):
-    # the function 'imp._getimporter' is a pypy-only extension
+    # 'imp._getimporter' is somewhat like CPython's get_path_importer
     w_path_importer_cache = space.sys.get("path_importer_cache")
     w_importer = space.finditem(w_path_importer_cache, w_pathitem)
     if w_importer is None:
         space.setitem(w_path_importer_cache, w_pathitem, space.w_None)
         for w_hook in space.unpackiterable(space.sys.get("path_hooks")):
+            w_pathbytes = w_pathitem
+            if space.isinstance_w(w_pathitem, space.w_unicode):
+                from pypy.module.sys.interp_encoding import getfilesystemencoding
+                w_pathbytes = space.call_method(space.w_unicode, 'encode',
+                                     w_pathitem, getfilesystemencoding(space))
             try:
-                w_importer = space.call_function(w_hook, w_pathitem)
+                w_importer = space.call_function(w_hook, w_pathbytes)
             except OperationError as e:
                 if not e.match(space, space.w_ImportError):
                     raise
@@ -723,7 +724,7 @@ def load_part(space, w_path, prefix, partname, w_parent, tentative):
 def reload(space, w_module):
     """Reload the module.
     The module must have been successfully imported before."""
-    if not space.is_w(space.type(w_module), space.type(space.sys)):
+    if not space.isinstance_w(w_module, space.type(space.sys)):
         raise oefmt(space.w_TypeError, "reload() argument must be module")
 
     w_modulename = space.getattr(w_module, space.newtext("__name__"))

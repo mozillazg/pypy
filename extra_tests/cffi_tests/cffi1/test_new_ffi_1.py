@@ -1221,7 +1221,7 @@ class TestNewFFI1:
             py.test.skip(str(e))
         f.write(ffi.buffer(a, 1000 * ffi.sizeof("int")))
         f.seek(0)
-        assert f.read() == array.array('i', range(1000)).tostring()
+        assert f.read() == arraytostring(array.array('i', range(1000)))
         f.seek(0)
         b = ffi.new("int[]", 1005)
         f.readinto(ffi.buffer(b, 1000 * ffi.sizeof("int")))
@@ -1239,7 +1239,7 @@ class TestNewFFI1:
             py.test.skip(str(e))
         f.write(ffi.buffer(a, 1000 * ffi.sizeof("int")))
         f.seek(0)
-        assert f.read() == array.array('i', range(1000)).tostring()
+        assert f.read() == arraytostring(array.array('i', range(1000)))
         f.seek(0)
         b = ffi.new("int[]", 1005)
         f.readinto(ffi.buffer(b, 1000 * ffi.sizeof("int")))
@@ -1780,7 +1780,7 @@ class TestNewFFI1:
 
     def test_import_from_lib(self):
         ffi2 = cffi.FFI()
-        ffi2.cdef("int myfunc(int); int myvar;\n#define MYFOO ...\n")
+        ffi2.cdef("int myfunc(int); extern int myvar;\n#define MYFOO ...\n")
         outputfilename = recompile(ffi2, "_test_import_from_lib",
                                    "int myfunc(int x) { return x + 1; }\n"
                                    "int myvar = -5;\n"

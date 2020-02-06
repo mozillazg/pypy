@@ -27,16 +27,18 @@ def check_type_table(input, expected_output, included=None):
 
 def verify(ffi, module_name, source, *args, **kwds):
     no_cpp = kwds.pop('no_cpp', False)
+    ignore_warnings = kwds.pop('ignore_warnings', False)
     kwds.setdefault('undef_macros', ['NDEBUG'])
     module_name = '_CFFI_' + module_name
     ffi.set_source(module_name, source)
     if not os.environ.get('NO_CPP') and not no_cpp:   # test the .cpp mode too
         kwds.setdefault('source_extension', '.cpp')
         source = 'extern "C" {\n%s\n}' % (source,)
-    elif sys.platform != 'win32':
+    elif sys.platform != 'win32' and not ignore_warnings:
         # add '-Werror' to the existing 'extra_compile_args' flags
+        from extra_tests.cffi_tests.support import extra_compile_args
         kwds['extra_compile_args'] = (kwds.get('extra_compile_args', []) +
-                                      ['-Werror'])
+                                      extra_compile_args)
     return _verify(ffi, module_name, source, *args, **kwds)
 
 def test_set_source_no_slashes():
@@ -84,7 +86,7 @@ def test_type_table_variadic_function():
                      "(FUNCTION 1)(PRIMITIVE 7)(FUNCTION_END 1)(POINTER 0)")
 
 def test_type_table_array():
-    check_type_table("int a[100];",
+    check_type_table("extern int a[100];",
                      "(PRIMITIVE 7)(ARRAY 0)(None 100)")
 
 def test_type_table_typedef():
@@ -136,7 +138,8 @@ def test_math_sin():
     import math
     ffi = FFI()
     ffi.cdef("float sin(double); double cos(double);")
-    lib = verify(ffi, 'test_math_sin', '#include <math.h>')
+    lib = verify(ffi, 'test_math_sin', '#include <math.h>',
+                 ignore_warnings=True)
     assert lib.cos(1.43) == math.cos(1.43)
 
 def test_repr_lib():
@@ -159,7 +162,7 @@ def test_funcres_ptr():
 
 def test_global_var_array():
     ffi = FFI()
-    ffi.cdef("int a[100];")
+    ffi.cdef("extern int a[100];")
     lib = verify(ffi, 'test_global_var_array', 'int a[100] = { 9999 };')
     lib.a[42] = 123456
     assert lib.a[42] == 123456
@@ -183,7 +186,7 @@ def test_verify_typedef_star_dotdotdot():
 
 def test_global_var_int():
     ffi = FFI()
-    ffi.cdef("int a, b, c;")
+    ffi.cdef("extern int a, b, c;")
     lib = verify(ffi, 'test_global_var_int', 'int a = 999, b, c;')
     assert lib.a == 999
     lib.a -= 1001
@@ -284,7 +287,7 @@ def test_constant_ptr():
 
 def test_dir():
     ffi = FFI()
-    ffi.cdef("int ff(int); int aa; static const int my_constant;")
+    ffi.cdef("int ff(int); extern int aa; static const int my_constant;")
     lib = verify(ffi, 'test_dir', """
         #define my_constant  (-45)
         int aa;
@@ -348,9 +351,9 @@ def test_verify_exact_field_offset():
     lib = verify(ffi, 'test_verify_exact_field_offset',
                  """struct foo_s { short a; int b; };""")
     e = py.test.raises(ffi.error, ffi.new, "struct foo_s *", [])    # lazily
-    assert str(e.value) == ("struct foo_s: wrong offset for field 'b' (cdef "
-                       'says 0, but C compiler says 4). fix it or use "...;" '
-                       "in the cdef for struct foo_s to make it flexible")
+    assert str(e.value).startswith(
+        "struct foo_s: wrong offset for field 'b' (cdef "
+        'says 0, but C compiler says 4). fix it or use "...;" ')
 
 def test_type_caching():
     ffi1 = FFI(); ffi1.cdef("struct foo_s;")
@@ -406,7 +409,7 @@ def test_dotdotdot_length_of_array_field():
 
 def test_dotdotdot_global_array():
     ffi = FFI()
-    ffi.cdef("int aa[...]; int bb[...];")
+    ffi.cdef("extern int aa[...]; extern int bb[...];")
     lib = verify(ffi, 'test_dotdotdot_global_array',
                  "int aa[41]; int bb[12];")
     assert ffi.sizeof(lib.aa) == 41 * 4
@@ -561,37 +564,37 @@ def test_module_name_in_package():
 
 def test_bad_size_of_global_1():
     ffi = FFI()
-    ffi.cdef("short glob;")
+    ffi.cdef("extern short glob;")
     py.test.raises(VerificationError, verify, ffi,
                    "test_bad_size_of_global_1", "long glob;")
 
 def test_bad_size_of_global_2():
     ffi = FFI()
-    ffi.cdef("int glob[10];")
+    ffi.cdef("extern int glob[10];")
     py.test.raises(VerificationError, verify, ffi,
                    "test_bad_size_of_global_2", "int glob[9];")
 
 def test_unspecified_size_of_global_1():
     ffi = FFI()
-    ffi.cdef("int glob[];")
+    ffi.cdef("extern int glob[];")
     lib = verify(ffi, "test_unspecified_size_of_global_1", "int glob[10];")
     assert ffi.typeof(lib.glob) == ffi.typeof("int *")
 
 def test_unspecified_size_of_global_2():
     ffi = FFI()
-    ffi.cdef("int glob[][5];")
+    ffi.cdef("extern int glob[][5];")
     lib = verify(ffi, "test_unspecified_size_of_global_2", "int glob[10][5];")
     assert ffi.typeof(lib.glob) == ffi.typeof("int(*)[5]")
 
 def test_unspecified_size_of_global_3():
     ffi = FFI()
-    ffi.cdef("int glob[][...];")
+    ffi.cdef("extern int glob[][...];")
     lib = verify(ffi, "test_unspecified_size_of_global_3", "int glob[10][5];")
     assert ffi.typeof(lib.glob) == ffi.typeof("int(*)[5]")
 
 def test_unspecified_size_of_global_4():
     ffi = FFI()
-    ffi.cdef("int glob[...][...];")
+    ffi.cdef("extern int glob[...][...];")
     lib = verify(ffi, "test_unspecified_size_of_global_4", "int glob[10][5];")
     assert ffi.typeof(lib.glob) == ffi.typeof("int[10][5]")
 
@@ -645,7 +648,7 @@ def test_include_3():
     ffi.cdef("sshort_t ff3(sshort_t);")
     lib = verify(ffi, "test_include_3",
                  "typedef short sshort_t; //usually from a #include\n"
-                 "sshort_t ff3(sshort_t x) { return x + 42; }")
+                 "sshort_t ff3(sshort_t x) { return (sshort_t)(x + 42); }")
     assert lib.ff3(10) == 52
     assert ffi.typeof(ffi.cast("sshort_t", 42)) is ffi.typeof("short")
     assert ffi1.typeof("sshort_t") is ffi.typeof("sshort_t")
@@ -754,7 +757,7 @@ def test_unicode_libraries():
     ffi = FFI()
     ffi.cdef(unicode("float sin(double); double cos(double);"))
     lib = verify(ffi, 'test_math_sin_unicode', unicode('#include <math.h>'),
-                 libraries=[unicode(lib_m)])
+                 libraries=[unicode(lib_m)], ignore_warnings=True)
     assert lib.cos(1.43) == math.cos(1.43)
 
 def test_incomplete_struct_as_arg():
@@ -814,7 +817,7 @@ def test_name_of_unnamed_struct():
 def test_address_of_global_var():
     ffi = FFI()
     ffi.cdef("""
-        long bottom, bottoms[2];
+        extern long bottom, bottoms[2];
         long FetchRectBottom(void);
         long FetchRectBottoms1(void);
         #define FOOBAR 42
@@ -882,15 +885,20 @@ def test_unpack_args():
     e5 = py.test.raises(TypeError, lib.foo2)
     e6 = py.test.raises(TypeError, lib.foo2, 42)
     e7 = py.test.raises(TypeError, lib.foo2, 45, 46, 47)
-    assert str(e1.value) == "foo0() takes no arguments (1 given)"
-    assert str(e2.value) == "foo0() takes no arguments (2 given)"
-    assert str(e3.value) == "foo1() takes exactly one argument (0 given)"
-    assert str(e4.value) == "foo1() takes exactly one argument (2 given)"
-    assert str(e5.value) in ["foo2 expected 2 arguments, got 0",
+    def st1(s):
+        s = str(s)
+        if s.startswith("_CFFI_test_unpack_args.CompiledLib."):
+            s = s[len("_CFFI_test_unpack_args.CompiledLib."):]
+        return s
+    assert st1(e1.value) == "foo0() takes no arguments (1 given)"
+    assert st1(e2.value) == "foo0() takes no arguments (2 given)"
+    assert st1(e3.value) == "foo1() takes exactly one argument (0 given)"
+    assert st1(e4.value) == "foo1() takes exactly one argument (2 given)"
+    assert st1(e5.value) in ["foo2 expected 2 arguments, got 0",
                              "foo2() takes exactly 2 arguments (0 given)"]
-    assert str(e6.value) in ["foo2 expected 2 arguments, got 1",
+    assert st1(e6.value) in ["foo2 expected 2 arguments, got 1",
                              "foo2() takes exactly 2 arguments (1 given)"]
-    assert str(e7.value) in ["foo2 expected 2 arguments, got 3",
+    assert st1(e7.value) in ["foo2 expected 2 arguments, got 3",
                              "foo2() takes exactly 2 arguments (3 given)"]
 
 def test_address_of_function():
@@ -898,7 +906,7 @@ def test_address_of_function():
     ffi.cdef("long myfunc(long x);")
     lib = verify(ffi, "test_addressof_function", """
         char myfunc(char x) { return (char)(x + 42); }
-    """)
+    """, ignore_warnings=True)
     assert lib.myfunc(5) == 47
     assert lib.myfunc(0xABC05) == 47
     assert not isinstance(lib.myfunc, ffi.CData)
@@ -969,7 +977,7 @@ def test_variable_of_unknown_size():
     ffi = FFI()
     ffi.cdef("""
         typedef ... opaque_t;
-        opaque_t globvar;
+        extern opaque_t globvar;
     """)
     lib = verify(ffi, 'test_variable_of_unknown_size', """
         typedef char opaque_t[6];
@@ -1014,7 +1022,7 @@ def test_dotdot_in_source_file_names():
 def test_call_with_incomplete_structs():
     ffi = FFI()
     ffi.cdef("typedef struct {...;} foo_t; "
-             "foo_t myglob; "
+             "extern foo_t myglob; "
              "foo_t increment(foo_t s); "
              "double getx(foo_t s);")
     lib = verify(ffi, 'test_call_with_incomplete_structs', """
@@ -1058,7 +1066,7 @@ def test_struct_array_guess_length_3():
 
 def test_global_var_array_2():
     ffi = FFI()
-    ffi.cdef("int a[...][...];")
+    ffi.cdef("extern int a[...][...];")
     lib = verify(ffi, 'test_global_var_array_2', 'int a[10][8];')
     lib.a[9][7] = 123456
     assert lib.a[9][7] == 123456
@@ -1071,7 +1079,7 @@ def test_global_var_array_2():
 
 def test_global_var_array_3():
     ffi = FFI()
-    ffi.cdef("int a[][...];")
+    ffi.cdef("extern int a[][...];")
     lib = verify(ffi, 'test_global_var_array_3', 'int a[10][8];')
     lib.a[9][7] = 123456
     assert lib.a[9][7] == 123456
@@ -1082,7 +1090,7 @@ def test_global_var_array_3():
 
 def test_global_var_array_4():
     ffi = FFI()
-    ffi.cdef("int a[10][...];")
+    ffi.cdef("extern int a[10][...];")
     lib = verify(ffi, 'test_global_var_array_4', 'int a[10][8];')
     lib.a[9][7] = 123456
     assert lib.a[9][7] == 123456
@@ -1171,7 +1179,7 @@ def test_some_float_invalid_3():
     lib = verify(ffi, 'test_some_float_invalid_3', """
         typedef long double foo_t;
         foo_t neg(foo_t x) { return -x; }
-    """)
+    """, ignore_warnings=True)
     if ffi.sizeof("long double") == ffi.sizeof("double"):
         assert lib.neg(12.3) == -12.3
     else:
@@ -1205,7 +1213,7 @@ def test_alignment_of_longlong():
 
 def test_import_from_lib():
     ffi = FFI()
-    ffi.cdef("int mybar(int); int myvar;\n#define MYFOO ...")
+    ffi.cdef("int mybar(int); static int myvar;\n#define MYFOO ...")
     lib = verify(ffi, 'test_import_from_lib',
                  "#define MYFOO 42\n"
                  "static int mybar(int x) { return x + 1; }\n"
@@ -1221,7 +1229,7 @@ def test_import_from_lib():
 
 def test_macro_var_callback():
     ffi = FFI()
-    ffi.cdef("int my_value; int *(*get_my_value)(void);")
+    ffi.cdef("extern int my_value; extern int *(*get_my_value)(void);")
     lib = verify(ffi, 'test_macro_var_callback',
                  "int *(*get_my_value)(void);\n"
                  "#define my_value (*get_my_value())")
@@ -1336,7 +1344,7 @@ def test_const_function_args():
 
 def test_const_function_type_args():
     ffi = FFI()
-    ffi.cdef("""int (*foobar)(const int a, const int *b, const int c[]);""")
+    ffi.cdef("""extern int(*foobar)(const int a,const int*b,const int c[]);""")
     lib = verify(ffi, 'test_const_function_type_args', """
         int (*foobar)(const int a, const int *b, const int c[]);
     """)
@@ -1626,7 +1634,7 @@ def test_extern_python_1():
 
 def test_extern_python_bogus_name():
     ffi = FFI()
-    ffi.cdef("int abc;")
+    ffi.cdef("extern int abc;")
     lib = verify(ffi, 'test_extern_python_bogus_name', "int abc;")
     def fn():
         pass
@@ -1787,8 +1795,8 @@ def test_extern_python_stdcall():
     ffi.cdef("""
         extern "Python" int __stdcall foo(int);
         extern "Python" int WINAPI bar(int);
-        int (__stdcall * mycb1)(int);
-        int indirect_call(int);
+        static int (__stdcall * mycb1)(int);
+        static int indirect_call(int);
     """)
     lib = verify(ffi, 'test_extern_python_stdcall', """
         #ifndef _MSC_VER
@@ -1845,7 +1853,7 @@ def test_introspect_function():
     ffi = FFI()
     ffi.cdef("float f1(double);")
     lib = verify(ffi, 'test_introspect_function', """
-        float f1(double x) { return x; }
+        float f1(double x) { return (float)x; }
     """)
     assert dir(lib) == ['f1']
     FUNC = ffi.typeof(lib.f1)
@@ -1856,7 +1864,7 @@ def test_introspect_function():
 
 def test_introspect_global_var():
     ffi = FFI()
-    ffi.cdef("float g1;")
+    ffi.cdef("extern float g1;")
     lib = verify(ffi, 'test_introspect_global_var', """
         float g1;
     """)
@@ -1867,7 +1875,7 @@ def test_introspect_global_var():
 
 def test_introspect_global_var_array():
     ffi = FFI()
-    ffi.cdef("float g1[100];")
+    ffi.cdef("extern float g1[100];")
     lib = verify(ffi, 'test_introspect_global_var_array', """
         float g1[100];
     """)
@@ -2039,7 +2047,7 @@ def test_function_returns_float_complex():
     ffi.cdef("float _Complex f1(float a, float b);");
     lib = verify(ffi, "test_function_returns_float_complex", """
         #include <complex.h>
-        static float _Complex f1(float a, float b) { return a + I*2.0*b; }
+        static float _Complex f1(float a, float b) { return a + I*2.0f*b; }
     """, no_cpp=True)    # <complex.h> fails on some systems with C++
     result = lib.f1(1.25, 5.1)
     assert type(result) == complex
@@ -2090,7 +2098,7 @@ def test_typedef_array_dotdotdot():
     ffi = FFI()
     ffi.cdef("""
         typedef int foo_t[...], bar_t[...];
-        int gv[...];
+        extern int gv[...];
         typedef int mat_t[...][...];
         typedef int vmat_t[][...];
         """)
@@ -2150,7 +2158,8 @@ def test_call_with_nested_anonymous_struct():
     lib = verify(ffi, "test_call_with_nested_anonymous_struct", """
         struct foo { int a; union { int b, c; }; };
         struct foo f(void) {
-            struct foo s = { 40 };
+            struct foo s;
+            s.a = 40;
             s.b = 200;
             return s;
         }

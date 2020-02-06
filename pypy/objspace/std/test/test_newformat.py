@@ -199,6 +199,13 @@ class BaseStringFormatTests:
         assert self.s('{0:\x00<12}').format(3+2.0j) == '(3+2j)' + '\x00' * 6
         assert self.s('{0:\x01<12}').format(3+2.0j) == '(3+2j)' + '\x01' * 6
 
+    def test_issue3100(self):
+        class Foo:
+            def __format__(self, f):
+                return '<<%r>>' % (f,)
+        fmtstr = self.s("{:[XYZ}")
+        assert fmtstr.format(Foo()) == "<<%r>>" % (self.s("[XYZ"),)
+
 
 class AppTestUnicodeFormat(BaseStringFormatTests):
     def setup_class(cls):
@@ -379,6 +386,24 @@ class AppTestFloatFormatting:
             assert locale.format('%g', x, grouping=True) == '1,234.57'
             assert format(x, 'n') == '1,234.57'
             assert format(12345678901234, 'n') == '12,345,678,901,234'
+        finally:
+            locale.setlocale(locale.LC_NUMERIC, 'C')
+
+    def test_locale_german(self):
+        import locale
+        for name in ['de_DE', 'de_DE.utf8']:
+            try:
+                locale.setlocale(locale.LC_NUMERIC, name)
+                break
+            except locale.Error:
+                pass
+        else:
+            skip("no german locale")
+        x = 1234.567890
+        try:
+            assert locale.format('%g', x, grouping=True) == '1.234,57'
+            assert format(x, 'n') == '1.234,57'
+            assert format(12345678901234, 'n') == '12.345.678.901.234'
         finally:
             locale.setlocale(locale.LC_NUMERIC, 'C')
 

@@ -202,7 +202,7 @@ class TestOwnLib(object):
             py.test.skip("fix the auto-generation of the tiny test lib")
         ffi = FFI(backend=self.Backend())
         ffi.cdef("""
-            int my_array[7];
+            extern int my_array[7];
         """)
         ownlib = ffi.dlopen(self.module)
         for i in range(7):
@@ -224,7 +224,7 @@ class TestOwnLib(object):
             py.test.skip("not supported by the ctypes backend")
         ffi = FFI(backend=self.Backend())
         ffi.cdef("""
-            int my_array[];
+            extern int my_array[];
         """)
         ownlib = ffi.dlopen(self.module)
         for i in range(7):
@@ -292,7 +292,7 @@ class TestOwnLib(object):
                 long bottom;
             } RECT;
             
-            long left, top, right, bottom;
+            extern long left, top, right, bottom;
 
             RECT ReturnRect(int i, RECT ar, RECT* br, POINT cp, RECT dr,
                         RECT *er, POINT fp, RECT gr);
@@ -322,7 +322,7 @@ class TestOwnLib(object):
         if self.Backend is CTypesBackend:
             py.test.skip("not implemented with the ctypes backend")
         ffi = FFI(backend=self.Backend())
-        ffi.cdef("long left; int test_getting_errno(void);")
+        ffi.cdef("extern long left; int test_getting_errno(void);")
         lib = ffi.dlopen(self.module)
         lib.left = 123456
         p = ffi.addressof(lib, "left")
@@ -372,3 +372,29 @@ class TestOwnLib(object):
         assert s.top == 22
         assert s.right == 33
         assert s.bottom == 44
+
+    def test_dlopen_handle(self):
+        if self.module is None:
+            py.test.skip("fix the auto-generation of the tiny test lib")
+        if sys.platform == 'win32':
+            py.test.skip("uses 'dl' explicitly")
+        if self.__class__.Backend is CTypesBackend:
+            py.test.skip("not for the ctypes backend")
+        backend = self.Backend()
+        ffi1 = FFI(backend=backend)
+        ffi1.cdef("""void *dlopen(const char *filename, int flags);
+                     int dlclose(void *handle);""")
+        lib1 = ffi1.dlopen('dl')
+        handle = lib1.dlopen(self.module.encode(sys.getfilesystemencoding()),
+                             backend.RTLD_LAZY)
+        assert ffi1.typeof(handle) == ffi1.typeof("void *")
+        assert handle
+
+        ffi = FFI(backend=backend)
+        ffi.cdef("""unsigned short foo_2bytes(unsigned short a);""")
+        lib = ffi.dlopen(handle)
+        x = lib.foo_2bytes(1000)
+        assert x == 1042
+
+        err = lib1.dlclose(handle)
+        assert err == 0

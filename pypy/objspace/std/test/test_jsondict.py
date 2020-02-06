@@ -95,3 +95,32 @@ class AppTest(object):
         assert not 1 in d
         assert __pypy__.strategy(d) == "UnicodeDictStrategy"
         assert list(d) == [u"a", u"b"]
+
+    def test_bug(self):
+        import _pypyjson
+        a =  """
+        {
+          "top": {
+            "k": "8",
+            "k": "8",
+            "boom": 1
+          }
+        }
+        """
+        d = _pypyjson.loads(a)
+        str(d)
+        repr(d)
+
+    def test_objdict_bug(self):
+        import _pypyjson
+        a = """{"foo": "bar"}"""
+        d = _pypyjson.loads(a)
+        d['foo'] = 'x'
+
+        class Obj(object):
+            pass
+
+        x = Obj()
+        x.__dict__ = d
+
+        x.foo = 'baz'  # used to segfault on pypy3
