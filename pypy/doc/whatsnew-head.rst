@@ -17,6 +17,22 @@ Handle ``NAN`` more correctly in ``array.array`` for ``__eq__`` and ``count``
 
 Fixes incorrect error text for ``int('1', base=1000)``
 
+.. branch: heptapod
+
+adapt contributing documentation to heptapod
+
+
+.. branch: pypy-jitdriver-greenkeys
+
+Improve code generation for generators (and generator expressions in
+particular) when passing them to builtin functions that consume iterators, such
+as ``sum``, ``map``, ``max``, etc.
+
+.. branch: warmup-improvements-various
+
+Improves warmup time by up to 20%.
+
+
 .. branch: record-known-result
 
 Improve reasoning of the JIT about utf-8 index manipulation. Add a generic

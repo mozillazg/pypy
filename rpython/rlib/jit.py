@@ -1391,6 +1391,7 @@ class Counters(object):
     TRACING
     BACKEND
     OPS
+    HEAPCACHED_OPS
     RECORDED_OPS
     GUARDS
     OPT_OPS
