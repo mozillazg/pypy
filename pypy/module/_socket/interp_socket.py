@@ -322,11 +322,20 @@ class W_Socket(W_Root):
 
         Returns the timeout in floating seconds associated with socket
         operations. A timeout of None indicates that timeouts on socket
+        operations are disabled.
         """
         timeout = self.sock.gettimeout()
         if timeout < 0.0:
             return space.w_None
         return space.newfloat(timeout)
+
+    def getblocking_w(self, space):
+        """getblocking()
+
+        Returns True if socket is in blocking mode, or False if it
+        is in non-blocking mode.
+        """
+        return space.newbool(self.sock.gettimeout() != 0.0)
 
     @unwrap_spec(backlog="c_int")
     def listen_w(self, space, backlog):
@@ -720,6 +729,7 @@ accept bind close connect connect_ex dup fileno
 getpeername getsockname getsockopt gettimeout listen makefile
 recv recvfrom send sendall sendto setblocking
 setsockopt settimeout shutdown _reuse _drop recv_into recvfrom_into
+getblocking
 """.split()
 # Remove non-implemented methods
 for name in ('dup',):
