@@ -1,7 +1,7 @@
 Mercurial and Heptapod short tutorial
 =====================================
 
-.. comment::
+.. comment
   Taken from https://foss.heptapod.net/fluiddyn/fluiddyn/blob/branch/default/doc/mercurial_heptapod.rst
   and modified
 
@@ -43,7 +43,7 @@ Anaconda Prompt. First, we need to install `conda-app
 <https://pypi.org/project/conda-app>`_ in the base conda environment::
 
   conda activate base
-  pip install conda-app
+  python -mpip install conda-app
 
 Then, with the conda-forge channel added (``conda config --add channels
 conda-forge``), one just needs to run::
