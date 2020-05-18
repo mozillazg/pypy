@@ -1056,17 +1056,22 @@ entries '.' and '..' even if they are present in the directory."""
             result = call_rposix(rposix.listdir, path)
         except OSError as e:
             raise wrap_oserror2(space, e, path.w_path, eintr_retry=False)
-    if as_bytes:
-        return space.newlist_bytes(result)
-    else:
-        len_result = len(result)
-        result_w = [None] * len_result
-        for i in range(len_result):
-            if _WIN32:
+    len_result = len(result)
+    result_w = [None] * len_result
+    for i in range(len_result):
+        if _WIN32:
+            if as_bytes:
+                v = result[i]
+                assert isinstance(v, bytes)
+                result_w[i] = space.newbytes(v)
+            else:
                 result_w[i] = space.newtext(result[i])
+        else:
+            if as_bytes:
+                result_w[i] = space.newbytes(v)
             else:
                 result_w[i] = space.newfilename(result[i])
-        return space.newlist(result_w)
+    return space.newlist(result_w)
 
 @unwrap_spec(fd=c_int)
 def get_inheritable(space, fd):
