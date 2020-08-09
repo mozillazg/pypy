@@ -5,6 +5,7 @@ from pypy.interpreter.gateway import interp2app, unwrap_spec, W_Root
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module._hpy_universal.llapi import BASE_DIR
 from pypy.module._hpy_universal.test._vendored import support as _support
+from pypy.module._hpy_universal._vendored.hpy.devel import HPyDevel
 
 COMPILER_VERBOSE = False
 
@@ -26,9 +27,9 @@ class HPyAppTest(object):
     def setup_method(self, meth):
         if self.space.config.objspace.usemodules.cpyext:
             from pypy.module import cpyext
-            cpython_include_dirs = cpyext.api.include_dirs
+            cpyext_include_dirs = cpyext.api.include_dirs
         else:
-            cpython_include_dirs = []
+            cpyext_include_dirs = None
         #
         # it would be nice to use the 'compiler' fixture to provide
         # make_module as the std HPyTest do. Howwever, we don't have the space
@@ -36,9 +37,11 @@ class HPyAppTest(object):
         tmpdir = py.path.local.make_numbered_dir(rootdir=udir,
                                                  prefix=meth.__name__ + '-',
                                                  keep=0)  # keep everything
-        compiler = _support.ExtensionCompiler(tmpdir, 'universal', BASE_DIR,
+
+        hpy_devel = HPyDevel(str(BASE_DIR))
+        compiler = _support.ExtensionCompiler(tmpdir, 'universal', hpy_devel,
                                               compiler_verbose=COMPILER_VERBOSE,
-                                              cpython_include_dirs=cpython_include_dirs)
+                                              extra_include_dirs=cpyext_include_dirs)
         #
         @unwrap_spec(source_template='text', name='text', w_extra_templates=W_Root)
         def descr_make_module(space, source_template, name='mytest',
