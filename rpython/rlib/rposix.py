@@ -2779,9 +2779,14 @@ if sys.platform.startswith('linux'):
         return handle_posix_error('sendfile', res)
 
 elif not _WIN32:
+    # Neither on Windows nor on Linux, so probably a BSD derivative of
+    # some sort. Please note that the implementation below is partial;
+    # the VOIDP is an iovec for sending headers and trailers which
+    # CPython uses for the headers and trailers argument, and it also
+    # has a flags argument. None of these are currently supported.
     sendfile_eci = ExternalCompilationInfo(includes=["sys/socket.h"])
     _OFF_PTR_T = rffi.CArrayPtr(OFF_T)
-    # FIXME: the VOIDP is an iovec for sending headers and trailers
+    # NB: the VOIDP is an struct sf_hdtr for sending headers and trailers
     c_sendfile = rffi.llexternal('sendfile',
             [rffi.INT, rffi.INT, OFF_T, _OFF_PTR_T, rffi.VOIDP, rffi.INT],
             rffi.SSIZE_T, save_err=rffi.RFFI_SAVE_ERRNO,
