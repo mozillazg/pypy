@@ -64,8 +64,7 @@ handle is already detached, this will return zero.
 After calling this function, the handle is effectively invalidated,
 but the handle is not closed.  You would call this function when you
 need the underlying win32 handle to exist beyond the lifetime of the
-handle object.
-On 64 bit windows, the result of this function is a long integer"""
+handle object."""
         key = self.as_int()
         self.hkey = rwin32.NULL_HANDLE
         return space.newint(key)
@@ -295,7 +294,7 @@ But the underlying API call doesn't return the type: Lame, DONT USE THIS!!!"""
                 if ret == rwinreg.ERROR_MORE_DATA:
                     # Resize and retry
                     bufSize *= 2
-                    bufsize_p[0] = bufSize
+                    bufsize_p[0] = rffi.cast(rwin32.LONG, bufSize)
                     continue
 
                 if ret != 0:
@@ -316,7 +315,7 @@ def convert_to_regdata(space, w_value, typ):
                 value = space.c_uint_w(w_value)
             buflen = rffi.sizeof(rwin32.DWORD)
             buf1 = lltype.malloc(rffi.CArray(rwin32.DWORD), 1, flavor='raw')
-            buf1[0] = value
+            buf1[0] = rffi.cast(rffi.UINT, value)
             buf = rffi.cast(rffi.CCHARP, buf1)
 
     elif typ == rwinreg.REG_SZ or typ == rwinreg.REG_EXPAND_SZ:
@@ -532,10 +531,11 @@ value_name is a string indicating the value to query"""
                     if ret != 0:
                         raiseWindowsError(space, ret, 'RegQueryValueEx')
                     length = intmask(dataSize[0])
+                    ret_type = intmask(retType[0])
                     return space.newtuple([
                         convert_from_regdata(space, dataBuf,
-                                             length, retType[0]),
-                        space.newint(intmask(retType[0])),
+                                             length, ret_type),
+                        space.newint(intmask(ret_type)),
                     ])
 
 

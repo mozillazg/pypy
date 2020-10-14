@@ -871,16 +871,25 @@ class TypeCode(object):
 
     def is_integer_type(self):
         return self.unwrap == 'int_w' or self.unwrap == 'bigint_w'
+if rffi.sizeof(rffi.UINT) == rffi.sizeof(lltype.Unsigned):
+    # 32 bits: UINT can't safely overflow into a lltype.Unsigned (rpython int)
 
 
-if rffi.sizeof(rffi.UINT) == rffi.sizeof(rffi.ULONG):
-    # 32 bits: UINT can't safely overflow into a C long (rpython int)
     # via int_w, handle it like ULONG below
     _UINTTypeCode = \
          TypeCode(rffi.UINT,          'bigint_w.touint')
 else:
     _UINTTypeCode = \
          TypeCode(rffi.UINT,          'int_w', True)
+if rffi.sizeof(rffi.ULONG) == rffi.sizeof(lltype.Unsigned):
+    # Overflow handled by rbigint.touint() which
+    # corresponds to lltype.Unsigned
+    _ULONGTypeCode = \
+         TypeCode(rffi.ULONG,         'bigint_w', errorname="integer")
+else:
+    # 64 bit Windows special case: ULONG is same as UINT
+    _ULONGTypeCode = \
+         TypeCode(rffi.ULONG,         'int_w', True, errorname="integer")
 types = {
     'u': TypeCode(lltype.UniChar,     'utf8_len_w', method=''),
     'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
@@ -890,7 +899,7 @@ types = {
     'i': TypeCode(rffi.INT,           'int_w', True, True),
     'I': _UINTTypeCode,
     'l': TypeCode(rffi.LONG,          'int_w', True, True),
-    'L': TypeCode(rffi.ULONG,         'bigint_w.touint', errorname="integer"),
+    'L': _ULONGTypeCode,
     'q': TypeCode(rffi.LONGLONG,      'bigint_w.tolonglong', True, True, errorname="integer"),
     'Q': TypeCode(rffi.ULONGLONG,     'bigint_w.toulonglong', True, errorname="integer"),
     'f': TypeCode(lltype.SingleFloat, 'float_w', method='__float__'),
