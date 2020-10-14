@@ -710,11 +710,12 @@ data_type is an integer that identifies the type of the value data."""
                     length = intmask(dataSize[0])
                     vlen = (intmask(valueSize[0]) + 1) * 2
                     utf8v, lenv = wbuf_to_utf8(space, valueBuf[0:vlen])
+                    ret_type = intmask(retType[0])
                     return space.newtuple([
                         space.newtext(utf8v, lenv),
                         convert_from_regdata(space, dataBuf,
-                                             length, retType[0]),
-                        space.newint(intmask(retType[0])),
+                                             length, ret_type),
+                        space.newint(ret_type),
                         ])
 
 
