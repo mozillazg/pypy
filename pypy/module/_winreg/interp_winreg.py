@@ -562,7 +562,7 @@ If the function fails, an exception is raised."""
             return W_HKEY(space, rethkey[0])
 
 
-@unwrap_spec(sub_key="unicode", reserved=int, access=rffi.r_uint)
+@unwrap_spec(sub_key="unicode", reserved=int, access=r_uint)
 def CreateKeyEx(space, w_key, sub_key, reserved=0, access=rwinreg.KEY_WRITE):
     """key = CreateKey(key, sub_key) - Creates or opens the specified key.
 
@@ -622,7 +622,7 @@ value is a string that identifies the value to remove."""
             raiseWindowsError(space, ret, 'RegDeleteValue')
 
 
-@unwrap_spec(reserved=int, access=rffi.r_uint)
+@unwrap_spec(reserved=int, access=r_uint)
 def OpenKey(space, w_key, w_sub_key, reserved=0, access=rwinreg.KEY_READ):
     """
 key = OpenKey(key, sub_key, res = 0, sam = KEY_READ) - Opens the specified key.
@@ -738,18 +738,17 @@ raised, indicating no more values are available."""
     # create a 256 character key that is missing the terminating
     # nul.  RegEnumKeyEx requires a 257 character buffer to
     # retrieve such a key name.
-    buf = ByteBuffer(257)
-    bufP = rffi.cast(rffi.CCHARP, buf.get_raw_address())
-    with lltype.scoped_alloc(rwin32.LPDWORD.TO, 1) as valueSize:
-        valueSize[0] = r_uint(257)  # includes NULL terminator
-        ret = rwinreg.RegEnumKeyExW(hkey, index, bufP, valueSize,
-                                    null_dword, None, null_dword,
-                                    lltype.nullptr(rwin32.PFILETIME.TO))
-        if ret != 0:
-            raiseWindowsError(space, ret, 'RegEnumKeyEx')
-        vlen = intmask(valueSize[0]) * 2
-        utf8, lgt = wbuf_to_utf8(space, buf[0:vlen])
-        return space.newtext(utf8, lgt)
+    with lltype.scoped_alloc(rffi.CCHARP.TO, 257) as buf:
+        with lltype.scoped_alloc(rwin32.LPDWORD.TO, 1) as retValueSize:
+            retValueSize[0] = rffi.r_uint(257)  # includes NULL terminator
+            ret = rwinreg.RegEnumKeyExW(hkey, index, buf, retValueSize,
+                                        null_dword, None, null_dword,
+                                        lltype.nullptr(rwin32.PFILETIME.TO))
+            if ret != 0:
+                raiseWindowsError(space, ret, 'RegEnumKeyEx')
+            vlen = intmask(retValueSize[0]) * 2
+            utf8, lgt = wbuf_to_utf8(space, buf[0:vlen])
+            return space.newtext(utf8, lgt)
 
 
 def QueryInfoKey(space, w_hkey):
@@ -840,7 +839,7 @@ def QueryReflectionKey(space, w_key):
                 "not implemented on this platform")
 
 
-@unwrap_spec(sub_key="unicode", reserved=int, access=rffi.r_uint)
+@unwrap_spec(sub_key="unicode", reserved=int, access=r_uint)
 def DeleteKeyEx(space, w_key, sub_key, reserved=0, access=rwinreg.KEY_WOW64_64KEY):
     """DeleteKeyEx(key, sub_key, sam, res) - Deletes the specified key.
 
