@@ -738,17 +738,18 @@ raised, indicating no more values are available."""
     # create a 256 character key that is missing the terminating
     # nul.  RegEnumKeyEx requires a 257 character buffer to
     # retrieve such a key name.
-    with lltype.scoped_alloc(rffi.CCHARP.TO, 257) as buf:
-        with lltype.scoped_alloc(rwin32.LPDWORD.TO, 1) as retValueSize:
-            retValueSize[0] = rffi.r_uint(257)  # includes NULL terminator
-            ret = rwinreg.RegEnumKeyExW(hkey, index, buf, retValueSize,
-                                        null_dword, None, null_dword,
-                                        lltype.nullptr(rwin32.PFILETIME.TO))
-            if ret != 0:
-                raiseWindowsError(space, ret, 'RegEnumKeyEx')
-            vlen = intmask(retValueSize[0]) * 2
-            utf8, lgt = wbuf_to_utf8(space, buf[0:vlen])
-            return space.newtext(utf8, lgt)
+    buf = ByteBuffer(257)
+    bufP = rffi.cast(rffi.CCHARP, buf.get_raw_address())
+    with lltype.scoped_alloc(rwin32.LPDWORD.TO, 1) as retValueSize:
+        retValueSize[0] = rffi.r_uint(257)  # includes NULL terminator
+        ret = rwinreg.RegEnumKeyExW(hkey, index, bufP, retValueSize,
+                                    null_dword, None, null_dword,
+                                    lltype.nullptr(rwin32.PFILETIME.TO))
+        if ret != 0:
+            raiseWindowsError(space, ret, 'RegEnumKeyEx')
+        vlen = intmask(retValueSize[0]) * 2
+        utf8, lgt = wbuf_to_utf8(space, buf[0:vlen])
+        return space.newtext(utf8, lgt)
 
 
 def QueryInfoKey(space, w_hkey):
