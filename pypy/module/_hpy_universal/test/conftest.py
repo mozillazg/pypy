@@ -21,6 +21,9 @@ if sys.platform.startswith('linux') and sys.maxsize <= 2**31:
     # skip all tests on linux32
     disable = True
 
+if sys.platform == 'win32' and sys.maxsize > 2 ** 31:
+    disable = True
+
 # test/_vendored/test_cpy_compat.py
 class extra_AppTestCPythonCompatibility:
     USE_CPYEXT = True
