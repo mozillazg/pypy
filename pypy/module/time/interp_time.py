@@ -689,7 +689,7 @@ def _get_time_info(space, w_info):
                                      is_time_adjustment_disabled)
 
             _setinfo(space, w_info, "GetSystemTimeAsFileTime()",
-                     time_increment[0] * 1e-7, False, True)
+                     intmask(time_increment[0]) * 1e-7, False, True)
     else:
         if HAS_CLOCK_GETTIME:
             with lltype.scoped_alloc(TIMESPEC) as tsres:
@@ -994,7 +994,7 @@ if HAS_MONOTONIC:
                         # Is this right? Cargo culting...
                         raise wrap_oserror(space,
                             rwin32.lastSavedWindowsError("GetSystemTimeAdjustment"))
-                    resolution = resolution * time_increment[0]
+                    resolution = resolution * intmask(time_increment[0])
                 _setinfo(space, w_info, implementation, resolution, True, False)
             return space.newfloat(result)
 
@@ -1113,7 +1113,7 @@ if _WIN:
                           r_ulonglong(user_time.c_dwHighDateTime) << 32)
         if w_info is not None:
             _setinfo(space, w_info, "GetProcessTimes()", 1e-7, True, False)
-        return space.newfloat((float(kernel_time2) + float(user_time2)) * 1e-7)
+        return space.newfloat((float(kernel_time2) + intmask(user_time2)) * 1e-7)
 else:
     have_times = hasattr(rposix, 'c_times')
 
