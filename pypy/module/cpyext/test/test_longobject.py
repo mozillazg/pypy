@@ -48,6 +48,10 @@ class TestLongObject(BaseApiTest):
         w_val2 = api.PyLong_FromSsize_t(2)
         assert isinstance(w_val2, W_LongObject)
         assert space.eq_w(w_value, w_val2)
+        with pytest.raises(OverflowError):
+            api.PyLong_AsSsize_t(space.newlong(-2147483648))
+        with pytest.raises(TypeError):
+            api.PyLong_AsSsize_t(space.newtext("this is not a number"))
 
     def test_fromdouble(self, space, api):
         w_value = api.PyLong_FromDouble(-12.74)
