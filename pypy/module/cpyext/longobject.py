@@ -83,6 +83,13 @@ def PyLong_AsSsize_t(space, w_long):
     and -1 will be returned.
     """
     return space.int_w(w_long)
+    # try:
+    #     return space.uint_w(w_long)
+    # except OperationError as e:
+    #     if e.match(space, space.w_ValueError):
+    #         e.w_type = space.w_OverflowError
+    #     raise
+
 
 @cpython_api([PyObject], rffi.LONGLONG, error=-1)
 def PyLong_AsLongLong(space, w_long):
