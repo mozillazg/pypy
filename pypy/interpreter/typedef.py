@@ -155,6 +155,9 @@ def _getusercls(cls, reallywantdict=False):
     class subcls(cls):
         user_overridden_class = True
         objectmodel.import_from_mixin(base_mixin)
+
+        special_shortcut_next = W_Root.special_shortcut_next
+
     for copycls in copy_methods:
         _copy_methods(copycls, subcls)
     subcls.__name__ = name

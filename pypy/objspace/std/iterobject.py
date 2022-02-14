@@ -26,7 +26,7 @@ class W_AbstractSeqIterObject(W_Root):
     def descr_iter(self, space):
         return self
 
-    def descr_next(self, space):
+    def special_shortcut_next(self, space):
         raise NotImplementedError
 
     def descr_reduce(self, space):
@@ -49,7 +49,7 @@ Get an iterator from an object.  In the first form, the argument must
 supply its own iterator, or be a sequence.
 In the second form, the callable is called until it returns the sentinel.''',
     __iter__ = interp2app(W_AbstractSeqIterObject.descr_iter),
-    next = interpindirect2app(W_AbstractSeqIterObject.descr_next),
+    next = interpindirect2app(W_AbstractSeqIterObject.special_shortcut_next),
     __reduce__ = interp2app(W_AbstractSeqIterObject.descr_reduce),
     __length_hint__ = interp2app(W_AbstractSeqIterObject.descr_length_hint),
 )
@@ -59,7 +59,7 @@ W_AbstractSeqIterObject.typedef.acceptable_as_base_class = False
 class W_SeqIterObject(W_AbstractSeqIterObject):
     """Sequence iterator implementation for general sequences."""
 
-    def descr_next(self, space):
+    def special_shortcut_next(self, space):
         if self.w_seq is None:
             raise OperationError(space.w_StopIteration, space.w_None)
         try:
@@ -76,7 +76,7 @@ class W_SeqIterObject(W_AbstractSeqIterObject):
 class W_FastListIterObject(W_AbstractSeqIterObject):
     """Sequence iterator specialized for lists."""
 
-    def descr_next(self, space):
+    def special_shortcut_next(self, space):
         from pypy.objspace.std.listobject import W_ListObject
         w_seq = self.w_seq
         if w_seq is None:
@@ -101,7 +101,7 @@ class W_FastUnicodeIterObject(W_AbstractSeqIterObject):
         assert isinstance(w_seq, W_UnicodeObject)
         self.byteindex = 0
 
-    def descr_next(self, space):
+    def special_shortcut_next(self, space):
         from pypy.objspace.std.unicodeobject import W_UnicodeObject
         w_seq = self.w_seq
         if w_seq is None:
@@ -127,7 +127,7 @@ class W_FastTupleIterObject(W_AbstractSeqIterObject):
         W_AbstractSeqIterObject.__init__(self, w_seq)
         self.tupleitems = wrappeditems
 
-    def descr_next(self, space):
+    def special_shortcut_next(self, space):
         if self.tupleitems is None:
             raise OperationError(space.w_StopIteration, space.w_None)
         index = self.index
@@ -164,7 +164,7 @@ class W_ReverseSeqIterObject(W_Root):
     def descr_iter(self, space):
         return self
 
-    def descr_next(self, space):
+    def special_shortcut_next(self, space):
         if self.index >= 0:
             w_index = space.newint(self.index)
             try:
@@ -188,7 +188,7 @@ class W_ReverseSeqIterObject(W_Root):
 W_ReverseSeqIterObject.typedef = TypeDef(
     "reversesequenceiterator",
     __iter__ = interp2app(W_ReverseSeqIterObject.descr_iter),
-    next = interp2app(W_ReverseSeqIterObject.descr_next),
+    next = interp2app(W_ReverseSeqIterObject.special_shortcut_next),
     __reduce__ = interp2app(W_ReverseSeqIterObject.descr_reduce),
     __length_hint__ = interp2app(W_ReverseSeqIterObject.descr_length_hint),
 )

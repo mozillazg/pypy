@@ -298,11 +298,7 @@ class DescrOperation(object):
         return w_iter
 
     def next(space, w_obj):
-        w_descr = space.lookup(w_obj, 'next')
-        if w_descr is None:
-            raise oefmt(space.w_TypeError,
-                        "'%T' object is not an iterator", w_obj)
-        return space.get_and_call_function(w_descr, w_obj)
+        return w_obj.special_shortcut_next(space)
 
     def getitem(space, w_obj, w_key):
         w_descr = space.lookup(w_obj, '__getitem__')
