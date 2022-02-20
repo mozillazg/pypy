@@ -6,7 +6,7 @@ from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import default_identity_hash
 from rpython.tool.sourcetools import compile2, func_with_new_name
 from pypy.module.__builtin__.interp_classobj import W_InstanceObject
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import specialize, try_inline, always_inline
 from rpython.rlib import jit
 
 @specialize.memo()
@@ -237,7 +237,15 @@ class DescrOperation(object):
                         w_obj)
         return space.get_and_call_function(w_descr, w_obj, w_name)
 
+    @always_inline
     def is_true(space, w_obj):
+        if w_obj is space.w_True:
+            return True
+        if w_obj is space.w_False:
+            return False
+        return space._is_true(w_obj)
+
+    def _is_true(space, w_obj):
         w_descr = space.lookup(w_obj, "__nonzero__")
         if w_descr is None:
             w_descr = space.lookup(w_obj, "__len__")
