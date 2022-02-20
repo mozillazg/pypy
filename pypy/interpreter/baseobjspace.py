@@ -382,12 +382,6 @@ class W_Root(object):
     def iterator_greenkey_printable(self):
         return "?"
 
-    def special_shortcut_next(self, space):
-        w_descr = space.lookup(self, 'next')
-        if w_descr is None:
-            raise oefmt(space.w_TypeError,
-                        "'%T' object is not an iterator", self)
-        return space.get_and_call_function(w_descr, self)
 
 
 class InternalSpaceCache(Cache):

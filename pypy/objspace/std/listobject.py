@@ -493,10 +493,10 @@ class W_ListObject(W_Root):
         result = self.length()
         return space.newint(result)
 
-    def descr_iter(self, space):
+    def special_shortcut_iter(self, space):
         return W_FastListIterObject(self)
 
-    def descr_contains(self, space, w_obj):
+    def special_shortcut_contains(self, space, w_obj):
         try:
             self.find(w_obj)
             return space.w_True
@@ -542,7 +542,7 @@ class W_ListObject(W_Root):
         self.inplace_mul(times)
         return self
 
-    def descr_getitem(self, space, w_index):
+    def special_shortcut_getitem(self, space, w_index):
         if isinstance(w_index, W_SliceObject):
             length = self.length()
             start, stop, step, slicelength = w_index.indices4(space, length)
@@ -566,7 +566,7 @@ class W_ListObject(W_Root):
             return make_empty_list(space)
         return self.getslice(start, stop, 1, stop - start)
 
-    def descr_setitem(self, space, w_index, w_any):
+    def special_shortcut_setitem(self, space, w_index, w_any):
         if isinstance(w_index, W_SliceObject):
             # special case for l[:] = l2
             if (space.is_w(w_index.w_start, space.w_None) and
@@ -611,7 +611,7 @@ class W_ListObject(W_Root):
             w_other = W_ListObject(space, sequence_w)
             self.setslice(start, 1, stop - start, w_other)
 
-    def descr_delitem(self, space, w_idx):
+    def special_shortcut_delitem(self, space, w_idx):
         if isinstance(w_idx, W_SliceObject):
             start, stop, step, slicelength = w_idx.indices4(
                     space, self.length())
@@ -2219,8 +2219,8 @@ list(iterable) -> new list initialized from iterable's items""",
     __ge__ = interp2app(W_ListObject.descr_ge),
 
     __len__ = interp2app(W_ListObject.descr_len),
-    __iter__ = interp2app(W_ListObject.descr_iter),
-    __contains__ = interp2app(W_ListObject.descr_contains),
+    __iter__ = interp2app(W_ListObject.special_shortcut_iter),
+    __contains__ = interp2app(W_ListObject.special_shortcut_contains),
 
     __add__ = interp2app(W_ListObject.descr_add),
     __iadd__ = interp2app(W_ListObject.descr_inplace_add),
@@ -2228,11 +2228,11 @@ list(iterable) -> new list initialized from iterable's items""",
     __rmul__ = interp2app(W_ListObject.descr_mul),
     __imul__ = interp2app(W_ListObject.descr_inplace_mul),
 
-    __getitem__ = interp2app(W_ListObject.descr_getitem),
+    __getitem__ = interp2app(W_ListObject.special_shortcut_getitem),
     __getslice__ = interp2app(W_ListObject.descr_getslice),
-    __setitem__ = interp2app(W_ListObject.descr_setitem),
+    __setitem__ = interp2app(W_ListObject.special_shortcut_setitem),
     __setslice__ = interp2app(W_ListObject.descr_setslice),
-    __delitem__ = interp2app(W_ListObject.descr_delitem),
+    __delitem__ = interp2app(W_ListObject.special_shortcut_delitem),
     __delslice__ = interp2app(W_ListObject.descr_delslice),
 
     sort = interp2app(W_ListObject.descr_sort),

@@ -1118,6 +1118,7 @@ class __extend__(pyframe.PyFrame):
         w_iterator = self.space.iter(w_iterable)
         self.pushvalue(w_iterator)
 
+    @always_inline
     def FOR_ITER(self, jumpby, next_instr):
         w_iterator = self.peekvalue()
         try:

@@ -8,7 +8,7 @@ from pypy.interpreter.gateway import (interp2app, BuiltinCode, unwrap_spec,
 
 from rpython.rlib.jit import promote
 from rpython.rlib.objectmodel import compute_identity_hash, specialize
-from rpython.rlib.objectmodel import instantiate, not_rpython
+from rpython.rlib.objectmodel import instantiate, not_rpython, always_inline, try_inline
 from rpython.tool.sourcetools import compile2, func_with_new_name
 
 
@@ -87,6 +87,32 @@ def auto__ge__(space, w_self, w_other):
 def auto__ne__(space, w_self, w_other):
     return space.not_(space.eq(w_self, w_other))
 
+# ____________________________________________________________
+# shortcut support
+
+SHORTCUTS = {}
+
+def with_shortcut(generic_implementation):
+    always_inline(generic_implementation)
+
+    space_name = generic_implementation.func_name
+
+    shortcut_name = "special_shortcut_" + space_name
+    def meth(self, space, *args):
+        return generic_implementation(space, self, *args)
+    meth.func_name = shortcut_name + "_generic"
+
+    setattr(W_Root, shortcut_name, meth)
+
+    SHORTCUTS[shortcut_name] = meth
+    
+    @try_inline
+    def call_shortcut(space, w_obj, *args):
+        return getattr(w_obj, shortcut_name)(space, *args)
+
+    call_shortcut.func_name = space_name + "_call_shortcut"
+    return call_shortcut
+
 
 # ____________________________________________________________
 #  Hash support
@@ -157,10 +183,14 @@ def _getusercls(cls, reallywantdict=False):
         objectmodel.import_from_mixin(base_mixin)
 
         special_shortcut_next = W_Root.special_shortcut_next
-
     for copycls in copy_methods:
         _copy_methods(copycls, subcls)
     subcls.__name__ = name
+
+    for methname, meth in SHORTCUTS.iteritems():
+        if meth is not getattr(cls, methname).im_func:
+            setattr(subcls, methname, meth)
+
     return subcls
 
 def _copy_methods(copycls, subcls):

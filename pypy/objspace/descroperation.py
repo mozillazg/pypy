@@ -3,7 +3,7 @@ from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.baseobjspace import ObjSpace
 from pypy.interpreter.function import Function, Method, FunctionWithFixedCode
 from pypy.interpreter.argument import Arguments
-from pypy.interpreter.typedef import default_identity_hash
+from pypy.interpreter.typedef import default_identity_hash, with_shortcut
 from rpython.tool.sourcetools import compile2, func_with_new_name
 from pypy.module.__builtin__.interp_classobj import W_InstanceObject
 from rpython.rlib.objectmodel import specialize, try_inline, always_inline
@@ -290,6 +290,7 @@ class DescrOperation(object):
             raise oefmt(space.w_ValueError, "__len__() should return >= 0")
         return result
 
+    @with_shortcut
     def iter(space, w_obj):
         w_descr = space.lookup(w_obj, '__iter__')
         if w_descr is None:
@@ -305,9 +306,15 @@ class DescrOperation(object):
             raise oefmt(space.w_TypeError, "iter() returned non-iterator")
         return w_iter
 
+    @with_shortcut
     def next(space, w_obj):
-        return w_obj.special_shortcut_next(space)
-
+        w_descr = space.lookup(w_obj, 'next')
+        if w_descr is None:
+            raise oefmt(space.w_TypeError,
+                        "'%T' object is not an iterator", w_obj)
+        return space.get_and_call_function(w_descr, w_obj)
+    
+    @with_shortcut
     def getitem(space, w_obj, w_key):
         w_descr = space.lookup(w_obj, '__getitem__')
         if w_descr is None:
@@ -316,6 +323,7 @@ class DescrOperation(object):
                         w_obj, w_key)
         return space.get_and_call_function(w_descr, w_obj, w_key)
 
+    @with_shortcut
     def setitem(space, w_obj, w_key, w_val):
         w_descr = space.lookup(w_obj, '__setitem__')
         if w_descr is None:
@@ -323,6 +331,7 @@ class DescrOperation(object):
                         "'%T' object does not support item assignment", w_obj)
         return space.get_and_call_function(w_descr, w_obj, w_key, w_val)
 
+    @with_shortcut
     def delitem(space, w_obj, w_key):
         w_descr = space.lookup(w_obj, '__delitem__')
         if w_descr is None:
@@ -411,6 +420,7 @@ class DescrOperation(object):
                 return w_res
         return space.pow(w_lhs, w_rhs, space.w_None)
 
+    @with_shortcut
     def contains(space, w_container, w_item):
         w_descr = space.lookup(w_container, '__contains__')
         if w_descr is not None:
