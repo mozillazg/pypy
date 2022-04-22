@@ -116,6 +116,7 @@ class PyCode(eval.Code):
 
     def _initialize(self):
         from pypy.objspace.std.mapdict import init_mapdict_cache
+        from pypy.objspace.std.celldict import init_celldict_cache
         from pypy.interpreter.nestedscope import CellFamily
         if self.co_cellvars:
             argcount = self.co_argcount
@@ -136,9 +137,7 @@ class PyCode(eval.Code):
         self._compute_flatcall()
 
         init_mapdict_cache(self)
-        if self.space.config.objspace.std.withcelldict:
-            from pypy.objspace.std.celldict import init_celldict_cache
-            init_celldict_cache(self)
+        init_celldict_cache(self)
 
     def _init_ready(self):
         "This is a hook for the vmprof module, which overrides this method."
