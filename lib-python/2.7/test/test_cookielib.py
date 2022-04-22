@@ -6,6 +6,7 @@ import os
 import re
 import time
 
+from cookielib import http2time, time2isoz, iso2time, time2netscape
 from unittest import TestCase
 
 from test import test_support
@@ -14,8 +15,6 @@ from test import test_support
 class DateTimeTests(TestCase):
 
     def test_time2isoz(self):
-        from cookielib import time2isoz
-
         base = 1019227000
         day = 24*3600
         self.assertEqual(time2isoz(base), "2002-04-19 14:36:40Z")
@@ -30,9 +29,29 @@ class DateTimeTests(TestCase):
                                      r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\dZ$",
                                      "bad time2isoz format: %s %s" % (az, bz))
 
-    def test_http2time(self):
-        from cookielib import http2time
+    def test_time2netscape(self):
+        base = 1019227000
+        day = 24*3600
+        self.assertEqual(time2netscape(base), "Fri, 19-Apr-2002 14:36:40 GMT")
+        self.assertEqual(time2netscape(base+day),
+                         "Sat, 20-Apr-2002 14:36:40 GMT")
 
+        self.assertEqual(time2netscape(base+2*day),
+                         "Sun, 21-Apr-2002 14:36:40 GMT")
+
+        self.assertEqual(time2netscape(base+3*day),
+                         "Mon, 22-Apr-2002 14:36:40 GMT")
+
+        az = time2netscape()
+        bz = time2netscape(500000)
+        for text in (az, bz):
+            # Format "%s, %02d-%s-%04d %02d:%02d:%02d GMT"
+            self.assertRegexpMatches(
+                text,
+                r"[a-zA-Z]{3}, \d{2}-[a-zA-Z]{3}-\d{4} \d{2}:\d{2}:\d{2} GMT$",
+                "bad time2netscape format: %s %s" % (az, bz))
+
+    def test_http2time(self):
         def parse_date(text):
             return time.gmtime(http2time(text))[:6]
 
@@ -45,7 +64,7 @@ class DateTimeTests(TestCase):
         self.assertEqual(parse_date("03-Feb-98"), (1998, 2, 3, 0, 0, 0.0))
 
     def test_http2time_formats(self):
-        from cookielib import http2time, time2isoz
+
 
         # test http2time for supported dates.  Test cases with 2 digit year
         # will probably break in year 2044.
@@ -81,8 +100,6 @@ class DateTimeTests(TestCase):
             self.assertEqual(http2time(s.upper()), test_t, s.upper())
 
     def test_http2time_garbage(self):
-        from cookielib import http2time
-
         for test in [
             '',
             'Garbage',
@@ -99,6 +116,19 @@ class DateTimeTests(TestCase):
                          "http2time(%s) is not None\n"
                          "http2time(test) %s" % (test, http2time(test))
                          )
+
+    def test_http2time_redos_regression_actually_completes(self):
+        # LOOSE_HTTP_DATE_RE was vulnerable to malicious input which caused catastrophic backtracking (REDoS).
+        # If we regress to cubic complexity, this test will take a very long time to succeed.
+        # If fixed, it should complete within a fraction of a second.
+        http2time("01 Jan 1970{}00:00:00 GMT!".format(" " * 10 ** 5))
+        http2time("01 Jan 1970 00:00:00{}GMT!".format(" " * 10 ** 5))
+
+    def test_iso2time_performance_regression(self):
+        # If ISO_DATE_RE regresses to quadratic complexity, this test will take a very long time to succeed.
+        # If fixed, it should complete within a fraction of a second.
+        iso2time('1994-02-03{}14:15:29 -0100!'.format(' '*10**6))
+        iso2time('1994-02-03 14:15:29{}-0100!'.format(' '*10**6))
 
 
 class HeaderTests(TestCase):
@@ -329,7 +359,7 @@ class CookieTests(TestCase):
 ##   comma-separated list, it'll be a headache to parse (at least my head
 ##   starts hurting every time I think of that code).
 ## - Expires: You'll get all sorts of date formats in the expires,
-##   including emtpy expires attributes ("expires="). Be as flexible as you
+##   including empty expires attributes ("expires="). Be as flexible as you
 ##   can, and certainly don't expect the weekday to be there; if you can't
 ##   parse it, just ignore it and pretend it's a session cookie.
 ## - Domain-matching: Netscape uses the 2-dot rule for _all_ domains, not
@@ -351,6 +381,7 @@ class CookieTests(TestCase):
             ("http://foo.bar.com/", ".foo.bar.com", True),
             ("http://foo.bar.com/", "foo.bar.com", True),
             ("http://foo.bar.com/", ".bar.com", True),
+            ("http://foo.bar.com/", "bar.com", True),
             ("http://foo.bar.com/", "com", True),
             ("http://foo.com/", "rhubarb.foo.com", False),
             ("http://foo.com/", ".foo.com", True),
@@ -361,6 +392,8 @@ class CookieTests(TestCase):
             ("http://foo/", "foo", True),
             ("http://foo/", "foo.local", True),
             ("http://foo/", ".local", True),
+            ("http://barfoo.com", ".foo.com", False),
+            ("http://barfoo.com", "foo.com", False),
             ]:
             request = urllib2.Request(url)
             r = pol.domain_return_ok(domain, request)
@@ -628,6 +661,35 @@ class CookieTests(TestCase):
         # missing final slash
         req = Request("http://www.example.com")
         self.assertEqual(request_path(req), "/")
+
+    def test_path_prefix_match(self):
+        from cookielib import CookieJar, DefaultCookiePolicy
+        from urllib2 import Request
+
+        pol = DefaultCookiePolicy()
+        strict_ns_path_pol = DefaultCookiePolicy(strict_ns_set_path=True)
+
+        c = CookieJar(pol)
+        base_url = "http://bar.com"
+        interact_netscape(c, base_url, 'spam=eggs; Path=/foo')
+        cookie = c._cookies['bar.com']['/foo']['spam']
+
+        for path, ok in [('/foo', True),
+                         ('/foo/', True),
+                         ('/foo/bar', True),
+                         ('/', False),
+                         ('/foobad/foo', False)]:
+            url = '{0}{1}'.format(base_url, path)
+            req = Request(url)
+            h = interact_netscape(c, url)
+            if ok:
+                self.assertIn('spam=eggs', h,
+                              "cookie not set for {0}".format(path))
+                self.assertTrue(strict_ns_path_pol.set_ok_path(cookie, req))
+            else:
+                self.assertNotIn('spam=eggs', h,
+                                 "cookie set for {0}".format(path))
+                self.assertFalse(strict_ns_path_pol.set_ok_path(cookie, req))
 
     def test_request_port(self):
         from urllib2 import Request
@@ -918,6 +980,33 @@ class CookieTests(TestCase):
         c.set_cookie(cookies[0])
         self.assertEqual(len(c), 2)
         # ... and check is doesn't get returned
+        c.add_cookie_header(req)
+        self.assertFalse(req.has_header("Cookie"))
+
+        c.clear()
+
+        pol.set_blocked_domains([])
+        req = Request("http://acme.com/")
+        res = FakeResponse(headers, "http://acme.com/")
+        cookies = c.make_cookies(res, req)
+        c.extract_cookies(res, req)
+        self.assertEqual(len(c), 1)
+
+        req = Request("http://acme.com/")
+        c.add_cookie_header(req)
+        self.assertTrue(req.has_header("Cookie"))
+
+        req = Request("http://badacme.com/")
+        c.add_cookie_header(req)
+        self.assertFalse(pol.return_ok(cookies[0], req))
+        self.assertFalse(req.has_header("Cookie"))
+
+        p = pol.set_blocked_domains(["acme.com"])
+        req = Request("http://acme.com/")
+        c.add_cookie_header(req)
+        self.assertFalse(req.has_header("Cookie"))
+
+        req = Request("http://badacme.com/")
         c.add_cookie_header(req)
         self.assertFalse(req.has_header("Cookie"))
 
@@ -1760,7 +1849,7 @@ class LWPCookieTests(TestCase):
             key = "%s_after" % cookie.value
             counter[key] = counter[key] + 1
 
-            # a permanent cookie got lost accidently
+            # a permanent cookie got lost accidentally
         self.assertEqual(counter["perm_after"], counter["perm_before"])
             # a session cookie hasn't been cleared
         self.assertEqual(counter["session_after"], 0)

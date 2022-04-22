@@ -5,6 +5,8 @@ from rpython.rtyper.lltypesystem import rffi, lltype
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib import rmmap as mmap
 from rpython.rlib.rmmap import RTypeError, RValueError, alloc, free
+from rpython.rlib.rmmap import madvise_free
+
 
 class TestMMap:
     def setup_class(cls):
@@ -256,7 +258,7 @@ class TestMMap:
         f.flush()
         def func(no):
             m = mmap.mmap(no, 6, access=mmap.ACCESS_WRITE)
-            m.write("ciao\n")
+            assert m.write("ciao\n") == 5
             m.seek(0)
             assert m.read(6) == "ciao\nr"
             m.close()
@@ -296,7 +298,7 @@ class TestMMap:
         f = open(self.tmpname + "l2", "w+")
         f.write("foobar")
         f.flush()
-        m = mmap.mmap(f.fileno(), 6, prot=~mmap.PROT_WRITE)
+        m = mmap.mmap(f.fileno(), 6, prot=mmap.PROT_READ|mmap.PROT_EXEC)
         py.test.raises(RTypeError, m.check_writeable)
         py.test.raises(RTypeError, m.check_writeable)
         m.close()
@@ -454,6 +456,17 @@ class TestMMap:
 
         compile(func, [int], gcpolicy='boehm')
 
+    @py.test.mark.skipif("not mmap.has_madvise")
+    def test_translated_madvise_bug(self):
+        from rpython.translator.c.test.test_genc import compile
+
+        def func():
+            m = mmap.mmap(-1, 8096)
+            m.madvise(mmap.MADV_NORMAL, 0, 8096)
+            m.close()
+
+        compile(func, [], gcpolicy='boehm')
+
     def test_windows_crasher_1(self):
         if sys.platform != "win32":
             py.test.skip("Windows-only test")
@@ -483,6 +496,13 @@ class TestMMap:
         py.test.raises(RValueError, m.getitem, 0)
         m.close()
 
+    @py.test.mark.skipif("not mmap.has_madvise")
+    def test_madvise(self):
+        m = mmap.mmap(-1, 8096)
+        m.madvise(mmap.MADV_NORMAL, 0, 8096)
+        m.close()
+
+
 def test_alloc_free():
     map_size = 65536
     data = alloc(map_size)
@@ -490,6 +510,7 @@ def test_alloc_free():
         data[i] = chr(i & 0xff)
     for i in range(0, map_size, 171):
         assert data[i] == chr(i & 0xff)
+    madvise_free(data, map_size)
     free(data, map_size)
 
 def test_compile_alloc_free():

@@ -1,6 +1,12 @@
+# encoding: utf-8
+import pytest
+import sys
 
 class AppTestMagic:
     spaceconfig = dict(usemodules=['__pypy__'])
+
+    def setup_class(cls):
+        cls.w_file = cls.space.wrap(__file__)
 
     def test_save_module_content_for_future_reload(self):
         import sys, __pypy__
@@ -47,3 +53,34 @@ def f():
         assert decode_long('\x00\x80', 'little', False) == 32768
         assert decode_long('\x00\x80', 'little', True) == -32768
         raises(ValueError, decode_long, '', 'foo')
+
+    def test_promote(self):
+        from __pypy__ import _promote
+        assert _promote(1) == 1
+        assert _promote(1.1) == 1.1
+        assert _promote("abc") == "abc"
+        raises(TypeError, _promote, u"abc")
+        l = []
+        assert _promote(l) is l
+        class A(object):
+            pass
+        a = A()
+        assert _promote(a) is a
+
+    def test_utf8_content(self):
+        from __pypy__ import utf8content
+        assert utf8content(u"a") == b"a"
+        assert utf8content(u"\xe4") == b'\xc3\xa4'
+
+    @pytest.mark.skipif(sys.platform != 'win32', reason="win32 only")
+    def test_get_osfhandle(self):
+        from __pypy__ import get_osfhandle
+        with open(self.file) as fid:
+            f = get_osfhandle(fid.fileno())
+        raises(OSError, get_osfhandle, 2**30)
+
+    def test_list_get_physical_size(self):
+        from __pypy__ import list_get_physical_size
+        l = [1, 2]
+        l.append(3)
+        assert list_get_physical_size(l) >= 3 # should be 6, but untranslated 3

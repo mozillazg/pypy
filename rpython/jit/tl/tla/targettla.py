@@ -1,12 +1,20 @@
 import py
 py.path.local(__file__)
 from rpython.jit.tl.tla import tla
+from rpython.rlib import jit
 
 
 def entry_point(args):
-    """Main entry point of the stand-alone executable:
-    takes a list of strings and returns the exit code.
-    """
+    for i in range(len(args)):
+        if args[i] == "--jit":
+            if len(args) == i + 1:
+                print "missing argument after --jit"
+                return 2
+            jitarg = args[i + 1]
+            del args[i:i+2]
+            jit.set_user_param(None, jitarg)
+            break
+
     if len(args) < 3:
         print "Usage: %s filename x" % (args[0],)
         return 2
@@ -26,7 +34,7 @@ def load_bytecode(filename):
     return bytecode
 
 def target(driver, args):
-    return entry_point, None
+    return entry_point
 
 # ____________________________________________________________
 

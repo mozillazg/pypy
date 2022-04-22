@@ -1,4 +1,5 @@
 import __future__
+import pytest
 import py, sys
 from pypy.interpreter.pycompiler import PythonAstCompiler
 from pypy.interpreter.pycode import PyCode
@@ -77,7 +78,7 @@ class BaseTestCompiler:
         """)
         assert self.space.unwrap(w_args) == (
             'unindent does not match any outer indentation level',
-            (None, 3, 0, ' y\n'))
+            ('<string>', 3, 2, ' y\n'))
 
     def test_getcodeflags(self):
         code = self.compiler.compile('from __future__ import division\n',
@@ -344,6 +345,16 @@ class BaseTestCompiler:
             ex = e.value
             ex.normalize_exception(self.space)
             assert ex.match(self.space, self.space.w_SyntaxError)
+
+    def test_future_error_offset(self):
+        space = self.space
+        with pytest.raises(OperationError) as excinfo:
+            self.compiler.compile("from __future__ import bogus", "tmp", "exec", 0)
+        ex = excinfo.value
+        assert ex.match(space, space.w_SyntaxError)
+        ex.normalize_exception(space)
+        w_exc = ex.get_w_value(space)
+        assert space.int_w(w_exc.w_offset) == 1
 
     def test_globals_warnings(self):
         space = self.space
@@ -696,7 +707,7 @@ with somtehing as stuff:
         """)
         try:
             self.compiler.compile(str(source), '<filename>', 'exec', 0)
-        except OperationError, e:
+        except OperationError as e:
             if not e.match(self.space, self.space.w_SyntaxError):
                 raise
         else:
@@ -706,7 +717,7 @@ with somtehing as stuff:
         code = 'def f(): (yield bar) += y'
         try:
             self.compiler.compile(code, '', 'single', 0)
-        except OperationError, e:
+        except OperationError as e:
             if not e.match(self.space, self.space.w_SyntaxError):
                 raise
         else:
@@ -716,7 +727,7 @@ with somtehing as stuff:
         code = 'dict(a = i for i in xrange(10))'
         try:
             self.compiler.compile(code, '', 'single', 0)
-        except OperationError, e:
+        except OperationError as e:
             if not e.match(self.space, self.space.w_SyntaxError):
                 raise
         else:
@@ -729,6 +740,10 @@ class TestECCompiler(BaseTestCompiler):
 
 
 class AppTestCompiler:
+    def setup_class(cls):
+        cls.w_host_is_pypy = cls.space.wrap(
+            '__pypy__' in sys.builtin_module_names)
+
     def test_bom_with_future(self):
         s = '\xef\xbb\xbffrom __future__ import division\nx = 1/2'
         ns = {}
@@ -770,6 +785,65 @@ class AppTestCompiler:
         assert math.copysign(1., b[1]) == 1.0
         assert math.copysign(1., c[0]) == -1.0
         assert math.copysign(1., c[1]) == -1.0
+
+    def test_zeros_not_mixed_in_lambdas(self):
+        import math
+        code = compile("x = lambda: -0.0; y = lambda: 0.0", "<test>", "exec")
+        consts = code.co_consts
+        x, y, z = consts
+        assert isinstance(x, type(code)) and isinstance(y, type(code))
+        assert x is not y
+        assert x != y
+
+    @py.test.mark.skipif('config.option.runappdirect')
+    def test_dont_share_lambdas(self):
+        # the two lambdas's codes aren't shared (CPython does that but it's
+        # completely pointless: it only applies to identical lambdas that are
+        # defined on the same line)
+        code = compile("x = lambda: 0; y = lambda: 0", "<test>", "exec")
+        consts = code.co_consts
+        x, y, z = consts
+        assert isinstance(x, type(code)) and isinstance(y, type(code))
+        assert x is not y
+        assert x == y
+
+    def test_dict_and_set_literal_order(self):
+        x = 1
+        l1 = list({1:'a', 3:'b', 2:'c', 4:'d'})
+        l2 = list({1, 3, 2, 4})
+        l3 = list({x:'a', 3:'b', 2:'c', 4:'d'})
+        l4 = list({x, 3, 2, 4})
+        if not self.host_is_pypy:
+            # the full test relies on the host Python providing ordered dicts
+            assert set(l1) == set(l2) == set(l3) == set(l4) == {1, 3, 2, 4}
+        else:
+            assert l1 == l2 == l3 == l4 == [1, 3, 2, 4]
+
+    def test_freevars_order(self):
+        # co_cellvars and co_freevars are guaranteed to appear in
+        # alphabetical order.  See CPython Issue #15368 (which does
+        # not come with tests).
+        source = """if 1:
+        def f1(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15):
+            def g1():
+                return (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15)
+            return g1
+        def f2(x15,x14,x13,x12,x11,x10,x9,x8,x7,x6,x5,x4,x3,x2,x1):
+            def g2():
+                return (x15,x14,x13,x12,x11,x10,x9,x8,x7,x6,x5,x4,x3,x2,x1)
+            return g2
+        c1 = f1(*range(15)).__code__.co_freevars
+        c2 = f2(*range(15)).__code__.co_freevars
+        r1 = f1.__code__.co_cellvars
+        r2 = f2.__code__.co_cellvars
+        """
+        d = {}
+        exec(source, d)
+        assert d['c1'] == d['c2']
+        # the test above is important for a few bytecode hacks,
+        # but actually we get them in alphabetical order, so check that:
+        assert d['c1'] == tuple(sorted(d['c1']))
+        assert d['r1'] == d['r2'] == d['c1']
 
 
 ##class TestPythonAstCompiler(BaseTestCompiler):
@@ -1011,8 +1085,20 @@ class AppTestExceptions:
         """
         try:
             exec source
-        except IndentationError, e:
+        except IndentationError as e:
             assert e.msg == 'unindent does not match any outer indentation level'
+        else:
+            raise Exception("DID NOT RAISE")
+
+    def test_outdentation_error_filename(self):
+        source = """if 1:
+         x
+        y
+        """
+        try:
+            exec(source)
+        except IndentationError as e:
+            assert e.filename == '<string>'
         else:
             raise Exception("DID NOT RAISE")
 
@@ -1021,13 +1107,13 @@ class AppTestExceptions:
         source2 = "x = (\n\n"
         try:
             exec source1
-        except SyntaxError, err1:
+        except SyntaxError as err1:
             pass
         else:
             raise Exception("DID NOT RAISE")
         try:
             exec source2
-        except SyntaxError, err2:
+        except SyntaxError as err2:
             pass
         else:
             raise Exception("DID NOT RAISE")
@@ -1057,3 +1143,9 @@ class AppTestExceptions:
             skip()
         code = 'u"""\\\n# -*- coding: utf-8 -*-\n\xc2\xa4"""\n'
         assert eval(code) == u'# -*- coding: utf-8 -*-\n\xc2\xa4'
+
+    def test_asterror_has_line_without_file(self):
+        code = u"print(1)\na/2 = 5\n"
+        with raises(SyntaxError) as excinfo:
+            compile(code, 'not a file!', 'exec')
+        assert excinfo.value.text == "a/2 = 5\n"

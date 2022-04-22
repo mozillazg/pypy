@@ -11,7 +11,7 @@ from rpython.rlib import jit_libffi
 from rpython.rlib.jit_libffi import (types, CIF_DESCRIPTION, FFI_TYPE_PP,
                                      jit_ffi_call)
 from rpython.rlib.unroll import unrolling_iterable
-from rpython.rlib.rarithmetic import intmask, r_longlong, r_singlefloat
+from rpython.rlib.rarithmetic import intmask, r_longlong, r_singlefloat, r_uint
 from rpython.rlib.longlong2float import float2longlong
 
 def get_description(atypes, rtype):
@@ -81,11 +81,12 @@ class FfiCallTests(object):
                 TYPE = rffi.CArray(lltype.typeOf(avalue))
                 data = rffi.ptradd(exchange_buffer, ofs)
                 got = rffi.cast(lltype.Ptr(TYPE), data)[0]
-                if lltype.typeOf(avalue) is lltype.SingleFloat:
+                tp = lltype.typeOf(avalue)
+                if tp is lltype.SingleFloat:
                     got = float(got)
                     avalue = float(avalue)
-                elif (lltype.typeOf(avalue) is rffi.SIGNEDCHAR or
-                      lltype.typeOf(avalue) is rffi.UCHAR):
+                elif (isinstance(tp, lltype.Number) and
+                      rffi.sizeof(tp) < rffi.sizeof(lltype.Signed)):
                     got = intmask(got)
                     avalue = intmask(avalue)
                 assert got == avalue
@@ -230,8 +231,8 @@ class FfiCallTests(object):
 
     def test_handle_unsigned(self):
         self._run([types.ulong], types.ulong,
-                  [rffi.cast(rffi.ULONG, sys.maxint + 91348)],
-                  rffi.cast(rffi.ULONG, sys.maxint + 4242))
+                  [rffi.cast(rffi.ULONG, r_uint(sys.maxint + 91348))],
+                  rffi.cast(rffi.ULONG, r_uint(sys.maxint + 4242)))
 
     def test_handle_unsignedchar(self):
         self._run([types.uint8], types.uint8,

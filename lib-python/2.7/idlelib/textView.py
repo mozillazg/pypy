@@ -21,7 +21,7 @@ class TextViewer(Toplevel):
         Toplevel.__init__(self, parent)
         self.configure(borderwidth=5)
         # place dialog below parent if running htest
-        self.geometry("=%dx%d+%d+%d" % (625, 500,
+        self.geometry("=%dx%d+%d+%d" % (750, 500,
                            parent.winfo_rootx() + 10,
                            parent.winfo_rooty() + (10 if not _htest else 100)))
         #elguavas - config placeholders til config stuff completed
@@ -39,7 +39,8 @@ class TextViewer(Toplevel):
         self.textView.insert(0.0, text)
         self.textView.config(state=DISABLED)
 
-        if modal:
+        self.is_modal = modal
+        if self.is_modal:
             self.transient(parent)
             self.grab_set()
             self.wait_window()
@@ -62,6 +63,8 @@ class TextViewer(Toplevel):
         frameText.pack(side=TOP,expand=TRUE,fill=BOTH)
 
     def Ok(self, event=None):
+        if self.is_modal:
+            self.grab_release()
         self.destroy()
 
 
@@ -79,6 +82,10 @@ def view_file(parent, title, filename, encoding=None, modal=True):
         tkMessageBox.showerror(title='File Load Error',
                                message='Unable to load file %r .' % filename,
                                parent=parent)
+    except UnicodeDecodeError as err:
+        showerror(title='Unicode Decode Error',
+                  message=str(err),
+                  parent=parent)
     else:
         return view_text(parent, title, textFile.read(), modal)
 

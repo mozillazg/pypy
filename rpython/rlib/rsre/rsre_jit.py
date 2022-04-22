@@ -11,7 +11,7 @@ class RSreJitDriver(JitDriver):
             # we print based on indices in 'args'.  We first print
             # 'ctx.pattern' from the arg number debugprint[0].
             pattern = args[debugprint[0]]
-            s = str(pattern)
+            s = str(pattern.pattern)
             if len(s) > 120:
                 s = s[:110] + '...'
             if len(debugprint) > 1:
@@ -36,8 +36,10 @@ def install_jitdriver_spec(name, **kwds):
     from rpython.rlib.rsre.rsre_core import BufMatchContext
     from rpython.rlib.rsre.rsre_core import StrMatchContext
     from rpython.rlib.rsre.rsre_core import UnicodeMatchContext
+    from rpython.rlib.rsre.rsre_utf8 import Utf8MatchContext
     for prefix, concreteclass in [('Buf', BufMatchContext),
                                   ('Str', StrMatchContext),
-                                  ('Uni', UnicodeMatchContext)]:
+                                  ('Uni', UnicodeMatchContext),
+                                  ('Utf8', Utf8MatchContext)]:
         jitdriver = RSreJitDriver(prefix + name, **kwds)
         setattr(concreteclass, 'jitdriver_' + name, jitdriver)

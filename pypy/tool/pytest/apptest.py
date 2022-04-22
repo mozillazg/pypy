@@ -1,19 +1,17 @@
 # Collects and executes application-level tests.
 #
-# Classes which names start with "AppTest", or function which names
-# start with "app_test*" are not executed by the host Python, but
+# Classes which names start with "AppTest"
+# are not executed by the host Python, but
 # by an interpreted pypy object space.
 #
 # ...unless the -A option ('runappdirect') is passed.
 
 import py
-import sys, textwrap, types
+import sys, textwrap, types, gc
 from pypy.interpreter.gateway import app2interp_temp
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.function import Method
 from pypy.tool.pytest import appsupport
-from pypy.tool.pytest.objspace import gettestobjspace
-from pypy.conftest import PyPyClassCollector
 from inspect import getmro
 
 
@@ -21,20 +19,16 @@ class AppError(Exception):
     def __init__(self, excinfo):
         self.excinfo = excinfo
 
-marker = py.test.mark.applevel
 
-class AppTestFunction(py.test.collect.Function):
-    def __init__(self, *args, **kwargs):
-        super(AppTestFunction, self).__init__(*args, **kwargs)
-        self._request.applymarker(marker)
-
+class AppTestMethod(py.test.collect.Function):
     def _prunetraceback(self, traceback):
         return traceback
 
     def execute_appex(self, space, target, *args):
+        self.space = space
         try:
             target(*args)
-        except OperationError, e:
+        except OperationError as e:
             if self.config.option.raise_operr:
                 raise
             tb = sys.exc_info()[2]
@@ -45,27 +39,22 @@ class AppTestFunction(py.test.collect.Function):
                 raise AppError, AppError(appexcinfo), tb
             raise
 
-    def runtest(self):
-        target = self.obj
-        if self.config.option.runappdirect:
-            return target()
-        space = gettestobjspace()
-        filename = self._getdynfilename(target)
-        func = app2interp_temp(target, filename=filename)
-        print "executing", func
-        self.execute_appex(space, func, space)
-
     def repr_failure(self, excinfo):
         if excinfo.errisinstance(AppError):
             excinfo = excinfo.value.excinfo
-        return super(AppTestFunction, self).repr_failure(excinfo)
+        return super(AppTestMethod, self).repr_failure(excinfo)
 
     def _getdynfilename(self, func):
         code = getattr(func, 'im_func', func).func_code
         return "[%s:%s]" % (code.co_filename, code.co_firstlineno)
 
+    def track_allocations_collect(self):
+        gc.collect()
+        # must also invoke finalizers now; UserDelAction
+        # would not run at all unless invoked explicitly
+        if hasattr(self, 'space'):
+            self.space.getexecutioncontext()._run_finalizers_now()
 
-class AppTestMethod(AppTestFunction):
     def setup(self):
         super(AppTestMethod, self).setup()
         instance = self.parent.obj
@@ -78,12 +67,12 @@ class AppTestMethod(AppTestFunction):
                 else:
                     obj = getattr(instance, name)
                     if isinstance(obj, types.MethodType):
-                        source = py.std.inspect.getsource(obj).lstrip()
+                        source = py.code.Source(obj).indent()
                         w_func = space.appexec([], textwrap.dedent("""
                         ():
-                            %s
+                        %s
                             return %s
-                        """) % (source, name))
+                        """) % (source, obj.__name__))
                         w_obj = Method(space, w_func, w_instance, space.w_None)
                     else:
                         w_obj = obj
@@ -114,7 +103,7 @@ class AppClassInstance(py.test.collect.Instance):
             self.w_instance = space.call_function(w_class)
 
 
-class AppClassCollector(PyPyClassCollector):
+class AppClassCollector(py.test.Class):
     Instance = AppClassInstance
 
     def setup(self):
@@ -141,4 +130,3 @@ class AppClassCollector(PyPyClassCollector):
                                           space.newtuple([]),
                                           space.newdict())
         self.w_class = w_class
-

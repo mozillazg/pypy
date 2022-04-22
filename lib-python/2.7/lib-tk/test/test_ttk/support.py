@@ -1,3 +1,4 @@
+import functools
 import re
 import unittest
 import Tkinter as tkinter
@@ -23,7 +24,7 @@ class AbstractTkTest:
     def tearDownClass(cls):
         cls.root.update_idletasks()
         cls.root.destroy()
-        cls.root = None
+        del cls.root
         tkinter._default_root = None
         tkinter._support_default_root = cls._old_support_default_root
 
@@ -54,8 +55,19 @@ import _tkinter
 tcl_version = tuple(map(int, _tkinter.TCL_VERSION.split('.')))
 
 def requires_tcl(*version):
-    return unittest.skipUnless(tcl_version >= version,
+    if len(version) <= 2:
+        return unittest.skipUnless(tcl_version >= version,
             'requires Tcl version >= ' + '.'.join(map(str, version)))
+
+    def deco(test):
+        @functools.wraps(test)
+        def newtest(self):
+            if get_tk_patchlevel() < version:
+                self.skipTest('requires Tcl version >= ' +
+                                '.'.join(map(str, version)))
+            test(self)
+        return newtest
+    return deco
 
 _tk_patchlevel = None
 def get_tk_patchlevel():

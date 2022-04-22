@@ -1,5 +1,8 @@
+import sys
 from rpython.rlib.rarithmetic import ovfcheck, LONG_BIT, maxint, is_valid_int
 from rpython.rlib.objectmodel import we_are_translated
+from rpython.rtyper.lltypesystem import lltype
+from rpython.rtyper.lltypesystem.lloperation import llop
 from rpython.jit.metainterp.resoperation import rop, ResOperation
 from rpython.jit.metainterp.optimizeopt.info import AbstractInfo, INFO_NONNULL,\
      INFO_UNKNOWN, INFO_NULL
@@ -8,6 +11,19 @@ from rpython.jit.metainterp.history import ConstInt
 
 MAXINT = maxint
 MININT = -maxint - 1
+
+IS_64_BIT = sys.maxint > 2**32
+
+def next_pow2_m1(n):
+    """Calculate next power of 2 greater than n minus one."""
+    n |= n >> 1
+    n |= n >> 2
+    n |= n >> 4
+    n |= n >> 8
+    n |= n >> 16
+    if IS_64_BIT:
+        n |= n >> 32
+    return n
 
 
 class IntBound(AbstractInfo):
@@ -26,28 +42,46 @@ class IntBound(AbstractInfo):
     # Returns True if the bound was updated
     def make_le(self, other):
         if other.has_upper:
-            if not self.has_upper or other.upper < self.upper:
-                self.has_upper = True
-                self.upper = other.upper
-                return True
+            return self.make_le_const(other.upper)
+        return False
+
+    def make_le_const(self, other):
+        if not self.has_upper or other < self.upper:
+            self.has_upper = True
+            self.upper = other
+            return True
         return False
 
     def make_lt(self, other):
-        return self.make_le(other.add(-1))
+        if other.has_upper:
+            return self.make_lt_const(other.upper)
+        return False
+
+    def make_lt_const(self, other):
+        try:
+            other = ovfcheck(other - 1)
+        except OverflowError:
+            return False
+        return self.make_le_const(other)
 
     def make_ge(self, other):
         if other.has_lower:
-            if not self.has_lower or other.lower > self.lower:
-                self.has_lower = True
-                self.lower = other.lower
-                return True
+            return self.make_ge_const(other.lower)
         return False
 
     def make_ge_const(self, other):
-        return self.make_ge(ConstIntBound(other))
+        if not self.has_lower or other > self.lower:
+            self.has_lower = True
+            self.lower = other
+            return True
+        return False
 
     def make_gt_const(self, other):
-        return self.make_gt(ConstIntBound(other))
+        try:
+            other = ovfcheck(other + 1)
+        except OverflowError:
+            return False
+        return self.make_ge_const(other)
 
     def make_eq_const(self, intval):
         self.has_upper = True
@@ -56,7 +90,9 @@ class IntBound(AbstractInfo):
         self.lower = intval
 
     def make_gt(self, other):
-        return self.make_ge(other.add(1))
+        if other.has_lower:
+            return self.make_gt_const(other.lower)
+        return False
 
     def is_constant(self):
         return self.has_upper and self.has_lower and self.lower == self.upper
@@ -73,14 +109,34 @@ class IntBound(AbstractInfo):
     def bounded(self):
         return self.has_lower and self.has_upper
 
+    def known_lt_const(self, other):
+        if self.has_upper:
+            return self.upper < other
+        return False
+
+    def known_le_const(self, other):
+        if self.has_upper:
+            return self.upper <= other
+        return False
+
+    def known_gt_const(self, other):
+        if self.has_lower:
+            return self.lower > other
+        return False
+
+    def known_ge_const(self, other):
+        if self.has_upper:
+            return self.upper >= other
+        return False
+
     def known_lt(self, other):
-        if self.has_upper and other.has_lower and self.upper < other.lower:
-            return True
+        if other.has_lower:
+            return self.known_lt_const(other.lower)
         return False
 
     def known_le(self, other):
-        if self.has_upper and other.has_lower and self.upper <= other.lower:
-            return True
+        if other.has_lower:
+            return self.known_le_const(other.lower)
         return False
 
     def known_gt(self, other):
@@ -89,21 +145,23 @@ class IntBound(AbstractInfo):
     def known_ge(self, other):
         return other.known_le(self)
 
+    def known_nonnegative(self):
+        return self.has_lower and 0 <= self.lower
+
     def intersect(self, other):
         r = False
-
         if other.has_lower:
-            if other.lower > self.lower or not self.has_lower:
-                self.lower = other.lower
-                self.has_lower = True
+            if self.make_ge_const(other.lower):
                 r = True
-
         if other.has_upper:
-            if other.upper < self.upper or not self.has_upper:
-                self.upper = other.upper
-                self.has_upper = True
+            if self.make_le_const(other.upper):
                 r = True
+        return r
 
+    def intersect_const(self, lower, upper):
+        r = self.make_ge_const(lower)
+        if self.make_le_const(upper):
+            r = True
         return r
 
     def add(self, offset):
@@ -171,11 +229,14 @@ class IntBound(AbstractInfo):
         else:
             return IntUnbounded()
 
-    def div_bound(self, other):
+    def py_div_bound(self, other):
         if self.has_upper and self.has_lower and \
            other.has_upper and other.has_lower and \
            not other.contains(0):
             try:
+                # this gives the bounds for 'int_py_div', so use the
+                # Python-style handling of negative numbers and not
+                # the C-style one
                 vals = (ovfcheck(self.upper / other.upper),
                         ovfcheck(self.upper / other.lower),
                         ovfcheck(self.lower / other.upper),
@@ -186,11 +247,22 @@ class IntBound(AbstractInfo):
         else:
             return IntUnbounded()
 
+    def mod_bound(self, other):
+        r = IntUnbounded()
+        if other.is_constant():
+            val = other.getint()
+            if val >= 0:        # with Python's modulo:  0 <= (x % pos) < pos
+                r.make_ge_const(0)
+                r.make_lt_const(val)
+            else:               # with Python's modulo:  neg < (x % neg) <= 0
+                r.make_gt_const(val)
+                r.make_le_const(0)
+        return r
+
     def lshift_bound(self, other):
-        if self.has_upper and self.has_lower and \
-           other.has_upper and other.has_lower and \
-           other.known_ge(IntBound(0, 0)) and \
-           other.known_lt(IntBound(LONG_BIT, LONG_BIT)):
+        if self.bounded() and other.bounded() and \
+           other.known_nonnegative() and \
+           other.known_lt_const(LONG_BIT):
             try:
                 vals = (ovfcheck(self.upper << other.upper),
                         ovfcheck(self.upper << other.lower),
@@ -203,10 +275,9 @@ class IntBound(AbstractInfo):
             return IntUnbounded()
 
     def rshift_bound(self, other):
-        if self.has_upper and self.has_lower and \
-           other.has_upper and other.has_lower and \
-           other.known_ge(IntBound(0, 0)) and \
-           other.known_lt(IntBound(LONG_BIT, LONG_BIT)):
+        if self.bounded() and other.bounded() and \
+           other.known_nonnegative() and \
+           other.known_lt_const(LONG_BIT):
             vals = (self.upper >> other.upper,
                     self.upper >> other.lower,
                     self.lower >> other.upper,
@@ -215,7 +286,62 @@ class IntBound(AbstractInfo):
         else:
             return IntUnbounded()
 
+    def and_bound(self, other):
+        pos1 = self.known_nonnegative()
+        pos2 = other.known_nonnegative()
+        r = IntUnbounded()
+        if pos1 or pos2:
+            r.make_ge_const(0)
+        if pos1:
+            r.make_le(self)
+        if pos2:
+            r.make_le(other)
+        return r
+
+    def or_bound(self, other):
+        r = IntUnbounded()
+        if self.known_nonnegative() and \
+                other.known_nonnegative():
+            if self.has_upper and other.has_upper:
+                mostsignificant = self.upper | other.upper
+                r.intersect(IntBound(0, next_pow2_m1(mostsignificant)))
+            else:
+                r.make_ge_const(0)
+        return r
+
+    def invert_bound(self):
+        res = self.clone()
+        res.has_upper = False
+        if self.has_lower:
+            res.upper = ~self.lower
+            res.has_upper = True
+        res.has_lower = False
+        if self.has_upper:
+            res.lower = ~self.upper
+            res.has_lower = True
+        return res
+
+    def neg_bound(self):
+        res = self.clone()
+        res.has_upper = False
+        if self.has_lower:
+            try:
+                res.upper = ovfcheck(-self.lower)
+                res.has_upper = True
+            except OverflowError:
+                pass
+        res.has_lower = False
+        if self.has_upper:
+            try:
+                res.lower = ovfcheck(-self.upper)
+                res.has_lower = True
+            except OverflowError:
+                pass
+        return res
+
     def contains(self, val):
+        if not we_are_translated():
+            assert not isinstance(val, long)
         if not isinstance(val, int):
             if ((not self.has_lower or self.lower == MININT) and
                 not self.has_upper or self.upper == MAXINT):
@@ -276,8 +402,8 @@ class IntBound(AbstractInfo):
             guards.append(op)
 
     def is_bool(self):
-        return (self.bounded() and self.known_ge(ConstIntBound(0)) and
-                self.known_le(ConstIntBound(1)))
+        return (self.bounded() and self.known_nonnegative() and
+                self.known_le_const(1))
 
     def make_bool(self):
         self.intersect(IntBound(0, 1))
@@ -288,11 +414,11 @@ class IntBound(AbstractInfo):
         return ConstInt(self.getint())
 
     def getnullness(self):
-        if self.known_gt(IntBound(0, 0)) or \
-           self.known_lt(IntBound(0, 0)):
+        if self.known_gt_const(0) or \
+           self.known_lt_const(0):
             return INFO_NONNULL
-        if self.known_ge(IntBound(0, 0)) and \
-           self.known_le(IntBound(0, 0)):
+        if self.known_nonnegative() and \
+           self.known_le_const(0):
             return INFO_NULL
         return INFO_UNKNOWN
 

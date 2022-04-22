@@ -67,6 +67,7 @@
 
 #  define SIZEOF_INT        4
 #  define SIZEOF_LONG       4
+#  define SIZEOF_SIGNED     4
 #  define SIZEOF_LONG_LONG  8
 
 /******************** 64-bit support ********************/
@@ -82,6 +83,7 @@
 
 #    define SIZEOF_INT        4
 #    define SIZEOF_LONG       8
+#    define SIZEOF_SIGNED     8
 #    define SIZEOF_LONG_LONG  8
 
 /******************** Win-64 support ********************/
@@ -95,6 +97,7 @@
 
 #    define SIZEOF_INT        4
 #    define SIZEOF_LONG       4
+#    define SIZEOF_SIGNED     8
 #    define SIZEOF_LONG_LONG  8
 
 #  endif
@@ -120,3 +123,7 @@
 #  define MS_WINDOWS    /* a synonym */
 #endif
 #endif
+
+/* stringify a constant */
+#define Py_XSTR(x)   #x
+#define Py_STR(x)  Py_XSTR(x)

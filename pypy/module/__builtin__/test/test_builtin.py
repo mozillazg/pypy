@@ -51,6 +51,11 @@ class AppTestBuiltinApp:
         assert bytes is str
         assert isinstance(eval("b'hi'"), str)
 
+    def test_eval_adds_builtins(self):
+        d = {}
+        eval('1', d)
+        assert "__builtins__" in d
+
     def test_import(self):
         m = __import__('pprint')
         assert m.pformat({}) == '{}'
@@ -225,6 +230,86 @@ class AppTestBuiltinApp:
                 assert other is None
                 return 42
         assert sum([Foo()], None) == 42
+
+    def test_sum_fast_path(self):
+        # Fast paths for expected behaviour
+        start = []
+        assert sum([[1, 2], [3]], start) == [1, 2, 3]
+        assert start == []
+
+        start = [1, 2]
+        assert sum([[3]], start) == [1, 2, 3]
+        assert start == [1, 2]
+
+        assert sum([(1, 2), (3,)], ()) == (1, 2, 3)
+        assert sum([(3,)], (1, 2)) == (1, 2, 3)
+        assert sum(([x + 1] for x in range(3)), []) == [1, 2, 3]
+
+    def test_sum_empty_edge_cases(self):
+        assert sum([], []) == []
+        assert sum(iter([]), []) == []
+        assert sum([], ()) == ()
+        start = []
+        assert sum([], start) is start
+        assert sum([[]], start) is not start
+
+    def test_sum_type_errors(self):
+        with raises(TypeError):
+            sum([[]], ())
+        with raises(TypeError):
+            sum([()], [])
+        with raises(TypeError):
+            sum([[], [], ()], [])
+
+    def test_sum_strange_objects(self):
+        # All that follows should be rare, but needs care
+        class TupleTail(object):
+            def __radd__(self, other):
+                assert isinstance(other, tuple)
+                return other[1:]
+
+        strange_seq = [(1, 2), (3, 4), TupleTail(), (5,)]
+        assert sum(strange_seq, (2, 3, 4, 5))
+        assert sum(iter(strange_seq), (2, 3, 4, 5))
+
+        class NotAList(list):
+            def __add__(self, _):
+                return "!"
+
+            def __radd__(self, _):
+                return "?"
+
+            def __iadd__(self, _):
+                raise RuntimeError(
+                    "Calling __iadd__ breaks CPython compatability"
+                )
+
+        assert sum([[1]], NotAList()) == "!"
+        assert sum([[1], NotAList()], []) == "?"
+
+    def test_sum_first_object_edge_cases(self):
+        class X(list):
+            def __radd__(self, other):
+                return Y()
+
+        class Y(object):
+            calls = []
+
+            def __add__(self, other):
+                Y.calls.append("add")
+
+            def __iadd__(self, other):
+                Y.calls.append("iadd")
+
+        assert sum([X(), []], []) is None
+        assert Y.calls == ["add"]
+
+        class Z(tuple):
+            def __radd__(self, other):
+                return Y()
+
+        assert sum([Z(), []], []) is None
+        assert Y.calls == ["add", "add"]
 
     def test_type_selftest(self):
         assert type(type) is type
@@ -404,6 +489,7 @@ class AppTestBuiltinApp:
 
 
     def test_cmp(self):
+        assert cmp(float('nan'), float('nan')) == 0
         assert cmp(9,9) == 0
         assert cmp(0,9) < 0
         assert cmp(9,0) > 0
@@ -509,59 +595,6 @@ class AppTestBuiltinApp:
         assert eval("i", None, None) == 4
         assert eval('a', None, dict(a=42)) == 42
 
-    def test_compile(self):
-        co = compile('1+2', '?', 'eval')
-        assert eval(co) == 3
-        co = compile(buffer('1+2'), '?', 'eval')
-        assert eval(co) == 3
-        exc = raises(TypeError, compile, chr(0), '?', 'eval')
-        assert str(exc.value) == "compile() expected string without null bytes"
-        exc = raises(TypeError, compile, unichr(0), '?', 'eval')
-        assert str(exc.value) == "compile() expected string without null bytes"
-        exc = raises(TypeError, compile, memoryview('1+2'), '?', 'eval')
-        assert str(exc.value) == "expected a readable buffer object"
-        compile("from __future__ import with_statement", "<test>", "exec")
-        raises(SyntaxError, compile, '-', '?', 'eval')
-        raises(ValueError, compile, '"\\xt"', '?', 'eval')
-        raises(ValueError, compile, '1+2', '?', 'maybenot')
-        raises(ValueError, compile, "\n", "<string>", "exec", 0xff)
-        raises(TypeError, compile, '1+2', 12, 34)
-
-    def test_compile_error_message(self):
-        import re
-        compile('# -*- coding: iso-8859-15 -*-\n', 'dummy', 'exec')
-        compile(b'\xef\xbb\xbf\n', 'dummy', 'exec')
-        compile(b'\xef\xbb\xbf# -*- coding: utf-8 -*-\n', 'dummy', 'exec')
-        exc = raises(SyntaxError, compile,
-            b'# -*- coding: fake -*-\n', 'dummy', 'exec')
-        assert 'fake' in str(exc.value)
-        exc = raises(SyntaxError, compile,
-            b'\xef\xbb\xbf# -*- coding: iso-8859-15 -*-\n', 'dummy', 'exec')
-        assert 'iso-8859-15' in str(exc.value)
-        assert 'BOM' in str(exc.value)
-        exc = raises(SyntaxError, compile,
-            b'\xef\xbb\xbf# -*- coding: fake -*-\n', 'dummy', 'exec')
-        assert 'fake' in str(exc.value)
-        assert 'BOM' in str(exc.value)
-
-    def test_unicode_compile(self):
-        try:
-            compile(u'-', '?', 'eval')
-        except SyntaxError as e:
-            assert e.lineno == 1
-
-    def test_unicode_encoding_compile(self):
-        code = u"# -*- coding: utf-8 -*-\npass\n"
-        raises(SyntaxError, compile, code, "tmp", "exec")
-
-    def test_recompile_ast(self):
-        import _ast
-        # raise exception when node type doesn't match with compile mode
-        co1 = compile('print 1', '<string>', 'exec', _ast.PyCF_ONLY_AST)
-        raises(TypeError, compile, co1, '<ast>', 'eval')
-        co2 = compile('1+1', '<string>', 'eval', _ast.PyCF_ONLY_AST)
-        compile(co2, '<ast>', 'eval')
-
     def test_isinstance(self):
         assert isinstance(5, int)
         assert isinstance(5, object)
@@ -620,37 +653,13 @@ class AppTestBuiltinApp:
         assert hasattr(x, 'bar') is False
         assert hasattr(x, 'abc') is False    # CPython compliance
         assert hasattr(x, 'bac') is False    # CPython compliance
-        raises(TypeError, hasattr, x, None)
-        raises(TypeError, hasattr, x, 42)
-        raises(UnicodeError, hasattr, x, u'\u5678')  # cannot encode attr name
-
-    def test_compile_leading_newlines(self):
-        src = """
-def fn(): pass
-"""
-        co = compile(src, 'mymod', 'exec')
-        firstlineno = co.co_firstlineno
-        assert firstlineno == 2
-
-    def test_compile_null_bytes(self):
-        raises(TypeError, compile, '\x00', 'mymod', 'exec', 0)
-        src = "#abc\x00def\n"
-        raises(TypeError, compile, src, 'mymod', 'exec')
-        raises(TypeError, compile, src, 'mymod', 'exec', 0)
-        execfile(self.nullbytes) # works
+        exc = raises(TypeError, hasattr, x, None)
+        assert str(exc.value) == 'hasattr(): attribute name must be string'
+        raises(UnicodeError, hasattr, x, u'\u5678')  # 'ascii' codec can't encode
 
     def test_execfile_args(self):
+        execfile(self.nullbytes) # works
         raises(TypeError, execfile, self.nonexistent, {}, ())
-
-    def test_compile_null_bytes_flag(self):
-        try:
-            from _ast import PyCF_ACCEPT_NULL_BYTES
-        except ImportError:
-            skip('PyPy only (requires _ast.PyCF_ACCEPT_NULL_BYTES)')
-        raises(SyntaxError, compile, '\x00', 'mymod', 'exec',
-               PyCF_ACCEPT_NULL_BYTES)
-        src = "#abc\x00def\n"
-        compile(src, 'mymod', 'exec', PyCF_ACCEPT_NULL_BYTES)  # works
 
     def test_print_function(self):
         import __builtin__
@@ -702,6 +711,9 @@ def fn(): pass
         assert round(5e15) == 5e15
         assert round(-(5e15-1)) == -(5e15-1)
         assert round(-5e15) == -5e15
+        assert round(5e15/2) == 5e15/2
+        assert round((5e15+1)/2) == 5e15/2+1
+        assert round((5e15-1)/2) == 5e15/2
         #
         inf = 1e200 * 1e200
         assert round(inf) == inf
@@ -713,6 +725,12 @@ def fn(): pass
         #
         assert round(562949953421312.5, 1) == 562949953421312.5
         assert round(56294995342131.5, 3) == 56294995342131.5
+        #
+        for i in range(-10, 10):
+            expected = i if i < 0 else i + 1
+            assert round(i + 0.5) == round(i + 0.5, 0) == expected
+            x = i * 10 + 5
+            assert round(x, -1) == round(float(x), -1) == expected * 10
 
     def test_vars_obscure_case(self):
         class C_get_vars(object):
@@ -746,10 +764,6 @@ class AppTestGetattr:
         raises(TypeError, getattr, A(), 42)
         raises(TypeError, setattr, A(), 42, 'x')
         raises(TypeError, delattr, A(), 42)
-
-
-class AppTestGetattrWithGetAttributeShortcut(AppTestGetattr):
-    spaceconfig = {"objspace.std.getattributeshortcut": True}
 
 
 class TestInternal:

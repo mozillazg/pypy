@@ -8,22 +8,18 @@ from rpython.rlib import jit, rerased, objectmodel
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.dictmultiobject import (
     DictStrategy, ObjectDictStrategy, _never_equal_to_string,
-    create_iterator_classes)
+    create_iterator_classes, BytesDictStrategy,
+    W_DictObject)
 from pypy.objspace.std.typeobject import (
-    MutableCell, IntMutableCell, ObjectMutableCell, write_cell)
+    MutableCell, IntMutableCell, ObjectMutableCell, write_cell, unwrap_cell)
 
 
 class VersionTag(object):
     pass
 
-def unwrap_cell(space, w_value):
-    if isinstance(w_value, MutableCell):
-        return w_value.unwrap_cell(space)
-    return w_value
-
 
 def _wrapkey(space, key):
-    return space.wrap(key)
+    return space.newtext(key)
 
 
 class ModuleDictStrategy(DictStrategy):
@@ -56,8 +52,8 @@ class ModuleDictStrategy(DictStrategy):
 
     def setitem(self, w_dict, w_key, w_value):
         space = self.space
-        if space.is_w(space.type(w_key), space.w_str):
-            self.setitem_str(w_dict, space.str_w(w_key), w_value)
+        if space.is_w(space.type(w_key), space.w_text):
+            self.setitem_str(w_dict, space.text_w(w_key), w_value)
         else:
             self.switch_to_object_strategy(w_dict)
             w_dict.setitem(w_key, w_value)
@@ -75,8 +71,8 @@ class ModuleDictStrategy(DictStrategy):
 
     def setdefault(self, w_dict, w_key, w_default):
         space = self.space
-        if space.is_w(space.type(w_key), space.w_str):
-            key = space.str_w(w_key)
+        if space.is_w(space.type(w_key), space.w_text):
+            key = space.text_w(w_key)
             cell = self.getdictvalue_no_unwrapping(w_dict, key)
             w_result = unwrap_cell(self.space, cell)
             if w_result is not None:
@@ -90,8 +86,8 @@ class ModuleDictStrategy(DictStrategy):
     def delitem(self, w_dict, w_key):
         space = self.space
         w_key_type = space.type(w_key)
-        if space.is_w(w_key_type, space.w_str):
-            key = space.str_w(w_key)
+        if space.is_w(w_key_type, space.w_text):
+            key = space.text_w(w_key)
             dict_w = self.unerase(w_dict.dstorage)
             try:
                 del dict_w[key]
@@ -111,8 +107,8 @@ class ModuleDictStrategy(DictStrategy):
     def getitem(self, w_dict, w_key):
         space = self.space
         w_lookup_type = space.type(w_key)
-        if space.is_w(w_lookup_type, space.w_str):
-            return self.getitem_str(w_dict, space.str_w(w_key))
+        if space.is_w(w_lookup_type, space.w_text):
+            return self.getitem_str(w_dict, space.text_w(w_key))
 
         elif _never_equal_to_string(space, w_lookup_type):
             return None
@@ -127,7 +123,7 @@ class ModuleDictStrategy(DictStrategy):
     def w_keys(self, w_dict):
         space = self.space
         l = self.unerase(w_dict.dstorage).keys()
-        return space.newlist_bytes(l)
+        return space.newlist_text(l)
 
     def values(self, w_dict):
         iterator = self.unerase(w_dict.dstorage).itervalues
@@ -173,6 +169,15 @@ class ModuleDictStrategy(DictStrategy):
 
     def wrapvalue(space, value):
         return unwrap_cell(space, value)
+
+    def copy(self, w_dict):
+        strategy = self.space.fromcache(BytesDictStrategy)
+        str_dict = strategy.unerase(strategy.get_empty_storage())
+
+        d = self.unerase(w_dict.dstorage)
+        for key, cell in d.iteritems():
+            str_dict[key] = unwrap_cell(self.space, cell)
+        return W_DictObject(strategy.space, strategy, strategy.erase(str_dict))
 
 
 create_iterator_classes(ModuleDictStrategy)

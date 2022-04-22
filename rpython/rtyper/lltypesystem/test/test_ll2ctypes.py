@@ -1,4 +1,4 @@
-import py
+import py, pytest
 import sys, struct
 import ctypes
 from rpython.rtyper.lltypesystem import lltype, rffi, llmemory
@@ -480,6 +480,30 @@ class TestLL2Ctypes(object):
         assert res == 42
         assert not ALLOCATED     # detects memory leaks in the test
 
+    def test_llhelper_error_value(self, monkeypatch):
+        from rpython.rlib.objectmodel import llhelper_error_value
+        class FooError(Exception):
+            pass
+        @llhelper_error_value(error_value=-7)
+        def dummy(n):
+            raise FooError(n + 2)
+
+        FUNCTYPE = lltype.FuncType([lltype.Signed], lltype.Signed)
+        cdummy = lltype2ctypes(llhelper(lltype.Ptr(FUNCTYPE), dummy))
+        # here we pretend there is C in the middle
+        lldummy = ctypes2lltype(lltype.Ptr(FUNCTYPE), cdummy,
+                                force_real_ctypes_function=True)
+        seen = []
+        def custom_except_hook(*args):
+            seen.append(args)
+        monkeypatch.setattr(sys, 'excepthook', custom_except_hook)
+        with pytest.raises(FooError) as exc:
+            lldummy(41)
+        assert exc.value.args == (41 + 2,)
+        assert exc.value._ll2ctypes_c_result == -7
+        assert not seen
+        assert not ALLOCATED     # detects memory leaks in the test
+
     def test_funcptr2(self):
         FUNCTYPE = lltype.FuncType([rffi.CCHARP], rffi.LONG)
         cstrlen = standard_c_lib.strlen
@@ -945,6 +969,11 @@ class TestLL2Ctypes(object):
         a[4] = rffi.r_int(4)
 
         def compare(a, b):
+            # do not use a,b directly! on a big endian machine
+            # ((void*)ptr)[0] will return 0x0 if the 32 bit value
+            # ptr points to is 0x1
+            a = rffi.cast(rffi.INTP, a)
+            b = rffi.cast(rffi.INTP, b)
             if a[0] > b[0]:
                 return rffi.r_int(1)
             else:
@@ -1399,6 +1428,70 @@ class TestLL2Ctypes(object):
         a = lltype.malloc(A, 5)
         a2 = ctypes2lltype(lltype.Ptr(A), lltype2ctypes(a))
         assert a2._obj.getitem(0)._obj._parentstructure() is a2._obj
+
+    def test_array_of_function_pointers(self):
+        c_source = py.code.Source(r"""
+        #include "src/precommondefs.h"
+        #include <stdio.h>
+
+        typedef int(*funcptr_t)(void);
+        static int forty_two(void) { return 42; }
+        static int forty_three(void) { return 43; }
+        static funcptr_t testarray[2];
+        RPY_EXPORTED void runtest(void cb(funcptr_t *)) { 
+            testarray[0] = &forty_two;
+            testarray[1] = &forty_three;
+            fprintf(stderr, "&forty_two = %p\n", testarray[0]);
+            fprintf(stderr, "&forty_three = %p\n", testarray[1]);
+            cb(testarray);
+            testarray[0] = 0;
+            testarray[1] = 0;
+        }
+        """)
+        eci = ExternalCompilationInfo(include_dirs=[cdir],
+                                      separate_module_sources=[c_source])
+
+        PtrF = lltype.Ptr(lltype.FuncType([], rffi.INT))
+        ArrayPtrF = rffi.CArrayPtr(PtrF)
+        CALLBACK = rffi.CCallback([ArrayPtrF], lltype.Void)
+
+        runtest = rffi.llexternal('runtest', [CALLBACK], lltype.Void,
+                                  compilation_info=eci)
+        seen = []
+
+        def callback(testarray):
+            seen.append(testarray[0])   # read a PtrF out of testarray
+            seen.append(testarray[1])
+
+        runtest(callback)
+        assert seen[0]() == 42
+        assert seen[1]() == 43
+
+    def test_keep_value_across_lltype_callable(self):
+        PtrF = lltype.Ptr(lltype.FuncType([], lltype.Void))
+        f = rffi.cast(PtrF, 42)
+        assert lltype.typeOf(f) == PtrF
+        assert rffi.cast(lltype.Signed, f) == 42
+
+    def test_keep_value_across_rffi_llexternal(self):
+        c_source = py.code.Source(r"""
+            void ff1(void) { }
+            void *get_ff1(void) { return &ff1; }
+        """)
+        eci = ExternalCompilationInfo(
+            separate_module_sources=[c_source],
+            post_include_bits = [
+                "RPY_EXTERN void ff1(void); RPY_EXTERN void *get_ff1(void);"])
+        PtrFF1 = lltype.Ptr(lltype.FuncType([], lltype.Void))
+        f1 = rffi.llexternal('ff1', [], lltype.Void, compilation_info=eci,
+                             _nowrapper=True)
+        assert lltype.typeOf(f1) == PtrFF1
+        getff1 = rffi.llexternal('get_ff1', [], PtrFF1, compilation_info=eci,
+                                 _nowrapper=True)
+        f2 = getff1()
+        assert rffi.cast(lltype.Signed, f2) == rffi.cast(lltype.Signed, f1)
+        #assert f2 == f1  -- fails, would be nice but oh well
+
 
 class TestPlatform(object):
     def test_lib_on_libpaths(self):

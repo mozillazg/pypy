@@ -1,12 +1,34 @@
 from rpython.jit.metainterp.optimizeopt.intutils import IntBound, IntUpperBound, \
-     IntLowerBound, IntUnbounded
-from rpython.jit.metainterp.optimizeopt.intbounds import next_pow2_m1
+     IntLowerBound, IntUnbounded, ConstIntBound, next_pow2_m1
 
 from copy import copy
 import sys
-from rpython.rlib.rarithmetic import LONG_BIT
+from rpython.rlib.rarithmetic import LONG_BIT, ovfcheck
 
-def bound(a,b):
+from hypothesis import given, strategies, example
+
+special_values = (
+    range(-100, 100) +
+    [2 ** i for i in range(1, LONG_BIT)] +
+    [-2 ** i for i in range(1, LONG_BIT)] +
+    [2 ** i - 1 for i in range(1, LONG_BIT)] +
+    [-2 ** i - 1 for i in range(1, LONG_BIT)] +
+    [2 ** i + 1 for i in range(1, LONG_BIT)] +
+    [-2 ** i + 1 for i in range(1, LONG_BIT)] +
+    [sys.maxint, -sys.maxint-1])
+
+special_values = strategies.sampled_from(
+    [int(v) for v in special_values if type(int(v)) is int])
+
+ints = strategies.builds(
+    int, # strategies.integers sometimes returns a long?
+    special_values | strategies.integers(
+    min_value=int(-sys.maxint-1), max_value=sys.maxint))
+
+ints_or_none = strategies.none() | ints
+
+
+def bound(a, b):
     if a is None and b is None:
         return IntUnbounded()
     elif a is None:
@@ -14,10 +36,47 @@ def bound(a,b):
     elif b is None:
         return IntLowerBound(a)
     else:
-        return IntBound(a,b)
+        return IntBound(a, b)
 
 def const(a):
     return bound(a,a)
+
+
+def build_bound_with_contained_number(a, b, c):
+    a, b, c = sorted([a, b, c])
+    r = bound(a, c)
+    assert r.contains(b)
+    return r, b
+
+unbounded = strategies.builds(
+    lambda x: (bound(None, None), int(x)),
+    ints
+)
+
+lower_bounded = strategies.builds(
+    lambda x, y: (bound(min(x, y), None), max(x, y)),
+    ints,
+    ints
+)
+
+upper_bounded = strategies.builds(
+    lambda x, y: (bound(None, max(x, y)), min(x, y)),
+    ints,
+    ints
+)
+
+bounded = strategies.builds(
+    build_bound_with_contained_number,
+    ints, ints, ints
+)
+
+constant = strategies.builds(
+    lambda x: (const(x), x),
+    ints
+)
+
+bound_with_contained_number = strategies.one_of(
+    unbounded, lower_bounded, upper_bounded, constant, bounded)
 
 def some_bounds():
     brd = [None] + range(-2, 3)
@@ -242,23 +301,32 @@ def test_shift_overflow():
 def test_div_bound():
     for _, _, b1 in some_bounds():
         for _, _, b2 in some_bounds():
-            b3 = b1.div_bound(b2)
+            b3 = b1.py_div_bound(b2)
             for n1 in nbr:
                 for n2 in nbr:
                     if b1.contains(n1) and b2.contains(n2):
                         if n2 != 0:
-                            assert b3.contains(n1 / n2)
+                            assert b3.contains(n1 / n2)   # Python-style div
 
-    a=bound(2, 4).div_bound(bound(1, 2))
+    a=bound(2, 4).py_div_bound(bound(1, 2))
     assert not a.contains(0)
     assert not a.contains(5)
 
-    a=bound(-3, 2).div_bound(bound(1, 2))
+    a=bound(-3, 2).py_div_bound(bound(1, 2))
     assert not a.contains(-4)
     assert not a.contains(3)
     assert a.contains(-3)
     assert a.contains(0)
 
+def test_mod_bound():
+    for _, _, b1 in some_bounds():
+        for _, _, b2 in some_bounds():
+            b3 = b1.mod_bound(b2)
+            for n1 in nbr:
+                for n2 in nbr:
+                    if b1.contains(n1) and b2.contains(n2):
+                        if n2 != 0:
+                            assert b3.contains(n1 % n2)   # Python-style div
 
 def test_sub_bound():
     for _, _, b1 in some_bounds():
@@ -273,6 +341,25 @@ def test_sub_bound():
     assert not a.contains(-1)
     assert not a.contains(4)
 
+def test_and_bound():
+    for _, _, b1 in some_bounds():
+        for _, _, b2 in some_bounds():
+            b3 = b1.and_bound(b2)
+            for n1 in nbr:
+                for n2 in nbr:
+                    if b1.contains(n1) and b2.contains(n2):
+                        assert b3.contains(n1 & n2)
+
+def test_or_bound():
+    for _, _, b1 in some_bounds():
+        for _, _, b2 in some_bounds():
+            b3 = b1.or_bound(b2)
+            for n1 in nbr:
+                for n2 in nbr:
+                    if b1.contains(n1) and b2.contains(n2):
+                        assert b3.contains(n1 | n2)
+                        assert b3.contains(n1 ^ n2) # we use it for xor too
+
 
 def test_next_pow2_m1():
     assert next_pow2_m1(0) == 0
@@ -283,3 +370,128 @@ def test_next_pow2_m1():
     assert next_pow2_m1(80) == 127
     assert next_pow2_m1((1 << 32) - 5) == (1 << 32) - 1
     assert next_pow2_m1((1 << 64) - 1) == (1 << 64) - 1
+
+def test_invert_bound():
+    for _, _, b1 in some_bounds():
+        b2 = b1.invert_bound()
+        for n1 in nbr:
+            if b1.contains(n1):
+                assert b2.contains(~n1)
+
+def test_neg_bound():
+    for _, _, b1 in some_bounds():
+        b2 = b1.neg_bound()
+        for n1 in nbr:
+            if b1.contains(n1):
+                assert b2.contains(-n1)
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_make_random(t1, t2):
+    def d(b):
+        return b.has_lower, b.lower, b.has_upper, b.upper
+    b1, n1 = t1
+    b2, n2 = t2
+
+    for meth in [IntBound.make_le, IntBound.make_lt, IntBound.make_ge, IntBound.make_gt]:
+        b = b1.clone()
+        meth(b, b2)
+        data = d(b)
+        assert not meth(b, b2)
+        assert data == d(b) # idempotent
+
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_add_bound_random(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    print b1, n1
+    print b2, n2
+    b3 = b1.add_bound(b2)
+    try:
+        r = ovfcheck(n1 + n2)
+    except OverflowError:
+        assert not b3.bounded()
+    else:
+        assert b3.contains(r)
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_sub_bound_random(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    print b1, n1
+    print b2, n2
+    b3 = b1.sub_bound(b2)
+    try:
+        r = ovfcheck(n1 - n2)
+    except OverflowError:
+        assert not b3.bounded()
+    else:
+        assert b3.contains(r)
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_mul_bound_random(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    b3 = b1.mul_bound(b2)
+    try:
+        r = ovfcheck(n1 * n2)
+    except OverflowError:
+        assert not b3.bounded()
+    else:
+        assert b3.contains(r)
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_div_bound_random(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    b3 = b1.py_div_bound(b2)
+    if n1 == -sys.maxint-1 and n2 == -1:
+        return # overflow
+    if n2 != 0:
+        assert b3.contains(n1 / n2)   # Python-style div
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_mod_bound_random(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    b3 = b1.mod_bound(b2)
+    if n1 == -sys.maxint-1 and n2 == -1:
+        return # overflow
+    if n2 != 0:
+        assert b3.contains(n1 % n2)   # Python-style mod
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_and_bound_random(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    b3 = b1.and_bound(b2)
+    r = n1 & n2
+    assert b3.contains(r)
+
+@given(bound_with_contained_number, bound_with_contained_number)
+def test_or_bound_random(t1, t2):
+    b1, n1 = t1
+    b2, n2 = t2
+    b3 = b1.or_bound(b2)
+    r = n1 | n2
+    assert b3.contains(r)
+    r = n1 ^ n2
+    assert b3.contains(r)
+
+@given(bound_with_contained_number)
+def test_invert_bound_random(t1):
+    b1, n1 = t1
+    b2 = b1.invert_bound()
+    assert b2.contains(~n1)
+
+@given(bound_with_contained_number)
+@example((IntUpperBound(-100), -sys.maxint-1))
+@example((ConstIntBound(-sys.maxint - 1), -sys.maxint-1))
+@example((IntBound(-sys.maxint - 1, -sys.maxint+10), -sys.maxint-1))
+def test_neg_bound_random(t1):
+    b1, n1 = t1
+    b2 = b1.neg_bound()
+    if n1 != -sys.maxint - 1:
+        assert b2.contains(-n1)
+    else:
+        assert not b2.has_upper

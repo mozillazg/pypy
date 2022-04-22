@@ -119,6 +119,10 @@ class ExternalCompilationInfo(object):
                     macro, value = macro.split('=')
                 else:
                     value = '1'
+                if macro == '_XOPEN_SOURCE':
+                    # use default _XOPEN_SOURCE since we always define
+                    # _GNU_SOURCE, which then defines a _XOPEN_SOURCE itself
+                    continue
                 pre_include_bits.append('#define %s %s' % (macro, value))
             elif arg.startswith('-L') or arg.startswith('-l'):
                 raise ValueError('linker flag found in compiler options: %r'
@@ -333,4 +337,10 @@ class ExternalCompilationInfo(object):
         d['libraries'] += (lib,)
         d['separate_module_files'] = ()
         d['separate_module_sources'] = ()
+        return ExternalCompilationInfo(**d)
+
+    def copy_without(self, *names):
+        d = self._copy_attributes()
+        for name in names:
+            del d[name]
         return ExternalCompilationInfo(**d)

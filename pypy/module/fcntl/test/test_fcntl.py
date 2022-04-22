@@ -138,7 +138,7 @@ class AppTestFcntl:
             rval = 2
             try:
                 fcntl.flock(open(f.name, f.mode), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except IOError, e:
+            except IOError as e:
                 if e.errno not in (errno.EACCES, errno.EAGAIN):
                     raise
                 rval = 0
@@ -175,7 +175,7 @@ class AppTestFcntl:
             rval = 2
             try:
                 fcntl.lockf(open(f.name, f.mode), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except IOError, e:
+            except IOError as e:
                 if e.errno not in (errno.EACCES, errno.EAGAIN):
                     raise
                 rval = 0
@@ -290,6 +290,22 @@ class AppTestFcntl:
             # test both with a positive and potentially negative ioctl code
             new_winsz = fcntl.ioctl(mfd, set_winsz_opcode_pos, our_winsz)
             new_winsz = fcntl.ioctl(mfd, set_winsz_opcode_maybe_neg, our_winsz)
+        finally:
+            os.close(mfd)
+            os.close(sfd)
+
+    def test_ioctl_use_mask_on_op(self):
+        import os
+        import fcntl
+        import pty
+        try:
+            from termios import TCFLSH, TCIOFLUSH
+        except ImportError:
+            skip("don't know how to test ioctl() on this platform")
+
+        mfd, sfd = pty.openpty()
+        try:
+            assert fcntl.ioctl(mfd, TCFLSH | 0x1000000000000000000000, TCIOFLUSH) == 0
         finally:
             os.close(mfd)
             os.close(sfd)

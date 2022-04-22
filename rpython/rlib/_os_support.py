@@ -9,6 +9,8 @@ from rpython.rtyper.lltypesystem import rffi
 _CYGWIN = sys.platform == 'cygwin'
 _WIN32 = sys.platform.startswith('win')
 UNDERSCORE_ON_WIN32 = '_' if _WIN32 else ''
+POSIX_SIZE_T = rffi.UINT if _WIN32 else rffi.SIZE_T
+POSIX_SSIZE_T = rffi.INT if _WIN32 else rffi.SSIZE_T
 _MACRO_ON_POSIX = True if not _WIN32 else None
 
 
@@ -64,6 +66,8 @@ class UnicodeTraits(object):
         assert path is not None
         if isinstance(path, unicode):
             return path
+        elif isinstance(path, str):
+            raise RuntimeError('str given where unicode expected')
         else:
             return path.as_unicode()
 
@@ -99,6 +103,13 @@ if _WIN32:
             return unicode_traits
         else:
             return string_traits
+
+    @specialize.argtype(0, 1)
+    def _preferred_traits2(path1, path2):
+        if _prefer_unicode(path1) or _prefer_unicode(path2):
+            return unicode_traits
+        else:
+            return string_traits
 else:
     @specialize.argtype(0)
     def _prefer_unicode(path):
@@ -106,4 +117,8 @@ else:
 
     @specialize.argtype(0)
     def _preferred_traits(path):
+        return string_traits
+
+    @specialize.argtype(0, 1)
+    def _preferred_traits2(path1, path2):
         return string_traits

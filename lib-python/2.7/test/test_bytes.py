@@ -1,10 +1,10 @@
 """Unit tests for the bytes and bytearray types.
 
-XXX This is a mess.  Common tests should be moved to buffer_tests.py,
-which itself ought to be unified with string_tests.py (and the latter
-should be modernized).
+XXX This is a mess.  Common tests should be unified with string_tests.py (and
+the latter should be modernized).
 """
 
+import array
 import os
 import re
 import sys
@@ -15,7 +15,6 @@ import tempfile
 import unittest
 import test.test_support
 import test.string_tests
-import test.buffer_tests
 
 
 if sys.flags.bytes_warning:
@@ -60,11 +59,49 @@ class BaseBytesTest(unittest.TestCase):
         self.assertRaises(IndexError, lambda: b[-sys.maxint-2])
         self.assertRaises(IndexError, lambda: b[-10**100])
 
-    def test_from_list(self):
-        ints = list(range(256))
-        b = self.type2test(i for i in ints)
+    def test_from_iterable(self):
+        b = self.type2test(range(256))
         self.assertEqual(len(b), 256)
-        self.assertEqual(list(b), ints)
+        self.assertEqual(list(b), list(range(256)))
+
+        # Non-sequence iterable.
+        b = self.type2test({42})
+        self.assertEqual(b, b"*")
+        b = self.type2test({43, 45})
+        self.assertIn(tuple(b), {(43, 45), (45, 43)})
+
+        # Iterator that has a __length_hint__.
+        b = self.type2test(iter(range(256)))
+        self.assertEqual(len(b), 256)
+        self.assertEqual(list(b), list(range(256)))
+
+        # Iterator that doesn't have a __length_hint__.
+        b = self.type2test(i for i in range(256) if i % 2)
+        self.assertEqual(len(b), 128)
+        self.assertEqual(list(b), list(range(256))[1::2])
+
+        # Sequence without __iter__.
+        class S:
+            def __getitem__(self, i):
+                return (1, 2, 3)[i]
+        b = self.type2test(S())
+        self.assertEqual(b, b"\x01\x02\x03")
+
+    def test_from_tuple(self):
+        # There is a special case for tuples.
+        b = self.type2test(tuple(range(256)))
+        self.assertEqual(len(b), 256)
+        self.assertEqual(list(b), list(range(256)))
+        b = self.type2test((1, 2, 3))
+        self.assertEqual(b, b"\x01\x02\x03")
+
+    def test_from_list(self):
+        # There is a special case for lists.
+        b = self.type2test(list(range(256)))
+        self.assertEqual(len(b), 256)
+        self.assertEqual(list(b), list(range(256)))
+        b = self.type2test([1, 2, 3])
+        self.assertEqual(b, b"\x01\x02\x03")
 
     def test_from_index(self):
         b = self.type2test([Indexable(), Indexable(1), Indexable(254),
@@ -72,6 +109,20 @@ class BaseBytesTest(unittest.TestCase):
         self.assertEqual(list(b), [0, 1, 254, 255])
         self.assertRaises(ValueError, self.type2test, [Indexable(-1)])
         self.assertRaises(ValueError, self.type2test, [Indexable(256)])
+
+    def test_from_buffer(self):
+        a = self.type2test(array.array('B', [1, 2, 3]))
+        self.assertEqual(a, b"\x01\x02\x03")
+        a = self.type2test(b"\x01\x02\x03")
+        self.assertEqual(a, b"\x01\x02\x03")
+
+        # Issues #29159 and #34974.
+        # Fallback when __index__ raises a TypeError
+        class B(bytes):
+            def __index__(self):
+                raise TypeError
+
+        self.assertEqual(self.type2test(B(b"foobar")), b"foobar")
 
     def test_from_ssize(self):
         self.assertEqual(self.type2test(0), b'')
@@ -104,6 +155,20 @@ class BaseBytesTest(unittest.TestCase):
         self.assertRaises(ValueError, self.type2test, [sys.maxint])
         self.assertRaises(ValueError, self.type2test, [sys.maxint+1])
         self.assertRaises(ValueError, self.type2test, [10**100])
+
+    def test_constructor_exceptions(self):
+        # Issue #34974: bytes and bytearray constructors replace unexpected
+        # exceptions.
+        class BadInt:
+            def __index__(self):
+                1//0
+        self.assertRaises(ZeroDivisionError, self.type2test, BadInt())
+        self.assertRaises(ZeroDivisionError, self.type2test, [BadInt()])
+
+        class BadIterable:
+            def __iter__(self):
+                1//0
+        self.assertRaises(ZeroDivisionError, self.type2test, BadIterable())
 
     def test_compare(self):
         b1 = self.type2test([1, 2, 3])
@@ -338,54 +403,23 @@ class BaseBytesTest(unittest.TestCase):
         self.assertEqual(b.replace(b'i', b'a'), b'massassappa')
         self.assertEqual(b.replace(b'ss', b'x'), b'mixixippi')
 
-    def test_split(self):
-        b = self.type2test(b'mississippi')
-        self.assertEqual(b.split(b'i'), [b'm', b'ss', b'ss', b'pp', b''])
-        self.assertEqual(b.split(b'ss'), [b'mi', b'i', b'ippi'])
-        self.assertEqual(b.split(b'w'), [b])
-
-    def test_split_whitespace(self):
-        for b in (b'  arf  barf  ', b'arf\tbarf', b'arf\nbarf', b'arf\rbarf',
-                  b'arf\fbarf', b'arf\vbarf'):
-            b = self.type2test(b)
-            self.assertEqual(b.split(), [b'arf', b'barf'])
-            self.assertEqual(b.split(None), [b'arf', b'barf'])
-            self.assertEqual(b.split(None, 2), [b'arf', b'barf'])
-        for b in (b'a\x1Cb', b'a\x1Db', b'a\x1Eb', b'a\x1Fb'):
-            b = self.type2test(b)
-            self.assertEqual(b.split(), [b])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').split(None, 0), [b'a  bb  c  '])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').split(None, 1), [b'a', b'bb  c  '])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').split(None, 2), [b'a', b'bb', b'c  '])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').split(None, 3), [b'a', b'bb', b'c'])
+    def test_replace_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').replace, 32, b'')
 
     def test_split_string_error(self):
         self.assertRaises(TypeError, self.type2test(b'a b').split, u' ')
+        self.assertRaises(TypeError, self.type2test(b'a b').rsplit, u' ')
+
+    def test_split_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').split, 32)
+        self.assertRaises(TypeError, self.type2test(b'a b').rsplit, 32)
 
     def test_split_unicodewhitespace(self):
+        for b in (b'a\x1Cb', b'a\x1Db', b'a\x1Eb', b'a\x1Fb'):
+            b = self.type2test(b)
+            self.assertEqual(b.split(), [b])
         b = self.type2test(b"\x09\x0A\x0B\x0C\x0D\x1C\x1D\x1E\x1F")
         self.assertEqual(b.split(), [b'\x1c\x1d\x1e\x1f'])
-
-    def test_rsplit(self):
-        b = self.type2test(b'mississippi')
-        self.assertEqual(b.rsplit(b'i'), [b'm', b'ss', b'ss', b'pp', b''])
-        self.assertEqual(b.rsplit(b'ss'), [b'mi', b'i', b'ippi'])
-        self.assertEqual(b.rsplit(b'w'), [b])
-
-    def test_rsplit_whitespace(self):
-        for b in (b'  arf  barf  ', b'arf\tbarf', b'arf\nbarf', b'arf\rbarf',
-                  b'arf\fbarf', b'arf\vbarf'):
-            b = self.type2test(b)
-            self.assertEqual(b.rsplit(), [b'arf', b'barf'])
-            self.assertEqual(b.rsplit(None), [b'arf', b'barf'])
-            self.assertEqual(b.rsplit(None, 2), [b'arf', b'barf'])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').rsplit(None, 0), [b'  a  bb  c'])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').rsplit(None, 1), [b'  a  bb', b'c'])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').rsplit(None, 2), [b'  a', b'bb', b'c'])
-        self.assertEqual(self.type2test(b'  a  bb  c  ').rsplit(None, 3), [b'a', b'bb', b'c'])
-
-    def test_rsplit_string_error(self):
-        self.assertRaises(TypeError, self.type2test(b'a b').rsplit, u' ')
 
     def test_rsplit_unicodewhitespace(self):
         b = self.type2test(b"\x09\x0A\x0B\x0C\x0D\x1C\x1D\x1E\x1F")
@@ -402,6 +436,14 @@ class BaseBytesTest(unittest.TestCase):
         self.assertEqual(b.rpartition(b'i'), (b'mississipp', b'i', b''))
         self.assertEqual(b.rpartition(b'w'), (b'', b'', b'mississippi'))
 
+    def test_partition_string_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').partition, u' ')
+        self.assertRaises(TypeError, self.type2test(b'a b').rpartition, u' ')
+
+    def test_partition_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'a b').partition, 32)
+        self.assertRaises(TypeError, self.type2test(b'a b').rpartition, 32)
+
     def test_pickling(self):
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             for b in b"", b"a", b"abc", b"\xffab\x80", b"\0\0\377\0\0":
@@ -410,46 +452,25 @@ class BaseBytesTest(unittest.TestCase):
                 q = pickle.loads(ps)
                 self.assertEqual(b, q)
 
-    def test_strip(self):
-        b = self.type2test(b'mississippi')
-        self.assertEqual(b.strip(b'i'), b'mississipp')
-        self.assertEqual(b.strip(b'm'), b'ississippi')
-        self.assertEqual(b.strip(b'pi'), b'mississ')
-        self.assertEqual(b.strip(b'im'), b'ssissipp')
-        self.assertEqual(b.strip(b'pim'), b'ssiss')
-        self.assertEqual(b.strip(b), b'')
-
-    def test_lstrip(self):
-        b = self.type2test(b'mississippi')
-        self.assertEqual(b.lstrip(b'i'), b'mississippi')
-        self.assertEqual(b.lstrip(b'm'), b'ississippi')
-        self.assertEqual(b.lstrip(b'pi'), b'mississippi')
-        self.assertEqual(b.lstrip(b'im'), b'ssissippi')
-        self.assertEqual(b.lstrip(b'pim'), b'ssissippi')
-
-    def test_rstrip(self):
-        b = self.type2test(b'mississippi')
-        self.assertEqual(b.rstrip(b'i'), b'mississipp')
-        self.assertEqual(b.rstrip(b'm'), b'mississippi')
-        self.assertEqual(b.rstrip(b'pi'), b'mississ')
-        self.assertEqual(b.rstrip(b'im'), b'mississipp')
-        self.assertEqual(b.rstrip(b'pim'), b'mississ')
-
-    def test_strip_whitespace(self):
-        b = self.type2test(b' \t\n\r\f\vabc \t\n\r\f\v')
-        self.assertEqual(b.strip(), b'abc')
-        self.assertEqual(b.lstrip(), b'abc \t\n\r\f\v')
-        self.assertEqual(b.rstrip(), b' \t\n\r\f\vabc')
-
     def test_strip_bytearray(self):
         self.assertEqual(self.type2test(b'abc').strip(memoryview(b'ac')), b'b')
         self.assertEqual(self.type2test(b'abc').lstrip(memoryview(b'ac')), b'bc')
         self.assertEqual(self.type2test(b'abc').rstrip(memoryview(b'ac')), b'ab')
 
     def test_strip_string_error(self):
-        self.assertRaises(TypeError, self.type2test(b'abc').strip, u'b')
-        self.assertRaises(TypeError, self.type2test(b'abc').lstrip, u'b')
-        self.assertRaises(TypeError, self.type2test(b'abc').rstrip, u'b')
+        self.assertRaises(TypeError, self.type2test(b'abc').strip, u'ac')
+        self.assertRaises(TypeError, self.type2test(b'abc').lstrip, u'ac')
+        self.assertRaises(TypeError, self.type2test(b'abc').rstrip, u'ac')
+
+    def test_strip_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b' abc ').strip, 32)
+        self.assertRaises(TypeError, self.type2test(b' abc ').lstrip, 32)
+        self.assertRaises(TypeError, self.type2test(b' abc ').rstrip, 32)
+
+    def test_xjust_int_error(self):
+        self.assertRaises(TypeError, self.type2test(b'abc').center, 7, 32)
+        self.assertRaises(TypeError, self.type2test(b'abc').ljust, 7, 32)
+        self.assertRaises(TypeError, self.type2test(b'abc').rjust, 7, 32)
 
     def test_ord(self):
         b = self.type2test(b'\0A\x7f\x80\xff')
@@ -517,6 +538,10 @@ class BaseBytesTest(unittest.TestCase):
                                 x, None, None, None)
         self.assertRaisesRegexp(TypeError, r'\bendswith\b', b.endswith,
                                 x, None, None, None)
+
+    def test_free_after_iterating(self):
+        test.test_support.check_free_after_iterating(self, iter, self.type2test)
+        test.test_support.check_free_after_iterating(self, reversed, self.type2test)
 
 
 class ByteArrayTest(BaseBytesTest):
@@ -723,9 +748,27 @@ class ByteArrayTest(BaseBytesTest):
         for i in range(100):
             b += b"x"
             alloc = b.__alloc__()
-            self.assertTrue(alloc >= len(b))
+            self.assertGreater(alloc, len(b))  # including trailing null byte
             if alloc not in seq:
                 seq.append(alloc)
+
+    @test.test_support.impl_detail("undocumented bytes.__alloc__()")
+    def test_init_alloc(self):
+        b = bytearray()
+        def g():
+            for i in range(1, 100):
+                yield i
+                a = list(b)
+                self.assertEqual(a, list(range(1, len(a)+1)))
+                self.assertEqual(len(b), len(a))
+                self.assertLessEqual(len(b), i)
+                alloc = b.__alloc__()
+                self.assertGreater(alloc, len(b))  # including trailing null byte
+        b.__init__(g())
+        self.assertEqual(list(b), list(range(1, 100)))
+        self.assertEqual(len(b), 99)
+        alloc = b.__alloc__()
+        self.assertGreater(alloc, len(b))
 
     def test_extend(self):
         orig = b'hello'
@@ -771,6 +814,13 @@ class ByteArrayTest(BaseBytesTest):
         self.assertRaises(TypeError, lambda: b.remove(u'e'))
         b.remove(Indexable(ord('e')))
         self.assertEqual(b, b'')
+
+        # test values outside of the ascii range: (0, 127)
+        c = bytearray([126, 127, 128, 129])
+        c.remove(127)
+        self.assertEqual(c, bytearray([126, 128, 129]))
+        c.remove(129)
+        self.assertEqual(c, bytearray([126, 128]))
 
     def test_pop(self):
         b = bytearray(b'world')
@@ -902,6 +952,16 @@ class ByteArrayTest(BaseBytesTest):
         # PyByteArray_AS_STRING() C macro.
         self.assertRaises(ValueError, int, bytearray(b''))
 
+    def test_exhausted_iterator(self):
+        a = self.type2test([1, 2, 3])
+        exhit = iter(a)
+        empit = iter(a)
+        for x in exhit:  # exhaust the iterator
+            next(empit)  # not exhausted
+        a.append(9)
+        self.assertEqual(list(exhit), [])
+        self.assertEqual(list(empit), [9])
+        self.assertEqual(a, self.type2test([1, 2, 3, 9]))
 
 class AssortedBytesTest(unittest.TestCase):
     #
@@ -1014,7 +1074,7 @@ class AssortedBytesTest(unittest.TestCase):
     # XXX More string methods?  (Those that don't use character properties)
 
     # There are tests in string_tests.py that are more
-    # comprehensive for things like split, partition, etc.
+    # comprehensive for things like partition, etc.
     # Unfortunately they are all bundled with tests that
     # are not appropriate for bytes
 
@@ -1022,8 +1082,7 @@ class AssortedBytesTest(unittest.TestCase):
     # the rest that make sense (the code can be cleaned up to use modern
     # unittest methods at the same time).
 
-class BytearrayPEP3137Test(unittest.TestCase,
-                       test.buffer_tests.MixinBytesBufferCommonTests):
+class BytearrayPEP3137Test(unittest.TestCase):
     def marshal(self, x):
         return bytearray(x)
 
@@ -1045,12 +1104,10 @@ class BytearrayPEP3137Test(unittest.TestCase,
             self.assertTrue(val is not newval,
                             expr+' returned val on a mutable object')
 
-class FixedStringTest(test.string_tests.BaseTest):
 
-    def fixtype(self, obj):
-        if isinstance(obj, str):
-            return obj.encode("utf-8")
-        return super(FixedStringTest, self).fixtype(obj)
+class ByteArrayAsStringTest(test.string_tests.CommonTest,
+        test.string_tests.NonStringModuleTest):
+    type2test = bytearray
 
     # Currently the bytes containment testing uses a single integer
     # value. This may not be the final design, but until then the
@@ -1066,10 +1123,6 @@ class FixedStringTest(test.string_tests.BaseTest):
     def test_hash(self):
         # XXX check this out
         pass
-
-
-class ByteArrayAsStringTest(FixedStringTest):
-    type2test = bytearray
 
 
 class ByteArraySubclass(bytearray):
@@ -1152,7 +1205,6 @@ class ByteArraySubclassTest(unittest.TestCase):
 def test_main():
     #test.test_support.run_unittest(BytesTest)
     #test.test_support.run_unittest(AssortedBytesTest)
-    #test.test_support.run_unittest(BytesAsStringTest)
     test.test_support.run_unittest(
         ByteArrayTest,
         ByteArrayAsStringTest,

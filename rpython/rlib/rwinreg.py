@@ -26,6 +26,7 @@ REG_NOTIFY_CHANGE_LAST_SET REG_NOTIFY_CHANGE_SECURITY REG_LEGAL_CHANGE_FILTER
 REG_NONE REG_SZ REG_EXPAND_SZ REG_BINARY REG_DWORD REG_DWORD_LITTLE_ENDIAN
 REG_DWORD_BIG_ENDIAN REG_LINK REG_MULTI_SZ REG_RESOURCE_LIST
 REG_FULL_RESOURCE_DESCRIPTOR REG_RESOURCE_REQUIREMENTS_LIST
+REG_QWORD REG_QWORD_LITTLE_ENDIAN
 
 HKEY_LOCAL_MACHINE HKEY_CLASSES_ROOT HKEY_CURRENT_CONFIG HKEY_CURRENT_USER
 HKEY_DYN_DATA HKEY_LOCAL_MACHINE HKEY_PERFORMANCE_DATA HKEY_USERS
@@ -48,75 +49,110 @@ HKEY = rwin32.HANDLE
 PHKEY = rffi.CArrayPtr(HKEY)
 REGSAM = rwin32.DWORD
 
-RegSetValue = external(
-    'RegSetValueA',
-    [HKEY, rffi.CCHARP, rwin32.DWORD, rffi.CCHARP, rwin32.DWORD],
-    rffi.LONG)
+def get_traits(suffix):
+    if suffix == 'A':
+        strp = rffi.CCHARP
+    else:
+        strp = rffi.CWCHARP
+    RegSetValue = external(
+        'RegSetValue' + suffix,
+        [HKEY, strp, rwin32.DWORD, strp, rwin32.DWORD],
+        rffi.LONG)
 
-RegSetValueEx = external(
-    'RegSetValueExA',
-    [HKEY, rffi.CCHARP, rwin32.DWORD,
-     rwin32.DWORD, rffi.CCHARP, rwin32.DWORD],
-    rffi.LONG)
+    RegSetValueEx = external(
+        'RegSetValueEx' + suffix,
+        [HKEY, strp, rwin32.DWORD,
+         rwin32.DWORD, strp, rwin32.DWORD],
+        rffi.LONG)
 
-RegQueryValue = external(
-    'RegQueryValueA',
-    [HKEY, rffi.CCHARP, rffi.CCHARP, rwin32.PLONG],
-    rffi.LONG)
+    RegQueryValue = external(
+        'RegQueryValue' + suffix,
+        [HKEY, strp, strp, rwin32.PLONG],
+        rffi.LONG)
 
-RegQueryValueEx = external(
-    'RegQueryValueExA',
-    [HKEY, rffi.CCHARP, rwin32.LPDWORD, rwin32.LPDWORD,
-     rffi.CCHARP, rwin32.LPDWORD],
-    rffi.LONG)
+    RegQueryValueEx = external(
+        'RegQueryValueEx' + suffix,
+        [HKEY, strp, rwin32.LPDWORD, rwin32.LPDWORD,
+         strp, rwin32.LPDWORD],
+        rffi.LONG)
 
-RegCreateKey = external(
-    'RegCreateKeyA',
-    [HKEY, rffi.CCHARP, PHKEY],
-    rffi.LONG)
+    RegCreateKey = external(
+        'RegCreateKey' + suffix,
+        [HKEY, strp, PHKEY],
+        rffi.LONG)
 
-RegCreateKeyEx = external(
-    'RegCreateKeyExA',
-    [HKEY, rffi.CCHARP, rwin32.DWORD, rffi.CCHARP, rwin32.DWORD,
-     REGSAM, rffi.VOIDP, PHKEY, rwin32.LPDWORD],
-    rffi.LONG)
+    RegCreateKeyEx = external(
+        'RegCreateKeyEx' + suffix,
+        [HKEY, strp, rwin32.DWORD, strp, rwin32.DWORD,
+         REGSAM, rffi.VOIDP, PHKEY, rwin32.LPDWORD],
+        rffi.LONG)
 
-RegDeleteValue = external(
-    'RegDeleteValueA',
-    [HKEY, rffi.CCHARP],
-    rffi.LONG)
+    RegDeleteValue = external(
+        'RegDeleteValue' + suffix,
+        [HKEY, strp],
+        rffi.LONG)
 
-RegDeleteKey = external(
-    'RegDeleteKeyA',
-    [HKEY, rffi.CCHARP],
-    rffi.LONG)
+    RegDeleteKey = external(
+        'RegDeleteKey' + suffix,
+        [HKEY, strp],
+        rffi.LONG)
 
-RegOpenKeyEx = external(
-    'RegOpenKeyExA',
-    [HKEY, rffi.CCHARP, rwin32.DWORD, REGSAM, PHKEY],
-    rffi.LONG)
+    RegOpenKeyEx = external(
+        'RegOpenKeyEx' + suffix,
+        [HKEY, strp, rwin32.DWORD, REGSAM, PHKEY],
+        rffi.LONG)
 
-RegEnumValue = external(
-    'RegEnumValueA',
-    [HKEY, rwin32.DWORD, rffi.CCHARP,
-     rwin32.LPDWORD, rwin32.LPDWORD, rwin32.LPDWORD,
-     rffi.CCHARP, rwin32.LPDWORD],
-    rffi.LONG)
+    RegEnumValue = external(
+        'RegEnumValue' + suffix,
+        [HKEY, rwin32.DWORD, strp,
+         rwin32.LPDWORD, rwin32.LPDWORD, rwin32.LPDWORD,
+         rffi.CCHARP, rwin32.LPDWORD],
+        rffi.LONG)
 
-RegEnumKeyEx = external(
-    'RegEnumKeyExA',
-    [HKEY, rwin32.DWORD, rffi.CCHARP,
-     rwin32.LPDWORD, rwin32.LPDWORD,
-     rffi.CCHARP, rwin32.LPDWORD, rwin32.PFILETIME],
-    rffi.LONG)
+    RegEnumKeyEx = external(
+        'RegEnumKeyEx' + suffix,
+        [HKEY, rwin32.DWORD, strp,
+         rwin32.LPDWORD, rwin32.LPDWORD,
+         strp, rwin32.LPDWORD, rwin32.PFILETIME],
+        rffi.LONG)
 
-RegQueryInfoKey = external(
-    'RegQueryInfoKeyA',
-    [HKEY, rffi.CCHARP, rwin32.LPDWORD, rwin32.LPDWORD,
-     rwin32.LPDWORD, rwin32.LPDWORD, rwin32.LPDWORD,
-     rwin32.LPDWORD, rwin32.LPDWORD, rwin32.LPDWORD,
-     rwin32.LPDWORD, rwin32.PFILETIME],
-    rffi.LONG)
+    RegQueryInfoKey = external(
+        'RegQueryInfoKey' + suffix,
+        [HKEY, strp, rwin32.LPDWORD, rwin32.LPDWORD,
+         rwin32.LPDWORD, rwin32.LPDWORD, rwin32.LPDWORD,
+         rwin32.LPDWORD, rwin32.LPDWORD, rwin32.LPDWORD,
+         rwin32.LPDWORD, rwin32.PFILETIME],
+        rffi.LONG)
+
+    RegLoadKey = external(
+        'RegLoadKey' + suffix,
+        [HKEY, strp, strp],
+        rffi.LONG)
+
+    RegSaveKey = external(
+        'RegSaveKey' + suffix,
+        [HKEY, strp, rffi.VOIDP],
+        rffi.LONG)
+
+    RegConnectRegistry = external(
+        'RegConnectRegistry' + suffix,
+        [strp, HKEY, PHKEY],
+        rffi.LONG)
+
+    return (RegSetValue, RegSetValueEx, RegQueryValue, RegQueryValueEx,
+            RegCreateKey, RegCreateKeyEx, RegDeleteValue, RegDeleteKey,
+            RegOpenKeyEx, RegEnumValue, RegEnumKeyEx, RegQueryInfoKey,
+            RegLoadKey, RegSaveKey, RegConnectRegistry)
+
+RegSetValueW, RegSetValueExW, RegQueryValueW, RegQueryValueExW, \
+    RegCreateKeyW, RegCreateKeyExW, RegDeleteValueW, RegDeleteKeyW, \
+    RegOpenKeyExW, RegEnumValueW, RegEnumKeyExW, RegQueryInfoKeyW, \
+    RegLoadKeyW, RegSaveKeyW, RegConnectRegistryW = get_traits('W')
+
+RegSetValueA, RegSetValueExA, RegQueryValueA, RegQueryValueExA, \
+    RegCreateKeyA, RegCreateKeyExA, RegDeleteValueA, RegDeleteKeyA, \
+    RegOpenKeyExA, RegEnumValueA, RegEnumKeyExA, RegQueryInfoKeyA, \
+    RegLoadKeyA, RegSaveKeyA, RegConnectRegistryA = get_traits('A')
 
 RegCloseKey = external(
     'RegCloseKey',
@@ -128,29 +164,14 @@ RegFlushKey = external(
     [HKEY],
     rffi.LONG)
 
-RegLoadKey = external(
-    'RegLoadKeyA',
-    [HKEY, rffi.CCHARP, rffi.CCHARP],
-    rffi.LONG)
-
-RegSaveKey = external(
-    'RegSaveKeyA',
-    [HKEY, rffi.CCHARP, rffi.VOIDP],
-    rffi.LONG)
-
-RegConnectRegistry = external(
-    'RegConnectRegistryA',
-    [rffi.CCHARP, HKEY, PHKEY],
-    rffi.LONG)
-
 _ExpandEnvironmentStringsW = external(
     'ExpandEnvironmentStringsW',
     [rffi.CWCHARP, rffi.CWCHARP, rwin32.DWORD],
     rwin32.DWORD,
     save_err=rffi.RFFI_SAVE_LASTERROR)
 
-def ExpandEnvironmentStrings(source):
-    with rffi.scoped_unicode2wcharp(source) as src_buf:
+def ExpandEnvironmentStrings(source, unicode_len):
+    with rffi.scoped_utf82wcharp(source, unicode_len) as src_buf:
         size = _ExpandEnvironmentStringsW(src_buf,
                                           lltype.nullptr(rffi.CWCHARP.TO), 0)
         if size == 0:
@@ -160,4 +181,5 @@ def ExpandEnvironmentStrings(source):
             if _ExpandEnvironmentStringsW(src_buf,
                                           dest_buf.raw, size) == 0:
                 raise rwin32.lastSavedWindowsError("ExpandEnvironmentStrings")
-            return dest_buf.str(size - 1) # remove trailing \0
+            res = dest_buf.str(size-1) # remove trailing \0
+            return res.encode('utf8'), len(res)

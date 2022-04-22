@@ -28,7 +28,7 @@ to a file named "<name>.html".
 
 Module docs for core modules are assumed to be in
 
-    http://docs.python.org/library/
+    https://docs.python.org/library/
 
 This can be overridden by setting the PYTHONDOCS environment variable
 to a different URL or to a local directory containing the Library
@@ -374,7 +374,9 @@ class Doc:
 
     docmodule = docclass = docroutine = docother = docproperty = docdata = fail
 
-    def getdocloc(self, object):
+    def getdocloc(self, object,
+                  basedir=os.path.join(sys.exec_prefix, "lib",
+                                       "python"+sys.version[0:3])):
         """Return the location of module docs or None"""
 
         try:
@@ -383,9 +385,8 @@ class Doc:
             file = '(built-in)'
 
         docloc = os.environ.get("PYTHONDOCS",
-                                "http://docs.python.org/library")
-        basedir = os.path.join(sys.exec_prefix, "lib",
-                               "python"+sys.version[0:3])
+                                "https://docs.python.org/library")
+        basedir = os.path.normcase(basedir)
         if (isinstance(object, type(os)) and
             (object.__name__ in ('errno', 'exceptions', 'gc', 'imp',
                                  'marshal', 'posix', 'signal', 'sys',
@@ -393,10 +394,10 @@ class Doc:
              (file.startswith(basedir) and
               not file.startswith(os.path.join(basedir, 'site-packages')))) and
             object.__name__ not in ('xml.etree', 'test.pydoc_mod')):
-            if docloc.startswith("http://"):
-                docloc = "%s/%s" % (docloc.rstrip("/"), object.__name__)
+            if docloc.startswith(("http://", "https://")):
+                docloc = "%s/%s" % (docloc.rstrip("/"), object.__name__.lower())
             else:
-                docloc = os.path.join(docloc, object.__name__ + ".html")
+                docloc = os.path.join(docloc, object.__name__.lower() + ".html")
         else:
             docloc = None
         return docloc
@@ -1424,15 +1425,16 @@ def pipepager(text, cmd):
 
 def tempfilepager(text, cmd):
     """Page through text by invoking a program on a temporary file."""
+    import shutil
     import tempfile
-    filename = tempfile.mktemp()
-    file = open(filename, 'w')
-    file.write(_encode(text))
-    file.close()
+    tempdir = tempfile.mkdtemp()
     try:
+        filename = os.path.join(tempdir, 'pydoc.out')
+        with open(filename, 'w') as file:
+            file.write(_encode(text))
         os.system(cmd + ' "' + filename + '"')
     finally:
-        os.unlink(filename)
+        shutil.rmtree(tempdir)
 
 def ttypager(text):
     """Page through text on a text terminal."""
@@ -1648,8 +1650,9 @@ class Helper:
     }
     # Either add symbols to this dictionary or to the symbols dictionary
     # directly: Whichever is easier. They are merged later.
+    _strprefixes = tuple(p + q for p in ('b', 'r', 'u') for q in ("'", '"'))
     _symbols_inverse = {
-        'STRINGS' : ("'", "'''", "r'", "u'", '"""', '"', 'r"', 'u"'),
+        'STRINGS' : ("'", "'''", '"""', '"') + _strprefixes,
         'OPERATORS' : ('+', '-', '*', '**', '/', '//', '%', '<<', '>>', '&',
                        '|', '^', '~', '<', '>', '<=', '>=', '==', '!=', '<>'),
         'COMPARISON' : ('<', '>', '<=', '>=', '==', '!=', '<>'),
@@ -1812,7 +1815,12 @@ has the same effect as typing a particular string at the help> prompt.
                 if not request: break
             except (KeyboardInterrupt, EOFError):
                 break
-            request = strip(replace(request, '"', '', "'", ''))
+            request = strip(request)
+            # Make sure significant trailing quotation marks of literals don't
+            # get deleted while cleaning input
+            if (len(request) > 2 and request[0] == request[-1] in ("'", '"')
+                    and request[0] not in request[1:-1]):
+                request = request[1:-1]
             if lower(request) in ('q', 'quit'): break
             self.help(request)
 
@@ -2250,8 +2258,11 @@ def gui():
             if self.scanner:
                 self.scanner.quit = 1
             self.scanner = ModuleScanner()
+            def onerror(modname):
+                pass
             threading.Thread(target=self.scanner.run,
-                             args=(self.update, key, self.done)).start()
+                             args=(self.update, key, self.done),
+                             kwargs=dict(onerror=onerror)).start()
 
         def update(self, path, modname, desc):
             if modname[-9:] == '.__init__':

@@ -40,6 +40,10 @@ import tokenize
 import linecache
 from operator import attrgetter
 from collections import namedtuple
+try:
+    from cpyext import is_cpyext_function as _is_cpyext_function
+except ImportError:
+    _is_cpyext_function = lambda obj: False
 
 # These constants are from Include/code.h.
 CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS = 0x1, 0x2, 0x4, 0x8
@@ -155,9 +159,8 @@ def isfunction(object):
 def isgeneratorfunction(object):
     """Return true if the object is a user-defined generator function.
 
-    Generator function objects provides same attributes as functions.
-
-    See help(isfunction) for attributes listing."""
+    Generator function objects provide the same attributes as functions.
+    See help(isfunction) for a list of attributes."""
     return bool((isfunction(object) or ismethod(object)) and
                 object.func_code.co_flags & CO_GENERATOR)
 
@@ -204,7 +207,7 @@ def isframe(object):
         f_locals        local namespace seen by this frame
         f_restricted    0 or 1 if frame is in restricted execution mode
         f_trace         tracing function for this frame, or None"""
-    return isinstance(object, types.FrameType)
+    return isinstance(object, (types.FrameType, types.FakeFrameType))
 
 def iscode(object):
     """Return true if the object is a code object.
@@ -231,7 +234,7 @@ def isbuiltin(object):
         __doc__         documentation string
         __name__        original name of this function or method
         __self__        instance to which a method is bound, or None"""
-    return isinstance(object, types.BuiltinFunctionType)
+    return isinstance(object, types.BuiltinFunctionType) or _is_cpyext_function(object)
 
 def isroutine(object):
     """Return true if the object is any kind of function or method."""
@@ -689,8 +692,15 @@ def getsourcelines(object):
     raised if the source code cannot be retrieved."""
     lines, lnum = findsource(object)
 
-    if ismodule(object): return lines, 0
-    else: return getblock(lines[lnum:]), lnum + 1
+    if istraceback(object):
+        object = object.tb_frame
+
+    # for module or frame that corresponds to module, return all source lines
+    if (ismodule(object) or
+        (isframe(object) and object.f_code.co_name == "<module>")):
+        return lines, 0
+    else:
+        return getblock(lines[lnum:]), lnum + 1
 
 def getsource(object):
     """Return the text of the source code for an object.
@@ -777,8 +787,11 @@ def getargs(co):
                     if opname in ('UNPACK_TUPLE', 'UNPACK_SEQUENCE'):
                         remain.append(value)
                         count.append(value)
-                    elif opname == 'STORE_FAST':
-                        stack.append(names[value])
+                    elif opname in ('STORE_FAST', 'STORE_DEREF'):
+                        if opname == 'STORE_FAST':
+                            stack.append(names[value])
+                        else:
+                            stack.append(co.co_cellvars[value])
 
                         # Special case for sublists of length 1: def foo((bar))
                         # doesn't generate the UNPACK_TUPLE bytecode, so if
@@ -978,8 +991,13 @@ def getcallargs(func, *positional, **named):
         assign(varkw, named)
     elif named:
         unexpected = next(iter(named))
-        if isinstance(unexpected, unicode):
-            unexpected = unexpected.encode(sys.getdefaultencoding(), 'replace')
+        try:
+            unicode
+        except NameError:
+            pass
+        else:
+            if isinstance(unexpected, unicode):
+                unexpected = unexpected.encode(sys.getdefaultencoding(), 'replace')
         raise TypeError("%s() got an unexpected keyword argument '%s'" %
                         (f_name, unexpected))
     unassigned = num_args - len([arg for arg in args if is_assigned(arg)])

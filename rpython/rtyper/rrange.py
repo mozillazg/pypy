@@ -195,17 +195,26 @@ def ll_rangenext_updown(iter):
 # Support for enumerate().
 
 class EnumerateIteratorRepr(IteratorRepr):
-    def __init__(self, r_baseiter):
+    def __init__(self, r_baseiter, const_startindex):
         self.r_baseiter = r_baseiter
         self.lowleveltype = r_baseiter.lowleveltype
         # only supports for now enumerate() on sequence types whose iterators
-        # have a method ll_getnextindex.  It's easy to add one for most
-        # iterator types, but I didn't do it so far.
+        # have a method ll_getnextindex.  It could be added for most
+        # iterator types, but it's a bit messy for no clear benefit.
+        if not hasattr(r_baseiter, 'll_getnextindex'):
+            raise TyperError("not implemented for now: enumerate(x) where x "
+                             "is not a regular list (got %r)" % (r_baseiter,))
         self.ll_getnextindex = r_baseiter.ll_getnextindex
+        self.const_startindex = const_startindex
 
     def rtype_next(self, hop):
         v_enumerate, = hop.inputargs(self)
         v_index = hop.gendirectcall(self.ll_getnextindex, v_enumerate)
+        if self.const_startindex is not None:
+            v_index = hop.llops.genop(
+                "int_add",
+                [v_index, hop.llops.genconst(self.const_startindex)],
+                resulttype=v_index.concretetype)
         hop2 = hop.copy()
         hop2.args_r = [self.r_baseiter]
         r_item_src = self.r_baseiter.external_item_repr
@@ -217,4 +226,8 @@ class EnumerateIteratorRepr(IteratorRepr):
 
 def rtype_builtin_enumerate(hop):
     hop.exception_cannot_occur()
-    return hop.r_result.r_baseiter.newiter(hop)
+    hop2 = hop.copy()
+    hop2.args_r = [hop.args_r[0]]
+    hop2.args_v = [hop.args_v[0]]
+    hop2.args_s = [hop.args_s[0]]
+    return hop.r_result.r_baseiter.newiter(hop2)

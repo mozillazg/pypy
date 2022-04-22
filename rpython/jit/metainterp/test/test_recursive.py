@@ -729,7 +729,7 @@ class RecursiveTests:
                 if codeno == 2:
                     try:
                         portal(1)
-                    except MyException, me:
+                    except MyException as me:
                         i += me.x
                 i += 1
             if codeno == 1:
@@ -1092,7 +1092,7 @@ class RecursiveTests:
                 if codeno < 10:
                     try:
                         portal(codeno + 5, k+1)
-                    except GotValue, e:
+                    except GotValue as e:
                         i += e.result
                     codeno += 1
                 elif codeno == 10:
@@ -1106,7 +1106,7 @@ class RecursiveTests:
         def main(codeno, k):
             try:
                 portal(codeno, k)
-            except GotValue, e:
+            except GotValue as e:
                 return e.result
 
         assert main(0, 1) == 2095
@@ -1332,6 +1332,48 @@ class RecursiveTests:
 
     def check_get_unique_id(self, lst):
         pass
+
+    def test_huge_trace_without_inlining(self):
+        py.test.skip("fix this!")
+        def p(pc, code):
+            code = hlstr(code)
+            return "%s %d %s" % (code, pc, code[pc])
+        myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
+                                get_printable_location=p,
+                                is_recursive=True)
+
+        def f(code, n):
+            pc = 0
+            while pc < len(code):
+
+                myjitdriver.jit_merge_point(n=n, code=code, pc=pc)
+                op = code[pc]
+                if op == "-":
+                    n -= 1
+                elif op == "c":
+                    f('--------------------', n)
+                elif op == "l":
+                    if n > 0:
+                        myjitdriver.can_enter_jit(n=n, code=code, pc=0)
+                        pc = 0
+                        continue
+                else:
+                    assert 0
+                pc += 1
+            return n
+        def g(m):
+            set_param(None, 'inlining', True)
+            set_param(None, 'trace_limit', 40)
+            if m > 1000000:
+                f('', 0)
+            result = 0
+            for i in range(m):
+                result += f('-' * 50 + '-c-l-', i+100)
+        self.meta_interp(g, [10], backendopt=True)
+        self.check_aborted_count(1)
+        self.check_resops(call=0, call_assembler_i=2)
+        self.check_jitcell_token_count(2)
+
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass

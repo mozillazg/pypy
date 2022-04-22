@@ -18,9 +18,12 @@
 #define _LARGEFILE_SOURCE 1
 /* Define on NetBSD to activate all library features */
 #define _NETBSD_SOURCE 1
-/* Define to activate features from IEEE Stds 1003.1-2001 */
-#ifndef _POSIX_C_SOURCE
-#  define _POSIX_C_SOURCE 200112L
+/* Define to activate features from IEEE Stds 1003.1-2008, except on
+   macOS where it hides a lot symbols */
+#ifndef __APPLE__
+#  ifndef _POSIX_C_SOURCE
+#    define _POSIX_C_SOURCE 200809L
+#  endif
 #endif
 /* Define on FreeBSD to activate all library features */
 #define __BSD_VISIBLE 1
@@ -63,14 +66,23 @@
 #ifdef __GNUC__
 #  define RPY_EXPORTED extern __attribute__((visibility("default")))
 #  define _RPY_HIDDEN  __attribute__((visibility("hidden")))
+#  define RPY_UNUSED __attribute__ ((__unused__))
 #else
 #  define RPY_EXPORTED extern __declspec(dllexport)
 #  define _RPY_HIDDEN  /* nothing */
+#  define RPY_UNUSED   /*nothing */
 #endif
 #ifndef RPY_EXTERN
 #  define RPY_EXTERN   extern _RPY_HIDDEN
 #endif
 
+#if defined(_MSC_VER)
+  #define INLINE __inline
+#elif defined(__GNUC__)
+  #define INLINE __inline__
+#else
+  #error define inline for this compiler
+#endif
 
 #endif /* __PYPY_PRECOMMONDEFS_H */
 

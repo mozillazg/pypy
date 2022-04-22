@@ -7,13 +7,14 @@ from rpython.jit.backend.llsupport.llmodel import AbstractLLCPU
 from rpython.rlib.jit_hooks import LOOP_RUN_CONTAINER
 from rpython.rtyper.lltypesystem import lltype, llmemory
 from rpython.jit.backend.arm.detect import detect_hardfloat
-from rpython.jit.backend.arm.detect import detect_arch_version
+from rpython.jit.backend.arm.detect import detect_arch_version, detect_neon
 
 jitframe.STATICSIZE = JITFRAME_FIXED_SIZE
 
 class CPUInfo(object):
     hf_abi = False
     arch_version = 6
+    neon = False
 
 class AbstractARMCPU(AbstractLLCPU):
 
@@ -22,6 +23,7 @@ class AbstractARMCPU(AbstractLLCPU):
     supports_floats = True
     supports_longlong = True
     supports_singlefloats = True
+    supports_load_effective_address = True
 
     from rpython.jit.backend.arm.arch import JITFRAME_FIXED_SIZE
     all_reg_indexes = range(len(all_regs))
@@ -48,6 +50,7 @@ class AbstractARMCPU(AbstractLLCPU):
     def setup_once(self):
         self.cpuinfo.arch_version = detect_arch_version()
         self.cpuinfo.hf_abi = detect_hardfloat()
+        self.cpuinfo.neon = detect_neon()
         #self.codemap.setup()
         self.assembler.setup_once()
 

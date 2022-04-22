@@ -269,6 +269,34 @@ class AppTestW_TupleObject:
         assert not 11 in t
         assert not t in t
 
+        logger = []
+
+        class Foo(object):
+
+            def __init__(self, value, name=None):
+                self.value = value
+                self.name = name or value
+
+            def __repr__(self):
+                return '<Foo %s>' % self.name
+
+            def __eq__(self, other):
+                logger.append((self, other))
+                return self.value == other.value
+
+        foo1, foo2, foo3 = Foo(1), Foo(2), Foo(3)
+        foo42 = Foo(42)
+        foo_tuple = (foo1, foo2, foo3)
+        foo42 in foo_tuple
+        logger_copy = logger[:]  # prevent re-evaluation during pytest error print
+        assert logger_copy == [(foo42, foo1), (foo42, foo2), (foo42, foo3)]
+
+        del logger[:]
+        foo2_bis = Foo(2, '2 bis')
+        foo2_bis in foo_tuple
+        logger_copy = logger[:]  # prevent re-evaluation during pytest error print
+        assert logger_copy == [(foo2_bis, foo1), (foo2_bis, foo2)]
+
     def test_add(self):
         t0 = ()
         t1 = (5, 3, 99)
@@ -426,3 +454,11 @@ class AppTestW_TupleObject:
             (4.1, 2.3), (3.6, 4.8)]
         assert specialized_zip_2_lists(["foo", "bar"], [6, 2]) == [
             ("foo", 6), ("bar", 2)]
+
+    def test_error_message_wrong_self(self):
+        unboundmeth = tuple.__hash__
+        e = raises(TypeError, unboundmeth, 42)
+        assert "tuple" in str(e.value)
+        if hasattr(unboundmeth, 'im_func'):
+            e = raises(TypeError, unboundmeth.im_func, 42)
+            assert "'tuple'" in str(e.value)

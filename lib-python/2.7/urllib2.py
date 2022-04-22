@@ -248,11 +248,9 @@ class Request:
         # methods getting called in a non-standard order.  this may be
         # too complicated and/or unnecessary.
         # XXX should the __r_XXX attributes be public?
-        if attr[:12] == '_Request__r_':
-            name = attr[12:]
-            if hasattr(Request, 'get_' + name):
-                getattr(self, 'get_' + name)()
-                return getattr(self, attr)
+        if attr in ('_Request__r_type', '_Request__r_host'):
+            getattr(self, 'get_' + attr[12:])()
+            return self.__dict__[attr]
         raise AttributeError, attr
 
     def get_method(self):
@@ -611,7 +609,7 @@ class HTTPRedirectHandler(BaseHandler):
 
         # fix a possible malformed URL
         urlparts = urlparse.urlparse(newurl)
-        if not urlparts.path:
+        if not urlparts.path and urlparts.netloc:
             urlparts = list(urlparts)
             urlparts[2] = "/"
         newurl = urlparse.urlunparse(urlparts)
@@ -835,10 +833,10 @@ class HTTPPasswordMgr:
             return True
         if base[0] != test[0]:
             return False
-        common = posixpath.commonprefix((base[1], test[1]))
-        if len(common) == len(base[1]):
-            return True
-        return False
+        prefix = base[1]
+        if prefix[-1:] != '/':
+            prefix += '/'
+        return test[1].startswith(prefix)
 
 
 class HTTPPasswordMgrWithDefaultRealm(HTTPPasswordMgr):
@@ -858,8 +856,15 @@ class AbstractBasicAuthHandler:
 
     # allow for double- and single-quoted realm values
     # (single quotes are a violation of the RFC, but appear in the wild)
-    rx = re.compile('(?:.*,)*[ \t]*([^ \t]+)[ \t]+'
-                    'realm=(["\']?)([^"\']*)\\2', re.I)
+    rx = re.compile('(?:^|,)'   # start of the string or ','
+                    '[ \t]*'    # optional whitespaces
+                    '([^ \t,]+)' # scheme like "Basic"
+                    '[ \t]+'    # mandatory whitespaces
+                    # realm=xxx
+                    # realm='xxx'
+                    # realm="xxx"
+                    'realm=(["\']?)([^"\']*)\\2',
+                    re.I)
 
     # XXX could pre-emptively send auth info already accepted (RFC 2617,
     # end of section 2, and section 1.2 immediately after "credentials"
@@ -871,22 +876,51 @@ class AbstractBasicAuthHandler:
         self.passwd = password_mgr
         self.add_password = self.passwd.add_password
 
+    def _parse_realm(self, header):
+        # parse WWW-Authenticate header: accept multiple challenges per header
+        found_challenge = False
+        for mo in AbstractBasicAuthHandler.rx.finditer(header):
+            scheme, quote, realm = mo.groups()
+            if quote not in ['"', "'"]:
+                warnings.warn("Basic Auth Realm was unquoted",
+                              UserWarning, 3)
+
+            yield (scheme, realm)
+
+            found_challenge = True
+
+        if not found_challenge:
+            if header:
+                scheme = header.split()[0]
+            else:
+                scheme = ''
+            yield (scheme, None)
 
     def http_error_auth_reqed(self, authreq, host, req, headers):
         # host may be an authority (without userinfo) or a URL with an
         # authority
-        # XXX could be multiple headers
-        authreq = headers.get(authreq, None)
+        headers = headers.getheaders(authreq)
+        if not headers:
+            # no header found
+            return
 
-        if authreq:
-            mo = AbstractBasicAuthHandler.rx.search(authreq)
-            if mo:
-                scheme, quote, realm = mo.groups()
-                if quote not in ['"', "'"]:
-                    warnings.warn("Basic Auth Realm was unquoted",
-                                  UserWarning, 2)
-                if scheme.lower() == 'basic':
+        unsupported = None
+        for header in headers:
+            for scheme, realm in self._parse_realm(header):
+                if scheme.lower() != 'basic':
+                    unsupported = scheme
+                    continue
+
+                if realm is not None:
+                    # Use the first matching Basic challenge.
+                    # Ignore following challenges even if they use the Basic
+                    # scheme.
                     return self.retry_http_basic_auth(host, req, realm)
+
+        if unsupported is not None:
+            raise ValueError("AbstractBasicAuthHandler does not "
+                             "support the following scheme: %r"
+                             % (scheme,))
 
     def retry_http_basic_auth(self, host, req, realm):
         user, pw = self.passwd.find_user_password(realm, host)
@@ -1073,6 +1107,9 @@ class AbstractDigestAuthHandler:
         elif algorithm == 'SHA':
             H = lambda x: hashlib.sha1(x).hexdigest()
         # XXX MD5-sess
+        else:
+            raise ValueError("Unsupported digest authentication "
+                             "algorithm %r" % algorithm.lower())
         KD = lambda s, d: H("%s:%s" % (s, d))
         return H, KD
 

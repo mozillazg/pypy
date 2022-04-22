@@ -125,6 +125,9 @@ class Repr(object):
                 self, value))
         return value
 
+    def special_uninitialized_value(self):
+        return None
+
     def get_ll_eq_function(self):
         """Return an eq(x,y) function to use to compare two low-level
         values of this Repr.
@@ -273,10 +276,10 @@ class __extend__(annmodel.SomeIterator):
     # NOTE: SomeIterator is for iterators over any container, not just list
     def rtyper_makerepr(self, rtyper):
         r_container = rtyper.getrepr(self.s_container)
-        if self.variant == ("enumerate",):
+        if self.variant and self.variant[0] == "enumerate":
             from rpython.rtyper.rrange import EnumerateIteratorRepr
             r_baseiter = r_container.make_iterator_repr()
-            return EnumerateIteratorRepr(r_baseiter)
+            return EnumerateIteratorRepr(r_baseiter, self.variant[1])
         return r_container.make_iterator_repr(*self.variant)
 
     def rtyper_makekey(self):
@@ -355,6 +358,10 @@ class VoidRepr(Repr):
     get_ll_fasthash_function = get_ll_hash_function
     def ll_str(self, nothing): raise AssertionError("unreachable code")
 impossible_repr = VoidRepr()
+
+class __extend__(pairtype(Repr, VoidRepr)):
+    def convert_from_to((r_from, r_to), v, llops):
+        return inputconst(lltype.Void, None)
 
 class SimplePointerRepr(Repr):
     "Convenience Repr for simple ll pointer types with no operation on them."
@@ -454,13 +461,9 @@ class DummyValueBuilder(object):
 
 # logging/warning
 
-import py
-from rpython.tool.ansi_print import ansi_log
+from rpython.tool.ansi_print import AnsiLogger
 
-log = py.log.Producer("rtyper")
-py.log.setconsumer("rtyper", ansi_log)
-py.log.setconsumer("rtyper translating", None)
-py.log.setconsumer("rtyper debug", None)
+log = AnsiLogger("rtyper")
 
 def warning(msg):
     log.WARNING(msg)

@@ -1,6 +1,9 @@
 class AppTestWeakref(object):
     spaceconfig = dict(usemodules=('_weakref',))
-                    
+
+    def setup_class(cls):
+        cls.w_runappdirect = cls.space.wrap(cls.runappdirect)
+
     def test_simple(self):
         import _weakref, gc
         class A(object):
@@ -18,6 +21,12 @@ class AppTestWeakref(object):
     def test_missing_arg(self):
         import _weakref
         raises(TypeError, _weakref.ref)
+
+    def test_no_kwargs(self):
+        import _weakref
+        class C(object):
+            pass
+        raises(TypeError, _weakref.ref, C(), callback=None)
 
     def test_callback(self):
         import _weakref, gc
@@ -140,6 +149,14 @@ class AppTestWeakref(object):
         assert ref1 != ref2
         assert not (ref1 == [])
         assert ref1 != []
+
+    def test_ne(self):
+        import _weakref
+        class X(object):
+            pass
+        ref1 = _weakref.ref(X())
+        assert ref1.__eq__(X()) is NotImplemented
+        assert ref1.__ne__(X()) is NotImplemented
 
     def test_getweakrefs(self):
         import _weakref, gc
@@ -287,6 +304,9 @@ class AppTestWeakref(object):
             assert a1 is None
 
     def test_del_and_callback_and_id(self):
+        if not self.runappdirect:
+            skip("the id() doesn't work correctly in __del__ and "
+                 "callbacks before translation")
         import gc, weakref
         seen_del = []
         class A(object):
@@ -523,3 +543,56 @@ class AppTestProxy(object):
         p1[42] = p2
         assert a1.setkey == 42
         assert a1.setvalue is p2
+
+    def test_error_message_wrong_self(self):
+        import _weakref
+        unboundmeth = _weakref.ref.__repr__
+        e = raises(TypeError, unboundmeth, 42)
+        assert "weakref" in str(e.value)
+        if hasattr(unboundmeth, 'im_func'):
+            e = raises(TypeError, unboundmeth.im_func, 42)
+            assert "'weakref-or-proxy'" in str(e.value)
+
+    def test_reverse_add(self):
+        import _weakref
+        class A:
+            def __add__(self, other):
+                return 17
+
+            def __radd__(self, other):
+                return 20
+
+            def __iadd__(self, other):
+                return 19
+
+        assert A() + 12 == 17
+        assert 12 + A() == 20
+        a = A()
+        a += -1
+        assert a == 19
+
+        a = A()
+        p = _weakref.proxy(a)
+        assert p + 12 == 17
+        print(12 + p)
+        assert 12 + p == 20
+        p += -1
+        assert p == 19
+
+    def test_gt_lt(self):
+        import _weakref
+        class A:
+            def __gt__(self, other):
+                return True
+
+            def __lt__(self, other):
+                return False
+
+        assert (A() > 12) == True
+        assert (12 > A()) == False
+
+        a = A()
+        p = _weakref.proxy(a)
+        assert (p > 12) == True
+        print(12 > p)
+        assert (12 > p) == False

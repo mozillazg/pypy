@@ -5,7 +5,7 @@ from rpython.jit.metainterp.history import ResOperation, TargetToken,\
 from rpython.jit.metainterp.history import (ConstInt, ConstPtr, Const,
                                             BasicFailDescr, BasicFinalDescr)
 from rpython.jit.backend.detect_cpu import getcpuclass
-from rpython.jit.backend.x86.arch import WORD
+from rpython.jit.backend.x86.arch import WORD, WIN64
 from rpython.jit.backend.x86.rx86 import fits_in_32bits
 from rpython.jit.backend.llsupport import symbolic
 from rpython.jit.metainterp.resoperation import rop, InputArgInt, InputArgRef
@@ -33,13 +33,13 @@ class TestX86(LLtypeBackendTest):
         add_loop_instructions = ('mov; '
                                  'lea; '    # a nop, for the label
                                  'add; test; je; jmp;')   # plus some padding
-        bridge_loop_instructions = 'cmp; jge; mov; mov; call; jmp;'
+        bridge_loop_instructions = 'cmp; jl; jmp;'
     else:
         add_loop_instructions = ('mov; '
                                  'nop; '    # for the label
                                  'add; test; je; jmp;')   # plus some padding
         bridge_loop_instructions = (
-            'cmp; jge; mov;( movabs;)? mov; mov(abs)?; call; mov(abs)?; jmp;')
+            'cmp; jl; mov(abs)?; jmp;')
 
     def get_cpu(self):
         cpu = CPU(rtyper=None, stats=FakeStats())
@@ -74,7 +74,7 @@ class TestX86(LLtypeBackendTest):
         assert u.chars[3] == u'd'
 
     @staticmethod
-    def _resbuf(res, item_tp=ctypes.c_long):
+    def _resbuf(res, item_tp=ctypes.c_long if not WIN64 else ctypes.c_longlong):
         return ctypes.cast(res._obj.intval, ctypes.POINTER(item_tp))
 
     def test_allocations(self):
@@ -285,12 +285,15 @@ class TestX86(LLtypeBackendTest):
         cases = [8, 16, 24]
         if WORD == 8:
             cases.append(32)
+            bigvalue = 0xAAAAAAAAAAAA
+        else:
+            bigvalue = 0xAAAAAAA
         for i in cases:
-            box = InputArgInt(0xAAAAAAAAAAAA)
+            box = InputArgInt(bigvalue)
             res = self.execute_operation(rop.INT_AND,
                                          [box, ConstInt(2 ** i - 1)],
                                          'int')
-            assert res == 0xAAAAAAAAAAAA & (2 ** i - 1)
+            assert res == bigvalue & (2 ** i - 1)
 
     def test_nullity_with_guard(self):
         allops = [rop.INT_IS_TRUE]
@@ -590,11 +593,11 @@ class TestDebuggingAssembler(object):
             self.cpu.compile_loop(ops.inputargs, ops.operations, looptoken)
             self.cpu.execute_token(looptoken, 0)
             # check debugging info
-            struct = self.cpu.assembler.loop_run_counters[0]
+            struct = self.cpu.assembler.get_loop_run_counters(0)
             assert struct.i == 1
-            struct = self.cpu.assembler.loop_run_counters[1]
+            struct = self.cpu.assembler.get_loop_run_counters(1)
             assert struct.i == 1
-            struct = self.cpu.assembler.loop_run_counters[2]
+            struct = self.cpu.assembler.get_loop_run_counters(2)
             assert struct.i == 9
             self.cpu.finish_once()
         finally:

@@ -1,4 +1,6 @@
 import unittest
+from test.support import precisionbigmemtest, _2G
+import sys
 from ctypes import *
 from test.test_support import impl_detail
 
@@ -35,20 +37,24 @@ class ArrayTestCase(unittest.TestCase):
             self.assertEqual(len(ia), alen)
 
             # slot values ok?
-            values = [ia[i] for i in range(len(init))]
+            values = [ia[i] for i in range(alen)]
             self.assertEqual(values, init)
+
+            # out-of-bounds accesses should be caught
+            with self.assertRaises(IndexError): ia[alen]
+            with self.assertRaises(IndexError): ia[-alen-1]
 
             # change the items
             from operator import setitem
             new_values = range(42, 42+alen)
             [setitem(ia, n, new_values[n]) for n in range(alen)]
-            values = [ia[i] for i in range(len(init))]
+            values = [ia[i] for i in range(alen)]
             self.assertEqual(values, new_values)
 
             # are the items initialized to 0?
             ia = int_array()
-            values = [ia[i] for i in range(len(init))]
-            self.assertEqual(values, [0] * len(init))
+            values = [ia[i] for i in range(alen)]
+            self.assertEqual(values, [0] * alen)
 
             # Too many initializers should be caught
             self.assertRaises(IndexError, int_array, *range(alen*2))
@@ -138,6 +144,32 @@ class ArrayTestCase(unittest.TestCase):
         t1 = my_int * 1
         t2 = my_int * 1
         self.assertIs(t1, t2)
+
+    def test_empty_element_struct(self):
+        class EmptyStruct(Structure):
+            _fields_ = []
+
+        obj = (EmptyStruct * 2)()  # bpo37188: Floating point exception
+        self.assertEqual(sizeof(obj), 0)
+
+    def test_empty_element_array(self):
+        class EmptyArray(Array):
+            _type_ = c_int
+            _length_ = 0
+
+        obj = (EmptyArray * 2)()  # bpo37188: Floating point exception
+        self.assertEqual(sizeof(obj), 0)
+
+    def test_bpo36504_signed_int_overflow(self):
+        # The overflow check in PyCArrayType_new() could cause signed integer
+        # overflow.
+        with self.assertRaises(OverflowError):
+            c_char * sys.maxsize * 2
+
+    @unittest.skipUnless(sys.maxsize > 2**32, 'requires 64bit platform')
+    @precisionbigmemtest(size=_2G, memuse=1, dry_run=False)
+    def test_large_array(self, size):
+        a = c_char * size
 
 if __name__ == '__main__':
     unittest.main()

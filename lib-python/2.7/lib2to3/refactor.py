@@ -15,6 +15,7 @@ __author__ = "Guido van Rossum <guido@python.org>"
 
 # Python imports
 import os
+import pkgutil
 import sys
 import logging
 import operator
@@ -33,13 +34,12 @@ from . import btm_matcher as bm
 def get_all_fix_names(fixer_pkg, remove_prefix=True):
     """Return a sorted list of all available fix names in the given package."""
     pkg = __import__(fixer_pkg, [], [], ["*"])
-    fixer_dir = os.path.dirname(pkg.__file__)
     fix_names = []
-    for name in sorted(os.listdir(fixer_dir)):
-        if name.startswith("fix_") and name.endswith(".py"):
+    for finder, name, ispkg in pkgutil.iter_modules(pkg.__path__):
+        if name.startswith("fix_"):
             if remove_prefix:
                 name = name[4:]
-            fix_names.append(name[:-3])
+            fix_names.append(name)
     return fix_names
 
 
@@ -184,7 +184,7 @@ class RefactoringTool(object):
 
         Args:
             fixer_names: a list of fixers to import
-            options: an dict with configuration.
+            options: a dict with configuration.
             explicit: a list of fixers to run even if they are explicit.
         """
         self.fixers = fixer_names
@@ -255,7 +255,7 @@ class RefactoringTool(object):
             fixer = fix_class(self.options, self.fixer_log)
             if fixer.explicit and self.explicit is not True and \
                     fix_mod_path not in self.explicit:
-                self.log_message("Skipping implicit fixer: %s", fix_name)
+                self.log_message("Skipping optional fixer: %s", fix_name)
                 continue
 
             self.log_debug("Adding transformation: %s", fix_name)

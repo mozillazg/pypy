@@ -492,6 +492,69 @@ class TestTimeDelta(HarmlessMixedComparison, unittest.TestCase):
         self.assertEqual(str(t3), str(t4))
         self.assertEqual(t4.as_hours(), -1)
 
+    def test_issue31752(self):
+        # The interpreter shouldn't crash because divmod() returns negative
+        # remainder.
+        for inttype in (int, long):
+            class BadInt(inttype):
+                def __mul__(self, other):
+                    return Prod()
+                def __rmul__(self, other):
+                    return Prod()
+                def __floordiv__(self, other):
+                    return Prod()
+                def __rfloordiv__(self, other):
+                    return Prod()
+
+            class BadLong(long):
+                def __mul__(self, other):
+                    return Prod()
+                def __rmul__(self, other):
+                    return Prod()
+                def __floordiv__(self, other):
+                    return Prod()
+                def __rfloordiv__(self, other):
+                    return Prod()
+
+            class Prod:
+                def __add__(self, other):
+                    return Sum()
+                def __radd__(self, other):
+                    return Sum()
+
+            for inttype2 in (int, long):
+                class Sum(inttype2):
+                    def __divmod__(self, other):
+                        return divmodresult
+
+                for divmodresult in [None, (), (0, 1, 2), (0, -1)]:
+                    # The following examples should not crash.
+                    try:
+                        timedelta(microseconds=BadInt(1))
+                    except TypeError:
+                        pass
+                    try:
+                        timedelta(hours=BadInt(1))
+                    except TypeError:
+                        pass
+                    try:
+                        timedelta(weeks=BadInt(1))
+                    except (TypeError, ValueError):
+                        pass
+                    try:
+                        timedelta(1) * BadInt(1)
+                    except (TypeError, ValueError):
+                        pass
+                    try:
+                        BadInt(1) * timedelta(1)
+                    except TypeError:
+                        pass
+                    try:
+                        timedelta(1) // BadInt(1)
+                    except TypeError:
+                        pass
+
+
 #############################################################################
 # date tests
 
@@ -882,7 +945,7 @@ class TestDate(HarmlessMixedComparison, unittest.TestCase):
         #self.assertRaises(ValueError, t.strftime, "%#")
 
         #oh well, some systems just ignore those invalid ones.
-        #at least, excercise them to make sure that no crashes
+        #at least, exercise them to make sure that no crashes
         #are generated
         for f in ["%e", "%", "%#"]:
             try:
@@ -1992,7 +2055,7 @@ class TestTime(HarmlessMixedComparison, unittest.TestCase):
                                          hour_byte + base[1:])
 
 # A mixin for classes with a tzinfo= argument.  Subclasses must define
-# theclass as a class atribute, and theclass(1, 1, 1, tzinfo=whatever)
+# theclass as a class attribute, and theclass(1, 1, 1, tzinfo=whatever)
 # must be legit (which is true for time and datetime).
 class TZInfoBase:
 
@@ -3343,7 +3406,7 @@ class Oddballs(unittest.TestCase):
         self.assertRaises(TypeError, lambda: as_date >= as_datetime)
         self.assertRaises(TypeError, lambda: as_datetime >= as_date)
 
-        # Neverthelss, comparison should work with the base-class (date)
+        # Nevertheless, comparison should work with the base-class (date)
         # projection if use of a date method is forced.
         self.assertTrue(as_date.__eq__(as_datetime))
         different_day = (as_date.day + 1) % 20 + 1

@@ -11,7 +11,7 @@ import sys
 import pypy
 conftestpath = py.path.local(pypy.__file__).dirpath("conftest.py")
 
-pytest_plugins = "pytest_pytester"
+pytest_plugins = "pytester"
 
 def somefunc(x):
     print x
@@ -37,37 +37,16 @@ def test_myexception(space):
                   build_pytest_assertion(space))
     try:
         f.call_args(Arguments(None, []))
-    except OperationError, e:
+    except OperationError as e:
         assert e.match(space, space.w_AssertionError)
         assert space.unwrap(space.str(e.get_w_value(space))) == 'assert 42 == 43'
     else:
         assert False, "got no exception!"
 
-def app_test_exception():
-    try:
-        raise AssertionError("42")
-    except AssertionError:
-        pass
-    else:
-        raise AssertionError, "app level AssertionError mixup!"
-
-def app_test_exception_with_message():
-    try:
-        assert 0, "Failed"
-    except AssertionError, e:
-        assert e.msg == "Failed"
-
-def app_test_comparison():
-    try:
-        assert 3 > 4
-    except AssertionError, e:
-        assert "3 > 4" in e.msg
-
-
 def test_appexecinfo(space):
     try:
         space.appexec([], "(): raise ValueError")
-    except OperationError, e:
+    except OperationError as e:
         appex = AppExceptionInfo(space, e)
     else:
         py.test.fail("did not raise!")
@@ -79,6 +58,9 @@ def test_appexecinfo(space):
         pass
     assert not appex.errisinstance(A)
 
+# this is used by test_wrapped_function_with_different_name below
+def inc(self, x):
+    return x+1
 
 class AppTestWithWrappedInterplevelAttributes:
     def setup_class(cls):
@@ -100,6 +82,11 @@ class AppTestWithWrappedInterplevelAttributes:
 
     def test_equal(self):
         assert self.compute(3) == 5
+
+    w_inc = inc
+
+    def test_wrapped_function_with_different_name(self):
+        assert self.inc(41) == 42
 
 
 def test_app_test_blow(testdir):

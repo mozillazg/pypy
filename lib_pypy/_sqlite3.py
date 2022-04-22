@@ -31,10 +31,11 @@ import sys
 import weakref
 from threading import _get_ident as _thread_get_ident
 try:
-    from __pypy__ import newlist_hint
+    from __pypy__ import newlist_hint, add_memory_pressure
 except ImportError:
     assert '__pypy__' not in sys.builtin_module_names
     newlist_hint = lambda sizehint: []
+    add_memory_pressure = lambda size: None
 
 if sys.version_info[0] >= 3:
     StandardError = Exception
@@ -150,8 +151,12 @@ class NotSupportedError(DatabaseError):
 def connect(database, timeout=5.0, detect_types=0, isolation_level="",
                  check_same_thread=True, factory=None, cached_statements=100):
     factory = Connection if not factory else factory
-    return factory(database, timeout, detect_types, isolation_level,
+    # an sqlite3 db seems to be around 100 KiB at least (doesn't matter if
+    # backed by :memory: or a file)
+    res = factory(database, timeout, detect_types, isolation_level,
                     check_same_thread, factory, cached_statements)
+    add_memory_pressure(100 * 1024)
+    return res
 
 
 def _unicode_text_factory(x):
@@ -220,6 +225,7 @@ class Connection(object):
         self.__statements_counter = 0
         self.__rawstatements = set()
         self._statement_cache = _StatementCache(self, cached_statements)
+        self.__statements_already_committed = []
 
         self.__func_cache = {}
         self.__aggregates = {}
@@ -285,7 +291,7 @@ class Connection(object):
             raise ProgrammingError(
                 "SQLite objects created in a thread can only be used in that "
                 "same thread. The object was created in thread id %d and this "
-                "is thread id %d" % (self.__thread_ident, _thread_get_ident()))
+                "is thread id %d." % (self.__thread_ident, _thread_get_ident()))
 
     def _check_thread_wrap(func):
         @wraps(func)
@@ -363,17 +369,29 @@ class Connection(object):
                 if cursor is not None:
                     cursor._reset = True
 
+    def _reset_already_committed_statements(self):
+        lst = self.__statements_already_committed
+        self.__statements_already_committed = []
+        for weakref in lst:
+            statement = weakref()
+            if statement is not None:
+                statement._reset()
+
     @_check_thread_wrap
     @_check_closed_wrap
     def __call__(self, sql):
         return self._statement_cache.get(sql)
 
-    def cursor(self, factory=None):
+    def _default_cursor_factory(self):
+        return Cursor(self)
+
+    def cursor(self, factory=_default_cursor_factory):
         self._check_thread()
         self._check_closed()
-        if factory is None:
-            factory = Cursor
         cur = factory(self)
+        if not issubclass(type(cur), Cursor):
+            raise TypeError("factory must return a cursor, not %s"
+                            % (type(cur).__name__,))
         if self.row_factory is not None:
             cur.row_factory = self.row_factory
         return cur
@@ -414,7 +432,18 @@ class Connection(object):
         if not self._in_transaction:
             return
 
-        self.__do_all_statements(Statement._reset, False)
+        # PyPy fix for non-refcounting semantics: since 2.7.13 (and in
+        # <= 2.6.x), the statements are not automatically reset upon
+        # commit.  However, if this is followed by some specific SQL
+        # operations like "drop table", these open statements come in
+        # the way and cause the "drop table" to fail.  On CPython the
+        # problem is much less important because typically all the old
+        # statements are freed already by reference counting.  So here,
+        # we copy all the still-alive statements to another list which
+        # is usually ignored, except if we get SQLITE_LOCKED
+        # afterwards---at which point we reset all statements in this
+        # list.
+        self.__statements_already_committed = self.__statements[:]
 
         statement_star = _ffi.new('sqlite3_stmt **')
         ret = _lib.sqlite3_prepare_v2(self._db, b"COMMIT", -1,
@@ -546,7 +575,7 @@ class Connection(object):
     @_check_thread_wrap
     @_check_closed_wrap
     def create_collation(self, name, callback):
-        name = name.upper()
+        name = str.upper(name)
         if not all(c in string.ascii_uppercase + string.digits + '_' for c in name):
             raise ProgrammingError("invalid character in collation name")
 
@@ -676,6 +705,8 @@ class Cursor(object):
         self.__initialized = True
 
     def close(self):
+        if not self.__initialized:
+            raise ProgrammingError("Base Cursor.__init__ not called.")
         self.__connection._check_thread()
         self.__connection._check_closed()
         if self.__statement:
@@ -815,7 +846,17 @@ class Cursor(object):
                 self.__statement._set_params(params)
 
                 # Actually execute the SQL statement
+
                 ret = _lib.sqlite3_step(self.__statement._statement)
+
+                # PyPy: if we get SQLITE_LOCKED, it's probably because
+                # one of the cursors created previously is still alive
+                # and not reset and the operation we're trying to do
+                # makes Sqlite unhappy about that.  In that case, we
+                # automatically reset all old cursors and try again.
+                if ret == _lib.SQLITE_LOCKED:
+                    self.__connection._reset_already_committed_statements()
+                    ret = _lib.sqlite3_step(self.__statement._statement)
 
                 if ret == _lib.SQLITE_ROW:
                     if multiple:
@@ -949,6 +990,7 @@ class Cursor(object):
         return list(self)
 
     def __get_connection(self):
+        self.__check_cursor()
         return self.__connection
     connection = property(__get_connection)
 
@@ -989,24 +1031,31 @@ class Statement(object):
         if '\0' in sql:
             raise ValueError("the query contains a null character")
 
-        first_word = sql.lstrip().split(" ")[0].upper()
-        if first_word == "":
-            self._type = _STMT_TYPE_INVALID
-        elif first_word == "SELECT":
-            self._type = _STMT_TYPE_SELECT
-        elif first_word == "INSERT":
-            self._type = _STMT_TYPE_INSERT
-        elif first_word == "UPDATE":
-            self._type = _STMT_TYPE_UPDATE
-        elif first_word == "DELETE":
-            self._type = _STMT_TYPE_DELETE
-        elif first_word == "REPLACE":
-            self._type = _STMT_TYPE_REPLACE
+        
+        if sql.strip():
+            first_word = sql.lstrip().split()[0].upper()
+            if first_word == '':
+                self._type = _STMT_TYPE_INVALID
+            if first_word == "SELECT":
+                self._type = _STMT_TYPE_SELECT
+            elif first_word == "INSERT":
+                self._type = _STMT_TYPE_INSERT
+            elif first_word == "UPDATE":
+                self._type = _STMT_TYPE_UPDATE
+            elif first_word == "DELETE":
+                self._type = _STMT_TYPE_DELETE
+            elif first_word == "REPLACE":
+                self._type = _STMT_TYPE_REPLACE
+            else:
+                self._type = _STMT_TYPE_OTHER
         else:
-            self._type = _STMT_TYPE_OTHER
+            self._type = _STMT_TYPE_INVALID
 
         if isinstance(sql, unicode):
             sql = sql.encode('utf-8')
+
+        self._valid = True
+
         statement_star = _ffi.new('sqlite3_stmt **')
         next_char = _ffi.new('char **')
         c_sql = _ffi.new("char[]", sql)
@@ -1017,10 +1066,11 @@ class Statement(object):
         if ret == _lib.SQLITE_OK and not self._statement:
             # an empty statement, work around that, as it's the least trouble
             self._type = _STMT_TYPE_SELECT
-            c_sql = _ffi.new("char[]", b"select 42")
+            c_sql = _ffi.new("char[]", b"select 42 where 42 = 23")
             ret = _lib.sqlite3_prepare_v2(self.__con._db, c_sql, -1,
                                           statement_star, next_char)
             self._statement = statement_star[0]
+            self._valid = False
 
         if ret != _lib.SQLITE_OK:
             raise self.__con._get_exception(ret)
@@ -1142,7 +1192,7 @@ class Statement(object):
             _STMT_TYPE_UPDATE,
             _STMT_TYPE_DELETE,
             _STMT_TYPE_REPLACE
-        ):
+        ) or not self._valid:
             return None
         desc = []
         for i in xrange(_lib.sqlite3_column_count(self._statement)):
@@ -1155,6 +1205,8 @@ class Statement(object):
 
 class Row(object):
     def __init__(self, cursor, values):
+        if not (type(cursor) is Cursor or issubclass(type(cursor), Cursor)):
+            raise TypeError("instance of cursor required for first argument")
         self.description = cursor.description
         self.values = values
 

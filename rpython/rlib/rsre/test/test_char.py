@@ -1,9 +1,15 @@
-from rpython.rlib.rsre import rsre_char
-from rpython.rlib.rsre.rsre_char import SRE_FLAG_LOCALE, SRE_FLAG_UNICODE
+from rpython.rlib.rsre import rsre_char, rsre_core
+from rpython.rlib.rsre.rsre_constants import SRE_FLAG_LOCALE, SRE_FLAG_UNICODE
 
 def setup_module(mod):
     from rpython.rlib.unicodedata import unicodedb
     rsre_char.set_unicode_db(unicodedb)
+
+
+def check_charset(pattern, idx, char):
+    p = rsre_core.CompiledPattern(pattern, 0)
+    return rsre_char.check_charset(Ctx(p), p, idx, char)
+
 
 UPPER_PI = 0x3a0
 LOWER_PI = 0x3c0
@@ -33,6 +39,34 @@ def test_getlower():
     assert rsre_char.getlower(UPPER_PI, SRE_FLAG_LOCALE) == UPPER_PI
     assert rsre_char.getlower(UPPER_PI, SRE_FLAG_LOCALE | SRE_FLAG_UNICODE) \
                                                          == UPPER_PI
+
+def test_getupper():
+    assert rsre_char.getupper(ord('A'), 0) == ord('A')
+    assert rsre_char.getupper(ord('b'), 0) == ord('B')
+    assert rsre_char.getupper(10, 0) == 10
+    assert rsre_char.getupper(LOWER_PI, 0) == LOWER_PI
+    #
+    assert rsre_char.getupper(ord('a'), SRE_FLAG_UNICODE) == ord('A')
+    assert rsre_char.getupper(ord('2'), SRE_FLAG_UNICODE) == ord('2')
+    assert rsre_char.getupper(10, SRE_FLAG_UNICODE) == 10
+    assert rsre_char.getupper(LOWER_PI, SRE_FLAG_UNICODE) == UPPER_PI
+    #
+    assert rsre_char.getupper(LOWER_PI, SRE_FLAG_LOCALE) == LOWER_PI
+    assert rsre_char.getupper(LOWER_PI, SRE_FLAG_LOCALE | SRE_FLAG_UNICODE) \
+                                                         == LOWER_PI
+
+
+def test_getupper_getlower_unicode_ascii_shortcut():
+    from rpython.rlib.unicodedata import unicodedb
+    try:
+        rsre_char.set_unicode_db(None)
+        for i in range(128):
+            # works despite not having a unicode db
+            rsre_char.getlower(i, SRE_FLAG_UNICODE)
+            rsre_char.getupper(i, SRE_FLAG_UNICODE)
+    finally:
+        rsre_char.set_unicode_db(unicodedb)
+
 
 def test_is_word():
     assert rsre_char.is_word(ord('A'))
@@ -128,6 +162,10 @@ def test_category():
     assert     cat(CHCODES["category_uni_not_digit"], DINGBAT_CIRCLED)
 
 
+class Ctx:
+    def __init__(self, pattern):
+        self.pattern = pattern
+
 def test_general_category():
     from rpython.rlib.unicodedata import unicodedb
 
@@ -137,12 +175,12 @@ def test_general_category():
         pat_neg = [70, ord(cat) | 0x80, 0]
         for c in positive:
             assert unicodedb.category(ord(c)).startswith(cat)
-            assert rsre_char.check_charset(pat_pos, 0, ord(c))
-            assert not rsre_char.check_charset(pat_neg, 0, ord(c))
+            assert check_charset(pat_pos, 0, ord(c))
+            assert not check_charset(pat_neg, 0, ord(c))
         for c in negative:
             assert not unicodedb.category(ord(c)).startswith(cat)
-            assert not rsre_char.check_charset(pat_pos, 0, ord(c))
-            assert rsre_char.check_charset(pat_neg, 0, ord(c))
+            assert not check_charset(pat_pos, 0, ord(c))
+            assert check_charset(pat_neg, 0, ord(c))
 
     def cat2num(cat):
         return ord(cat[0]) | (ord(cat[1]) << 8)
@@ -153,17 +191,28 @@ def test_general_category():
         pat_neg = [70, cat2num(cat) | 0x80, 0]
         for c in positive:
             assert unicodedb.category(ord(c)) == cat
-            assert rsre_char.check_charset(pat_pos, 0, ord(c))
-            assert not rsre_char.check_charset(pat_neg, 0, ord(c))
+            assert check_charset(pat_pos, 0, ord(c))
+            assert not check_charset(pat_neg, 0, ord(c))
         for c in negative:
             assert unicodedb.category(ord(c)) != cat
-            assert not rsre_char.check_charset(pat_pos, 0, ord(c))
-            assert rsre_char.check_charset(pat_neg, 0, ord(c))
+            assert not check_charset(pat_pos, 0, ord(c))
+            assert check_charset(pat_neg, 0, ord(c))
 
     # test for how the common 'L&' pattern might be compiled
     pat = [70, cat2num('Lu'), 70, cat2num('Ll'), 70, cat2num('Lt'), 0]
-    assert rsre_char.check_charset(pat, 0, 65)    # Lu
-    assert rsre_char.check_charset(pat, 0, 99)    # Ll
-    assert rsre_char.check_charset(pat, 0, 453)   # Lt
-    assert not rsre_char.check_charset(pat, 0, 688)    # Lm
-    assert not rsre_char.check_charset(pat, 0, 5870)   # Nl
+    assert check_charset(pat, 0, 65)    # Lu
+    assert check_charset(pat, 0, 99)    # Lcheck_charset(pat, 0, 453)   # Lt
+    assert not check_charset(pat, 0, 688)    # Lm
+    assert not check_charset(pat, 0, 5870)   # Nl
+
+def test_iscased():
+    assert rsre_char.iscased_ascii(65)
+    assert rsre_char.iscased_ascii(100)
+    assert rsre_char.iscased_ascii(64) is False
+    assert rsre_char.iscased_ascii(126) is False
+    assert rsre_char.iscased_ascii(1260) is False
+    assert rsre_char.iscased_ascii(12600) is False
+    for i in range(65536):
+        assert rsre_char.iscased_unicode(i) == (
+            rsre_char.getlower_unicode(i) != i or
+            rsre_char.getupper_unicode(i) != i)

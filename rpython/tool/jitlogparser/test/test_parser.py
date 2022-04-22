@@ -2,7 +2,8 @@ from rpython.tool.jitlogparser.parser import (SimpleParser, TraceForOpcode,
                                               Function, adjust_bridges,
                                               import_log, split_trace, Op,
                                               parse_log_counts)
-from rpython.tool.jitlogparser.storage import LoopStorage
+from rpython.tool.jitlogparser.storage import LoopStorage, GenericCode
+from rpython.tool.udir import udir
 import py, sys
 from rpython.jit.backend.detect_cpu import autodetect
 from rpython.jit.backend.tool.viewcode import ObjdumpNotFound
@@ -190,7 +191,7 @@ def test_parsing_strliteral():
     assert chunk.bytecode_name.startswith('StrLiteralSearch')
 
 def test_parsing_assembler():
-    if not autodetect().startswith('x86'):
+    if sys.platform == 'win32' or not autodetect().startswith('x86'):
         py.test.skip('x86 only test')
     backend_dump = "554889E5534154415541564157488DA500000000488B042590C5540148C7042590C554010000000048898570FFFFFF488B042598C5540148C7042598C554010000000048898568FFFFFF488B0425A0C5540148C70425A0C554010000000048898560FFFFFF488B0425A8C5540148C70425A8C554010000000048898558FFFFFF4C8B3C2550525B0149BB30E06C96FC7F00004D8B334983C60149BB30E06C96FC7F00004D89334981FF102700000F8D000000004983C7014C8B342580F76A024983EE014C89342580F76A024983FE000F8C00000000E9AEFFFFFF488B042588F76A024829E0483B042580EC3C01760D49BB05F30894FC7F000041FFD3554889E5534154415541564157488DA550FFFFFF4889BD70FFFFFF4889B568FFFFFF48899560FFFFFF48898D58FFFFFF4D89C7E954FFFFFF49BB00F00894FC7F000041FFD34440484C3D030300000049BB00F00894FC7F000041FFD34440484C3D070304000000"
     dump_start = 0x7f3b0b2e63d5
@@ -276,7 +277,7 @@ debug_merge_point(0, 're StrMatchIn at 92 [17. 4. 0. 20. 393237. 21. 0. 29. 9. 1
 
 
 def test_import_log():
-    if not autodetect().startswith('x86'):
+    if sys.platform == 'win32' or not autodetect().startswith('x86'):
         py.test.skip('x86 only test')
     _, loops = import_log(str(py.path.local(__file__).join('..',
                                                            'logtest.log')))
@@ -288,7 +289,7 @@ def test_import_log():
     assert 'jge' in loops[0].operations[3].asm
 
 def test_import_log_2():
-    if not autodetect().startswith('x86'):
+    if sys.platform == 'win32' or not autodetect().startswith('x86'):
         py.test.skip('x86 only test')
     _, loops = import_log(str(py.path.local(__file__).join('..',
                                                            'logtest2.log')))
@@ -381,4 +382,58 @@ def test_parse_from_inside():
     """)
     f = Function.from_operations(loop.operations, LoopStorage())
     assert len(f.chunks) == 2
-    
+
+def test_embedded_lineno():
+    # debug_merge_point() can have a text that is either:
+    #
+    # * the PyPy2's  <code object %s. file '%s'. line %d> #%d %s>
+    #                 funcname, filename, lineno, bytecode_no, bytecode_name
+    #
+    # * a standard text of the form  %s;%s:%d-%d-%d %s
+    #           funcname, filename, startlineno, curlineno, endlineno, anything
+    #
+    # * or anything else, which is not specially recognized but shouldn't crash
+    #
+    sourcefile = str(udir.join('test_embedded_lineno.src'))
+    with open(sourcefile, 'w') as f:
+        print >> f, "A#1"
+        print >> f, "B#2"
+        print >> f, "C#3"
+        print >> f, "D#4"
+        print >> f, "E#5"
+        print >> f, "F#6"
+    loop = parse("""
+    []
+    debug_merge_point(0, 0, 'myfunc;%(filename)s:2-2~one')
+    debug_merge_point(0, 0, 'myfunc;%(filename)s:2-2~two')
+    debug_merge_point(0, 0, 'myfunc;%(filename)s:2-4~')
+    debug_merge_point(0, 0, 'myfunc;%(filename)s:2-4~four')
+    """ % {'filename': sourcefile})
+    f = Function.from_operations(loop.operations, LoopStorage())
+
+    expect = [(2, 'one', True),
+              (2, 'two', False),
+              (4, '', True),
+              (4, 'four', False)]
+    assert len(f.chunks) == len(expect)
+
+    code_seen = set()
+    for chunk, (expected_lineno,
+                expected_bytecode_name,
+                expected_line_starts_here) in zip(f.chunks, expect):
+        assert chunk.name == 'myfunc'
+        assert chunk.bytecode_name == expected_bytecode_name
+        assert chunk.filename == sourcefile
+        assert chunk.startlineno == 2
+        assert chunk.bytecode_no == ~expected_lineno     # half-abuse
+        assert chunk.has_valid_code()
+        assert chunk.lineno == expected_lineno
+        assert chunk.line_starts_here == expected_line_starts_here
+        code_seen.add(chunk.code)
+
+    assert len(code_seen) == 1
+    code, = code_seen
+    assert code.source[0] == "B#2"
+    assert code.source[1] == "C#3"
+    assert code.source[4] == "F#6"
+    py.test.raises(IndexError, "code.source[5]")

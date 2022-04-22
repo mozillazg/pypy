@@ -49,12 +49,15 @@ The following introductory level articles are available:
 
 * `How to write interpreters in RPython`_ and `part 2`_ by Andrew Brown.
 
+* `RPython By Example`_
+
 .. _Fast Enough VMs in Fast Enough Time: http://tratt.net/laurie/tech_articles/articles/fast_enough_vms_in_fast_enough_time
 
 .. _How to write interpreters in RPython: http://morepypy.blogspot.com/2011/04/tutorial-writing-interpreter-with-pypy.html
 
 .. _part 2: http://morepypy.blogspot.com/2011/04/tutorial-part-2-adding-jit.html
 
+.. _RPython By Example: http://mesapy.org/rpython-by-example/
 
 .. _try-out-the-translator:
 
@@ -142,8 +145,8 @@ type simply::
 Translating Full Programs
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To translate full RPython programs, there is the script ``translate.py`` in
-:source:`rpython/translator/goal`. Examples for this are a slightly changed version of
+To translate full RPython programs, there is the script ``bin/rpython`` in
+:source:`rpython/bin/`. Examples for this are a slightly changed version of
 Pystone::
 
     python bin/rpython translator/goal/targetrpystonedalone

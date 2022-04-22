@@ -8,6 +8,7 @@ from rpython.rlib.clibffi import *
 from rpython.rlib.objectmodel import keepalive_until_here
 from rpython.rtyper.lltypesystem.ll2ctypes import ALLOCATED
 from rpython.rtyper.lltypesystem import rffi, lltype
+import gc
 import py
 import sys
 import time
@@ -50,6 +51,7 @@ class TestCLibffi(BaseFfiTest):
     def test_library_open(self):
         lib = self.get_libc()
         del lib
+        gc.collect()
         assert not ALLOCATED
 
     def test_library_get_func(self):
@@ -58,6 +60,7 @@ class TestCLibffi(BaseFfiTest):
         py.test.raises(KeyError, lib.getpointer, 'xxxxxxxxxxxxxxx', [], ffi_type_void)
         del ptr
         del lib
+        gc.collect()
         assert not ALLOCATED
 
     def test_library_func_call(self):
@@ -73,6 +76,7 @@ class TestCLibffi(BaseFfiTest):
         # not very hard check, but something :]
         del ptr
         del lib
+        gc.collect()
         assert not ALLOCATED
 
     def test_call_args(self):
@@ -89,6 +93,7 @@ class TestCLibffi(BaseFfiTest):
         assert res == 27.0
         del pow
         del libm
+        gc.collect()
         assert not ALLOCATED
 
     def test_wrong_args(self):
@@ -104,6 +109,7 @@ class TestCLibffi(BaseFfiTest):
         py.test.raises(ValueError, "ctime.push_arg(z)")
         del ctime
         del libc
+        gc.collect()
         lltype.free(z, flavor='raw')
         # allocation check makes no sense, since we've got GcStructs around
 
@@ -137,6 +143,7 @@ class TestCLibffi(BaseFfiTest):
         lltype.free(l_t, flavor='raw')
         del ctime
         del libc
+        gc.collect()
         assert not ALLOCATED
 
     def test_closure_heap(self):
@@ -170,10 +177,10 @@ class TestCLibffi(BaseFfiTest):
         assert snd == rffi.cast(rffi.VOIDP, a)
         
     def test_callback(self):
-        slong = cast_type_to_ffitype(rffi.LONG)
+        size_t = cast_type_to_ffitype(rffi.SIZE_T)
         libc = self.get_libc()
-        qsort = libc.getpointer('qsort', [ffi_type_pointer, slong,
-                                          slong, ffi_type_pointer],
+        qsort = libc.getpointer('qsort', [ffi_type_pointer, size_t,
+                                          size_t, ffi_type_pointer],
                                 ffi_type_void)
 
         def callback(ll_args, ll_res, stuff):
@@ -181,11 +188,12 @@ class TestCLibffi(BaseFfiTest):
             p_a2 = rffi.cast(rffi.VOIDPP, ll_args[1])[0]
             a1 = rffi.cast(rffi.INTP, p_a1)[0]
             a2 = rffi.cast(rffi.INTP, p_a2)[0]
-            res = rffi.cast(rffi.INTP, ll_res)
+            res = rffi.cast(rffi.SIGNEDP, ll_res)
+            # must store a full ffi arg!
             if a1 > a2:
-                res[0] = rffi.cast(rffi.INT, 1)
+                res[0] = 1
             else:
-                res[0] = rffi.cast(rffi.INT, -1)
+                res[0] = -1
 
         ptr = CallbackFuncPtr([ffi_type_pointer, ffi_type_pointer],
                               ffi_type_sint, callback)
@@ -240,6 +248,7 @@ class TestCLibffi(BaseFfiTest):
         lltype.free(buffer, flavor='raw')
         del pow
         del libm
+        gc.collect()
         assert not ALLOCATED
 
     def test_make_struct_ffitype_e(self):
@@ -274,33 +283,33 @@ class TestCLibffi(BaseFfiTest):
         #include <stdio.h>
 
         struct x_y {
-            long x;
-            long y;
+            Signed x;
+            Signed y;
         };
 
         RPY_EXPORTED
-        long sum_x_y(struct x_y s) {
+        Signed sum_x_y(struct x_y s) {
             return s.x + s.y;
         }
 
-        long sum_x_y_p(struct x_y *p) {
+        Signed sum_x_y_p(struct x_y *p) {
             return p->x + p->y;
         }
         
         '''))
         eci = ExternalCompilationInfo(include_dirs=[cdir])
-        lib_name = str(platform.compile([c_file], eci, 'x', standalone=False))
+        lib_name = str(platform.compile([c_file], eci, 'x1', standalone=False))
 
         lib = CDLL(lib_name)
 
-        slong = cast_type_to_ffitype(rffi.LONG)
-        size = slong.c_size*2
-        alignment = slong.c_alignment
-        tpe = make_struct_ffitype_e(size, alignment, [slong, slong])
+        signed = cast_type_to_ffitype(rffi.SIGNED)
+        size = signed.c_size*2
+        alignment = signed.c_alignment
+        tpe = make_struct_ffitype_e(size, alignment, [signed, signed])
 
-        sum_x_y = lib.getrawpointer('sum_x_y', [tpe.ffistruct], slong)
+        sum_x_y = lib.getrawpointer('sum_x_y', [tpe.ffistruct], signed)
 
-        buffer = lltype.malloc(rffi.LONGP.TO, 3, flavor='raw')
+        buffer = lltype.malloc(rffi.SIGNEDP.TO, 3, flavor='raw')
         buffer[0] = 200
         buffer[1] = 220
         buffer[2] = 666
@@ -313,6 +322,7 @@ class TestCLibffi(BaseFfiTest):
         lltype.free(tpe, flavor='raw')
         del lib
 
+        gc.collect()
         assert not ALLOCATED
 
     def test_ret_struct_val(self):
@@ -348,7 +358,7 @@ class TestCLibffi(BaseFfiTest):
         
         '''))
         eci = ExternalCompilationInfo(include_dirs=[cdir])
-        lib_name = str(platform.compile([c_file], eci, 'x', standalone=False))
+        lib_name = str(platform.compile([c_file], eci, 'x2', standalone=False))
 
         lib = CDLL(lib_name)
 
@@ -390,6 +400,7 @@ class TestCLibffi(BaseFfiTest):
         del give
         del perturb
         lltype.free(tpe, flavor='raw')
+        gc.collect()
         del lib
 
         assert not ALLOCATED
@@ -403,19 +414,19 @@ class TestCLibffi(BaseFfiTest):
         c_file.write(py.code.Source('''
         #include "src/precommondefs.h"
         RPY_EXPORTED
-        long fun(long i) {
+        Signed fun(Signed i) {
             return i + 42;
         }
         '''))
         eci = ExternalCompilationInfo(include_dirs=[cdir])
-        lib_name = str(platform.compile([c_file], eci, 'x', standalone=False))
+        lib_name = str(platform.compile([c_file], eci, 'x3', standalone=False))
 
         lib = CDLL(lib_name)
-        slong = cast_type_to_ffitype(rffi.LONG)
-        fun = lib.getrawpointer('fun', [slong], slong)
+        signed = cast_type_to_ffitype(rffi.SIGNED)
+        fun = lib.getrawpointer('fun', [signed], signed)
         del lib     # already delete here
 
-        buffer = lltype.malloc(rffi.LONGP.TO, 2, flavor='raw')
+        buffer = lltype.malloc(rffi.SIGNEDP.TO, 2, flavor='raw')
         buffer[0] = 200
         buffer[1] = -1
         fun.call([rffi.cast(rffi.VOIDP, buffer)],
@@ -425,6 +436,7 @@ class TestCLibffi(BaseFfiTest):
         lltype.free(buffer, flavor='raw')
         del fun
 
+        gc.collect()
         assert not ALLOCATED
 
 class TestWin32Handles(BaseFfiTest):

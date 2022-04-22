@@ -1,13 +1,13 @@
 from inspect import CO_VARARGS, CO_VARKEYWORDS
 
 import py
-from pypy.interpreter import gateway, pycode
-from pypy.interpreter.error import OperationError
+from pypy.interpreter import gateway, pycode, typedef, baseobjspace
+from pypy.interpreter.error import OperationError, oefmt
 
 try:
-    from _pytest.assertion.newinterpret import interpret
+    from _pytest.assertion.reinterpret import reinterpret as interpret
 except ImportError:
-    from _pytest.assertion.oldinterpret import interpret
+    from _pytest.assertion.newinterpret import interpret
 
 # ____________________________________________________________
 
@@ -74,7 +74,7 @@ class AppFrame(py.code.Frame):
     def repr(self, w_value):
         try:
             return self.space.unwrap(self.space.repr(w_value))
-        except Exception, e:
+        except Exception as e:
             return "<Sorry, exception while trying to do repr, %r>"%e
 
     def is_true(self, w_value):
@@ -198,7 +198,7 @@ def build_pytest_assertion(space):
     w_BuiltinAssertionError = space.getitem(space.builtin.w_dict,
                                             space.wrap('AssertionError'))
     w_metaclass = space.type(w_BuiltinAssertionError)
-    w_init = space.wrap(gateway.interp2app_temp(my_init))
+    w_init = space.wrap(gateway.interp2app(my_init))
     w_dict = space.newdict()
     space.setitem(w_dict, space.wrap('__init__'), w_init)
     return space.call_function(w_metaclass,
@@ -227,14 +227,49 @@ def _exc_info(space, err):
     finally:
         frame.last_exception = old
 
-def pypyraises(space, w_ExpectedException, w_expr, __args__):
+
+class W_RaisesContextManager(baseobjspace.W_Root):
+    # Note: this is here because of _cffi_backend/test/test_c.py
+    def __init__(self, space, w_ExpectedException):
+        self.space = space
+        self.w_ExpectedException = w_ExpectedException
+
+    def enter(self):
+        return self
+
+    def exit(self, w_exc_type, w_exc_value, w_traceback):
+        space = self.space
+        if space.is_none(w_exc_type):
+            self.report_error("no exception")
+        if not space.exception_match(w_exc_type, self.w_ExpectedException):
+            self.report_error(space.text_w(space.repr(w_exc_type)))
+        self.w_value = w_exc_value   # for the 'value' app-level attribute
+        self.w_type = w_exc_type
+        return space.w_True     # suppress the exception
+
+    def report_error(self, got):
+        space = self.space
+        raise oefmt(space.w_AssertionError,
+                    "raises() expected %s, but got %s",
+                    space.text_w(space.repr(self.w_ExpectedException)),
+                    got)
+
+W_RaisesContextManager.typedef = typedef.TypeDef("RaisesContextManager",
+    __enter__ = gateway.interp2app_temp(W_RaisesContextManager.enter),
+    __exit__ = gateway.interp2app_temp(W_RaisesContextManager.exit),
+    value=typedef.interp_attrproperty_w('w_value', cls=W_RaisesContextManager),
+    type=typedef.interp_attrproperty_w('w_type', cls=W_RaisesContextManager)
+    )
+
+def pypyraises(space, w_ExpectedException, w_expr=None, __args__=None):
     """A built-in function providing the equivalent of py.test.raises()."""
+    if w_expr is None:
+        return W_RaisesContextManager(space, w_ExpectedException)
     args_w, kwds_w = __args__.unpack()
-    if space.isinstance_w(w_expr, space.w_str):
+    if space.isinstance_w(w_expr, space.w_text):
         if args_w:
-            raise OperationError(space.w_TypeError,
-                                 space.wrap("raises() takes no argument "
-                                            "after a string expression"))
+            raise oefmt(space.w_TypeError,
+                        "raises() takes no argument after a string expression")
         expr = space.unwrap(w_expr)
         source = py.code.Source(expr)
         frame = space.getexecutioncontext().gettopframe()
@@ -253,28 +288,27 @@ def pypyraises(space, w_ExpectedException, w_expr, __args__):
         try:
             space.exec_(str(source), frame.get_w_globals(), w_locals,
                         filename=filename)
-        except OperationError, e:
+        except OperationError as e:
             if e.match(space, w_ExpectedException):
                 return _exc_info(space, e)
             raise
     else:
         try:
             space.call_args(w_expr, __args__)
-        except OperationError, e:
+        except OperationError as e:
             if e.match(space, w_ExpectedException):
                 return _exc_info(space, e)
             raise
-    raise OperationError(space.w_AssertionError,
-                         space.wrap("DID NOT RAISE"))
+    raise oefmt(space.w_AssertionError, "DID NOT RAISE")
 
-app_raises = gateway.interp2app_temp(pypyraises)
+app_raises = gateway.interp2app(pypyraises)
 
 def pypyskip(space, w_message):
     """skip a test at app-level. """
     msg = space.unwrap(w_message)
     py.test.skip(msg)
 
-app_skip = gateway.interp2app_temp(pypyskip)
+app_skip = gateway.interp2app(pypyskip)
 
 def raises_w(space, w_ExpectedException, *args, **kwds):
     try:
@@ -283,6 +317,6 @@ def raises_w(space, w_ExpectedException, *args, **kwds):
         if not value.match(space, w_ExpectedException):
             raise type, value, tb
         return excinfo
-    except py.test.raises.Exception, e:
+    except py.test.raises.Exception as e:
         e.tbindex = getattr(e, 'tbindex', -1) - 1
         raise

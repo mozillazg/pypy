@@ -1,13 +1,9 @@
 /* This is a Verbatim copy of _ctypes_test.c from CPython 2.7    */
-/*****************************************************************
-  This file should be kept compatible with Python 2.3, see PEP 291.
- *****************************************************************/
-
 
 #include <Python.h>
 
 /*
-  Backwards compatibility:
+  Backwards compatibility, no longer strictly required:
   Python2.2 used LONG_LONG instead of PY_LONG_LONG
 */
 #if defined(HAVE_LONG_LONG) && !defined(PY_LONG_LONG)
@@ -38,6 +34,37 @@ _testfunc_cbk_reg_double(double a, double b, double c, double d, double e,
                          double (*func)(double, double, double, double, double))
 {
     return func(a*a, b*b, c*c, d*d, e*e);
+}
+
+/*
+ * This structure should be the same as in test_callbacks.py and the
+ * method test_callback_large_struct. See issues 17310 and 20160: the
+ * structure must be larger than 8 bytes long.
+ */
+
+typedef struct {
+    unsigned long first;
+    unsigned long second;
+    unsigned long third;
+} Test;
+
+EXPORT(void)
+_testfunc_cbk_large_struct(Test in, void (*func)(Test))
+{
+    func(in);
+}
+
+/*
+ * See issue 29565. Update a structure passed by value;
+ * the caller should not see any change.
+ */
+
+EXPORT(void)
+_testfunc_large_struct_update_value(Test in)
+{
+    in.first = 0x0badf00d;
+    in.second = 0x0badf00d;
+    in.third = 0x0badf00d;
 }
 
 EXPORT(void)testfunc_array(int values[4])
@@ -629,6 +656,200 @@ EXPORT(void) TwoOutArgs(int a, int *pi, int b, int *pj)
     *pi += a;
     *pj += b;
 }
+
+#ifdef MS_WIN32
+
+typedef struct {
+    char f1;
+} Size1;
+
+typedef struct {
+    char f1;
+    char f2;
+} Size2;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+} Size3;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+    char f4;
+} Size4;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+    char f4;
+    char f5;
+} Size5;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+    char f4;
+    char f5;
+    char f6;
+} Size6;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+    char f4;
+    char f5;
+    char f6;
+    char f7;
+} Size7;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+    char f4;
+    char f5;
+    char f6;
+    char f7;
+    char f8;
+} Size8;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+    char f4;
+    char f5;
+    char f6;
+    char f7;
+    char f8;
+    char f9;
+} Size9;
+
+typedef struct {
+    char f1;
+    char f2;
+    char f3;
+    char f4;
+    char f5;
+    char f6;
+    char f7;
+    char f8;
+    char f9;
+    char f10;
+} Size10;
+
+EXPORT(Size1) TestSize1() {
+    Size1 f;
+    f.f1 = 'a';
+    return f;
+}
+
+EXPORT(Size2) TestSize2() {
+    Size2 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    return f;
+}
+
+EXPORT(Size3) TestSize3() {
+    Size3 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    return f;
+}
+
+EXPORT(Size4) TestSize4() {
+    Size4 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    f.f4 = 'd';
+    return f;
+}
+
+EXPORT(Size5) TestSize5() {
+    Size5 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    f.f4 = 'd';
+    f.f5 = 'e';
+    return f;
+}
+
+EXPORT(Size6) TestSize6() {
+    Size6 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    f.f4 = 'd';
+    f.f5 = 'e';
+    f.f6 = 'f';
+    return f;
+}
+
+EXPORT(Size7) TestSize7() {
+    Size7 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    f.f4 = 'd';
+    f.f5 = 'e';
+    f.f6 = 'f';
+    f.f7 = 'g';
+    return f;
+}
+
+EXPORT(Size8) TestSize8() {
+    Size8 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    f.f4 = 'd';
+    f.f5 = 'e';
+    f.f6 = 'f';
+    f.f7 = 'g';
+    f.f8 = 'h';
+    return f;
+}
+
+EXPORT(Size9) TestSize9() {
+    Size9 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    f.f4 = 'd';
+    f.f5 = 'e';
+    f.f6 = 'f';
+    f.f7 = 'g';
+    f.f8 = 'h';
+    f.f9 = 'i';
+    return f;
+}
+
+EXPORT(Size10) TestSize10() {
+    Size10 f;
+    f.f1 = 'a';
+    f.f2 = 'b';
+    f.f3 = 'c';
+    f.f4 = 'd';
+    f.f5 = 'e';
+    f.f6 = 'f';
+    f.f7 = 'g';
+    f.f8 = 'h';
+    f.f9 = 'i';
+    f.f10 = 'j';
+    return f;
+}
+
+#endif
 
 #ifdef MS_WIN32
 EXPORT(S2H) __stdcall s_ret_2h_func(S2H inp) { return ret_2h_func(inp); }

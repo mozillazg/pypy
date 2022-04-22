@@ -7,19 +7,28 @@ import py
 from struct import unpack
 from rpython.rlib.rstruct.formatiterator import FormatIterator
 from rpython.rlib.rstruct.error import StructError
+from rpython.rlib.objectmodel import specialize
+from rpython.rlib.buffer import StringBuffer
 
 class MasterReader(object):
     def __init__(self, s):
-        self.input = s
+        self.inputbuf = StringBuffer(s)
+        self.length = len(s)
         self.inputpos = 0
 
-    def read(self, count):
+    def can_advance(self, count):
         end = self.inputpos + count
-        if end > len(self.input):
+        return end <= self.length
+
+    def advance(self, count):
+        if not self.can_advance(count):
             raise StructError("unpack str size too short for format")
-        s = self.input[self.inputpos : end]
-        self.inputpos = end
-        return s
+        self.inputpos += count
+
+    def read(self, count):
+        curpos = self.inputpos
+        self.advance(count) # raise if we are out of bound
+        return self.inputbuf.getslice(curpos, 1, count)
 
     def align(self, mask):
         self.inputpos = (self.inputpos + mask) & ~mask
@@ -39,11 +48,14 @@ def reader_for_pos(pos):
         def appendobj(self, value):
             self.value = value
 
-        def get_buffer_as_string_maybe(self):
-            return self.mr.input, self.mr.inputpos
+        def get_buffer_and_pos(self):
+            return self.mr.inputbuf, self.mr.inputpos
 
-        def skip(self, size):
-            self.read(size) # XXX, could avoid taking the slice
+        def can_advance(self, size):
+            return self.mr.can_advance(size)
+
+        def advance(self, size):
+            self.mr.advance(size)
     ReaderForPos.__name__ = 'ReaderForPos%d' % pos
     return ReaderForPos
 
@@ -73,12 +85,12 @@ class FrozenUnpackIterator(FormatIterator):
         for i in rg:
             fmtdesc, rep, mask = self.formats[i]
             miniglobals['unpacker%d' % i] = fmtdesc.unpack
-            if mask is not None:
-                perform_lst.append('master_reader.align(%d)' % mask)
             if not fmtdesc.needcount:
                 perform_lst.append('unpacker%d(reader%d)' % (i, i))
             else:
                 perform_lst.append('unpacker%d(reader%d, %d)' % (i, i, rep))
+            if mask is not None:
+                perform_lst.append('master_reader.align(%d)' % mask)
             miniglobals['reader_cls%d' % i] = reader_for_pos(i)
         readers = ";".join(["reader%d = reader_cls%d(master_reader, bigendian)"
                             % (i, i) for i in rg])
@@ -91,7 +103,7 @@ class FrozenUnpackIterator(FormatIterator):
             %(perform)s
             return (%(unpackers)s)
         """ % locals())
-        exec source.compile() in miniglobals
+        exec(source.compile(), miniglobals)
         self.unpack = miniglobals['unpack'] # override not-rpython version
 
     def _freeze_(self):
@@ -99,14 +111,14 @@ class FrozenUnpackIterator(FormatIterator):
         self._create_unpacking_func()
         return True
 
+@specialize.memo()
 def create_unpacker(unpack_str):
     fmtiter = FrozenUnpackIterator(unpack_str)
     fmtiter.interpret(unpack_str)
     assert fmtiter._freeze_()
     return fmtiter
-create_unpacker._annspecialcase_ = 'specialize:memo'
 
+@specialize.arg(0)
 def runpack(fmt, input):
     unpacker = create_unpacker(fmt)
     return unpacker.unpack(input)
-runpack._annspecialcase_ = 'specialize:arg(0)'

@@ -2,7 +2,7 @@
 This is not used in a PyPy translation, but it can be used
 in RPython code.  It exports the same interface as the
 Python 're' module.  You can call the functions at the start
-of the module (expect the ones with NOT_RPYTHON for now).
+of the module (expect the ones with @not_rpython for now).
 They must be called with a *constant* pattern string.
 """
 import re, sys
@@ -10,6 +10,7 @@ from rpython.rlib.rsre import rsre_core, rsre_char
 from rpython.rlib.rsre.rpy import get_code as _get_code
 from rpython.rlib.unicodedata import unicodedb
 from rpython.rlib.objectmodel import specialize, we_are_translated
+from rpython.rlib.objectmodel import not_rpython
 rsre_char.set_unicode_db(unicodedb)
 
 
@@ -37,12 +38,12 @@ def findall(pattern, string, flags=0):
 def finditer(pattern, string, flags=0):
     return compile(pattern, flags).finditer(string)
 
+@not_rpython
 def sub(pattern, repl, string, count=0):
-    "NOT_RPYTHON"
     return compile(pattern).sub(repl, string, count)
 
+@not_rpython
 def subn(pattern, repl, string, count=0):
-    "NOT_RPYTHON"
     return compile(pattern).subn(repl, string, count)
 
 @specialize.call_location()
@@ -71,13 +72,11 @@ class RSREPattern(object):
 
     def match(self, string, pos=0, endpos=sys.maxint):
         return self._make_match(rsre_core.match(self._code, string,
-                                                pos, endpos,
-                                                flags=self.flags))
+                                                pos, endpos))
 
     def search(self, string, pos=0, endpos=sys.maxint):
         return self._make_match(rsre_core.search(self._code, string,
-                                                 pos, endpos,
-                                                 flags=self.flags))
+                                                 pos, endpos))
 
     def findall(self, string, pos=0, endpos=sys.maxint):
         matchlist = []
@@ -103,8 +102,8 @@ class RSREPattern(object):
                 break
             yield match
 
+    @not_rpython
     def subn(self, repl, string, count=0):
-        "NOT_RPYTHON"
         filter = repl
         if not callable(repl) and "\\" in repl:
             # handle non-literal strings; hand it over to the template compiler
@@ -115,8 +114,7 @@ class RSREPattern(object):
                          isinstance(repl, unicode))
         n = last_pos = 0
         while not count or n < count:
-            match = rsre_core.search(self._code, string, start,
-                                     flags=self.flags)
+            match = rsre_core.search(self._code, string, start)
             if match is None:
                 break
             if last_pos < match.match_start:
@@ -151,8 +149,8 @@ class RSREPattern(object):
             item = "".join(sublist)
         return item, n
 
+    @not_rpython
     def sub(self, repl, string, count=0):
-        "NOT_RPYTHON"
         item, n = self.subn(repl, string, count)
         return item
 
@@ -162,8 +160,7 @@ class RSREPattern(object):
         n = 0
         last = 0
         while not maxsplit or n < maxsplit:
-            match = rsre_core.search(self._code, string, start,
-                                     flags=self.flags)
+            match = rsre_core.search(self._code, string, start)
             if match is None:
                 break
             if match.match_start == match.match_end: # zero-width match

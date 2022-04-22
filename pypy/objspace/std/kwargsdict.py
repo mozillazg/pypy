@@ -7,11 +7,11 @@ from rpython.rlib import jit, rerased, objectmodel
 
 from pypy.objspace.std.dictmultiobject import (
     BytesDictStrategy, DictStrategy, EmptyDictStrategy, ObjectDictStrategy,
-    create_iterator_classes)
+    create_iterator_classes, W_DictObject)
 
 
 def _wrapkey(space, key):
-    return space.wrap(key)
+    return space.newtext(key)
 
 
 class EmptyKwargsDictStrategy(EmptyDictStrategy):
@@ -20,6 +20,10 @@ class EmptyKwargsDictStrategy(EmptyDictStrategy):
         storage = strategy.get_empty_storage()
         w_dict.set_strategy(strategy)
         w_dict.dstorage = storage
+
+    def copy(self, w_dict):
+        dstorage = self.unerase(w_dict.dstorage)
+        return W_DictObject(self.space, self, self.get_empty_storage())
 
 
 class KwargsDictStrategy(DictStrategy):
@@ -31,7 +35,7 @@ class KwargsDictStrategy(DictStrategy):
         return _wrapkey(self.space, key)
 
     def unwrap(self, wrapped):
-        return self.space.str_w(wrapped)
+        return self.space.text_w(wrapped)
 
     def get_empty_storage(self):
         d = ([], [])
@@ -39,7 +43,7 @@ class KwargsDictStrategy(DictStrategy):
 
     def is_correct_type(self, w_obj):
         space = self.space
-        return space.is_w(space.type(w_obj), space.w_str)
+        return space.is_w(space.type(w_obj), space.w_text)
 
     def _never_equal_to(self, w_lookup_type):
         return False
@@ -116,7 +120,7 @@ class KwargsDictStrategy(DictStrategy):
 
     def w_keys(self, w_dict):
         l = self.unerase(w_dict.dstorage)[0]
-        return self.space.newlist_bytes(l[:])
+        return self.space.newlist_text(l[:])
 
     def values(self, w_dict):
         return self.unerase(w_dict.dstorage)[1][:] # to make non-resizable
@@ -129,6 +133,8 @@ class KwargsDictStrategy(DictStrategy):
 
     def popitem(self, w_dict):
         keys, values_w = self.unerase(w_dict.dstorage)
+        if not keys:
+            raise KeyError
         key = keys.pop()
         w_value = values_w.pop()
         return self.wrap(key), w_value
@@ -168,6 +174,11 @@ class KwargsDictStrategy(DictStrategy):
     def getiteritems_with_hash(self, w_dict):
         keys, values_w = self.unerase(w_dict.dstorage)
         return ZipItemsWithHash(keys, values_w)
+
+    def copy(self, w_dict):
+        dstorage = self.unerase(w_dict.dstorage)
+        return W_DictObject(self.space, self,
+                self.erase((dstorage[0][:], dstorage[1][:])))
 
     wrapkey = _wrapkey
 

@@ -1,7 +1,4 @@
-#include "common_header.h"
-#include "structdef.h"
-#include "forwarddecl.h"
-#include "preimpl.h"
+#include "singleheader.h"
 #include "src/exception.h"
 
 #if defined(PYPY_CPYTHON_EXTENSION)
@@ -36,7 +33,6 @@ void RPyDebugReturnShowException(const char *msg, const char *filename,
 
 void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc)
 {
-	/* XXX msg is ignored */
 	RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(rexc), rexc);
 }
 

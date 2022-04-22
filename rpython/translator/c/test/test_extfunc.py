@@ -166,7 +166,9 @@ def test_os_stat():
     f = compile(call_stat, [])
     res = eval(f())
     assert res[0] == os.stat(filename).st_mode
-    assert res[1] == os.stat(filename).st_ino
+    # windows zeros out st_ino in the app-level os.stat
+    if sys.platform != 'win32':
+        assert res[1] == os.stat(filename).st_ino
     st_ctime = res[2]
     if isinstance(st_ctime, float):
         assert (st_ctime - os.stat(filename).st_ctime) < 0.1
@@ -183,7 +185,7 @@ def test_os_stat_raises_winerror():
     def call_stat():
         try:
             os.stat("nonexistentdir/nonexistentfile")
-        except WindowsError, e:
+        except WindowsError as e:
             return e.winerror
         return 0    
     f = compile(call_stat, [])
@@ -612,7 +614,7 @@ if hasattr(os, 'getlogin'):
 
         try:
             expected = os.getlogin()
-        except OSError, e:
+        except OSError as e:
             py.test.skip("the underlying os.getlogin() failed: %s" % e)
         f1 = compile(does_stuff, [])
         assert f1() == expected

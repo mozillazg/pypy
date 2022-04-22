@@ -4,10 +4,16 @@ Tests for the entry point of pypy-c, app_main.py.
 from __future__ import with_statement
 import py
 import sys, os, re, runpy, subprocess
+import shutil
 from rpython.tool.udir import udir
 from contextlib import contextmanager
-from pypy.conftest import pypydir
+from pypy import pypydir
 from lib_pypy._pypy_interact import irc_header
+
+try:
+    import __pypy__
+except ImportError:
+    __pypy__ = None
 
 banner = sys.version.splitlines()[0]
 
@@ -71,6 +77,11 @@ crashing_demo_script = getscript("""
     print 'Goodbye2'   # should not be reached
     """)
 
+script_with_future = getscript("""
+    from __future__ import division
+    from __future__ import print_function
+    """)
+
 
 class TestParseCommandLine:
     def check_options(self, options, sys_argv, **expected):
@@ -89,6 +100,7 @@ class TestParseCommandLine:
         saved_sys_argv = sys.argv[:]
         saved_sys_stdout = sys.stdout
         saved_sys_stderr = sys.stdout
+        app_main.WE_ARE_TRANSLATED = False
         app_main.os = os
         try:
             os.environ.update(env)
@@ -106,6 +118,9 @@ class TestParseCommandLine:
             sys.argv[:] = saved_sys_argv
             sys.stdout = saved_sys_stdout
             sys.stderr = saved_sys_stderr
+            if __pypy__:
+                __pypy__.set_debug(True)
+            app_main.WE_ARE_TRANSLATED = True
 
     def test_all_combinations_I_can_think_of(self):
         self.check([], {}, sys_argv=[''], run_stdin=True)
@@ -134,6 +149,8 @@ class TestParseCommandLine:
         self.check(['-S', '-tO', '--version'], {}, output_contains='Python')
         self.check(['-S', '-tOV'], {}, output_contains='Python')
         self.check(['--jit', 'off', '-S'], {}, sys_argv=[''],
+                   run_stdin=True, no_site=1)
+        self.check(['-X', 'jit-off', '-S'], {}, sys_argv=[''],
                    run_stdin=True, no_site=1)
         self.check(['-c', 'pass'], {}, sys_argv=['-c'], run_command='pass')
         self.check(['-cpass'], {}, sys_argv=['-c'], run_command='pass')
@@ -208,6 +225,22 @@ class TestParseCommandLine:
         expected = {"no_user_site": True}
         self.check(['-c', 'pass'], {}, sys_argv=['-c'], run_command='pass', **expected)
 
+    def test_track_resources(self, monkeypatch):
+        myflag = [False]
+        def pypy_set_track_resources(flag):
+            myflag[0] = flag
+        monkeypatch.setattr(sys, 'pypy_set_track_resources', pypy_set_track_resources, raising=False)
+        self.check(['-X', 'track-resources'], {}, sys_argv=[''], run_stdin=True)
+        assert myflag[0] == True
+
+    def test_jit_off(self, monkeypatch):
+        options = [None]
+        def set_jit_option(_, option, *args):
+            options[0] = option
+        from pypy.interpreter import app_main
+        monkeypatch.setattr(app_main, 'set_jit_option', set_jit_option, raising=False)
+        self.check(['-X', 'jit-off'], {}, sys_argv=[''], run_stdin=True)
+        assert options == ["off"]
 
 class TestInteraction:
     """
@@ -217,7 +250,7 @@ class TestInteraction:
     def _spawn(self, *args, **kwds):
         try:
             import pexpect
-        except ImportError, e:
+        except ImportError as e:
             py.test.skip(str(e))
         else:
             # Version is of the style "0.999" or "2.1".  Older versions of
@@ -279,7 +312,7 @@ class TestInteraction:
         child.expect('>>>')   # banner
         if irc_topic:
             assert irc_header in child.before
-        else:    
+        else:
             assert irc_header not in child.before
 
     def test_help(self):
@@ -437,6 +470,31 @@ class TestInteraction:
             assert index == 1      # no traceback
         finally:
             os.environ['PYTHONSTARTUP'] = old
+
+    def test_future_in_executed_script(self):
+        child = self.spawn(['-i', script_with_future])
+        child.expect('>>> ')
+        child.sendline('x=1; print(x/2, 3/4)')
+        child.expect('0.5 0.75')
+
+    def test_future_in_python_startup(self, monkeypatch):
+        monkeypatch.setenv('PYTHONSTARTUP', script_with_future)
+        child = self.spawn([])
+        child.expect('>>> ')
+        child.sendline('x=1; print(x/2, 3/4)')
+        child.expect('0.5 0.75')
+
+    def test_future_in_cmd(self):
+        child = self.spawn(['-i', '-c', 'from __future__ import division'])
+        child.expect('>>> ')
+        child.sendline('x=1; x/2; 3/4')
+        child.expect('0.5')
+        child.expect('0.75')
+
+    def test_cmd_co_name(self):
+        child = self.spawn(['-c',
+                    'import sys; print sys._getframe(0).f_code.co_name'])
+        child.expect('<module>')
 
     def test_ignore_python_inspect(self):
         os.environ['PYTHONINSPECT_'] = '1'
@@ -601,12 +659,10 @@ class TestNonInteractive:
     def run_with_status_code(self, cmdline, senddata='', expect_prompt=False,
             expect_banner=False, python_flags='', env=None):
         if os.name == 'nt':
-            try:
-                import __pypy__
-            except:
+            if __pypy__ is None:
                 py.test.skip('app_main cannot run on non-pypy for windows')
-        cmdline = '%s %s "%s" %s' % (sys.executable, python_flags,
-                                     app_main, cmdline)
+        cmdline = '%s %s "%s" %s %s' % (sys.executable, python_flags,
+                                     app_main, python_flags, cmdline)
         print 'POPEN:', cmdline
         process = subprocess.Popen(
             cmdline,
@@ -728,6 +784,7 @@ class TestNonInteractive:
         assert 'hello world\n' in data
         assert '42\n' in data
 
+    @py.test.mark.skipif('sys.platform=="win32"', reason="windows, sendata, and quoting problems")  
     def test_putenv_fires_interactive_within_process(self):
         try:
             import __pypy__
@@ -814,6 +871,14 @@ class TestNonInteractive:
                 if old_pythonpath is not None:
                     os.putenv('PYTHONPATH', old_pythonpath)
 
+        # if we are running in a virtualenv, messing with site.py will
+        # make runpy.py and pkgutil unavailable. They are needed to run
+        # app_main. Copy them into the tmpdir
+        runpy_dir = os.path.dirname(runpy.__file__)
+        import pkgutil
+        pkgutil_dir = os.path.dirname(pkgutil.__file__)
+        shutil.copy(os.path.join(runpy_dir, 'runpy.py'), str(tmpdir))
+        shutil.copy(os.path.join(pkgutil_dir, 'pkgutil.py'), str(tmpdir))
         tmpdir.join('site.py').write('print "SHOULD NOT RUN"')
         runme_py = tmpdir.join('runme.py')
         runme_py.write('print "some text"')
@@ -919,7 +984,8 @@ class TestAppMain:
         }
         try:
             sys.stdout = f = cStringIO.StringIO()
-            py.test.raises(SystemExit, app_main.print_info)
+            with py.test.raises(SystemExit):
+                app_main.print_info()
         finally:
             sys.stdout = prev_so
             if prev_ti == 'missing':
@@ -935,6 +1001,7 @@ class TestAppMain:
                                 "    foo = True\n")
 
 
+@py.test.mark.skipif('config.getoption("runappdirect")')
 class AppTestAppMain:
     def setup_class(self):
         # ----------------------------------------
@@ -977,23 +1044,32 @@ class AppTestAppMain:
         old_sys_path = sys.path[:]
         old_cwd = os.getcwd()
 
-        sys.path.append(self.goal_dir)
         # make sure cwd does not contain a stdlib
         if self.tmp_dir.startswith(self.trunkdir):
             skip('TMPDIR is inside the PyPy source')
-        os.chdir(self.tmp_dir)
+        sys.path.append(self.goal_dir)
         tmp_pypy_c = os.path.join(self.tmp_dir, 'pypy-c')
         try:
+            os.chdir(self.tmp_dir)
+
+            # If we are running PyPy with a libpypy-c, the following
+            # lines find the stdlib anyway.  Otherwise, it is not found.
+            expected_found = (
+                getattr(sys, 'pypy_translation_info', {})
+                .get('translation.shared'))
+
             import app_main
-            app_main.setup_bootstrap_path(tmp_pypy_c)  # stdlib not found
+            app_main.setup_bootstrap_path(tmp_pypy_c)
             assert sys.executable == ''
-            assert sys.path == old_sys_path + [self.goal_dir]
+            if not expected_found:
+                assert sys.path == old_sys_path + [self.goal_dir]
 
             app_main.setup_bootstrap_path(self.fake_exe)
             if not sys.platform == 'win32':
                 # an existing file is always 'executable' on windows
                 assert sys.executable == ''      # not executable!
-                assert sys.path == old_sys_path + [self.goal_dir]
+                if not expected_found:
+                    assert sys.path == old_sys_path + [self.goal_dir]
 
             os.chmod(self.fake_exe, 0755)
             app_main.setup_bootstrap_path(self.fake_exe)
@@ -1004,7 +1080,8 @@ class AppTestAppMain:
             if newpath[0].endswith('__extensions__'):
                 newpath = newpath[1:]
             # we get at least 'expected_path', and maybe more (e.g.plat-linux2)
-            assert newpath[:len(self.expected_path)] == self.expected_path
+            if not expected_found:
+                assert newpath[:len(self.expected_path)] == self.expected_path
         finally:
             sys.path[:] = old_sys_path
             os.chdir(old_cwd)
@@ -1039,4 +1116,3 @@ class AppTestAppMain:
             # assert it did not crash
         finally:
             sys.path[:] = old_sys_path
-    

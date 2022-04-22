@@ -402,7 +402,8 @@ else:
         if _logger is not None:
             d['log_level'] = _logger.getEffectiveLevel()
 
-        if not WINEXE and not WINSERVICE:
+        if not WINEXE and not WINSERVICE and \
+           not d['sys_argv'][0].lower().endswith('pythonservice.exe'):
             main_path = getattr(sys.modules['__main__'], '__file__', None)
             if not main_path and sys.argv[0] not in ('', '-c'):
                 main_path = sys.argv[0]
@@ -467,12 +468,26 @@ def prepare(data):
         process.ORIGINAL_DIR = data['orig_dir']
 
     if 'main_path' in data:
+        # XXX (ncoghlan): The following code makes several bogus
+        # assumptions regarding the relationship between __file__
+        # and a module's real name. See PEP 302 and issue #10845
+        # The problem is resolved properly in Python 3.4+, as
+        # described in issue #19946
+
         main_path = data['main_path']
         main_name = os.path.splitext(os.path.basename(main_path))[0]
         if main_name == '__init__':
             main_name = os.path.basename(os.path.dirname(main_path))
 
-        if main_name != 'ipython':
+        if main_name == '__main__':
+            # For directory and zipfile execution, we assume an implicit
+            # "if __name__ == '__main__':" around the module, and don't
+            # rerun the main module code in spawned processes
+            main_module = sys.modules['__main__']
+            main_module.__file__ = main_path
+        elif main_name != 'ipython':
+            # Main modules not actually called __main__.py may
+            # contain additional code that should still be executed
             import imp
 
             if main_path is None:

@@ -1,4 +1,4 @@
-import os, random, struct
+import sys, os, random, struct
 import py
 from rpython.jit.backend.x86 import rx86
 from rpython.rlib.rarithmetic import intmask
@@ -257,6 +257,9 @@ class TestRx86_32(object):
         g.close()
         error = [line for line in got.splitlines() if 'error' in line.lower()]
         if error:
+            if (sys.maxint <= 2**32 and
+                    'no compiled in support for x86_64' in error[0]):
+                py.test.skip(error)
             raise Exception("Assembler got an error: %r" % error[0])
         error = [line for line in got.splitlines()
                  if 'warning' in line.lower()]
@@ -279,6 +282,8 @@ class TestRx86_32(object):
         if modes:
             tests = self.get_all_tests()
             m = modes[0]
+            if m == 'p' and self.WORD == 4:
+                return []
             lst = tests[m]()
             random.shuffle(lst)
             if methname == 'PSRAD_xi' and m == 'i':
@@ -306,6 +311,8 @@ class TestRx86_32(object):
                 return []   # MOV AL, [immediate]: there is a special encoding
             if methname == 'MOV8_jr' and args[1] == rx86.R.al:
                 return []   # MOV [immediate], AL: there is a special encoding
+            if methname == 'TEST_ri' and args[0] == rx86.R.eax:
+                return []  # TEST EAX, constant: there is a special encoding
 
             return [args]
 

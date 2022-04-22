@@ -31,7 +31,7 @@ if sys.platform == 'win32' and not hasattr(cpy_signal,'CTRL_C_EVENT'):
     signal_names.append('CTRL_BREAK_EVENT')
     CTRL_C_EVENT = 0
     CTRL_BREAK_EVENT = 1
-includes = ['stdlib.h', 'src/signals.h']
+includes = ['stdlib.h', 'src/signals.h', 'signal.h']
 if sys.platform != 'win32':
     includes.append('sys/time.h')
 
@@ -41,13 +41,16 @@ eci = ExternalCompilationInfo(
     includes = includes,
     separate_module_files = [cdir / 'src' / 'signals.c'],
     include_dirs = [str(cdir)],
+    pre_include_bits = ["#define PYPY_SIGINT_INTERRUPT_EVENT 1\n"],
 )
 
 class CConfig:
     _compilation_info_ = eci
 
 if sys.platform != 'win32':
-    for name in """ITIMER_REAL ITIMER_VIRTUAL ITIMER_PROF""".split():
+    for name in """
+        ITIMER_REAL ITIMER_VIRTUAL ITIMER_PROF
+        SIG_BLOCK SIG_UNBLOCK SIG_SETMASK""".split():
         setattr(CConfig, name, rffi_platform.DefinedConstantInteger(name))
 
     CConfig.timeval = rffi_platform.Struct(
@@ -71,7 +74,11 @@ pypysig_ignore = external('pypysig_ignore', [rffi.INT], lltype.Void)
 pypysig_default = external('pypysig_default', [rffi.INT], lltype.Void)
 pypysig_setflag = external('pypysig_setflag', [rffi.INT], lltype.Void)
 pypysig_reinstall = external('pypysig_reinstall', [rffi.INT], lltype.Void)
-pypysig_set_wakeup_fd = external('pypysig_set_wakeup_fd', [rffi.INT], rffi.INT)
+PYPYSIG_WITH_NUL_BYTE = 0x01   # flags for the 2nd argument to set_wakeup_fd()
+PYPYSIG_USE_SEND = 0x02
+PYPYSIG_NO_WARN_FULL  = 0x04
+pypysig_set_wakeup_fd = external('pypysig_set_wakeup_fd',
+                                 [rffi.INT, rffi.INT], rffi.INT)
 pypysig_poll = external('pypysig_poll', [], rffi.INT, releasegil=False)
 # don't bother releasing the GIL around a call to pypysig_poll: it's
 # pointless and a performance issue
@@ -87,10 +94,13 @@ del struct_name
 pypysig_getaddr_occurred = external('pypysig_getaddr_occurred', [],
                                     lltype.Ptr(LONG_STRUCT), _nowrapper=True,
                                     elidable_function=True)
+pypysig_check_and_reset = external('pypysig_check_and_reset', [],
+                                   lltype.Bool, _nowrapper=True)
 c_alarm = external('alarm', [rffi.INT], rffi.INT)
 c_pause = external('pause', [], rffi.INT, releasegil=True)
 c_siginterrupt = external('siginterrupt', [rffi.INT, rffi.INT], rffi.INT,
                           save_err=rffi.RFFI_SAVE_ERRNO)
+c_raise = external('raise', [rffi.INT], rffi.INT)
 
 if sys.platform != 'win32':
     itimervalP = rffi.CArrayPtr(itimerval)
@@ -98,3 +108,46 @@ if sys.platform != 'win32':
                            [rffi.INT, itimervalP, itimervalP], rffi.INT,
                            save_err=rffi.RFFI_SAVE_ERRNO)
     c_getitimer = external('getitimer', [rffi.INT, itimervalP], rffi.INT)
+
+c_pthread_kill = external('pthread_kill', [lltype.Signed, rffi.INT], rffi.INT,
+                          save_err=rffi.RFFI_SAVE_ERRNO)
+
+if sys.platform != 'win32':
+    c_strsignal = external('strsignal', [rffi.INT], rffi.CCHARP)
+    def strsignal(signum):
+        res = c_strsignal(signum)
+        if not res:
+            return None
+        return rffi.charp2str(res)
+else:
+    def strsignal(signum):
+        # CPython does this too!
+        if signum == SIGINT:
+            return "Interrupt";
+        elif signum == SIGILL:
+            return "Illegal instruction";
+        elif signum == SIGABRT:
+            return "Aborted";
+        elif signum == SIGFPE:
+            return "Floating point exception";
+        elif signum == SIGSEGV:
+            return "Segmentation fault";
+        elif signum == SIGTERM:
+            return "Terminated";
+        return None
+
+
+if sys.platform != 'win32':
+    c_sigset_t = rffi.COpaquePtr('sigset_t', compilation_info=eci)
+    c_sigemptyset = external('sigemptyset', [c_sigset_t], rffi.INT)
+    c_sigfillset = external('sigfillset', [c_sigset_t], rffi.INT)
+    c_sigaddset = external('sigaddset', [c_sigset_t, rffi.INT], rffi.INT)
+    c_sigismember = external('sigismember', [c_sigset_t, rffi.INT], rffi.INT)
+    c_sigwait = external('sigwait', [c_sigset_t, rffi.INTP], rffi.INT,
+                         releasegil=True,
+                         save_err=rffi.RFFI_SAVE_ERRNO)
+    c_sigpending = external('sigpending', [c_sigset_t], rffi.INT,
+                            save_err=rffi.RFFI_SAVE_ERRNO)
+    c_pthread_sigmask = external('pthread_sigmask',
+                                 [rffi.INT, c_sigset_t, c_sigset_t], rffi.INT,
+                                 save_err=rffi.RFFI_SAVE_ERRNO)

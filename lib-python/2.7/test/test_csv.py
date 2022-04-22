@@ -2,6 +2,7 @@
 # Copyright (C) 2001,2002 Python Software Foundation
 # csv package unit tests
 
+import copy
 import sys
 import os
 import unittest
@@ -10,6 +11,7 @@ import tempfile
 import csv
 import gc
 import io
+import pickle
 from test import test_support
 
 class Test_Csv(unittest.TestCase):
@@ -470,6 +472,18 @@ class TestDialectRegistry(unittest.TestCase):
         self.assertRaises(TypeError, csv.reader, [], delimiter = None)
         self.assertRaises(TypeError, csv.reader, [], quoting = -1)
         self.assertRaises(TypeError, csv.reader, [], quoting = 100)
+
+    # See issue #22995
+    ## def test_copy(self):
+    ##     for name in csv.list_dialects():
+    ##         dialect = csv.get_dialect(name)
+    ##         self.assertRaises(TypeError, copy.copy, dialect)
+
+    ## def test_pickle(self):
+    ##     for name in csv.list_dialects():
+    ##         dialect = csv.get_dialect(name)
+    ##         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+    ##             self.assertRaises(TypeError, pickle.dumps, dialect, proto)
 
 class TestCsvBase(unittest.TestCase):
     def readerAssertEqual(self, input, expected_result):
@@ -1026,6 +1040,15 @@ Stonecutters Seafood and Chop House+ Lemont+ IL+ 12/19/02+ Week Back
         self.assertEqual(sniffer.has_header(self.sample8), False)
         self.assertEqual(sniffer.has_header(self.header2 + self.sample8),
                          True)
+
+    def test_guess_quote_and_delimiter(self):
+        sniffer = csv.Sniffer()
+        for header in (";'123;4';", "'123;4';", ";'123;4'", "'123;4'"):
+            dialect = sniffer.sniff(header, ",;")
+            self.assertEqual(dialect.delimiter, ';')
+            self.assertEqual(dialect.quotechar, "'")
+            self.assertIs(dialect.doublequote, False)
+            self.assertIs(dialect.skipinitialspace, False)
 
     def test_sniff(self):
         sniffer = csv.Sniffer()

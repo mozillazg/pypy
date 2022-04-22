@@ -131,6 +131,29 @@ _CD64_NUMBER_ENTRIES_TOTAL = 7
 _CD64_DIRECTORY_SIZE = 8
 _CD64_OFFSET_START_CENTDIR = 9
 
+_DD_SIGNATURE = 0x08074b50
+
+_EXTRA_FIELD_STRUCT = struct.Struct('<HH')
+
+def _strip_extra(extra, xids):
+    # Remove Extra Fields with specified IDs.
+    unpack = _EXTRA_FIELD_STRUCT.unpack
+    modified = False
+    buffer = []
+    start = i = 0
+    while i + 4 <= len(extra):
+        xid, xlen = unpack(extra[i : i + 4])
+        j = i + 4 + xlen
+        if xid in xids:
+            if i != start:
+                buffer.append(extra[start : i])
+            start = j
+            modified = True
+        i = j
+    if not modified:
+        return extra
+    return b''.join(buffer)
+
 def _check_zipfile(fp):
     try:
         if _EndRecData(fp):
@@ -622,19 +645,23 @@ class ZipExtFile(io.BufferedIOBase):
         """Read and return up to n bytes.
         If the argument is omitted, None, or negative, data is read and returned until EOF is reached..
         """
-        buf = ''
+        # PyPy modification: don't do repeated string concatenation
+        buf = []
+        lenbuf = 0
         if n is None:
             n = -1
         while True:
             if n < 0:
                 data = self.read1(n)
-            elif n > len(buf):
-                data = self.read1(n - len(buf))
+            elif n > lenbuf:
+                data = self.read1(n - lenbuf)
             else:
-                return buf
+                break
             if len(data) == 0:
-                return buf
-            buf += data
+                break
+            lenbuf += len(data)
+            buf.append(data)
+        return "".join(buf)
 
     def _update_crc(self, newdata, eof):
         # Update the CRC using the given data.
@@ -1135,7 +1162,9 @@ class ZipFile(object):
             arcname += '/'
         zinfo = ZipInfo(arcname, date_time)
         zinfo.external_attr = (st[0] & 0xFFFF) << 16L      # Unix attributes
-        if compress_type is None:
+        if isdir:
+            zinfo.compress_type = ZIP_STORED
+        elif compress_type is None:
             zinfo.compress_type = self.compression
         else:
             zinfo.compress_type = compress_type
@@ -1248,9 +1277,9 @@ class ZipFile(object):
         self.fp.write(bytes)
         if zinfo.flag_bits & 0x08:
             # Write CRC and file sizes after the file data
-            fmt = '<LQQ' if zip64 else '<LLL'
-            self.fp.write(struct.pack(fmt, zinfo.CRC, zinfo.compress_size,
-                  zinfo.file_size))
+            fmt = '<LLQQ' if zip64 else '<LLLL'
+            self.fp.write(struct.pack(fmt, _DD_SIGNATURE, zinfo.CRC,
+                  zinfo.compress_size, zinfo.file_size))
         self.fp.flush()
         self.filelist.append(zinfo)
         self.NameToInfo[zinfo.filename] = zinfo
@@ -1292,6 +1321,7 @@ class ZipFile(object):
                     extra_data = zinfo.extra
                     if extra:
                         # Append a ZIP64 field to the extra's
+                        extra_data = _strip_extra(extra_data, (1,))
                         extra_data = struct.pack(
                                 '<HH' + 'Q'*len(extra),
                                 1, 8*len(extra), *extra) + extra_data

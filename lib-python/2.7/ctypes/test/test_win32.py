@@ -53,6 +53,24 @@ class FunctionCallTestCase(unittest.TestCase):
         windll.user32.GetDesktopWindow()
 
 @unittest.skipUnless(sys.platform == "win32", 'Windows-specific test')
+class ReturnStructSizesTestCase(unittest.TestCase):
+    def test_sizes(self):
+        dll = CDLL(_ctypes_test.__file__)
+        for i in range(1, 11):
+            fields = [ ("f%d" % f, c_char) for f in range(1, i + 1)]
+            class S(Structure):
+                _fields_ = fields
+            f = getattr(dll, "TestSize%d" % i)
+            f.restype = S
+            res = f()
+            for i, f in enumerate(fields):
+                value = getattr(res, f[0])
+                expected = chr(ord('a') + i)
+                self.assertEquals(value, expected)
+
+
+
+@unittest.skipUnless(sys.platform == "win32", 'Windows-specific test')
 class TestWintypes(unittest.TestCase):
     def test_HWND(self):
         from ctypes import wintypes
@@ -113,6 +131,10 @@ class Structures(unittest.TestCase):
             self.assertEqual(ret.right, right.value)
             self.assertEqual(ret.top, top.value)
             self.assertEqual(ret.bottom, bottom.value)
+
+        # to not leak references, we must clean _pointer_type_cache
+        from ctypes import _pointer_type_cache
+        del _pointer_type_cache[RECT]
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,4 +1,6 @@
 from __future__ import with_statement
+from rpython import rlib
+from pypy.interpreter.error import oefmt
 from pypy.interpreter.gateway import interp2app
 from rpython.tool.udir import udir
 from pypy.module._io import interp_bufferedio
@@ -12,6 +14,9 @@ class AppTestBufferedReader:
         tmpfile = udir.join('tmpfile')
         tmpfile.write("a\nb\nc", mode='wb')
         cls.w_tmpfile = cls.space.wrap(str(tmpfile))
+        bigtmpfile = udir.join('bigtmpfile')
+        bigtmpfile.write("a\nb\nc" * 20, mode='wb')
+        cls.w_bigtmpfile = cls.space.wrap(str(bigtmpfile))
 
     def test_simple_read(self):
         import _io
@@ -135,20 +140,34 @@ class AppTestBufferedReader:
 
     def test_readinto(self):
         import _io
-        a = bytearray('x' * 10)
+        a1 = bytearray('x')
+        a = bytearray('x' * 9)
         raw = _io.FileIO(self.tmpfile)
         f = _io.BufferedReader(raw)
-        assert f.readinto(a) == 5
+        assert f.readinto(a1) == 1
+        assert a1 == 'a'
+        assert f.readinto(a) == 4
+        assert a == '\nb\ncxxxxx'
         exc = raises(TypeError, f.readinto, u"hello")
         assert str(exc.value) == "cannot use unicode as modifiable buffer"
         exc = raises(TypeError, f.readinto, buffer(b"hello"))
-        assert str(exc.value) == "must be read-write buffer, not buffer"
+        assert "must be read-write buffer, not buffer" in str(exc.value)
         exc = raises(TypeError, f.readinto, buffer(bytearray("hello")))
-        assert str(exc.value) == "must be read-write buffer, not buffer"
+        assert "must be read-write buffer, not buffer" in str(exc.value)
         exc = raises(TypeError, f.readinto, memoryview(b"hello"))
-        assert str(exc.value) == "must be read-write buffer, not memoryview"
+        assert "must be read-write buffer, not memoryview" in str(exc.value)
         f.close()
-        assert a == 'a\nb\ncxxxxx'
+
+    def test_readinto_big(self):
+        import _io
+        a1 = bytearray('x')
+        a = bytearray('x' * 199)
+        raw = _io.FileIO(self.bigtmpfile)
+        f = _io.BufferedReader(raw)
+        assert f.readinto(a1) == 1
+        assert a1 == 'a'
+        assert f.readinto(a) == 99
+        assert a == '\nb\nc' + 'a\nb\nc' * 19 + 'x' * 100
 
     def test_seek(self):
         import _io
@@ -237,7 +256,47 @@ class AppTestBufferedReader:
         assert rawio.count == 4
 
 class AppTestBufferedReaderWithThreads(AppTestBufferedReader):
-    spaceconfig = dict(usemodules=['_io', 'thread'])
+    spaceconfig = dict(usemodules=['_io', 'thread', 'time'])
+
+    def test_readinto_small_parts(self):
+        import _io, os, thread, time
+        read_fd, write_fd = os.pipe()
+        raw = _io.FileIO(read_fd)
+        f = _io.BufferedReader(raw)
+        a = bytearray(b'x' * 10)
+        os.write(write_fd, b"abcde")
+        def write_more():
+            time.sleep(0.5)
+            os.write(write_fd, b"fghij")
+        thread.start_new_thread(write_more, ())
+        assert f.readinto(a) == 10
+        assert a == 'abcdefghij'
+
+@py.test.yield_fixture
+def forbid_nonmoving_raw_ptr_for_resizable_list(space):
+    orig_nonmoving_raw_ptr_for_resizable_list = rlib.buffer.nonmoving_raw_ptr_for_resizable_list
+    def fail(l):
+        raise oefmt(space.w_ValueError, "rgc.nonmoving_raw_ptr_for_resizable_list() not supported under RevDB")
+    rlib.buffer.nonmoving_raw_ptr_for_resizable_list = fail
+    yield
+    rlib.buffer.nonmoving_raw_ptr_for_resizable_list = orig_nonmoving_raw_ptr_for_resizable_list
+
+@py.test.mark.usefixtures('forbid_nonmoving_raw_ptr_for_resizable_list')
+class AppTestForbidRawPtrForResizableList(object):
+    spaceconfig = dict(usemodules=['_io'])
+
+    @py.test.mark.skipif("py.test.config.option.runappdirect")
+    def test_monkeypatch_works(self):
+        import _io, os
+        raw = _io.FileIO(os.devnull)
+        f = _io.BufferedReader(raw)
+        with raises(ValueError) as e:
+            f.read(1024)
+        assert e.value.args[0] == "rgc.nonmoving_raw_ptr_for_resizable_list() not supported under RevDB"
+
+@py.test.mark.usefixtures('forbid_nonmoving_raw_ptr_for_resizable_list')
+class AppTestBufferedReaderOnRevDB(AppTestBufferedReader):
+    spaceconfig = {'usemodules': ['_io'], 'translation.reverse_debugger': True}
 
 
 class AppTestBufferedWriter:
@@ -307,7 +366,6 @@ class AppTestBufferedWriter:
         class MyIO(_io.BufferedWriter):
             def __del__(self):
                 record.append(1)
-                super(MyIO, self).__del__()
             def close(self):
                 record.append(2)
                 super(MyIO, self).close()
@@ -416,8 +474,11 @@ class AppTestBufferedWriter:
                 available = self.buffersize - len(self.buffer)
                 if available <= 0:
                     return None
-                self.buffer += data[:available]
-                return min(len(data), available)
+                add_data = data[:available]
+                if isinstance(add_data, memoryview):
+                    add_data = add_data.tobytes()
+                self.buffer += add_data
+                return len(add_data)
             def read(self, size=-1):
                 if not self.buffer:
                     return None
@@ -564,6 +625,15 @@ class AppTestBufferedWriter:
         err = raises(IOError, b.close)  # exception not swallowed
         assert err.value.args == ('close',)
         assert not b.closed
+
+    def test_truncate_after_close(self):
+        import _io
+        raw = _io.FileIO(self.tmpfile, 'w+')
+        b = _io.BufferedWriter(raw)
+        b.close()
+        with raises(ValueError) as exc:
+            b.truncate()
+        assert exc.value.args[0] == "truncate of closed file"
 
 class AppTestBufferedRWPair:
     def test_pair(self):

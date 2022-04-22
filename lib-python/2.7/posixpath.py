@@ -186,7 +186,7 @@ def ismount(path):
         return False
     try:
         s1 = os.lstat(path)
-        s2 = os.lstat(join(path, '..'))
+        s2 = os.lstat(realpath(join(path, '..')))
     except os.error:
         return False # It doesn't exist -- so not a mount point :-)
     dev1 = s1.st_dev
@@ -259,7 +259,12 @@ def expanduser(path):
     if i == 1:
         if 'HOME' not in os.environ:
             import pwd
-            userhome = pwd.getpwuid(os.getuid()).pw_dir
+            try:
+                userhome = pwd.getpwuid(os.getuid()).pw_dir
+            except KeyError:
+                # bpo-10496: if the current user identifier doesn't exist in the
+                # password database, return the path unchanged
+                return path
         else:
             userhome = os.environ['HOME']
     else:
@@ -267,6 +272,8 @@ def expanduser(path):
         try:
             pwent = pwd.getpwnam(path[1:i])
         except KeyError:
+            # bpo-10496: if the user name from the path doesn't exist in the
+            # password database, return the path unchanged
             return path
         userhome = pwent.pw_dir
     userhome = userhome.rstrip('/')
@@ -375,7 +382,7 @@ symbolic links encountered in the path."""
     path, ok = _joinrealpath('', filename, {})
     return abspath(path)
 
-# Join two paths, normalizing ang eliminating any symbolic links
+# Join two paths, normalizing and eliminating any symbolic links
 # encountered in the second path.
 def _joinrealpath(path, rest, seen):
     if isabs(rest):

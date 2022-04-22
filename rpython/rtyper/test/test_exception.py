@@ -3,7 +3,7 @@ import py
 from rpython.translator.translator import TranslationContext
 from rpython.rtyper.test.tool import BaseRtypingTest
 from rpython.rtyper.llinterp import LLException
-from rpython.rtyper.error import MissingRTypeOperation
+from rpython.rtyper.error import MissingRTypeOperation, TyperError
 
 
 class MyException(Exception):
@@ -48,7 +48,7 @@ class TestException(BaseRtypingTest):
         def f(n):
             try:
                 g(n)
-            except IOError, e:
+            except IOError as e:
                 assert e.errno == 0
                 assert e.strerror == "test"
                 assert e.filename is None
@@ -56,7 +56,7 @@ class TestException(BaseRtypingTest):
                 assert False
             try:
                 h(n)
-            except OSError, e:
+            except OSError as e:
                 assert e.errno == 42
                 assert e.strerror == "?"
                 assert e.filename is None
@@ -92,7 +92,7 @@ class TestException(BaseRtypingTest):
         def f(n):
             try:
                 assert n < 10
-            except MyError, operr:
+            except MyError as operr:
                 h(operr)
         res = self.interpret(f, [7])
         assert res is None
@@ -108,7 +108,7 @@ class TestException(BaseRtypingTest):
                 raise OperationError(next_instr)
             try:
                 raise BytecodeCorruption()
-            except OperationError, operr:
+            except OperationError as operr:
                 next_instr -= operr.a
         py.test.raises(LLException, self.interpret, f, [10])
 
@@ -124,7 +124,7 @@ class TestException(BaseRtypingTest):
                 raise OperationError(next_instr)
             try:
                 raise bcerr
-            except OperationError, operr:
+            except OperationError as operr:
                 next_instr -= operr.a
         py.test.raises(LLException, self.interpret, f, [10])
 
@@ -164,3 +164,10 @@ class TestException(BaseRtypingTest):
             except OverflowError:
                 return 42
         py.test.raises(MissingRTypeOperation, self.interpret, f, [])
+
+    def test_cannot_raise_something_annotated_as_none(self):
+        def g():
+            return None
+        def f():
+            raise g()
+        py.test.raises(TyperError, rtype, f)

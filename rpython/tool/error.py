@@ -8,11 +8,7 @@ import py
 
 from rpython.flowspace.model import Variable
 from rpython.rlib import jit
-from rpython.tool.ansi_print import ansi_log
 
-
-log = py.log.Producer("error")
-py.log.setconsumer("error", ansi_log)
 
 SHOW_TRACEBACK = False
 SHOW_ANNOTATIONS = True
@@ -31,7 +27,7 @@ def source_lines1(graph, block, operindex=None, offset=None, long=False,
     else:
         graph_lines = source.split("\n")
         if offset is not None:
-            linestart = offset2lineno(graph.func.func_code, offset)
+            linestart = offset2lineno(graph.func.__code__, offset)
             linerange = (linestart, linestart)
             here = None
         else:
@@ -39,7 +35,7 @@ def source_lines1(graph, block, operindex=None, offset=None, long=False,
                 return []
 
             def toline(operindex):
-                return offset2lineno(graph.func.func_code, block.operations[operindex].offset)
+                return offset2lineno(graph.func.__code__, block.operations[operindex].offset)
             if operindex is None:
                 linerange = (toline(0), toline(-1))
                 if not long:
@@ -107,7 +103,7 @@ def format_simple_call(annotator, oper, msg):
     msg.append("Occurred processing the following simple_call:")
     try:
         descs = annotator.binding(oper.args[0]).descriptions
-    except (KeyError, AttributeError), e:
+    except (KeyError, AttributeError) as e:
         msg.append("      (%s getting at the binding!)" % (
             e.__class__.__name__,))
         return
@@ -121,9 +117,9 @@ def format_simple_call(annotator, oper, msg):
                     func_name = "%s.__init__" % func.__name__
                     func = func.__init__.im_func
                 else:
-                    func_name = func.func_name
+                    func_name = func.__name__
                 r = "function %s <%s, line %s>" % (func_name,
-                       func.func_code.co_filename, func.func_code.co_firstlineno)
+                       func.__code__.co_filename, func.__code__.co_firstlineno)
             except (AttributeError, TypeError):
                 r = repr(desc)
         msg.append("  %s returning" % (r,))
@@ -162,6 +158,8 @@ def debug(drv, use_pdb=True):
 
 @jit.elidable
 def offset2lineno(c, stopat):
+    # even position in lnotab denote byte increments, odd line increments.
+    # see dis.findlinestarts in the python std. library for more details
     tab = c.co_lnotab
     line = c.co_firstlineno
     addr = 0

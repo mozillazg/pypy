@@ -12,8 +12,8 @@ typedef enum RPyLockStatus {
 } RPyLockStatus;
 
 #ifdef _WIN32
+#define RPYTHREAD_NAME "nt"
 #include "thread_nt.h"
-#define inline _inline
 #else
 
 /* We should check if unistd.h defines _POSIX_THREADS, but sometimes
@@ -22,36 +22,20 @@ typedef enum RPyLockStatus {
    always go ahead and use them, assuming they are supported on all
    platforms for which we care.  If not, do some detecting again.
 */
+#define RPYTHREAD_NAME "pthread"
 #include "thread_pthread.h"
 
 #endif /* !_WIN32 */
 
 RPY_EXTERN void RPyGilAllocate(void);
-RPY_EXTERN long RPyGilYieldThread(void);
-RPY_EXTERN void RPyGilAcquireSlowPath(long);
+RPY_EXTERN Signed RPyGilYieldThread(void);
+RPY_EXTERN void RPyGilAcquireSlowPath(void);
 #define RPyGilAcquire _RPyGilAcquire
 #define RPyGilRelease _RPyGilRelease
 #define RPyFetchFastGil _RPyFetchFastGil
+#define RPyGilGetHolder _RPyGilGetHolder
+#define RPY_FASTGIL_LOCKED(x)   (x != 0)
 
-#ifdef PYPY_USE_ASMGCC
-# define RPY_FASTGIL_LOCKED(x)   (x == 1)
-#else
-# define RPY_FASTGIL_LOCKED(x)   (x != 0)
-#endif
-
-RPY_EXTERN long rpy_fastgil;
-
-static inline void _RPyGilAcquire(void) {
-    long old_fastgil = lock_test_and_set(&rpy_fastgil, 1);
-    if (old_fastgil != 0)
-        RPyGilAcquireSlowPath(old_fastgil);
-}
-static inline void _RPyGilRelease(void) {
-    assert(RPY_FASTGIL_LOCKED(rpy_fastgil));
-    lock_release(&rpy_fastgil);
-}
-static inline long *_RPyFetchFastGil(void) {
-    return &rpy_fastgil;
-}
+RPY_EXTERN Signed rpy_fastgil;
 
 #endif

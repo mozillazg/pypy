@@ -2,7 +2,8 @@
 import py
 import random
 from pypy.objspace.std.listobject import W_ListObject, SizeListStrategy,\
-     IntegerListStrategy, ObjectListStrategy
+     IntegerListStrategy, BytesListStrategy, FloatListStrategy, \
+     ObjectListStrategy, IntOrFloatListStrategy, AsciiListStrategy
 from pypy.interpreter.error import OperationError
 from rpython.rlib.rarithmetic import is_valid_int
 
@@ -430,8 +431,70 @@ class TestW_ListObject(object):
         with py.test.raises(ValueError):
             intlist.find(w(4), 0, 2)
 
+    def test_intlist_to_object_too_much_wrapping(self):
+        w = self.space.wrap
+        w_list = W_ListObject(self.space, [w(1000000)] * 100)
+        assert isinstance(w_list.strategy, IntegerListStrategy)
+        w_list.setitem(0, w(1))
+        w_list.setitem(0, self.space.w_None)
+        assert isinstance(w_list.strategy, ObjectListStrategy)
+        l = w_list.getitems()
+        assert len(set(l)) == 2
+
+    def test_floatlist_to_object_too_much_wrapping(self):
+        w = self.space.wrap
+        for value in [11233.12, float('NaN')]:
+            w_list = W_ListObject(self.space, [w(value)] * 100)
+            assert isinstance(w_list.strategy, FloatListStrategy)
+            w_list.setitem(0, self.space.w_None)
+            assert isinstance(w_list.strategy, ObjectListStrategy)
+            l = w_list.getitems()
+            for element in l[2:]:
+                assert element is l[1]
+
+    def test_intorfloatlist_to_object_too_much_wrapping(self):
+        w = self.space.wrap
+        w_list = W_ListObject(self.space, [w(0)] * 100)
+        w_list.setitem(0, w(1.1))
+        assert isinstance(w_list.strategy, IntOrFloatListStrategy)
+        w_list.setitem(0, self.space.w_None)
+        assert isinstance(w_list.strategy, ObjectListStrategy)
+        l = w_list.getitems()
+        assert len(set(l)) == 2
+
+    def test_byteslist_to_object_too_much_wrapping(self):
+        w = self.space.wrap
+        w_list = W_ListObject(self.space, [self.space.newbytes(b"abc")] * 100)
+        assert isinstance(w_list.strategy, BytesListStrategy)
+        w_list.setitem(0, self.space.w_None)
+        assert isinstance(w_list.strategy, ObjectListStrategy)
+        l = w_list.getitems()
+        for element in l[2:]:
+            assert element is l[1]
+
+    def test_asciilist_to_object_too_much_wrapping(self):
+        w = self.space.wrap
+        w_list = W_ListObject(self.space, [self.space.newutf8(b"abc", 3)] * 100)
+        assert isinstance(w_list.strategy, AsciiListStrategy)
+        w_list.setitem(0, self.space.w_None)
+        assert isinstance(w_list.strategy, ObjectListStrategy)
+        l = w_list.getitems()
+        for element in l[2:]:
+            assert element is l[1]
+
+    def test_tuple_extend_shortcut(self, space, monkeypatch):
+        from pypy.objspace.std import listobject
+        w = self.space.wrap
+        w_list = W_ListObject(space, [w(5)])
+        w_tup = space.newtuple([w(6), w(7)])
+        monkeypatch.setattr(listobject, "_do_extend_from_iterable", None)
+        space.call_method(w_list, "extend", w_tup) # does not crash because of the shortcut
+        assert space.unwrap(w_list) == [5, 6, 7]
+
 
 class AppTestListObject(object):
+    #spaceconfig = {"objspace.std.withliststrategies": True}  # it's the default
+
     def setup_class(cls):
         import platform
         import sys
@@ -500,6 +563,34 @@ class AppTestListObject(object):
         assert not l.__contains__(-3)
         assert not l.__contains__(-20)
         assert not l.__contains__(-21)
+
+        logger = []
+
+        class Foo(object):
+
+            def __init__(self, value, name=None):
+                self.value = value
+                self.name = name or value
+
+            def __repr__(self):
+                return '<Foo %s>' % self.name
+
+            def __eq__(self, other):
+                logger.append((self, other))
+                return self.value == other.value
+
+        foo1, foo2, foo3 = Foo(1), Foo(2), Foo(3)
+        foo42 = Foo(42)
+        foo_list = [foo1, foo2, foo3]
+        foo42 in foo_list
+        logger_copy = logger[:]  # prevent re-evaluation during pytest error print
+        assert logger_copy == [(foo42, foo1), (foo42, foo2), (foo42, foo3)]
+
+        del logger[:]
+        foo2_bis = Foo(2, '2 bis')
+        foo2_bis in foo_list
+        logger_copy = logger[:]  # prevent re-evaluation during pytest error print
+        assert logger_copy == [(foo2_bis, foo1), (foo2_bis, foo2)]
 
     def test_call_list(self):
         assert list('') == []
@@ -588,6 +679,18 @@ class AppTestListObject(object):
         l.extend(iter([2.3, 3.4, 4.5]))
         assert l == [1.2, 2.3, 3.4, 4.5]
         assert l is l0
+
+    def test_extend_iterable_length_hint_overflow(self):
+        import sys
+        class CustomIterable(object):
+            def __iter__(self):
+                if False:
+                    yield
+            def __length_hint__(self):
+                return sys.maxsize
+        a = [1, 2, 3, 4]
+        a.extend(CustomIterable())
+        assert a == [1, 2, 3, 4]
 
     def test_sort(self):
         l = l0 = [1, 5, 3, 0]
@@ -1038,6 +1141,15 @@ class AppTestListObject(object):
         l[::3] = ('a', 'b')
         assert l == ['a', 1.1, 2.2, 'b', 4.4, 5.5]
 
+        l_int = [5]; l_int.pop()   # IntListStrategy
+        l_empty = []               # EmptyListStrategy
+        raises(ValueError, "l_int[::-1] = [42]")
+        raises(ValueError, "l_int[::7] = [42]")
+        raises(ValueError, "l_empty[::-1] = [42]")
+        raises(ValueError, "l_empty[::7] = [42]")
+        l_int[::1] = [42]; assert l_int == [42]
+        l_empty[::1] = [42]; assert l_empty == [42]
+
     def test_setslice_with_self(self):
         l = [1,2,3,4]
         l[:] = l
@@ -1078,6 +1190,24 @@ class AppTestListObject(object):
         for i in range(count):
             b[i:i+1] = ['y']
         assert b == ['y'] * count
+
+    def test_setslice_full(self):
+        l = [1, 2, 3]
+        l[::] = "abc"
+        assert l == ['a', 'b', 'c']
+
+        l = [1, 2, 3]
+        l[::] = []
+        assert l == []
+
+        l = [1, 2, 3]
+        l[::] = l
+        assert l == [1, 2, 3]
+
+    def test_setslice_full_bug(self):
+        l = [1, 2, 3]
+        l[::] = (x + 1 for x in l)
+        assert l == [2, 3, 4]
 
     def test_recursive_repr(self):
         l = []
@@ -1344,6 +1474,10 @@ class AppTestListObject(object):
         l3 = [s]
         assert l1[0].encode("ascii", "replace") == "???"
 
+    def test_unicode_bug_in_listview_utf8(self):
+        l1 = list(u'\u1234\u2345')
+        assert l1 == [u'\u1234', u'\u2345']
+
     def test_list_from_set(self):
         l = ['a']
         l.__init__(set('b'))
@@ -1488,6 +1622,16 @@ class AppTestListObject(object):
             def __iter__(self):
                 yield "ok"
         assert list(U(u"don't see me")) == ["ok"]
+        #
+        class S(str):
+            def __getitem__(self, index):
+                return str.__getitem__(self, index).upper()
+        assert list(S("abc")) == list("ABC")
+        #
+        class U(unicode):
+            def __getitem__(self, index):
+                return unicode.__getitem__(self, index).upper()
+        assert list(U(u"abc")) == list(u"ABC")
 
     def test_extend_from_nonempty_list_with_subclasses(self):
         l = ["hi!"]
@@ -1513,6 +1657,20 @@ class AppTestListObject(object):
         l.extend(U(u"don't see me"))
         #
         assert l == ["hi!", "okT", "okL", "okL", "okS", "okU"]
+        #
+        class S(str):
+            def __getitem__(self, index):
+                return str.__getitem__(self, index).upper()
+        l = []
+        l.extend(S("abc"))
+        assert l == list("ABC")
+        #
+        class U(unicode):
+            def __getitem__(self, index):
+                return unicode.__getitem__(self, index).upper()
+        l = []
+        l.extend(U(u"abc"))
+        assert l == list(u"ABC")
 
     def test_no_len_on_range_iter(self):
         iterable = range(10)
@@ -1590,20 +1748,13 @@ class AppTestListObject(object):
             assert L3.index(-0.0, i) == i
 
 
-class AppTestListObjectWithRangeList(AppTestListObject):
-    """Run the list object tests with range lists enabled. Tests should go in
-    AppTestListObject so they can be run -A against CPython as well.
-    """
-    spaceconfig = {"objspace.std.withrangelist": True}
-
-
 class AppTestRangeListForcing:
     """Tests for range lists that test forcing. Regular tests should go in
     AppTestListObject so they can be run -A against CPython as well. Separate
     from AppTestListObjectWithRangeList so we don't silently overwrite tests
     with the same names.
     """
-    spaceconfig = {"objspace.std.withrangelist": True}
+    spaceconfig = {"objspace.std.withliststrategies": True}
 
     def setup_class(cls):
         if cls.runappdirect:

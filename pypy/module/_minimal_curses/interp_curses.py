@@ -1,94 +1,90 @@
-
 from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.error import OperationError
-from pypy.module._minimal_curses import _curses
+from pypy.module._minimal_curses import fficurses
+from rpython.rtyper.lltypesystem import lltype, rffi
+from rpython.rlib.rarithmetic import r_uint, intmask, widen
+
 
 class ModuleInfo:
-    def __init__(self):
+    def __init__(self, space):
         self.setupterm_called = False
 
-module_info = ModuleInfo()
+def check_setup_invoked(space):
+    if not space.fromcache(ModuleInfo).setupterm_called:
+        raise curses_error(space, "must call (at least) setupterm() first")
 
-class curses_error(Exception):
-    def __init__(self, msg):
-        self.msg = msg
 
-from rpython.annotator.classdesc import FORCE_ATTRIBUTES_INTO_CLASSES
-from rpython.annotator.model import SomeString
-
-# this is necessary due to annmixlevel
-FORCE_ATTRIBUTES_INTO_CLASSES[curses_error] = {'msg': SomeString()}
-
-def convert_error(space, error):
-    msg = error.msg
+def curses_error(space, errmsg):
     w_module = space.getbuiltinmodule('_minimal_curses')
-    w_exception_class = space.getattr(w_module, space.wrap('error'))
-    w_exception = space.call_function(w_exception_class, space.wrap(msg))
+    w_exception_class = space.getattr(w_module, space.newtext('error'))
+    w_exception = space.call_function(w_exception_class, space.newtext(errmsg))
     return OperationError(w_exception_class, w_exception)
 
-def _curses_setupterm_null(fd):
-    # NOT_RPYTHON
-    try:
-        _curses.setupterm(None, fd)
-    except _curses.error, e:
-        raise curses_error(e.args[0])
-
-def _curses_setupterm(termname, fd):
-    # NOT_RPYTHON
-    try:
-        _curses.setupterm(termname, fd)
-    except _curses.error, e:
-        raise curses_error(e.args[0])
 
 @unwrap_spec(fd=int)
 def setupterm(space, w_termname=None, fd=-1):
+    _fd = fd
     if fd == -1:
         w_stdout = space.getattr(space.getbuiltinmodule('sys'),
-                                 space.wrap('stdout'))
-        fd = space.int_w(space.call_function(space.getattr(w_stdout,
-                                             space.wrap('fileno'))))
+                                 space.newtext('stdout'))
+        _fd = space.int_w(space.call_function(space.getattr(w_stdout,
+                                             space.newtext('fileno'))))
+    if space.is_none(w_termname):
+        termname = None
+        termname_err = 'None'
+    else:
+        termname = space.text_w(w_termname)
+        termname_err = "'%s'" % termname
+
+    p_errret = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
     try:
-        if space.is_none(w_termname):
-            _curses_setupterm_null(fd)
-        else:
-            _curses_setupterm(space.str_w(w_termname), fd)
-    except curses_error, e:
-        raise convert_error(space, e)
+        with rffi.scoped_str2charp(termname) as ll_term:
+            _fd = rffi.cast(rffi.INT, _fd)
+            errval = fficurses.setupterm(ll_term, _fd, p_errret)
+            
+        if errval == -1:
+            errret = widen(p_errret[0])
+            if errret == 0:
+                msg_ext = 'could not find terminal'
+            elif errret == -1:
+                msg_ext = 'could not find termininfo database'
+            else:
+                msg_ext = 'unknown error'
+            msg = ("setupterm(%s, %d) failed (err=%d): %s"  %
+                  (termname_err, fd, errret, msg_ext))
+            raise curses_error(space, msg)
+    finally:
+        lltype.free(p_errret, flavor='raw')
+    space.fromcache(ModuleInfo).setupterm_called = True
 
-class TermError(Exception):
-    pass
-
-def _curses_tigetstr(capname):
-    # NOT_RPYTHON
-    try:
-        res = _curses.tigetstr(capname)
-    except _curses.error, e:
-        raise curses_error(e.args[0])
-    if res is None:
-        raise TermError
-    return res
-
-def _curses_tparm(s, args):
-    # NOT_RPYTHON
-    try:
-        return _curses.tparm(s, *args)
-    except _curses.error, e:
-        raise curses_error(e.args[0])
-
-@unwrap_spec(capname=str)
+@unwrap_spec(capname='text')
 def tigetstr(space, capname):
-    try:
-        result = _curses_tigetstr(capname)
-    except TermError:
-        return space.w_None
-    except curses_error, e:
-        raise convert_error(space, e)
-    return space.wrap(result)
+    check_setup_invoked(space)
+    with rffi.scoped_str2charp(capname) as ll_capname:
+        ll_result = fficurses.rpy_curses_tigetstr(ll_capname)
+        if ll_result:
+            return space.newbytes(rffi.charp2str(ll_result))
+        else:
+            return space.w_None
 
-@unwrap_spec(s=str)
+@unwrap_spec(s='text')
 def tparm(space, s, args_w):
+    check_setup_invoked(space)
     args = [space.int_w(a) for a in args_w]
-    try:
-        return space.wrap(_curses_tparm(s, args))
-    except curses_error, e:
-        raise convert_error(space, e)
+    # nasty trick stolen from CPython
+    x0 = args[0] if len(args) > 0 else 0
+    x1 = args[1] if len(args) > 1 else 0
+    x2 = args[2] if len(args) > 2 else 0
+    x3 = args[3] if len(args) > 3 else 0
+    x4 = args[4] if len(args) > 4 else 0
+    x5 = args[5] if len(args) > 5 else 0
+    x6 = args[6] if len(args) > 6 else 0
+    x7 = args[7] if len(args) > 7 else 0
+    x8 = args[8] if len(args) > 8 else 0
+    with rffi.scoped_str2charp(s) as ll_str:
+        ll_result = fficurses.rpy_curses_tparm(ll_str, x0, x1, x2, x3,
+                                               x4, x5, x6, x7, x8)
+        if ll_result:
+            return space.newbytes(rffi.charp2str(ll_result))
+        else:
+            raise curses_error(space, "tparm() returned NULL")

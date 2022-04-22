@@ -58,8 +58,20 @@ class CursorFactoryTests(unittest.TestCase):
         self.con.close()
 
     def CheckIsInstance(self):
-        cur = self.con.cursor(factory=MyCursor)
+        cur = self.con.cursor()
+        self.assertIsInstance(cur, sqlite.Cursor)
+        cur = self.con.cursor(MyCursor)
         self.assertIsInstance(cur, MyCursor)
+        cur = self.con.cursor(factory=lambda con: MyCursor(con))
+        self.assertIsInstance(cur, MyCursor)
+
+    def CheckInvalidFactory(self):
+        # not a callable at all
+        self.assertRaises(TypeError, self.con.cursor, None)
+        # invalid callable with not exact one argument
+        self.assertRaises(TypeError, self.con.cursor, lambda: None)
+        # invalid callable returning non-cursor
+        self.assertRaises(TypeError, self.con.cursor, lambda con: None)
 
 class RowFactoryTestsBackwardsCompat(unittest.TestCase):
     def setUp(self):
@@ -147,19 +159,24 @@ class RowFactoryTests(unittest.TestCase):
         row_1 = self.con.execute("select 1 as a, 2 as b").fetchone()
         row_2 = self.con.execute("select 1 as a, 2 as b").fetchone()
         row_3 = self.con.execute("select 1 as a, 3 as b").fetchone()
+        row_4 = self.con.execute("select 1 as b, 2 as a").fetchone()
+        row_5 = self.con.execute("select 2 as b, 1 as a").fetchone()
 
-        self.assertEqual(row_1, row_1)
-        self.assertEqual(row_1, row_2)
-        self.assertTrue(row_2 != row_3)
+        self.assertTrue(row_1 == row_1)
+        self.assertTrue(row_1 == row_2)
+        self.assertFalse(row_1 == row_3)
+        self.assertFalse(row_1 == row_4)
+        self.assertFalse(row_1 == row_5)
+        self.assertFalse(row_1 == object())
 
         self.assertFalse(row_1 != row_1)
         self.assertFalse(row_1 != row_2)
-        self.assertFalse(row_2 == row_3)
+        self.assertTrue(row_1 != row_3)
+        self.assertTrue(row_1 != row_4)
+        self.assertTrue(row_1 != row_5)
+        self.assertTrue(row_1 != object())
 
-        self.assertEqual(row_1, row_2)
         self.assertEqual(hash(row_1), hash(row_2))
-        self.assertNotEqual(row_1, row_3)
-        self.assertNotEqual(hash(row_1), hash(row_3))
 
     def CheckSqliteRowAsSequence(self):
         """ Checks if the row object can act like a sequence """
@@ -169,6 +186,16 @@ class RowFactoryTests(unittest.TestCase):
         as_tuple = tuple(row)
         self.assertEqual(list(reversed(row)), list(reversed(as_tuple)))
         self.assertIsInstance(row, Sequence)
+
+    def CheckFakeCursorClass(self):
+        # Issue #24257: Incorrect use of PyObject_IsInstance() caused
+        # segmentation fault.
+        # Issue #27861: Also applies for cursor factory.
+        class FakeCursor(str):
+            __class__ = sqlite.Cursor
+        self.con.row_factory = sqlite.Row
+        self.assertRaises(TypeError, self.con.cursor, FakeCursor)
+        self.assertRaises(TypeError, sqlite.Row, FakeCursor(), ())
 
     def tearDown(self):
         self.con.close()
@@ -221,7 +248,7 @@ class TextFactoryTestsWithEmbeddedZeroBytes(unittest.TestCase):
         self.assertEqual(row[0], "a\x00b")
 
     def CheckCustom(self):
-        # A custom factory should receive an str argument
+        # A custom factory should receive a str argument
         self.con.text_factory = lambda x: x
         row = self.con.execute("select value from test").fetchone()
         self.assertIs(type(row[0]), str)

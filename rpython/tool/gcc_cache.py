@@ -1,5 +1,5 @@
 from hashlib import md5
-import py, os
+import py, os, sys
 
 def cache_file_path(c_files, eci, cachename):
     "Builds a filename to cache compilation data"
@@ -26,6 +26,8 @@ def build_executable_cache(c_files, eci, ignore_errors=False):
             if ignore_errors:
                 platform.log_errors = False
             result = platform.execute(platform.compile(c_files, eci))
+            if result.err:
+                sys.stderr.write(result.err)
         finally:
             if ignore_errors:
                 del platform.log_errors
@@ -33,7 +35,8 @@ def build_executable_cache(c_files, eci, ignore_errors=False):
             # compare equal to another instance without it
             if platform.log_errors != _previous:
                 platform.log_errors = _previous
-        try_atomic_write(path, result.out)
+        if not result.err:
+            try_atomic_write(path, result.out)
         return result.out
 
 def try_atomic_write(path, data):
@@ -51,14 +54,16 @@ def try_atomic_write(path, data):
             pass
 
 def try_compile_cache(c_files, eci):
-    "Try to compile a program.  If it works, caches this fact."
+    "Try to compile a program.  Cache success, and error message on failure"
     # Import 'platform' every time, the compiler may have been changed
-    from rpython.translator.platform import platform
+    from rpython.translator.platform import platform, CompilationError
     path = cache_file_path(c_files, eci, 'try_compile_cache')
     try:
         data = path.read()
         if data == 'True':
             return True
+        else:
+            raise CompilationError(data, '')
     except py.error.Error:
         pass
     #
@@ -66,12 +71,16 @@ def try_compile_cache(c_files, eci):
     try:
         platform.log_errors = False
         platform.compile(c_files, eci)
-        # ^^^ may raise CompilationError.  We don't cache such results.
+    except CompilationError as e:
+        msg = e.out + e.err
+        if msg != 'True':
+            try_atomic_write(path, msg)
+        raise
     finally:
         del platform.log_errors
         # ^^^remove from the instance --- needed so that it can
         # compare equal to another instance without it
         if platform.log_errors != _previous:
             platform.log_errors = _previous
-    path.write('True')
+    try_atomic_write(path, "True")
     return True

@@ -1,12 +1,11 @@
-import py
+import pytest
 
 class AppTest(object):
-    spaceconfig = {"objspace.usemodules.select": False,
-                   "objspace.std.withrangelist": True}
+    spaceconfig = {"objspace.usemodules.select": False}
 
     def setup_class(cls):
         if cls.runappdirect:
-            py.test.skip("does not make sense on pypy-c")
+            pytest.skip("does not make sense on pypy-c")
 
     def test_cpumodel(self):
         import __pypy__
@@ -61,6 +60,7 @@ class AppTest(object):
         import __pypy__
         import sys
 
+        result = [False]
         @__pypy__.hidden_applevel
         def test_hidden_with_tb():
             def not_hidden(): 1/0
@@ -69,9 +69,11 @@ class AppTest(object):
                 assert sys.exc_info() == (None, None, None)
                 tb = __pypy__.get_hidden_tb()
                 assert tb.tb_frame.f_code.co_name == 'not_hidden'
-                return True
+                result[0] = True
+                raise
             else: return False
-        assert test_hidden_with_tb()
+        raises(ZeroDivisionError, test_hidden_with_tb)
+        assert result[0]
 
     def test_lookup_special(self):
         from __pypy__ import lookup_special
@@ -99,7 +101,7 @@ class AppTest(object):
         l = ["a", "b", "c"]
         assert strategy(l) == "BytesListStrategy"
         l = [u"a", u"b", u"c"]
-        assert strategy(l) == "UnicodeListStrategy"
+        assert strategy(l) == "AsciiListStrategy"
         l = [1.1, 2.2, 3.3]
         assert strategy(l) == "FloatListStrategy"
         l = range(3)
@@ -129,13 +131,38 @@ class AppTest(object):
         s = set([2, 3, 4])
         assert strategy(s) == "IntegerSetStrategy"
 
+    def test_instance_strategy(self):
+        import sys
+        from __pypy__ import strategy
+        if sys.maxsize < 2**32:
+            skip('not for 32-bit python')
+        class A(object):
+            pass
+        a = A()
+        a.x = 1
+        a.y = 2
+        assert strategy(a).startswith("<UnboxedPlainAttribute y DICT 0 1 <UnboxedPlainAttribute x DICT 0 0 <DictTerminator w_cls=<W_TypeObject 'A'")
+
 
 class AppTestJitFeatures(object):
     spaceconfig = {"translation.jit": True}
 
+    def setup_class(cls):
+        cls.w_runappdirect = cls.space.wrap(cls.runappdirect)
+
     def test_jit_backend_features(self):
-        from __pypy__ import jit_backend_features
+        try:
+            from __pypy__ import jit_backend_features
+        except ImportError:
+            skip("compiled without jit")
         supported_types = jit_backend_features
         assert isinstance(supported_types, list)
         for x in supported_types:
             assert x in ['floats', 'singlefloats', 'longlong']
+
+    def test_internal_error(self):
+        if not self.runappdirect:
+            skip("we don't wrap a random exception inside SystemError "
+                 "when untranslated, because it makes testing harder")
+        from __pypy__ import _internal_crash
+        raises(SystemError, _internal_crash, 1)

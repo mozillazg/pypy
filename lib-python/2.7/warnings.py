@@ -5,7 +5,6 @@
 # See bug 683658.
 import linecache
 import sys
-import types
 
 __all__ = ["warn", "warn_explicit", "showwarning",
            "formatwarning", "filterwarnings", "simplefilter",
@@ -31,7 +30,7 @@ def _show_warning(message, category, filename, lineno, file=None, line=None):
             return
     try:
         file.write(formatwarning(message, category, filename, lineno, line))
-    except IOError:
+    except (IOError, UnicodeError):
         pass # the file (probably stderr) is invalid - this warning gets lost.
 # Keep a working version around in case the deprecation of the old API is
 # triggered.
@@ -39,11 +38,30 @@ showwarning = _show_warning
 
 def formatwarning(message, category, filename, lineno, line=None):
     """Function to format a warning the standard way."""
-    s =  "%s:%s: %s: %s\n" % (filename, lineno, category.__name__, message)
+    try:
+        unicodetype = unicode
+    except NameError:
+        unicodetype = ()
+    template = "%s: %s: %s\n"
+    try:
+        message = str(message)
+    except UnicodeEncodeError:
+        template = unicode(template)
+    s = template % (lineno, category.__name__, message)
     line = linecache.getline(filename, lineno) if line is None else line
     if line:
         line = line.strip()
+        if isinstance(s, unicodetype) and isinstance(line, str):
+            line = unicode(line, 'latin1')
         s += "  %s\n" % line
+    if isinstance(s, unicodetype) and isinstance(filename, str):
+        enc = sys.getfilesystemencoding()
+        if enc:
+            try:
+                filename = unicode(filename, enc)
+            except UnicodeDecodeError:
+                pass
+    s = "%s:%s" % (filename, s)
     return s
 
 def filterwarnings(action, message="", category=Warning, module="", lineno=0,
@@ -58,6 +76,7 @@ def filterwarnings(action, message="", category=Warning, module="", lineno=0,
     'lineno' -- an integer line number, 0 matches all warnings
     'append' -- if true, append to the list of filters
     """
+    import types
     import re
     assert action in ("error", "ignore", "always", "default", "module",
                       "once"), "invalid action: %r" % (action,)
@@ -66,10 +85,10 @@ def filterwarnings(action, message="", category=Warning, module="", lineno=0,
            "category must be a class"
     assert issubclass(category, Warning), "category must be a Warning subclass"
     assert isinstance(module, basestring), "module must be a string"
-    assert isinstance(lineno, int) and lineno >= 0, \
+    assert isinstance(lineno, (int, long)) and lineno >= 0, \
            "lineno must be an int >= 0"
     item = (action, re.compile(message, re.I), category,
-            re.compile(module), lineno)
+            re.compile(module), int(lineno))
     if append:
         filters.append(item)
     else:
@@ -87,9 +106,9 @@ def simplefilter(action, category=Warning, lineno=0, append=0):
     """
     assert action in ("error", "ignore", "always", "default", "module",
                       "once"), "invalid action: %r" % (action,)
-    assert isinstance(lineno, int) and lineno >= 0, \
+    assert isinstance(lineno, (int, long)) and lineno >= 0, \
            "lineno must be an int >= 0"
-    item = (action, None, category, None, lineno)
+    item = (action, None, category, None, int(lineno))
     if append:
         filters.append(item)
     else:
@@ -163,6 +182,8 @@ def _getcategory(category):
         module = category[:i]
         klass = category[i+1:]
         try:
+            if not module:
+                raise ImportError   # instead of the ValueError we'd get
             m = __import__(module, None, None, [klass])
         except ImportError:
             raise _OptionError("invalid module name: %r" % (module,))
@@ -291,9 +312,12 @@ class WarningMessage(object):
 
     def __init__(self, message, category, filename, lineno, file=None,
                     line=None):
-        local_values = locals()
-        for attr in self._WARNING_DETAILS:
-            setattr(self, attr, local_values[attr])
+        self.message = message
+        self.category = category
+        self.filename = filename
+        self.lineno = lineno
+        self.file = file
+        self.line = line
         self._category_name = category.__name__ if category else None
 
     def __str__(self):

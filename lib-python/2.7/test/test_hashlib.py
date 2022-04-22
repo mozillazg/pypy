@@ -371,25 +371,25 @@ class HashLibTestCase(unittest.TestCase):
         data = smallest_data*200000
         expected_hash = hashlib.sha1(data*num_threads).hexdigest()
 
-        def hash_in_chunks(chunk_size, event):
+        def hash_in_chunks(chunk_size):
             index = 0
             while index < len(data):
                 hasher.update(data[index:index+chunk_size])
                 index += chunk_size
-            event.set()
 
-        events = []
+        threads = []
         for threadnum in xrange(num_threads):
             chunk_size = len(data) // (10**threadnum)
             assert chunk_size > 0
             assert chunk_size % len(smallest_data) == 0
-            event = threading.Event()
-            events.append(event)
-            threading.Thread(target=hash_in_chunks,
-                             args=(chunk_size, event)).start()
+            thread = threading.Thread(target=hash_in_chunks,
+                                      args=(chunk_size,))
+            threads.append(thread)
 
-        for event in events:
-            event.wait()
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
         self.assertEqual(expected_hash, hasher.hexdigest())
 
@@ -408,7 +408,7 @@ class KDFTests(unittest.TestCase):
 
     pbkdf2_results = {
         "sha1": [
-            # offical test vectors from RFC 6070
+            # official test vectors from RFC 6070
             (unhexlify('0c60c80f961f0e71f3a9b524af6012062fe037a6'), None),
             (unhexlify('ea6c014dc72d6f8ccd1ed92ace1d41f0d8de8957'), None),
             (unhexlify('4b007901b765489abead49d926f721d065a429c1'), None),

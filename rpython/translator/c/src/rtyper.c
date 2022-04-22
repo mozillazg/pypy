@@ -1,9 +1,6 @@
 /************************************************************/
 /***  C header subsection: tools for RTyper-aware code    ***/
-#include "common_header.h"
-#include "structdef.h"
-#include "forwarddecl.h"
-#include "preimpl.h"
+#include "singleheader.h"
 #include <src/rtyper.h>
 
 #include <stdlib.h>
@@ -35,12 +32,4 @@ void RPyString_FreeCache(void)
 		_RPyString_dump = dump->next;
 		free(dump);
 	}
-}
-
-RPyString *RPyString_FromString(char *buf)
-{
-	int length = strlen(buf);
-	RPyString *rps = RPyString_New(length);
-	memcpy(rps->rs_chars.items, buf, length);
-	return rps;
 }

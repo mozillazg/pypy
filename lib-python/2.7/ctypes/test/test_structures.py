@@ -3,6 +3,7 @@ from ctypes import *
 from ctypes.test import need_symbol
 from struct import calcsize
 import _testcapi
+import _ctypes_test
 
 class SubclassesTest(unittest.TestCase):
     def test_subclass(self):
@@ -106,7 +107,7 @@ class StructureTestCase(unittest.TestCase):
         self.assertEqual(alignment(XX), alignment(X))
         self.assertEqual(sizeof(XX), calcsize("3s 3s 0s"))
 
-    def test_emtpy(self):
+    def test_empty(self):
         # I had problems with these
         #
         # Although these are pathological cases: Empty Structures!
@@ -326,6 +327,7 @@ class StructureTestCase(unittest.TestCase):
                                  "(Phone) <type 'exceptions.TypeError'>: "
                                  "expected string or Unicode object, int found")
         else:
+            # Compatibility no longer strictly required
             self.assertEqual(msg,
                                  "(Phone) exceptions.TypeError: "
                                  "expected string or Unicode object, int found")
@@ -399,6 +401,28 @@ class StructureTestCase(unittest.TestCase):
         self.assertEqual((z.a, z.b, z.c, z.d, z.e, z.f),
                          (1, 0, 0, 0, 0, 0))
         self.assertRaises(TypeError, lambda: Z(1, 2, 3, 4, 5, 6, 7))
+
+    def test_pass_by_value(self):
+        # This should mirror the structure in Modules/_ctypes/_ctypes_test.c
+        class X(Structure):
+            _fields_ = [
+                ('first', c_ulong),
+                ('second', c_ulong),
+                ('third', c_ulong),
+            ]
+
+        s = X()
+        s.first = 0xdeadbeef
+        s.second = 0xcafebabe
+        s.third = 0x0bad1dea
+        dll = CDLL(_ctypes_test.__file__)
+        func = dll._testfunc_large_struct_update_value
+        func.argtypes = (X,)
+        func.restype = None
+        func(s)
+        self.assertEqual(s.first, 0xdeadbeef)
+        self.assertEqual(s.second, 0xcafebabe)
+        self.assertEqual(s.third, 0x0bad1dea)
 
 class PointerMemberTestCase(unittest.TestCase):
 

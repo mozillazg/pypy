@@ -88,9 +88,10 @@ class ToplevelTest(AbstractToplevelTest, unittest.TestCase):
         widget = self.create()
         self.assertEqual(widget['use'], '')
         parent = self.create(container=True)
-        wid = parent.winfo_id()
+        # hex() adds the 'L' suffix for longs
+        wid = '%#x' % parent.winfo_id()
         widget2 = self.create(use=wid)
-        self.assertEqual(int(widget2['use']), wid)
+        self.assertEqual(widget2['use'], wid)
 
 
 @add_standard_options(StandardOptionsTests)
@@ -99,7 +100,7 @@ class FrameTest(AbstractToplevelTest, unittest.TestCase):
         'background', 'borderwidth',
         'class', 'colormap', 'container', 'cursor', 'height',
         'highlightbackground', 'highlightcolor', 'highlightthickness',
-        'relief', 'takefocus', 'visual', 'width',
+        'padx', 'pady', 'relief', 'takefocus', 'visual', 'width',
     )
 
     def create(self, **kwargs):
@@ -470,6 +471,14 @@ class SpinboxTest(EntryTest, unittest.TestCase):
         self.assertRaises(TypeError, widget.bbox)
         self.assertRaises(TypeError, widget.bbox, 0, 1)
 
+    def test_selection_element(self):
+        widget = self.create()
+        self.assertEqual(widget.selection_element(), "none")
+        widget.selection_element("buttonup")
+        self.assertEqual(widget.selection_element(), "buttonup")
+        widget.selection_element("buttondown")
+        self.assertEqual(widget.selection_element(), "buttondown")
+
 
 @add_standard_options(StandardOptionsTests)
 class TextTest(AbstractWidgetTest, unittest.TestCase):
@@ -633,7 +642,7 @@ class CanvasTest(AbstractWidgetTest, unittest.TestCase):
         'highlightbackground', 'highlightcolor', 'highlightthickness',
         'insertbackground', 'insertborderwidth',
         'insertofftime', 'insertontime', 'insertwidth',
-        'relief', 'scrollregion',
+        'offset', 'relief', 'scrollregion',
         'selectbackground', 'selectborderwidth', 'selectforeground',
         'state', 'takefocus',
         'xscrollcommand', 'xscrollincrement',
@@ -654,6 +663,15 @@ class CanvasTest(AbstractWidgetTest, unittest.TestCase):
     def test_confine(self):
         widget = self.create()
         self.checkBooleanParam(widget, 'confine')
+
+    def test_offset(self):
+        widget = self.create()
+        self.assertEqual(widget['offset'], '0,0')
+        self.checkParams(widget, 'offset',
+                'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'center')
+        self.checkParam(widget, 'offset', '10,20')
+        self.checkParam(widget, 'offset', '#5,6')
+        self.checkInvalidParam(widget, 'offset', 'spam')
 
     def test_scrollregion(self):
         widget = self.create()
@@ -690,7 +708,7 @@ class ListboxTest(AbstractWidgetTest, unittest.TestCase):
         'disabledforeground', 'exportselection',
         'font', 'foreground', 'height',
         'highlightbackground', 'highlightcolor', 'highlightthickness',
-        'listvariable', 'relief',
+        'justify', 'listvariable', 'relief',
         'selectbackground', 'selectborderwidth', 'selectforeground',
         'selectmode', 'setgrid', 'state',
         'takefocus', 'width', 'xscrollcommand', 'yscrollcommand',
@@ -703,6 +721,8 @@ class ListboxTest(AbstractWidgetTest, unittest.TestCase):
         widget = self.create()
         self.checkEnumParam(widget, 'activestyle',
                             'dotbox', 'none', 'underline')
+
+    test_justify = requires_tcl(8, 6, 5)(StandardOptionsTests.test_justify.im_func)
 
     def test_listvariable(self):
         widget = self.create()
@@ -937,7 +957,9 @@ class PanedWindowTest(AbstractWidgetTest, unittest.TestCase):
     OPTIONS = (
         'background', 'borderwidth', 'cursor',
         'handlepad', 'handlesize', 'height',
-        'opaqueresize', 'orient', 'relief',
+        'opaqueresize', 'orient',
+        'proxybackground', 'proxyborderwidth', 'proxyrelief',
+        'relief',
         'sashcursor', 'sashpad', 'sashrelief', 'sashwidth',
         'showhandle', 'width',
     )
@@ -963,6 +985,23 @@ class PanedWindowTest(AbstractWidgetTest, unittest.TestCase):
     def test_opaqueresize(self):
         widget = self.create()
         self.checkBooleanParam(widget, 'opaqueresize')
+
+    @requires_tcl(8, 6, 5)
+    def test_proxybackground(self):
+        widget = self.create()
+        self.checkColorParam(widget, 'proxybackground')
+
+    @requires_tcl(8, 6, 5)
+    def test_proxyborderwidth(self):
+        widget = self.create()
+        self.checkPixelsParam(widget, 'proxyborderwidth',
+                              0, 1.3, 2.9, 6, -2, '10p',
+                              conv=noconv)
+
+    @requires_tcl(8, 6, 5)
+    def test_proxyrelief(self):
+        widget = self.create()
+        self.checkReliefParam(widget, 'proxyrelief')
 
     def test_sashcursor(self):
         widget = self.create()

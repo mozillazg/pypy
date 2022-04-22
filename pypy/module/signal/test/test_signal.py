@@ -30,6 +30,7 @@ class TestCheckSignals:
         assert not space.is_true(w_received)
         #
         # calling ec.checksignals() should call it
+        print(space.getexecutioncontext().checksignals)
         space.getexecutioncontext().checksignals()
         assert space.is_true(w_received)
 
@@ -197,7 +198,7 @@ class AppTestSignal:
             except OSError:
                 pass
             else:
-                raise AssertionError, "os.read(fd_read, 1) succeeded?"
+                raise AssertionError("os.read(fd_read, 1) succeeded?")
         #
         fd_read, fd_write = posix.pipe()
         flags = fcntl.fcntl(fd_write, fcntl.F_GETFL, 0)
@@ -259,6 +260,17 @@ class AppTestSignal:
             readpipe_is_not_interrupted()
         finally:
             signal.signal(signum, oldhandler)
+
+    def test_default_int_handler(self):
+        import signal
+        for args in [(), (1, 2)]:
+            try:
+                signal.default_int_handler(*args)
+            except KeyboardInterrupt:
+                pass
+            else:
+                raise AssertionError("did not raise!")
+
 
 class AppTestSignalSocket:
     spaceconfig = dict(usemodules=['signal', '_socket'])

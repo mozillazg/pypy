@@ -12,11 +12,11 @@ try:
     priv_flags = win32security.TOKEN_ADJUST_PRIVILEGES | win32security.TOKEN_QUERY
     hToken = win32security.OpenProcessToken (win32api.GetCurrentProcess (), priv_flags)
     privilege_id = win32security.LookupPrivilegeValue (None, "SeBackupPrivilege")
-    win32security.AdjustTokenPrivileges (hToken, 0, [(privilege_id, win32security.SE_PRIVILEGE_ENABLED)])
+    ret = win32security.AdjustTokenPrivileges (hToken, 0, [(privilege_id, win32security.SE_PRIVILEGE_ENABLED)])
 except:
     canSaveKey = False
 else:
-    canSaveKey = True
+    canSaveKey = len(ret) > 0
 
 class AppTestHKey:
     spaceconfig = dict(usemodules=('_winreg',))
@@ -31,6 +31,7 @@ class AppTestFfi:
 
     def setup_class(cls):
         import _winreg
+        from platform import machine
         space = cls.space
         cls.root_key = _winreg.HKEY_CURRENT_USER
         cls.test_key_name = "SOFTWARE\\Pypy Registry Test Key - Delete Me"
@@ -38,6 +39,7 @@ class AppTestFfi:
         cls.w_test_key_name = space.wrap(cls.test_key_name)
         cls.w_canSaveKey = space.wrap(canSaveKey)
         cls.w_tmpfilename = space.wrap(str(udir.join('winreg-temp')))
+        cls.w_win64_machine = space.wrap(machine() == "AMD64")
 
         test_data = [
             ("Int Value", 0xFEDCBA98, _winreg.REG_DWORD),
@@ -45,6 +47,7 @@ class AppTestFfi:
             ("Unicode Value", u"A unicode Value", _winreg.REG_SZ),
             ("Str Expand", "The path is %path%", _winreg.REG_EXPAND_SZ),
             ("Multi Str", ["Several", "string", u"values"], _winreg.REG_MULTI_SZ),
+            ("Raw None", None, _winreg.REG_BINARY),
             ("Raw data", "binary"+chr(0)+"data", _winreg.REG_BINARY),
             ]
         cls.w_test_data = space.wrap(test_data)
@@ -127,7 +130,7 @@ class AppTestFfi:
         import errno
         try:
             QueryInfoKey(0)
-        except EnvironmentError, e:
+        except EnvironmentError as e:
             assert e.winerror == 6
             assert e.errno == errno.EBADF
             # XXX translations...
@@ -151,33 +154,43 @@ class AppTestFfi:
 
     def test_readValues(self):
         from _winreg import OpenKey, EnumValue, QueryValueEx, EnumKey
+        from _winreg import REG_SZ, REG_EXPAND_SZ
         key = OpenKey(self.root_key, self.test_key_name)
         sub_key = OpenKey(key, "sub_key")
         index = 0
         while 1:
             try:
                 data = EnumValue(sub_key, index)
-            except EnvironmentError, e:
+            except EnvironmentError as e:
                 break
             assert data in self.test_data
             index = index + 1
         assert index == len(self.test_data)
 
         for name, value, type in self.test_data:
-            assert QueryValueEx(sub_key, name) == (value, type)
+            result = QueryValueEx(sub_key, name)
+            assert result == (value, type)
+            if type == REG_SZ or type == REG_EXPAND_SZ:
+                assert isinstance(result[0], unicode)     # not string
 
         assert EnumKey(key, 0) == "sub_key"
         raises(EnvironmentError, EnumKey, key, 1)
 
     def test_delete(self):
-        from _winreg import OpenKey, KEY_ALL_ACCESS, DeleteValue, DeleteKey
+        # must be run after test_SetValueEx
+        from _winreg import OpenKey, KEY_ALL_ACCESS, DeleteValue, DeleteKey, DeleteKeyEx
         key = OpenKey(self.root_key, self.test_key_name, 0, KEY_ALL_ACCESS)
         sub_key = OpenKey(key, "sub_key", 0, KEY_ALL_ACCESS)
 
         for name, value, type in self.test_data:
             DeleteValue(sub_key, name)
 
-        DeleteKey(key, "sub_key")
+        if self.win64_machine:
+            DeleteKeyEx(key, "sub_key", KEY_ALL_ACCESS, 0)
+        else:
+            DeleteKey(key, "sub_key")
+
+        raises(OSError, OpenKey, key, "sub_key")
 
     def test_connect(self):
         from _winreg import ConnectRegistry, HKEY_LOCAL_MACHINE
@@ -185,6 +198,7 @@ class AppTestFfi:
         h.Close()
 
     def test_savekey(self):
+        # must be run after test_SetValueEx
         if not self.canSaveKey:
             skip("CPython needs win32api to set the SeBackupPrivilege security privilege")
         from _winreg import OpenKey, KEY_ALL_ACCESS, SaveKey
@@ -227,7 +241,7 @@ class AppTestFfi:
         from _winreg import EnumValue, QueryValueEx, HKEY_PERFORMANCE_DATA
         try:
             EnumValue(HKEY_PERFORMANCE_DATA, 0)
-        except WindowsError, e:
+        except WindowsError as e:
             import errno
             if e.errno in (errno.EPERM, errno.EACCES):
                 skip("access denied to registry key "
@@ -249,3 +263,18 @@ class AppTestFfi:
             raises(NotImplementedError, DeleteKeyEx, self.root_key,
                    self.test_key_name)
 
+    def test_reflection(self):
+        import sys
+        from _winreg import DisableReflectionKey, EnableReflectionKey, \
+                           QueryReflectionKey, OpenKey, HKEY_LOCAL_MACHINE
+        # Adapted from lib-python test
+        if not self.win64_machine:
+            skip("Requires 64-bit host")
+        # Test that we can call the query, enable, and disable functions
+        # on a key which isn't on the reflection list with no consequences.
+        with OpenKey(HKEY_LOCAL_MACHINE, "Software") as key:
+            # HKLM\Software is redirected but not reflected in all OSes
+            assert QueryReflectionKey(key)
+            assert EnableReflectionKey(key) is None
+            assert DisableReflectionKey(key) is None
+            assert QueryReflectionKey(key)

@@ -72,46 +72,6 @@ class AppTestMethodCaching(test_typeobject.AppTestTypeObject):
             assert cache_counter[1] >= 2 # should be (18, 2)
             assert sum(cache_counter) == 20
 
-    def test_change_methods(self):
-        @self.retry
-        def run():
-            import __pypy__
-            class A(object):
-                def f(self):
-                    return 42
-            l = [A()] * 10
-            __pypy__.reset_method_cache_counter()
-            for i, a in enumerate(l):
-                assert a.f() == 42 + i
-                A.f = eval("lambda self: %s" % (42 + i + 1, ))
-            cache_counter = __pypy__.method_cache_counter("f")
-            #
-            # a bit of explanation about what's going on.  (1) is the line "a.f()"
-            # and (2) is "A.f = ...".
-            #
-            # at line (1) we do the lookup on type(a).f
-            #
-            # at line (2) we do a setattr on A. However, descr_setattr does also a
-            # lookup of type(A).f i.e. type.f, to check if by chance 'f' is a data
-            # descriptor.
-            #
-            # At the first iteration:
-            # (1) is a miss because it's the first lookup of A.f. The result is cached
-            #
-            # (2) is a miss because it is the first lookup of type.f. The
-            # (non-existant) result is cached. The version of A changes, and 'f'
-            # is changed to be a cell object, so that subsequest assignments won't
-            # change the version of A
-            #
-            # At the second iteration:
-            # (1) is a miss because the version of A changed just before
-            # (2) is a hit, because type.f is cached. The version of A no longer changes
-            #
-            # At the third and subsequent iterations:
-            # (1) is a hit, because the version of A did not change
-            # (2) is a hit, see above
-            assert cache_counter == (17, 3)
-
     def test_subclasses(self):
         @self.retry
         def run():
@@ -202,7 +162,8 @@ class AppTestMethodCaching(test_typeobject.AppTestTypeObject):
                 l = [type.__getattribute__(A, "__new__")(A)] * 10
                 __pypy__.reset_method_cache_counter()
                 for i, a in enumerate(l):
-                    assert a.f() == 42
+                    # use getattr to circumvent the mapdict cache
+                    assert getattr(a, "f")() == 42
                 cache_counter = __pypy__.method_cache_counter("f")
                 assert sum(cache_counter) == 10
                 if cache_counter == (9, 1):
@@ -225,9 +186,11 @@ class AppTestMethodCaching(test_typeobject.AppTestTypeObject):
                 assert a.x == i + 1
                 A.x += 1
             cache_counter = __pypy__.method_cache_counter("x")
-            assert cache_counter[0] >= 350
+            # XXX this is the bad case for the mapdict cache: looking up
+            # non-method attributes from the class
+            assert cache_counter[0] >= 450
             assert cache_counter[1] >= 1
-            assert sum(cache_counter) == 400
+            assert sum(cache_counter) == 500
 
             __pypy__.reset_method_cache_counter()
             a = A()

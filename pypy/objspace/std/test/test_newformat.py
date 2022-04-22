@@ -1,5 +1,5 @@
+# -*- encoding: utf-8 -*-
 """Test unicode/str's format method"""
-from __future__ import with_statement
 
 
 class BaseStringFormatTests:
@@ -198,6 +198,13 @@ class BaseStringFormatTests:
         assert self.s('{0:\x00<12}').format(3+2.0j) == '(3+2j)' + '\x00' * 6
         assert self.s('{0:\x01<12}').format(3+2.0j) == '(3+2j)' + '\x01' * 6
 
+    def test_issue3100(self):
+        class Foo:
+            def __format__(self, f):
+                return '<<%r>>' % (f,)
+        fmtstr = self.s("{:[XYZ}")
+        assert fmtstr.format(Foo()) == "<<%r>>" % (self.s("[XYZ"),)
+
 
 class AppTestUnicodeFormat(BaseStringFormatTests):
     def setup_class(cls):
@@ -215,12 +222,20 @@ class AppTestUnicodeFormat(BaseStringFormatTests):
         assert self.s("{!r}").format(x()) == self.s("32")
 
     def test_non_latin1_key(self):
-        raises(KeyError, self.s("{\u1000}").format)
+        raises(KeyError, u"{\u1000}".format)
+        d = {u"\u1000": u"foo"}
+        assert u"{\u1000}".format(**d) == u"foo"
 
+    def test_padding_utf8_bug(self):
+        assert format(unichr(228), "3") == unichr(228) + u"  "
+
+    def test_precision_utf8_bug(self):
+        u = b'\xc3\xa4'.decode("utf-8")
+        assert u.__format__(".1") == u
 
 class AppTestStringFormat(BaseStringFormatTests):
     def setup_class(cls):
-        cls.w_s = cls.space.w_str
+        cls.w_s = cls.space.w_bytes
 
     def test_string_conversion(self):
         class x(object):
@@ -253,6 +268,7 @@ class BaseIntegralFormattingTest:
     def test_simple(self):
         assert format(self.i(2)) == "2"
         assert isinstance(format(self.i(2), u""), unicode)
+        assert isinstance(self.i(2).__format__(u""), str)
 
     def test_invalid(self):
         raises(ValueError, format, self.i(8), "s")
@@ -376,6 +392,30 @@ class AppTestFloatFormatting:
         finally:
             locale.setlocale(locale.LC_NUMERIC, 'C')
 
+    def test_locale_german(self):
+        import locale, sys
+        for name in ['de_DE', 'de_DE.utf8']:
+            try:
+                locale.setlocale(locale.LC_NUMERIC, name)
+                break
+            except locale.Error:
+                pass
+        else:
+            skip("no german locale")
+        x = 1234.567890
+        try:
+            if sys.platform != "darwin":
+                assert locale.format('%g', x, grouping=True) == '1.234,57'
+                assert format(x, 'n') == '1.234,57'
+                assert format(12345678901234, 'n') == '12.345.678.901.234'
+            else:
+                # No thousands separator on German in MacOS since 10.4
+                assert locale.format('%g', x, grouping=True) == '1234,57'
+                assert format(x, 'n') == '1234,57'
+                assert format(12345678901234, 'n') == '12345678901234'
+        finally:
+            locale.setlocale(locale.LC_NUMERIC, 'C')
+
     def test_dont_switch_to_g(self):
         skip("must fix when float formatting is figured out")
         assert len(format(1.1234e90, "f")) == 98
@@ -466,3 +506,15 @@ class AppTestInternalMethods:
         assert isinstance(first, unicode)
         for x, y in l:
             assert isinstance(y, unicode)
+
+    def test_format_char(self):
+        import sys
+        assert '{0:c}'.format(42) == '*'
+        raises(OverflowError, '{0:c}'.format, 1234)
+        # the rest looks unexpected, but that's also what CPython does
+        raises(UnicodeDecodeError, u'{0:c}'.format, 255)
+        raises(OverflowError, u'{0:c}'.format, 1234)
+        raises(OverflowError, u'{0:c}'.format, -1)
+
+    def test_format_unicode_nonutf8_bytestring(self):
+        raises(UnicodeDecodeError, u'{0}'.format, '\xff')

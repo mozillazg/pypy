@@ -50,6 +50,25 @@ class CodeRepresentation(object):
             current_lineno = opcode.lineno
         self.source = source.split("\n")
 
+    def get_opcode_from_info(self, info):
+        return self.map[info.bytecode_no]
+
+    @property
+    def filename(self):
+        return self.co.co_filename
+
+    @property
+    def startlineno(self):
+        return self.co.co_firstlineno
+
+    @property
+    def name(self):
+        return self.co.co_name
+
+    def match_name(self, opcode_name):
+        return self.__class__.__name__ == opcode_name
+
+
 def _setup():
     for opcode in opname:
         if not opcode.startswith('<'):
@@ -75,7 +94,7 @@ def dis(x=None):
     if hasattr(x, 'im_func'):
         x = x.im_func
     if hasattr(x, 'func_code'):
-        x = x.func_code
+        x = x.__code__
     if hasattr(x, '__dict__'):
         xxx
         items = sorted(x.__dict__.items())
@@ -87,7 +106,7 @@ def dis(x=None):
                 print("Disassembly of %s:" % name)
                 try:
                     dis(x1)
-                except TypeError, msg:
+                except TypeError as msg:
                     print("Sorry:", msg)
                 print()
     elif hasattr(x, 'co_code'):

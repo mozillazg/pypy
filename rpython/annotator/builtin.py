@@ -6,7 +6,7 @@ from collections import OrderedDict, defaultdict
 
 from rpython.annotator.model import (
     SomeInteger, SomeChar, SomeBool, SomeString, SomeTuple,
-    SomeUnicodeCodePoint, SomeFloat, unionof, SomeUnicodeString,
+    SomeUnicodeCodePoint, SomeFloat, union, SomeUnicodeString,
     SomePBC, SomeInstance, SomeDict, SomeList, SomeWeakRef, SomeIterator,
     SomeOrderedDict, SomeByteArray, add_knowntypedata, s_ImpossibleValue,)
 from rpython.annotator.bookkeeper import (
@@ -86,8 +86,13 @@ def builtin_range(*args):
 builtin_xrange = builtin_range # xxx for now allow it
 
 
-def builtin_enumerate(s_obj):
-    return SomeIterator(s_obj, "enumerate")
+def builtin_enumerate(s_obj, s_start=None):
+    const = None
+    if s_start is not None:
+        if not s_start.is_constant():
+            raise AnnotatorError("second argument to enumerate must be constant")
+        const = s_start.const
+    return SomeIterator(s_obj, "enumerate", const)
 
 
 def builtin_reversed(s_obj):
@@ -166,14 +171,14 @@ def builtin_min(*s_values):
         s_iter = s_values[0].iter()
         return s_iter.next()
     else:
-        return unionof(*s_values)
+        return union(*s_values)
 
 def builtin_max(*s_values):
     if len(s_values) == 1: # xxx do we support this?
         s_iter = s_values[0].iter()
         return s_iter.next()
     else:
-        s = unionof(*s_values)
+        s = union(*s_values)
         if type(s) is SomeInteger and not s.nonneg:
             nonneg = False
             for s1 in s_values:
@@ -237,22 +242,30 @@ def robjmodel_instantiate(s_clspbc, s_nonmovable=None):
     return SomeInstance(clsdef)
 
 @analyzer_for(rpython.rlib.objectmodel.r_dict)
-def robjmodel_r_dict(s_eqfn, s_hashfn, s_force_non_null=None):
+def robjmodel_r_dict(s_eqfn, s_hashfn, s_force_non_null=None, s_simple_hash_eq=None):
+    return _r_dict_helper(SomeDict, s_eqfn, s_hashfn, s_force_non_null, s_simple_hash_eq)
+
+@analyzer_for(rpython.rlib.objectmodel.r_ordereddict)
+def robjmodel_r_ordereddict(s_eqfn, s_hashfn, s_force_non_null=None, s_simple_hash_eq=None):
+    return _r_dict_helper(SomeOrderedDict, s_eqfn, s_hashfn,
+                          s_force_non_null, s_simple_hash_eq)
+
+def _r_dict_helper(cls, s_eqfn, s_hashfn, s_force_non_null, s_simple_hash_eq):
     if s_force_non_null is None:
         force_non_null = False
     else:
         assert s_force_non_null.is_constant()
         force_non_null = s_force_non_null.const
+    if s_simple_hash_eq is None:
+        simple_hash_eq = False
+    else:
+        assert s_simple_hash_eq.is_constant()
+        simple_hash_eq = s_simple_hash_eq.const
     dictdef = getbookkeeper().getdictdef(is_r_dict=True,
-                                         force_non_null=force_non_null)
+                                         force_non_null=force_non_null,
+                                         simple_hash_eq=simple_hash_eq)
     dictdef.dictkey.update_rdict_annotations(s_eqfn, s_hashfn)
-    return SomeDict(dictdef)
-
-@analyzer_for(rpython.rlib.objectmodel.r_ordereddict)
-def robjmodel_r_ordereddict(s_eqfn, s_hashfn):
-    dictdef = getbookkeeper().getdictdef(is_r_dict=True)
-    dictdef.dictkey.update_rdict_annotations(s_eqfn, s_hashfn)
-    return SomeOrderedDict(dictdef)
+    return cls(dictdef)
 
 @analyzer_for(rpython.rlib.objectmodel.hlinvoke)
 def robjmodel_hlinvoke(s_repr, s_llcallable, *args_s):

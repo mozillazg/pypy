@@ -303,15 +303,6 @@ def getsitepackages():
         else:
             sitepackages.append(prefix)
             sitepackages.append(os.path.join(prefix, "lib", "site-packages"))
-        if sys.platform == "darwin":
-            # for framework builds *only* we add the standard Apple
-            # locations.
-            from sysconfig import get_config_var
-            framework = get_config_var("PYTHONFRAMEWORK")
-            if framework:
-                sitepackages.append(
-                        os.path.join("/Library", framework,
-                            sys.version[:3], "site-packages"))
     return sitepackages
 
 def addsitepackages(known_paths):
@@ -456,7 +447,7 @@ def setcopyright():
         "PyPy is maintained by the PyPy developers: http://pypy.org/")
     __builtin__.license = _Printer(
         "license",
-        "See https://bitbucket.org/pypy/pypy/src/default/LICENSE")
+        "See https://foss.heptapod.net/pypy/pypy/-/blob/branch/default/LICENSE")
 
 
 class _Helper(object):

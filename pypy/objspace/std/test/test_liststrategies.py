@@ -3,7 +3,7 @@ import py
 from pypy.objspace.std.listobject import (
     W_ListObject, EmptyListStrategy, ObjectListStrategy, IntegerListStrategy,
     FloatListStrategy, BytesListStrategy, RangeListStrategy,
-    SimpleRangeListStrategy, make_range_list, UnicodeListStrategy,
+    SimpleRangeListStrategy, make_range_list, AsciiListStrategy,
     IntOrFloatListStrategy)
 from pypy.objspace.std import listobject
 from pypy.objspace.std.test.test_listobject import TestW_ListObject
@@ -13,20 +13,22 @@ class TestW_ListStrategies(TestW_ListObject):
     def test_check_strategy(self):
         space = self.space
         w = space.wrap
+        wb = space.newbytes
         assert isinstance(W_ListObject(space, []).strategy, EmptyListStrategy)
-        assert isinstance(W_ListObject(space, [w(1),w('a')]).strategy, ObjectListStrategy)
+        assert isinstance(W_ListObject(space, [w(1),wb('a')]).strategy, ObjectListStrategy)
         assert isinstance(W_ListObject(space, [w(1),w(2),w(3)]).strategy,
                           IntegerListStrategy)
-        assert isinstance(W_ListObject(space, [w('a'), w('b')]).strategy,
+        assert isinstance(W_ListObject(space, [wb('a'), wb('b')]).strategy,
                           BytesListStrategy)
         assert isinstance(W_ListObject(space, [w(u'a'), w(u'b')]).strategy,
-                          UnicodeListStrategy)
-        assert isinstance(W_ListObject(space, [w(u'a'), w('b')]).strategy,
+                          AsciiListStrategy)
+        assert isinstance(W_ListObject(space, [w(u'a'), wb('b')]).strategy,
                           ObjectListStrategy) # mixed unicode and bytes
 
     def test_empty_to_any(self):
         space = self.space
         w = space.wrap
+        wb = space.newbytes
         l = W_ListObject(space, [])
         assert isinstance(l.strategy, EmptyListStrategy)
         l.append(w((1,3)))
@@ -39,13 +41,13 @@ class TestW_ListStrategies(TestW_ListObject):
 
         l = W_ListObject(space, [])
         assert isinstance(l.strategy, EmptyListStrategy)
-        l.append(w('a'))
+        l.append(wb('a'))
         assert isinstance(l.strategy, BytesListStrategy)
 
         l = W_ListObject(space, [])
         assert isinstance(l.strategy, EmptyListStrategy)
         l.append(w(u'a'))
-        assert isinstance(l.strategy, UnicodeListStrategy)
+        assert isinstance(l.strategy, AsciiListStrategy)
 
         l = W_ListObject(space, [])
         assert isinstance(l.strategy, EmptyListStrategy)
@@ -63,9 +65,10 @@ class TestW_ListStrategies(TestW_ListObject):
 
     def test_string_to_any(self):
         l = W_ListObject(self.space,
-                         [self.space.wrap('a'),self.space.wrap('b'),self.space.wrap('c')])
+            [self.space.newbytes('a'), self.space.newbytes('b'),
+             self.space.newbytes('c')])
         assert isinstance(l.strategy, BytesListStrategy)
-        l.append(self.space.wrap('d'))
+        l.append(self.space.newbytes('d'))
         assert isinstance(l.strategy, BytesListStrategy)
         l.append(self.space.wrap(3))
         assert isinstance(l.strategy, ObjectListStrategy)
@@ -73,9 +76,9 @@ class TestW_ListStrategies(TestW_ListObject):
     def test_unicode_to_any(self):
         space = self.space
         l = W_ListObject(space, [space.wrap(u'a'), space.wrap(u'b'), space.wrap(u'c')])
-        assert isinstance(l.strategy, UnicodeListStrategy)
+        assert isinstance(l.strategy, AsciiListStrategy)
         l.append(space.wrap(u'd'))
-        assert isinstance(l.strategy, UnicodeListStrategy)
+        assert isinstance(l.strategy, AsciiListStrategy)
         l.append(space.wrap(3))
         assert isinstance(l.strategy, ObjectListStrategy)
 
@@ -91,6 +94,7 @@ class TestW_ListStrategies(TestW_ListObject):
     def test_setitem(self):
         space = self.space
         w = space.wrap
+        wb = space.newbytes
         # This should work if test_listobject.py passes
         l = W_ListObject(space, [w('a'),w('b'),w('c')])
         assert space.eq_w(l.getitem(0), w('a'))
@@ -106,14 +110,14 @@ class TestW_ListStrategies(TestW_ListObject):
         assert isinstance(l.strategy, ObjectListStrategy)
 
         # BytesStrategy to ObjectStrategy
-        l = W_ListObject(space, [w('a'),w('b'),w('c')])
+        l = W_ListObject(space, [wb('a'),wb('b'),wb('c')])
         assert isinstance(l.strategy, BytesListStrategy)
         l.setitem(0, w(2))
         assert isinstance(l.strategy, ObjectListStrategy)
 
         # UnicodeStrategy to ObjectStrategy
         l = W_ListObject(space, [w(u'a'),w(u'b'),w(u'c')])
-        assert isinstance(l.strategy, UnicodeListStrategy)
+        assert isinstance(l.strategy, AsciiListStrategy)
         l.setitem(0, w(2))
         assert isinstance(l.strategy, ObjectListStrategy)
 
@@ -126,6 +130,7 @@ class TestW_ListStrategies(TestW_ListObject):
     def test_insert(self):
         space = self.space
         w = space.wrap
+        wb = space.newbytes
         # no change
         l = W_ListObject(space, [w(1),w(2),w(3)])
         assert isinstance(l.strategy, IntegerListStrategy)
@@ -133,14 +138,14 @@ class TestW_ListStrategies(TestW_ListObject):
         assert isinstance(l.strategy, IntegerListStrategy)
 
         # BytesStrategy
-        l = W_ListObject(space, [w('a'),w('b'),w('c')])
+        l = W_ListObject(space, [wb('a'),wb('b'),wb('c')])
         assert isinstance(l.strategy, BytesListStrategy)
         l.insert(3, w(2))
         assert isinstance(l.strategy, ObjectListStrategy)
 
         # UnicodeStrategy
         l = W_ListObject(space, [w(u'a'),w(u'b'),w(u'c')])
-        assert isinstance(l.strategy, UnicodeListStrategy)
+        assert isinstance(l.strategy, AsciiListStrategy)
         l.insert(3, w(2))
         assert isinstance(l.strategy, ObjectListStrategy)
 
@@ -159,7 +164,7 @@ class TestW_ListStrategies(TestW_ListObject):
         # EmptyStrategy
         l = W_ListObject(space, [])
         assert isinstance(l.strategy, EmptyListStrategy)
-        l.insert(0, w('a'))
+        l.insert(0, wb('a'))
         assert isinstance(l.strategy, BytesListStrategy)
 
         l = W_ListObject(space, [])
@@ -187,6 +192,7 @@ class TestW_ListStrategies(TestW_ListObject):
     def test_setslice(self):
         space = self.space
         w = space.wrap
+        wb = space.newbytes
 
         l = W_ListObject(space, [])
         assert isinstance(l.strategy, EmptyListStrategy)
@@ -212,14 +218,14 @@ class TestW_ListStrategies(TestW_ListObject):
         assert isinstance(l.strategy, ObjectListStrategy)
 
         # BytesStrategy to ObjectStrategy
-        l = W_ListObject(space, [w('a'), w('b'), w('c')])
+        l = W_ListObject(space, [wb('a'), wb('b'), wb('c')])
         assert isinstance(l.strategy, BytesListStrategy)
         l.setslice(0, 1, 2, W_ListObject(space, [w(1), w(2), w(3)]))
         assert isinstance(l.strategy, ObjectListStrategy)
 
         # UnicodeStrategy to ObjectStrategy
         l = W_ListObject(space, [w(u'a'), w(u'b'), w(u'c')])
-        assert isinstance(l.strategy, UnicodeListStrategy)
+        assert isinstance(l.strategy, AsciiListStrategy)
         l.setslice(0, 1, 2, W_ListObject(space, [w(1), w(2), w(3)]))
         assert isinstance(l.strategy, ObjectListStrategy)
 
@@ -269,7 +275,7 @@ class TestW_ListStrategies(TestW_ListObject):
         l = W_ListObject(space, wrapitems([u"a",u"b",u"c",u"d",u"e"]))
         other = W_ListObject(space, wrapitems([u"a", u"b", u"c"]))
         keep_other_strategy(l, 0, 2, other.length(), other)
-        assert l.strategy is space.fromcache(UnicodeListStrategy)
+        assert l.strategy is space.fromcache(AsciiListStrategy)
 
         l = W_ListObject(space, wrapitems([1.1, 2.2, 3.3, 4.4, 5.5]))
         other = W_ListObject(space, [])
@@ -324,6 +330,7 @@ class TestW_ListStrategies(TestW_ListObject):
     def test_empty_extend_with_any(self):
         space = self.space
         w = space.wrap
+        wb = space.newbytes
 
         empty = W_ListObject(space, [])
         assert isinstance(empty.strategy, EmptyListStrategy)
@@ -332,13 +339,13 @@ class TestW_ListStrategies(TestW_ListObject):
 
         empty = W_ListObject(space, [])
         assert isinstance(empty.strategy, EmptyListStrategy)
-        empty.extend(W_ListObject(space, [w("a"), w("b"), w("c")]))
+        empty.extend(W_ListObject(space, [wb("a"), wb("b"), wb("c")]))
         assert isinstance(empty.strategy, BytesListStrategy)
 
         empty = W_ListObject(space, [])
         assert isinstance(empty.strategy, EmptyListStrategy)
         empty.extend(W_ListObject(space, [w(u"a"), w(u"b"), w(u"c")]))
-        assert isinstance(empty.strategy, UnicodeListStrategy)
+        assert isinstance(empty.strategy, AsciiListStrategy)
 
         empty = W_ListObject(space, [])
         assert isinstance(empty.strategy, EmptyListStrategy)
@@ -578,9 +585,11 @@ class TestW_ListStrategies(TestW_ListObject):
         assert not self.space.eq_w(l1, l2)
 
     def test_weird_rangelist_bug(self):
-        l = make_range_list(self.space, 1, 1, 3)
+        space = self.space
+        l = make_range_list(space, 1, 1, 3)
         # should not raise
-        assert l.descr_getslice(self.space, self.space.wrap(15), self.space.wrap(2222)).strategy == self.space.fromcache(EmptyListStrategy)
+        w_slice = space.newslice(space.wrap(15), space.wrap(2222), space.wrap(1))
+        assert l.descr_getitem(space, w_slice).strategy == space.fromcache(EmptyListStrategy)
 
     def test_add_to_rangelist(self):
         l1 = make_range_list(self.space, 1, 1, 3)
@@ -589,24 +598,24 @@ class TestW_ListStrategies(TestW_ListObject):
         assert self.space.eq_w(l3, W_ListObject(self.space, [self.space.wrap(1), self.space.wrap(2), self.space.wrap(3), self.space.wrap(4), self.space.wrap(5)]))
 
     def test_unicode(self):
-        l1 = W_ListObject(self.space, [self.space.wrap("eins"), self.space.wrap("zwei")])
+        l1 = W_ListObject(self.space, [self.space.newbytes("eins"), self.space.newbytes("zwei")])
         assert isinstance(l1.strategy, BytesListStrategy)
-        l2 = W_ListObject(self.space, [self.space.wrap(u"eins"), self.space.wrap(u"zwei")])
-        assert isinstance(l2.strategy, UnicodeListStrategy)
-        l3 = W_ListObject(self.space, [self.space.wrap("eins"), self.space.wrap(u"zwei")])
+        l2 = W_ListObject(self.space, [self.space.newutf8("eins", 4), self.space.newutf8("zwei", 4)])
+        assert isinstance(l2.strategy, AsciiListStrategy)
+        l3 = W_ListObject(self.space, [self.space.newbytes("eins"), self.space.newutf8("zwei", 4)])
         assert isinstance(l3.strategy, ObjectListStrategy)
 
     def test_listview_bytes(self):
         space = self.space
         assert space.listview_bytes(space.wrap(1)) == None
-        w_l = self.space.newlist([self.space.wrap('a'), self.space.wrap('b')])
+        w_l = self.space.newlist([self.space.newbytes('a'), self.space.newbytes('b')])
         assert space.listview_bytes(w_l) == ["a", "b"]
 
-    def test_listview_unicode(self):
+    def test_listview_ascii(self):
         space = self.space
-        assert space.listview_unicode(space.wrap(1)) == None
+        assert space.listview_ascii(space.wrap(1)) == None
         w_l = self.space.newlist([self.space.wrap(u'a'), self.space.wrap(u'b')])
-        assert space.listview_unicode(w_l) == [u"a", u"b"]
+        assert space.listview_ascii(w_l) == ["a", "b"]
 
     def test_string_join_uses_listview_bytes(self):
         space = self.space
@@ -617,7 +626,7 @@ class TestW_ListStrategies(TestW_ListObject):
         # the same for unicode
         w_l = self.space.newlist([self.space.wrap(u'a'), self.space.wrap(u'b')])
         w_l.getitems = None
-        assert space.unicode_w(space.call_method(space.wrap(u"c"), "join", w_l)) == u"acb"
+        assert space.utf8_w(space.call_method(space.wrap(u"c"), "join", w_l)) == "acb"
 
     def test_string_join_returns_same_instance(self):
         space = self.space
@@ -641,13 +650,13 @@ class TestW_ListStrategies(TestW_ListObject):
 
     def test_string_uses_newlist_bytes(self):
         space = self.space
-        w_s = space.wrap("a b c")
+        w_s = space.newbytes("a b c")
         space.newlist = None
         try:
             w_l = space.call_method(w_s, "split")
-            w_l2 = space.call_method(w_s, "split", space.wrap(" "))
+            w_l2 = space.call_method(w_s, "split", space.newbytes(" "))
             w_l3 = space.call_method(w_s, "rsplit")
-            w_l4 = space.call_method(w_s, "rsplit", space.wrap(" "))
+            w_l4 = space.call_method(w_s, "rsplit", space.newbytes(" "))
         finally:
             del space.newlist
         assert space.listview_bytes(w_l) == ["a", "b", "c"]
@@ -655,7 +664,7 @@ class TestW_ListStrategies(TestW_ListObject):
         assert space.listview_bytes(w_l3) == ["a", "b", "c"]
         assert space.listview_bytes(w_l4) == ["a", "b", "c"]
 
-    def test_unicode_uses_newlist_unicode(self):
+    def test_unicode_uses_newlist_ascii(self):
         space = self.space
         w_u = space.wrap(u"a b c")
         space.newlist = None
@@ -666,10 +675,10 @@ class TestW_ListStrategies(TestW_ListObject):
             w_l4 = space.call_method(w_u, "rsplit", space.wrap(" "))
         finally:
             del space.newlist
-        assert space.listview_unicode(w_l) == [u"a", u"b", u"c"]
-        assert space.listview_unicode(w_l2) == [u"a", u"b", u"c"]
-        assert space.listview_unicode(w_l3) == [u"a", u"b", u"c"]
-        assert space.listview_unicode(w_l4) == [u"a", u"b", u"c"]
+        assert space.listview_ascii(w_l) == [u"a", u"b", u"c"]
+        assert space.listview_ascii(w_l2) == [u"a", u"b", u"c"]
+        assert space.listview_ascii(w_l3) == [u"a", u"b", u"c"]
+        assert space.listview_ascii(w_l4) == [u"a", u"b", u"c"]
 
     def test_pop_without_argument_is_fast(self):
         space = self.space
@@ -707,13 +716,13 @@ class TestW_ListStrategies(TestW_ListObject):
 
     def test_listview_bytes_list(self):
         space = self.space
-        w_l = W_ListObject(space, [space.wrap("a"), space.wrap("b")])
+        w_l = W_ListObject(space, [space.newbytes("a"), space.newbytes("b")])
         assert self.space.listview_bytes(w_l) == ["a", "b"]
 
-    def test_listview_unicode_list(self):
+    def test_listview_ascii_list(self):
         space = self.space
         w_l = W_ListObject(space, [space.wrap(u"a"), space.wrap(u"b")])
-        assert self.space.listview_unicode(w_l) == [u"a", u"b"]
+        assert self.space.listview_ascii(w_l) == [u"a", u"b"]
 
     def test_listview_int_list(self):
         space = self.space
@@ -1033,6 +1042,13 @@ class TestW_ListStrategies(TestW_ListObject):
         w_l.sort(True)
         assert [(type(x), x) for x in space.unwrap(w_l)] == [
             (int, 5), (float, 1.2), (int, 1), (float, 1.0)]
+
+    def test_stringstrategy_wraps_bytes(self):
+        space = self.space
+        wb = space.newbytes
+        l = W_ListObject(space, [wb('a'), wb('b')])
+        w_item = l.getitem(0)
+        assert isinstance(w_item, space.StringObjectCls)
 
 
 class TestW_ListStrategiesDisabled:

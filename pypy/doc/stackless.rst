@@ -28,7 +28,7 @@ only available (so far) on x86 and x86-64 CPUs; for other CPUs you need
 to add a short page of custom assembler to
 :source:`rpython/translator/c/src/stacklet/`.
 
-.. _Stackless Python: http://www.stackless.com
+.. _Stackless Python: https://www.stackless.com
 
 
 Theory
@@ -190,7 +190,7 @@ Note that unlike the CPython greenlets, this version does not suffer
 from GC issues: if the program "forgets" an unfinished greenlet, it will
 always be collected at the next garbage collection.
 
-.. _documentation of the greenlets: http://packages.python.org/greenlet/
+.. _documentation of the greenlets: https://greenlet.readthedocs.io/
 
 
 Unimplemented features

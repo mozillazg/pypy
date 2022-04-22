@@ -44,6 +44,7 @@ Typical usage:
     UUID('00010203-0405-0607-0809-0a0b0c0d0e0f')
 """
 
+import os
 import struct
 
 __author__ = 'Ka-Ping Yee <ping@zesty.ca>'
@@ -356,8 +357,9 @@ def _find_mac(command, args, hw_identifiers, get_index):
 def _ifconfig_getnode():
     """Get the hardware address on Unix by running ifconfig."""
     # This works on Linux ('' or '-a'), Tru64 ('-av'), but not all Unixes.
+    keywords = ('hwaddr', 'ether', 'address:', 'lladdr')
     for args in ('', '-a', '-av'):
-        mac = _find_mac('ifconfig', args, ['hwaddr', 'ether'], lambda i: i+1)
+        mac = _find_mac('ifconfig', args, keywords, lambda i: i+1)
         if mac:
             return mac
 
@@ -370,7 +372,20 @@ def _arp_getnode():
         return None
 
     # Try getting the MAC addr from arp based on our IP address (Solaris).
-    return _find_mac('arp', '-an', [ip_addr], lambda i: -1)
+    mac = _find_mac('arp', '-an', [ip_addr], lambda i: -1)
+    if mac:
+        return mac
+
+    # This works on OpenBSD
+    mac = _find_mac('arp', '-an', [ip_addr], lambda i: i+1)
+    if mac:
+        return mac
+
+    # This works on Linux, FreeBSD and NetBSD
+    mac = _find_mac('arp', '-an', ['(%s)' % ip_addr],
+                    lambda i: i+2)
+    if mac:
+        return mac
 
 def _lanscan_getnode():
     """Get the hardware address on Unix by running lanscan."""
@@ -422,7 +437,7 @@ def _ipconfig_getnode():
         with pipe:
             for line in pipe:
                 value = line.split(':')[-1].strip().lower()
-                if re.match('([0-9a-f][0-9a-f]-){5}[0-9a-f][0-9a-f]', value):
+                if re.match('(?:[0-9a-f][0-9a-f]-){5}[0-9a-f][0-9a-f]$', value):
                     return int(value.replace('-', ''), 16)
 
 def _netbios_getnode():
@@ -457,27 +472,27 @@ def _netbios_getnode():
 # Thanks to Thomas Heller for ctypes and for his help with its use here.
 
 # If ctypes is available, use it to find system routines for UUID generation.
-_uuid_generate_random = _uuid_generate_time = _UuidCreate = None
+_uuid_generate_time = _UuidCreate = None
 try:
     import ctypes, ctypes.util
+    import sys
 
     # The uuid_generate_* routines are provided by libuuid on at least
     # Linux and FreeBSD, and provided by libc on Mac OS X.
-    for libname in ['uuid', 'c']:
+    _libnames = ['uuid']
+    if not sys.platform.startswith('win'):
+        _libnames.append('c')
+    for libname in _libnames:
         try:
             lib = ctypes.CDLL(ctypes.util.find_library(libname))
         except:
             continue
-        if hasattr(lib, 'uuid_generate_random'):
-            _uuid_generate_random = lib.uuid_generate_random
-            _uuid_generate_random.argtypes = [ctypes.c_char * 16]
-            _uuid_generate_random.restype = None
         if hasattr(lib, 'uuid_generate_time'):
             _uuid_generate_time = lib.uuid_generate_time
             _uuid_generate_time.argtypes = [ctypes.c_char * 16]
             _uuid_generate_time.restype = None
-            if _uuid_generate_random is not None:
-                break  # found everything we were looking for
+            break
+    del _libnames
 
     # The uuid_generate_* functions are broken on MacOS X 10.5, as noted
     # in issue #8621 the function generates the same sequence of values
@@ -486,11 +501,10 @@ try:
     #
     # Assume that the uuid_generate functions are broken from 10.5 onward,
     # the test can be adjusted when a later version is fixed.
-    import sys
     if sys.platform == 'darwin':
         import os
         if int(os.uname()[2].split('.')[0]) >= 9:
-            _uuid_generate_random = _uuid_generate_time = None
+            _uuid_generate_time = None
 
     # On Windows prior to 2000, UuidCreate gives a UUID containing the
     # hardware address.  On Windows 2000 and later, UuidCreate makes a
@@ -531,6 +545,11 @@ def _random_getnode():
 
 _node = None
 
+_NODE_GETTERS_WIN32 = [_windll_getnode, _netbios_getnode, _ipconfig_getnode]
+
+_NODE_GETTERS_UNIX = [_unixdll_getnode, _ifconfig_getnode, _arp_getnode,
+                      _lanscan_getnode, _netstat_getnode]
+
 def getnode():
     """Get the hardware address as a 48-bit positive integer.
 
@@ -546,18 +565,19 @@ def getnode():
 
     import sys
     if sys.platform == 'win32':
-        getters = [_windll_getnode, _netbios_getnode, _ipconfig_getnode]
+        getters = _NODE_GETTERS_WIN32
     else:
-        getters = [_unixdll_getnode, _ifconfig_getnode, _arp_getnode,
-                   _lanscan_getnode, _netstat_getnode]
+        getters = _NODE_GETTERS_UNIX
 
     for getter in getters + [_random_getnode]:
         try:
             _node = getter()
         except:
             continue
-        if _node is not None:
+        if (_node is not None) and (0 <= _node < (1 << 48)):
             return _node
+    assert False, '_random_getnode() returned invalid value: {}'.format(_node)
+
 
 _last_timestamp = None
 
@@ -604,7 +624,6 @@ def uuid3(namespace, name):
 
 def uuid4():
     """Generate a random UUID."""
-    import os
     return UUID(bytes=os.urandom(16), version=4)
 
 def uuid5(namespace, name):

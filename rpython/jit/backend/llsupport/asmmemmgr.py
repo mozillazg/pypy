@@ -36,8 +36,8 @@ class AsmMemoryManager(object):
         """
         result = self._allocate_block(minsize)
         (start, stop) = result
-        smaller_stop = start + maxsize
-        if smaller_stop + self.min_fragment <= stop:
+        if maxsize <= stop - start - self.min_fragment:
+            smaller_stop = start + maxsize
             self._add_free_block(smaller_stop, stop)
             stop = smaller_stop
             result = (start, stop)
@@ -66,13 +66,8 @@ class AsmMemoryManager(object):
         else:
             return False    # too small to record
 
-    def _allocate_large_block(self, minsize):
-        # Compute 'size' from 'minsize': it must be rounded up to
-        # 'large_alloc_size'.  Additionally, we use the following line
-        # to limit how many mmap() requests the OS will see in total:
-        minsize = max(minsize, intmask(self.total_memory_allocated >> 4))
-        size = minsize + self.large_alloc_size - 1
-        size = (size // self.large_alloc_size) * self.large_alloc_size
+    def _mmap_alloc(self, size):
+        # overridden by a test
         data = rmmap.alloc(size)
         if not we_are_translated():
             if self._allocated is None:
@@ -82,6 +77,16 @@ class AsmMemoryManager(object):
                 # Hack to make sure that mcs are not within 32-bits of one
                 # another for testing purposes
                 rmmap.hint.pos += 0x80000000 - size
+        return data
+
+    def _allocate_large_block(self, minsize):
+        # Compute 'size' from 'minsize': it must be rounded up to
+        # 'large_alloc_size'.  Additionally, we use the following line
+        # to limit how many mmap() requests the OS will see in total:
+        minsize = max(minsize, intmask(self.total_memory_allocated >> 4))
+        size = minsize + self.large_alloc_size - 1
+        size = (size // self.large_alloc_size) * self.large_alloc_size
+        data = self._mmap_alloc(size)
         self.total_memory_allocated += r_uint(size)
         data = rffi.cast(lltype.Signed, data)
         return self._add_free_block(data, data + size)
@@ -101,13 +106,17 @@ class AsmMemoryManager(object):
             left_start = self.free_blocks_end[start]
             self._del_free_block(left_start, start)
             start = left_start
+            assert start not in self.free_blocks_end
         # Merge with the block on the right
         if stop in self.free_blocks:
             right_stop = self.free_blocks[stop]
             self._del_free_block(stop, right_stop)
             stop = right_stop
+            assert stop not in self.free_blocks
         # Add it to the dicts
+        assert start not in self.free_blocks
         self.free_blocks[start] = stop
+        assert stop not in self.free_blocks_end
         self.free_blocks_end[stop] = start
         i = self._get_index(stop - start)
         self.blocks_by_size[i].append(start)
@@ -141,6 +150,7 @@ class AsmMemoryManager(object):
                     # any block found in a larger group is big enough
                     start = self.blocks_by_size[i].pop(0)
                     stop = self.free_blocks[start]
+                    assert start + length <= stop
                     break
                 i += 1
             else:
@@ -216,9 +226,6 @@ class BlockBuilderMixin(object):
 
     gcroot_markers = None
 
-    frame_positions = None
-    frame_assignments = None
-
     def __init__(self, translated=None):
         if translated is None:
             translated = we_are_translated()
@@ -226,6 +233,7 @@ class BlockBuilderMixin(object):
             self.init_block_builder()
         else:
             self._become_a_plain_block_builder()
+        self.rawstart = 0
 
     def init_block_builder(self):
         self._cursubblock = lltype.nullptr(self.SUBBLOCK)
@@ -248,8 +256,11 @@ class BlockBuilderMixin(object):
         self._cursubblock.data[index] = char
         self._cursubindex = index + 1
 
+    def absolute_addr(self):
+        return self.rawstart
+
     def overwrite(self, index, char):
-        assert 0 <= index < self.get_relative_pos()
+        assert 0 <= index < self.get_relative_pos(break_basic_block=False)
         block = self._cursubblock
         index -= self._baserelpos
         while index < 0:
@@ -263,7 +274,8 @@ class BlockBuilderMixin(object):
         self.overwrite(index + 2, chr((val >> 16) & 0xff))
         self.overwrite(index + 3, chr((val >> 24) & 0xff))
 
-    def get_relative_pos(self):
+    def get_relative_pos(self, break_basic_block=True):
+        # 'break_basic_block' is only used in x86
         return self._baserelpos + self._cursubindex
 
     def copy_to_raw_memory(self, addr):
@@ -283,6 +295,19 @@ class BlockBuilderMixin(object):
             targetindex -= self.SUBBLOCK_SIZE
         assert not block
 
+    def copy_core_dump(self, addr, offset=0, count=-1):
+        HEX = '0123456789ABCDEF'
+        dump = []
+        src = rffi.cast(rffi.CCHARP, addr)
+        end = self.get_relative_pos(break_basic_block=False)
+        if count != -1:
+            end = offset + count
+        for p in range(offset, end):
+            o = ord(src[p])
+            dump.append(HEX[o >> 4])
+            dump.append(HEX[o & 15])
+        return ''.join(dump)
+
     def _dump(self, addr, logname, backend=None):
         debug_start(logname)
         if have_debug_prints():
@@ -296,17 +321,11 @@ class BlockBuilderMixin(object):
             else:
                 debug_print('SYS_EXECUTABLE', '??')
             #
-            HEX = '0123456789ABCDEF'
-            dump = []
-            src = rffi.cast(rffi.CCHARP, addr)
-            for p in range(self.get_relative_pos()):
-                o = ord(src[p])
-                dump.append(HEX[o >> 4])
-                dump.append(HEX[o & 15])
+            dump = self.copy_core_dump(addr)
             debug_print('CODE_DUMP',
                         '@%x' % addr,
                         '+0 ',     # backwards compatibility
-                        ''.join(dump))
+                        dump)
             #
         debug_stop(logname)
 
@@ -318,32 +337,30 @@ class BlockBuilderMixin(object):
         allblocks.append(malloced)
         rawstart = malloced[0]
         rawstart = (rawstart + align - 1) & (-align)
+        self.rawstart = rawstart
         self.copy_to_raw_memory(rawstart)
         if self.gcroot_markers is not None:
             assert gcrootmap is not None
             for pos, mark in self.gcroot_markers:
                 gcrootmap.register_asm_addr(rawstart + pos, mark)
-        if cpu.HAS_CODEMAP:
-            cpu.codemap.register_frame_depth_map(rawstart, rawstart + size,
-                                                 self.frame_positions,
-                                                 self.frame_assignments)
-        self.frame_positions = None
-        self.frame_assignments = None
         return rawstart
 
     def _become_a_plain_block_builder(self):
         # hack purely for speed of tests
-        self._data = []
-        self.writechar = self._data.append
-        self.overwrite = self._data.__setitem__
-        self.get_relative_pos = self._data.__len__
+        self._data = _data = []
+        self.writechar = _data.append
+        self.overwrite = _data.__setitem__
+        def get_relative_pos(break_basic_block=True):
+            return len(_data)
+        self.get_relative_pos = get_relative_pos
         def plain_copy_to_raw_memory(addr):
             dst = rffi.cast(rffi.CCHARP, addr)
-            for i, c in enumerate(self._data):
+            for i, c in enumerate(_data):
                 dst[i] = c
         self._copy_to_raw_memory = plain_copy_to_raw_memory
 
     def insert_gcroot_marker(self, mark):
         if self.gcroot_markers is None:
             self.gcroot_markers = []
-        self.gcroot_markers.append((self.get_relative_pos(), mark))
+        self.gcroot_markers.append(
+            (self.get_relative_pos(break_basic_block=False), mark))

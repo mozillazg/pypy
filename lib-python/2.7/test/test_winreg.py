@@ -174,7 +174,7 @@ class BaseWinregTests(unittest.TestCase):
         DeleteKey(key, "sub_key")
 
         try:
-            # Shouldnt be able to delete it twice!
+            # Shouldn't be able to delete it twice!
             DeleteKey(key, "sub_key")
             self.fail("Deleting the key twice succeeded")
         except EnvironmentError:
@@ -293,7 +293,7 @@ class LocalWinregTests(BaseWinregTests):
                 self.skipTest("access denied to registry key "
                               "(are you running in a non-interactive session?)")
             raise
-        QueryValueEx(HKEY_PERFORMANCE_DATA, None)
+        QueryValueEx(HKEY_PERFORMANCE_DATA, "")
 
     # Reflection requires XP x64/Vista at a minimum. XP doesn't have this stuff
     # or DeleteKeyEx so make sure their use raises NotImplementedError

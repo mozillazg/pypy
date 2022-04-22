@@ -14,9 +14,9 @@ from rpython.rlib.entrypoint import secondary_entrypoints,\
      annotated_jit_entrypoints
 
 import py
-from rpython.tool.ansi_print import ansi_log
-log = py.log.Producer("translation")
-py.log.setconsumer("translation", ansi_log)
+from rpython.tool.ansi_print import AnsiLogger
+
+log = AnsiLogger("translation")
 
 
 def taskdef(deps, title, new_state=None, expected_states=[],
@@ -381,7 +381,7 @@ class TranslationDriver(SimpleTaskEngine):
         """ Run all backend optimizations - lltype version
         """
         from rpython.translator.backendopt.all import backend_optimizations
-        backend_optimizations(self.translator)
+        backend_optimizations(self.translator, replace_we_are_jitted=True)
 
 
     STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
@@ -398,8 +398,8 @@ class TranslationDriver(SimpleTaskEngine):
             from rpython.translator.platform import CompilationError
             try:
                 configure_boehm(self.translator.platform)
-            except CompilationError, e:
-                i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=hybrid"'
+            except CompilationError as e:
+                i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=minimark"'
                 raise Exception(str(e) + '\n' + i)
 
     @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'],
@@ -413,11 +413,13 @@ class TranslationDriver(SimpleTaskEngine):
             translator.frozen = True
 
         standalone = self.standalone
+        get_gchooks = self.extra.get('get_gchooks', lambda: None)
+        gchooks = get_gchooks()
 
         if standalone:
             from rpython.translator.c.genc import CStandaloneBuilder
             cbuilder = CStandaloneBuilder(self.translator, self.entry_point,
-                                          config=self.config,
+                                          config=self.config, gchooks=gchooks,
                       secondary_entrypoints=
                       self.secondary_entrypoints + annotated_jit_entrypoints)
         else:
@@ -426,7 +428,8 @@ class TranslationDriver(SimpleTaskEngine):
             cbuilder = CLibraryBuilder(self.translator, self.entry_point,
                                        functions=functions,
                                        name='libtesting',
-                                       config=self.config)
+                                       config=self.config,
+                                       gchooks=gchooks)
         if not standalone:     # xxx more messy
             cbuilder.modulename = self.extmod_name
         database = cbuilder.build_database()
@@ -463,10 +466,12 @@ class TranslationDriver(SimpleTaskEngine):
         newexename = self.exe_name % self.get_info()
         if '/' not in newexename and '\\' not in newexename:
             newexename = './' + newexename
-        newname = py.path.local(newexename)
         if suffix:
-            newname = newname.new(purebasename = newname.purebasename + suffix)
-        return newname
+            # Replace the last `.sfx` with the suffix
+            newname = py.path.local(newexename.rsplit('.', 1)[0])
+            newname = newname.new(basename=newname.basename + suffix)
+            return newname
+        return py.path.local(newexename)
 
     def create_exe(self):
         """ Copy the compiled executable into current directory, which is
@@ -474,26 +479,29 @@ class TranslationDriver(SimpleTaskEngine):
         """
         if self.exe_name is not None:
             exename = self.c_entryp
-            newexename = mkexename(self.compute_exe_name())
+            newexename = py.path.local(exename.basename)
             shutil_copy(str(exename), str(newexename))
+            self.log.info("copied: %s to %s" % (exename, newexename,))
             if self.cbuilder.shared_library_name is not None:
                 soname = self.cbuilder.shared_library_name
                 newsoname = newexename.new(basename=soname.basename)
                 shutil_copy(str(soname), str(newsoname))
-                self.log.info("copied: %s" % (newsoname,))
-                if sys.platform == 'win32':
+                self.log.info("copied: %s to %s" % (soname, newsoname,))
+                if hasattr(self.cbuilder, 'executable_name_w'):
                     # Copy pypyw.exe
-                    newexename = mkexename(self.compute_exe_name(suffix='w'))
-                    exe = py.path.local(exename)
-                    exename = exe.new(purebasename=exe.purebasename + 'w')
-                    shutil_copy(str(exename), str(newexename))
+                    exename_w = self.cbuilder.executable_name_w
+                    newexename_w = py.path.local(exename_w.basename)
+                    self.log.info("copied: %s to %s" % (exename_w, newexename_w,))
+                    shutil_copy(str(exename_w), str(newexename_w))
                     # for pypy, the import library is renamed and moved to
-                    # libs/python27.lib, according to the pragma in pyconfig.h
+                    # libs/python32.lib, according to the pragma in pyconfig.h
                     libname = self.config.translation.libname
-                    libname = libname or soname.new(ext='lib').basename
-                    libname = str(newsoname.dirpath().join(libname))
-                    shutil.copyfile(str(soname.new(ext='lib')), libname)
-                    self.log.info("copied: %s" % (libname,))
+                    oldlibname = soname.new(ext='lib')
+                    if not libname:
+                        libname = oldlibname.basename
+                        libname = str(newsoname.dirpath().join(libname))
+                    shutil.copyfile(str(oldlibname), libname)
+                    self.log.info("copied: %s to %s" % (oldlibname, libname,))
                     # the pdb file goes in the same place as pypy(w).exe
                     ext_to_copy = ['pdb',]
                     for ext in ext_to_copy:
@@ -501,6 +509,15 @@ class TranslationDriver(SimpleTaskEngine):
                         newname = newexename.new(basename=soname.basename)
                         shutil.copyfile(str(name), str(newname.new(ext=ext)))
                         self.log.info("copied: %s" % (newname,))
+                    # HACK: copy libcffi-*.dll which is required for venvs
+                    # At some point, we should stop doing this, and instead
+                    # use the artifact from packaging the build instead
+                    libffi = py.path.local.sysfind('libffi-8.dll')
+                    if sys.platform == 'win32' and not libffi:
+                        raise RuntimeError('could not find libffi')
+                    elif libffi:
+                        # in tests, we can mock using windows without libffi
+                        shutil.copyfile(str(libffi), os.getcwd() + r'\libffi-8.dll')
             self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
 
@@ -524,7 +541,6 @@ class TranslationDriver(SimpleTaskEngine):
     @taskdef([STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE], "LLInterpreting")
     def task_llinterpret_lltype(self):
         from rpython.rtyper.llinterp import LLInterpreter
-        py.log.setconsumer("llinterp operation", None)
 
         translator = self.translator
         interp = LLInterpreter(translator.rtyper)
@@ -534,7 +550,7 @@ class TranslationDriver(SimpleTaskEngine):
                               self.extra.get('get_llinterp_args',
                                              lambda: [])())
 
-        log.llinterpret.event("result -> %s" % v)
+        log.llinterpret("result -> %s" % v)
 
     def proceed(self, goals):
         if not goals:
@@ -551,16 +567,16 @@ class TranslationDriver(SimpleTaskEngine):
         self.log.info('usession directory: %s' % (udir,))
         return result
 
-    @staticmethod
-    def from_targetspec(targetspec_dic, config=None, args=None,
+    @classmethod
+    def from_targetspec(cls, targetspec_dic, config=None, args=None,
                         empty_translator=None,
                         disable=[],
                         default_goal=None):
         if args is None:
             args = []
 
-        driver = TranslationDriver(config=config, default_goal=default_goal,
-                                   disable=disable)
+        driver = cls(config=config, default_goal=default_goal,
+                     disable=disable)
         target = targetspec_dic['target']
         spec = target(driver, args)
 
@@ -600,11 +616,6 @@ class TranslationDriver(SimpleTaskEngine):
                         prereq()
                     from rpython.translator.goal import unixcheckpoint
                     unixcheckpoint.restartable_point(auto='run')
-
-def mkexename(name):
-    if sys.platform == 'win32':
-        name = name.new(ext='exe')
-    return name
 
 if os.name == 'posix':
     def shutil_copy(src, dst):

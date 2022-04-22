@@ -383,6 +383,8 @@ def dedent(text):
     considered to have no common leading whitespace.  (This behaviour is
     new in Python 2.5; older versions of this module incorrectly
     expanded tabs before searching for common leading whitespace.)
+
+    Entirely blank lines are normalized to a newline character.
     """
     # Look for the longest leading string of spaces and tabs common to
     # all lines.
@@ -403,11 +405,15 @@ def dedent(text):
         elif margin.startswith(indent):
             margin = indent
 
-        # Current line and previous winner have no common whitespace:
-        # there is no margin.
+        # Find the largest common whitespace between current line and previous
+        # winner.
         else:
-            margin = ""
-            break
+            for i, (x, y) in enumerate(zip(margin, indent)):
+                if x != y:
+                    margin = margin[:i]
+                    break
+            else:
+                margin = margin[:len(indent)]
 
     # sanity check (testing/debugging only)
     if 0 and margin:

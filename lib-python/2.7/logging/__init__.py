@@ -59,18 +59,6 @@ try:
 except NameError:
     _unicode = False
 
-#
-# _srcfile is used when walking the stack to check when we've got the first
-# caller stack frame.
-#
-if hasattr(sys, 'frozen'): #support for py2exe
-    _srcfile = "logging%s__init__%s" % (os.sep, __file__[-4:])
-elif __file__[-4:].lower() in ['.pyc', '.pyo']:
-    _srcfile = __file__[:-4] + '.py'
-else:
-    _srcfile = __file__
-_srcfile = os.path.normcase(_srcfile)
-
 # next bit filched from 1.5.2's inspect.py
 def currentframe():
     """Return the frame object for the caller's stack frame."""
@@ -81,6 +69,12 @@ def currentframe():
 
 if hasattr(sys, '_getframe'): currentframe = lambda: sys._getframe(3)
 # done filching
+
+#
+# _srcfile is used when walking the stack to check when we've got the first
+# caller stack frame.
+#
+_srcfile = os.path.normcase(currentframe.__code__.co_filename)
 
 # _srcfile is only used in conjunction with sys._getframe().
 # To provide compatibility with older versions of Python, set _srcfile
@@ -484,7 +478,15 @@ class Formatter(object):
         record.message = record.getMessage()
         if self.usesTime():
             record.asctime = self.formatTime(record, self.datefmt)
-        s = self._fmt % record.__dict__
+        try:
+            s = self._fmt % record.__dict__
+        except UnicodeDecodeError as e:
+            # Issue 25664. The logger name may be Unicode. Try again ...
+            try:
+                record.name = record.name.decode('utf-8')
+                s = self._fmt % record.__dict__
+            except UnicodeDecodeError:
+                raise e
         if record.exc_info:
             # Cache the traceback text to avoid converting it multiple times
             # (it's constant anyway)
@@ -647,12 +649,19 @@ def _removeHandlerRef(wr):
     # to prevent race conditions and failures during interpreter shutdown.
     acquire, release, handlers = _acquireLock, _releaseLock, _handlerList
     if acquire and release and handlers:
-        acquire()
         try:
-            if wr in handlers:
-                handlers.remove(wr)
-        finally:
-            release()
+            acquire()
+            try:
+                if wr in handlers:
+                    handlers.remove(wr)
+            finally:
+                release()
+        except TypeError:
+            # https://bugs.python.org/issue21149 - If the RLock object behind
+            # acquire() and release() has been partially finalized you may see
+            # an error about NoneType not being callable.  Absolutely nothing
+            # we can do in this GC during process shutdown situation.  Eat it.
+            pass
 
 def _addHandlerRef(handler):
     """
@@ -1233,7 +1242,7 @@ class Logger(Filterer):
 
         logger.log(level, "We have a %s", "mysterious problem", exc_info=1)
         """
-        if not isinstance(level, int):
+        if not isinstance(level, (int, long)):
             if raiseExceptions:
                 raise TypeError("level must be an integer")
             else:

@@ -8,7 +8,6 @@ from rpython.rlib.objectmodel import we_are_translated
 from rpython.jit.metainterp import resoperation
 from rpython.rlib.debug import make_sure_not_resized
 from rpython.jit.metainterp.resoperation import rop
-from rpython.jit.metainterp.resume import AccumInfo
 
 # ____________________________________________________________
 # Misc. utilities
@@ -46,7 +45,7 @@ def make_dispatcher_method(Class, name_prefix, op_prefix=None, default=None):
                 return func(self, op, *args)
             if default:
                 return default(self, op, *args)
-    dispatch.func_name = "dispatch_" + name_prefix
+    dispatch.__name__ = "dispatch_" + name_prefix
     return dispatch
 
 
@@ -73,6 +72,10 @@ def sort_descrs(lst):
     # unused, should I leave it or kill it?
     quicksort(lst, 0, len(lst)-1)
 
+def get_box_replacement(op):
+    if op is None:
+        return op
+    return op.get_box_replacement()
 
 # ____________________________________________________________
 
@@ -154,7 +157,8 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={},
         else:
             if op1.type != 'v':
                 remap[op2] = op1
-        if op1.getopnum() not in [rop.JUMP, rop.LABEL, rop.FINISH] and not op1.is_guard():
+        if (op1.getopnum() not in [rop.JUMP, rop.LABEL, rop.FINISH] and
+            not rop.is_guard(op1.getopnum())):
             assert op1.getdescr() == op2.getdescr()
         if op1.getfailargs() or op2.getfailargs():
             assert len(op1.getfailargs()) == len(op2.getfailargs())

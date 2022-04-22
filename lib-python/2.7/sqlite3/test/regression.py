@@ -24,6 +24,8 @@
 import datetime
 import unittest
 import sqlite3 as sqlite
+import weakref
+from test import support
 
 class RegressionTests(unittest.TestCase):
     def setUp(self):
@@ -73,7 +75,7 @@ class RegressionTests(unittest.TestCase):
     def CheckStatementFinalizationOnCloseDb(self):
         # pysqlite versions <= 2.3.3 only finalized statements in the statement
         # cache when closing the database. statements that were still
-        # referenced in cursors weren't closed an could provoke "
+        # referenced in cursors weren't closed and could provoke "
         # "OperationalError: Unable to close due to unfinalised statements".
         con = sqlite.connect(":memory:")
         cursors = []
@@ -118,7 +120,7 @@ class RegressionTests(unittest.TestCase):
 
     def CheckUnicodeConnect(self):
         """
-        With pysqlite 2.4.0 you needed to use a string or a APSW connection
+        With pysqlite 2.4.0 you needed to use a string or an APSW connection
         object for opening database connections.
 
         Formerly, both bytestrings and unicode strings used to work.
@@ -175,6 +177,9 @@ class RegressionTests(unittest.TestCase):
             pass
         except:
             self.fail("should have raised ProgrammingError")
+        with self.assertRaisesRegexp(sqlite.ProgrammingError,
+                                     r'^Base Cursor\.__init__ not called\.$'):
+            cur.close()
 
     def CheckConnectionConstructorCallCheck(self):
         """
@@ -241,52 +246,12 @@ class RegressionTests(unittest.TestCase):
         cur.execute("pragma page_size")
         row = cur.fetchone()
 
-    def CheckSetDict(self):
-        """
-        See http://bugs.python.org/issue7478
-
-        It was possible to successfully register callbacks that could not be
-        hashed. Return codes of PyDict_SetItem were not checked properly.
-        """
-        class NotHashable:
-            def __call__(self, *args, **kw):
-                pass
-            def __hash__(self):
-                raise TypeError()
-        var = NotHashable()
-        self.assertRaises(TypeError, self.con.create_function, var)
-        self.assertRaises(TypeError, self.con.create_aggregate, var)
-        self.assertRaises(TypeError, self.con.set_authorizer, var)
-        self.assertRaises(TypeError, self.con.set_progress_handler, var)
-
     def CheckConnectionCall(self):
         """
         Call a connection with a non-string SQL request: check error handling
         of the statement constructor.
         """
         self.assertRaises(sqlite.Warning, self.con, 1)
-
-    def CheckUpdateDescriptionNone(self):
-        """
-        Call Cursor.update with an UPDATE query and check that it sets the
-        cursor's description to be None.
-        """
-        cur = self.con.cursor()
-        cur.execute("CREATE TABLE foo (id INTEGER)")
-        cur.execute("UPDATE foo SET id = 3 WHERE id = 1")
-        self.assertEqual(cur.description, None)
-
-    def CheckStatementCache(self):
-        cur = self.con.cursor()
-        cur.execute("CREATE TABLE foo (id INTEGER)")
-        values = [(i,) for i in xrange(5)]
-        cur.executemany("INSERT INTO foo (id) VALUES (?)", values)
-
-        cur.execute("SELECT id FROM foo")
-        self.assertEqual(list(cur), values)
-        self.con.commit()
-        cur.execute("SELECT id FROM foo")
-        self.assertEqual(list(cur), values)
 
     def CheckRecursiveCursorUse(self):
         """
@@ -350,10 +315,124 @@ class RegressionTests(unittest.TestCase):
         self.assertRaises(ValueError, cur.execute, " \0select 2")
         self.assertRaises(ValueError, cur.execute, "select 2\0")
 
+    def CheckCommitCursorReset(self):
+        """
+        Connection.commit() did reset cursors, which made sqlite3
+        to return rows multiple times when fetched from cursors
+        after commit. See issues 10513 and 23129 for details.
+        """
+        con = sqlite.connect(":memory:")
+        con.executescript("""
+        create table t(c);
+        create table t2(c);
+        insert into t values(0);
+        insert into t values(1);
+        insert into t values(2);
+        """)
+
+        self.assertEqual(con.isolation_level, "")
+
+        counter = 0
+        for i, row in enumerate(con.execute("select c from t")):
+            con.execute("insert into t2(c) values (?)", (i,))
+            con.commit()
+            if counter == 0:
+                self.assertEqual(row[0], 0)
+            elif counter == 1:
+                self.assertEqual(row[0], 1)
+            elif counter == 2:
+                self.assertEqual(row[0], 2)
+            counter += 1
+        self.assertEqual(counter, 3, "should have returned exactly three rows")
+
+    def CheckBpo31770(self):
+        """
+        The interpreter shouldn't crash in case Cursor.__init__() is called
+        more than once.
+        """
+        def callback(*args):
+            pass
+        con = sqlite.connect(":memory:")
+        cur = sqlite.Cursor(con)
+        ref = weakref.ref(cur, callback)
+        cur.__init__(con)
+        del cur
+        # The interpreter shouldn't crash when ref is collected.
+        del ref
+        support.gc_collect()
+
+    def CheckDelIsolation_levelSegfault(self):
+        with self.assertRaises(AttributeError):
+            del self.con.isolation_level
+
+
+class UnhashableFunc:
+    def __hash__(self):
+        raise TypeError('unhashable type')
+
+    def __init__(self, return_value=None):
+        self.calls = 0
+        self.return_value = return_value
+
+    def __call__(self, *args, **kwargs):
+        self.calls += 1
+        return self.return_value
+
+
+class UnhashableCallbacksTestCase(unittest.TestCase):
+    """
+    https://bugs.python.org/issue34052
+
+    Registering unhashable callbacks raises TypeError, callbacks are not
+    registered in SQLite after such registration attempt.
+    """
+    def setUp(self):
+        self.con = sqlite.connect(':memory:')
+
+    def tearDown(self):
+        self.con.close()
+
+    def test_progress_handler(self):
+        f = UnhashableFunc(return_value=0)
+        with self.assertRaisesRegexp(TypeError, 'unhashable type'):
+            self.con.set_progress_handler(f, 1)
+        self.con.execute('SELECT 1')
+        self.assertFalse(f.calls)
+
+    def test_func(self):
+        func_name = 'func_name'
+        f = UnhashableFunc()
+        with self.assertRaisesRegexp(TypeError, 'unhashable type'):
+            self.con.create_function(func_name, 0, f)
+        msg = 'no such function: %s' % func_name
+        with self.assertRaisesRegexp(sqlite.OperationalError, msg):
+            self.con.execute('SELECT %s()' % func_name)
+        self.assertFalse(f.calls)
+
+    def test_authorizer(self):
+        f = UnhashableFunc(return_value=sqlite.SQLITE_DENY)
+        with self.assertRaisesRegexp(TypeError, 'unhashable type'):
+            self.con.set_authorizer(f)
+        self.con.execute('SELECT 1')
+        self.assertFalse(f.calls)
+
+    def test_aggr(self):
+        class UnhashableType(type):
+            __hash__ = None
+        aggr_name = 'aggr_name'
+        with self.assertRaisesRegexp(TypeError, 'unhashable type'):
+            self.con.create_aggregate(aggr_name, 0, UnhashableType('Aggr', (), {}))
+        msg = 'no such function: %s' % aggr_name
+        with self.assertRaisesRegexp(sqlite.OperationalError, msg):
+            self.con.execute('SELECT %s()' % aggr_name)
+
 
 def suite():
     regression_suite = unittest.makeSuite(RegressionTests, "Check")
-    return unittest.TestSuite((regression_suite,))
+    return unittest.TestSuite((
+        regression_suite,
+        unittest.makeSuite(UnhashableCallbacksTestCase),
+    ))
 
 def test():
     runner = unittest.TextTestRunner()

@@ -121,11 +121,6 @@ BaseServer:
 
 # Author of the BaseServer patch: Luke Kenneth Casson Leighton
 
-# XXX Warning!
-# There is a test suite for this module, but it cannot be run by the
-# standard regression test.
-# To run it manually, run Lib/test/test_socketserver.py.
-
 __version__ = "0.4"
 
 
@@ -234,6 +229,9 @@ class BaseServer:
                 # shutdown request and wastes cpu at all other times.
                 r, w, e = _eintr_retry(select.select, [self], [], [],
                                        poll_interval)
+                # bpo-35017: shutdown() called during select(), exit immediately.
+                if self.__shutdown_request:
+                    break
                 if self in r:
                     self._handle_request_noblock()
         finally:
@@ -296,6 +294,8 @@ class BaseServer:
             except:
                 self.handle_error(request, client_address)
                 self.shutdown_request(request)
+        else:
+            self.shutdown_request(request)
 
     def handle_timeout(self):
         """Called if no new request arrives within self.timeout.
@@ -642,7 +642,7 @@ class BaseRequestHandler:
     client address as self.client_address, and the server (in case it
     needs access to per-server information) as self.server.  Since a
     separate instance is created for each request, the handle() method
-    can define arbitrary other instance variariables.
+    can define other arbitrary instance variables.
 
     """
 
@@ -710,7 +710,7 @@ class StreamRequestHandler(BaseRequestHandler):
             try:
                 self.wfile.flush()
             except socket.error:
-                # An final socket error may have occurred here, such as
+                # A final socket error may have occurred here, such as
                 # the local error ECONNABORTED.
                 pass
         self.wfile.close()
@@ -718,9 +718,6 @@ class StreamRequestHandler(BaseRequestHandler):
 
 
 class DatagramRequestHandler(BaseRequestHandler):
-
-    # XXX Regrettably, I cannot get this working on Linux;
-    # s.recvfrom() doesn't return a meaningful client address.
 
     """Define self.rfile and self.wfile for datagram sockets."""
 

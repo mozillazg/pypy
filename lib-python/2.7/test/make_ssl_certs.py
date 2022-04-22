@@ -20,7 +20,28 @@ req_template = """
     CN                     = {hostname}
 
     [req_x509_extensions]
-    subjectAltName         = DNS:{hostname}
+    subjectAltName         = @san
+
+    [san]
+    DNS.1 = {hostname}
+    {extra_san}
+
+    [dir_sect]
+    C                      = XY
+    L                      = Castle Anthrax
+    O                      = Python Software Foundation
+    CN                     = dirname example
+
+    [princ_name]
+    realm = EXP:0, GeneralString:KERBEROS.REALM
+    principal_name = EXP:1, SEQUENCE:principal_seq
+
+    [principal_seq]
+    name_type = EXP:0, INTEGER:1
+    name_string = EXP:1, SEQUENCE:principals
+
+    [principals]
+    princ1 = GeneralString:username
 
     [ ca ]
     default_ca      = CA_default
@@ -29,7 +50,7 @@ req_template = """
     dir = cadir
     database  = $dir/index.txt
     crlnumber = $dir/crl.txt
-    default_md = sha1
+    default_md = sha256
     default_days = 3600
     default_crl_days = 3600
     certificate = pycacert.pem
@@ -67,7 +88,9 @@ req_template = """
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-def make_cert_key(hostname, sign=False):
+
+def make_cert_key(hostname, sign=False, extra_san='',
+                  ext='req_x509_extensions_full', key='rsa:3072'):
     print("creating cert for " + hostname)
     tempnames = []
     for i in range(3):
@@ -75,8 +98,9 @@ def make_cert_key(hostname, sign=False):
             tempnames.append(f.name)
     req_file, cert_file, key_file = tempnames
     try:
+        req = req_template.format(hostname=hostname, extra_san=extra_san)
         with open(req_file, 'w') as f:
-            f.write(req_template.format(hostname=hostname))
+            f.write(req)
         args = ['req', '-new', '-days', '3650', '-nodes',
                 '-newkey', 'rsa:1024', '-keyout', key_file,
                 '-config', req_file]
@@ -120,11 +144,11 @@ def make_ca():
         f.write('unique_subject = no')
 
     with tempfile.NamedTemporaryFile("w") as t:
-        t.write(req_template.format(hostname='our-ca-server'))
+        t.write(req_template.format(hostname='our-ca-server', extra_san=''))
         t.flush()
         with tempfile.NamedTemporaryFile() as f:
             args = ['req', '-new', '-days', '3650', '-extensions', 'v3_ca', '-nodes',
-                    '-newkey', 'rsa:2048', '-keyout', 'pycakey.pem',
+                    '-newkey', 'rsa:3072', '-keyout', 'pycakey.pem',
                     '-out', f.name,
                     '-subj', '/C=XY/L=Castle Anthrax/O=Python Software Foundation CA/CN=our-ca-server']
             check_call(['openssl'] + args)
@@ -168,6 +192,25 @@ if __name__ == '__main__':
 
     cert, key = make_cert_key('fakehostname', True)
     with open('keycert4.pem', 'w') as f:
+        f.write(key)
+        f.write(cert)
+
+    extra_san = [
+        'otherName.1 = 1.2.3.4;UTF8:some other identifier',
+        'otherName.2 = 1.3.6.1.5.2.2;SEQUENCE:princ_name',
+        'email.1 = user@example.org',
+        'DNS.2 = www.example.org',
+        # GEN_X400
+        'dirName.1 = dir_sect',
+        # GEN_EDIPARTY
+        'URI.1 = https://www.python.org/',
+        'IP.1 = 127.0.0.1',
+        'IP.2 = ::1',
+        'RID.1 = 1.2.3.4.5',
+    ]
+
+    cert, key = make_cert_key('allsans', extra_san='\n'.join(extra_san))
+    with open('allsans.pem', 'w') as f:
         f.write(key)
         f.write(cert)
 

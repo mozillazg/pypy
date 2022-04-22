@@ -1,6 +1,7 @@
 import py
 from rpython.rlib.parsing.lexer import SourcePos
 from rpython.rlib.parsing.tree import Node, Symbol, Nonterminal
+from rpython.rlib.objectmodel import not_rpython
 
 class Rule(object):
     def __init__(self, nonterminal, expansions):
@@ -181,8 +182,8 @@ class PackratParser(object):
             raise ParseError(input[error.pos].source_pos, error)
         return result[0]
 
+    @not_rpython
     def has_left_recursion(self):
-        """NOT_RPYTHON"""
         follows = {}
         for rule in self.rules:
             follow = py.builtin.set()
@@ -227,7 +228,7 @@ class ParserCompiler(object):
         miniglobals = globals().copy()
         miniglobals["baseclass"] = self.parser.__class__
         #print "\n".join(self.allcode)
-        exec py.code.Source("\n".join(self.allcode)).compile() in miniglobals
+        exec(py.code.Source("\n".join(self.allcode)).compile(), miniglobals)
         kls = miniglobals["CompileableParser"]
         # XXX
         parsetable = self.parser.parsetablefactory([], self.parser)

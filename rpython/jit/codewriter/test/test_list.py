@@ -39,7 +39,7 @@ class FakeCPU:
 class FakeCallControl:
     class getcalldescr(AbstractDescr):
         def __init__(self, op, oopspecindex=0, extraeffect=None,
-                     extradescr=None):
+                     extradescr=None, calling_graph=None):
             self.op = op
             self.oopspecindex = oopspecindex
         def __repr__(self):
@@ -103,6 +103,16 @@ def test_fixed_ll_arraycopy():
                   varoftype(lltype.Signed)],
                  lltype.Void, """
                      residual_call_ir_v $'myfunc', I[%i0, %i1, %i2], R[%r0, %r1], <CallDescrOS1>
+                 """)
+
+def test_fixed_ll_arraymove():
+    builtin_test('list.ll_arraymove',
+                 [varoftype(FIXEDLIST),
+                  varoftype(lltype.Signed), 
+                  varoftype(lltype.Signed), 
+                  varoftype(lltype.Signed)],
+                 lltype.Void, """
+                     residual_call_ir_v $'myfunc', I[%i0, %i1, %i2], R[%r0], <CallDescrOS9>
                  """)
 
 def test_fixed_getitem():

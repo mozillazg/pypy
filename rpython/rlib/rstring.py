@@ -6,9 +6,8 @@ from rpython.annotator.model import (SomeObject, SomeString, s_None, SomeChar,
     SomeInteger, SomeUnicodeCodePoint, SomeUnicodeString, SomePBC)
 from rpython.rtyper.llannotation import SomePtr
 from rpython.rlib import jit
-from rpython.rlib.objectmodel import newlist_hint, resizelist_hint, specialize
-from rpython.rlib.rarithmetic import ovfcheck, LONG_BIT as BLOOM_WIDTH
-from rpython.rlib.buffer import Buffer
+from rpython.rlib.objectmodel import newlist_hint, resizelist_hint, specialize, not_rpython
+from rpython.rlib.rarithmetic import ovfcheck, LONG_BIT as BLOOM_WIDTH, intmask
 from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
 from rpython.rtyper.extregistry import ExtRegistryEntry
 from rpython.tool.pairtype import pairtype
@@ -16,17 +15,41 @@ from rpython.tool.pairtype import pairtype
 
 # -------------- public API for string functions -----------------------
 
-@specialize.argtype(0)
-def _isspace(char):
+@specialize.ll_and_arg(2)
+def _isspace(s, pos, isutf8=False):
+    if isutf8:
+        from rpython.rlib import rutf8
+        return rutf8.isspace(s, pos)
+    char = s[pos]
     if isinstance(char, str):
         return char.isspace()
     else:
         assert isinstance(char, unicode)
         return unicodedb.isspace(ord(char))
 
+@specialize.ll_and_arg(2)
+def _incr(s, pos, isutf8):
+    if isutf8:
+        from rpython.rlib.rutf8 import next_codepoint_pos
+        assert pos >= 0
+        r = next_codepoint_pos(s, pos)
+        assert r >= 0
+        return r
+    else:
+        return pos + 1
 
-@specialize.argtype(0, 1)
-def split(value, by=None, maxsplit=-1):
+@specialize.ll_and_arg(2)
+def _decr(s, pos, isutf8):
+    if isutf8:
+        from rpython.rlib.rutf8 import prev_codepoint_pos
+        if pos <= 0:
+            return -1
+        return intmask(prev_codepoint_pos(s, pos))
+    else:
+        return pos - 1
+
+@specialize.ll_and_arg(3)
+def split(value, by=None, maxsplit=-1, isutf8=False):
     if by is None:
         length = len(value)
         i = 0
@@ -34,9 +57,9 @@ def split(value, by=None, maxsplit=-1):
         while True:
             # find the beginning of the next word
             while i < length:
-                if not _isspace(value[i]):
+                if not _isspace(value, i, isutf8):
                     break   # found
-                i += 1
+                i = _incr(value, i, isutf8)
             else:
                 break  # end of string, finished
 
@@ -44,18 +67,25 @@ def split(value, by=None, maxsplit=-1):
             if maxsplit == 0:
                 j = length   # take all the rest of the string
             else:
-                j = i + 1
-                while j < length and not _isspace(value[j]):
-                    j += 1
+                j = _incr(value, i, isutf8)
+                while j < length and not _isspace(value, j, isutf8):
+                    j = _incr(value, j, isutf8)
                 maxsplit -= 1   # NB. if it's already < 0, it stays < 0
 
             # the word is value[i:j]
             res.append(value[i:j])
 
             # continue to look from the character following the space after the word
-            i = j + 1
+            if j < length:
+                i = _incr(value, j, isutf8)
+            else:
+                break
         return res
+    else:
+        return _split_by(value, by, maxsplit)
 
+@specialize.argtype(0)
+def _split_by(value, by, maxsplit):
     if isinstance(value, unicode):
         assert isinstance(by, unicode)
     if isinstance(value, str):
@@ -66,12 +96,18 @@ def split(value, by=None, maxsplit=-1):
     bylen = len(by)
     if bylen == 0:
         raise ValueError("empty separator")
+    # XXX measure if preallocating the result list to the correct
+    #     size is faster, should be
 
     start = 0
     if bylen == 1:
-        # fast path: uses str.rfind(character) and str.count(character)
+        # fast path: uses str.find(character) and str.count(character)
         by = by[0]    # annotator hack: string -> char
         cnt = count(value, by, 0, len(value))
+        if cnt == 0:
+            if isinstance(value, str):
+                return [value]
+            return [value[0:len(value)]]
         if 0 <= maxsplit < cnt:
             cnt = maxsplit
         res = newlist_hint(cnt + 1)
@@ -102,42 +138,49 @@ def split(value, by=None, maxsplit=-1):
     return res
 
 
-@specialize.argtype(0, 1)
-def rsplit(value, by=None, maxsplit=-1):
+@specialize.ll_and_arg(3)
+def rsplit(value, by=None, maxsplit=-1, isutf8=False):
     if by is None:
         res = []
 
-        i = len(value) - 1
+        i = _decr(value, len(value), isutf8)
         while True:
             # starting from the end, find the end of the next word
             while i >= 0:
-                if not _isspace(value[i]):
+                if not _isspace(value, i, isutf8):
                     break   # found
-                i -= 1
+                i = _decr(value, i, isutf8)
             else:
                 break  # end of string, finished
 
-            # find the start of the word
-            # (more precisely, 'j' will be the space character before the word)
+            # find the start of the word as 'j1'
             if maxsplit == 0:
-                j = -1   # take all the rest of the string
+                j1 = 0   # take all the rest of the string
+                j = -1
             else:
-                j = i - 1
-                while j >= 0 and not _isspace(value[j]):
-                    j -= 1
+                j1 = i
+                while True:
+                    j = _decr(value, j1, isutf8)
+                    if j < 0 or _isspace(value, j, isutf8):
+                        break
+                    j1 = j
                 maxsplit -= 1   # NB. if it's already < 0, it stays < 0
 
-            # the word is value[j+1:i+1]
-            j1 = j + 1
+            # the word is value[j1:i+1]
             assert j1 >= 0
-            res.append(value[j1:i+1])
+            i1 = _incr(value, i, isutf8)
+            res.append(value[j1:i1])
 
             # continue to look from the character before the space before the word
-            i = j - 1
+            i = _decr(value, j, isutf8)
 
         res.reverse()
         return res
+    else:
+        return _rsplit_by(value, by, maxsplit)
 
+@specialize.argtype(0)
+def _rsplit_by(value, by, maxsplit):
     if isinstance(value, unicode):
         assert isinstance(by, unicode)
     if isinstance(value, str):
@@ -169,7 +212,12 @@ def rsplit(value, by=None, maxsplit=-1):
 
 @specialize.argtype(0, 1)
 @jit.elidable
-def replace(input, sub, by, maxsplit=-1):
+def replace(input, sub, by, maxcount=-1):
+    return replace_count(input, sub, by, maxcount)[0]
+
+@specialize.ll_and_arg(4)
+@jit.elidable
+def replace_count(input, sub, by, maxcount=-1, isutf8=False):
     if isinstance(input, str):
         Builder = StringBuilder
     elif isinstance(input, unicode):
@@ -177,14 +225,14 @@ def replace(input, sub, by, maxsplit=-1):
     else:
         assert isinstance(input, list)
         Builder = ByteListBuilder
-    if maxsplit == 0:
-        return input
+    if maxcount == 0:
+        return input, 0
 
 
-    if not sub:
+    if not sub and not isutf8:
         upper = len(input)
-        if maxsplit > 0 and maxsplit < upper + 2:
-            upper = maxsplit - 1
+        if maxcount > 0 and maxcount < upper + 2:
+            upper = maxcount - 1
             assert upper >= 0
 
         try:
@@ -201,34 +249,160 @@ def replace(input, sub, by, maxsplit=-1):
             builder.append(input[i])
         builder.append(by)
         builder.append_slice(input, upper, len(input))
+        replacements = upper + 1
+
+    elif isinstance(input, str) and len(sub) == 1:
+        if len(by) == 1:
+            return replace_count_str_chr_chr(input, sub[0], by[0], maxcount)
+        return replace_count_str_chr_str(input, sub[0], by, maxcount)
+
     else:
         # First compute the exact result size
-        cnt = count(input, sub, 0, len(input))
-        if cnt > maxsplit and maxsplit > 0:
-            cnt = maxsplit
+        if sub:
+            cnt = count(input, sub, 0, len(input))
+            if isinstance(input, str) and cnt == 0:
+                return input, 0
+            if isinstance(input, str):
+                return replace_count_str_str_str(input, sub, by, cnt, maxcount)
+        else:
+            assert isutf8
+            from rpython.rlib import rutf8
+            cnt = rutf8.codepoints_in_utf8(input) + 1
+
+        if cnt > maxcount and maxcount > 0:
+            cnt = maxcount
         diff_len = len(by) - len(sub)
         try:
             result_size = ovfcheck(diff_len * cnt)
             result_size = ovfcheck(result_size + len(input))
         except OverflowError:
             raise
+        replacements = cnt
 
         builder = Builder(result_size)
         start = 0
         sublen = len(sub)
 
-        while maxsplit != 0:
-            next = find(input, sub, start, len(input))
-            if next < 0:
-                break
-            builder.append_slice(input, start, next)
-            builder.append(by)
-            start = next + sublen
-            maxsplit -= 1   # NB. if it's already < 0, it stays < 0
+        if sublen == 0:
+            assert isutf8
+            from rpython.rlib import rutf8
+            while True:
+                builder.append(by)
+                maxcount -= 1
+                if start == len(input) or maxcount == 0:
+                    break
+                next = rutf8.next_codepoint_pos(input, start)
+                builder.append_slice(input, start, next)
+                start = next
+        else:
+            while maxcount != 0:
+                next = find(input, sub, start, len(input))
+                if next < 0:
+                    break
+                builder.append_slice(input, start, next)
+                builder.append(by)
+                start = next + sublen
+                maxcount -= 1   # NB. if it's already < 0, it stays < 0
 
         builder.append_slice(input, start, len(input))
 
-    return builder.build()
+    return builder.build(), replacements
+
+def replace_count_str_chr_chr(input, c1, c2, maxcount):
+    from rpython.rtyper.annlowlevel import llstr, hlstr
+    s = llstr(input)
+    length = len(s.chars)
+    start = find(input, c1, 0, len(input))
+    if start < 0:
+        return input, 0
+    newstr = s.malloc(length)
+    src = s.chars
+    dst = newstr.chars
+    s.copy_contents(s, newstr, 0, 0, len(input))
+    dst[start] = c2
+    count = 1
+    start += 1
+    maxcount -= 1
+    while maxcount != 0:
+        next = find(input, c1, start, len(input))
+        if next < 0:
+            break
+        dst[next] = c2
+        start = next + 1
+        maxcount -= 1
+        count += 1
+
+    return hlstr(newstr), count
+
+def replace_count_str_chr_str(input, sub, by, maxcount):
+    from rpython.rtyper.annlowlevel import llstr, hlstr
+    cnt = count(input, sub, 0, len(input))
+    if cnt == 0:
+        return input, 0
+    if maxcount > 0 and cnt > maxcount:
+        cnt = maxcount
+    diff_len = len(by) - 1
+    try:
+        result_size = ovfcheck(diff_len * cnt)
+        result_size = ovfcheck(result_size + len(input))
+    except OverflowError:
+        raise
+
+    s = llstr(input)
+    by_ll = llstr(by)
+
+    newstr = s.malloc(result_size)
+    dst = 0
+    start = 0
+    while maxcount != 0:
+        next = find(input, sub, start, len(input))
+        if next < 0:
+            break
+        s.copy_contents(s, newstr, start, dst, next - start)
+        dst += next - start
+        s.copy_contents(by_ll, newstr, 0, dst, len(by))
+        dst += len(by)
+
+        start = next + 1
+        maxcount -= 1   # NB. if it's already < 0, it stays < 0
+
+    s.copy_contents(s, newstr, start, dst, len(input) - start)
+    assert dst - start + len(input) == result_size
+    return hlstr(newstr), cnt
+
+def replace_count_str_str_str(input, sub, by, cnt, maxcount):
+    from rpython.rtyper.annlowlevel import llstr, hlstr
+    if cnt > maxcount and maxcount > 0:
+        cnt = maxcount
+    diff_len = len(by) - len(sub)
+    try:
+        result_size = ovfcheck(diff_len * cnt)
+        result_size = ovfcheck(result_size + len(input))
+    except OverflowError:
+        raise
+
+    s = llstr(input)
+    by_ll = llstr(by)
+    newstr = s.malloc(result_size)
+    sublen = len(sub)
+    bylen = len(by)
+    inputlen = len(input)
+    dst = 0
+    start = 0
+    while maxcount != 0:
+        next = find(input, sub, start, inputlen)
+        if next < 0:
+            break
+        s.copy_contents(s, newstr, start, dst, next - start)
+        dst += next - start
+        s.copy_contents(by_ll, newstr, 0, dst, bylen)
+        dst += bylen
+        start = next + sublen
+        maxcount -= 1   # NB. if it's already < 0, it stays < 0
+    s.copy_contents(s, newstr, start, dst, len(input) - start)
+    assert dst - start + len(input) == result_size
+    return hlstr(newstr), cnt
+
 
 def _normalize_start_end(length, start, end):
     if start < 0:
@@ -296,19 +470,28 @@ SEARCH_COUNT = 0
 SEARCH_FIND = 1
 SEARCH_RFIND = 2
 
+@specialize.ll()
 def bloom_add(mask, c):
     return mask | (1 << (ord(c) & (BLOOM_WIDTH - 1)))
 
+@specialize.ll()
 def bloom(mask, c):
     return mask & (1 << (ord(c) & (BLOOM_WIDTH - 1)))
 
 @specialize.argtype(0, 1)
 def _search(value, other, start, end, mode):
+    assert value is not None
+    if isinstance(value, unicode):
+        NUL = u'\0'
+    else:
+        NUL = '\0'
     if start < 0:
         start = 0
     if end > len(value):
         end = len(value)
     if start > end:
+        if mode == SEARCH_COUNT:
+            return 0
         return -1
 
     count = 0
@@ -326,10 +509,12 @@ def _search(value, other, start, end, mode):
     w = n - m
 
     if w < 0:
+        if mode == SEARCH_COUNT:
+            return 0
         return -1
 
     mlast = m - 1
-    skip = mlast - 1
+    skip = mlast
     mask = 0
 
     if mode != SEARCH_RFIND:
@@ -342,7 +527,7 @@ def _search(value, other, start, end, mode):
         i = start - 1
         while i + 1 <= start + w:
             i += 1
-            if value[i + m - 1] == other[m - 1]:
+            if value[i + mlast] == other[mlast]:
                 for j in range(mlast):
                     if value[i + j] != other[j]:
                         break
@@ -356,7 +541,7 @@ def _search(value, other, start, end, mode):
                 if i + m < len(value):
                     c = value[i + m]
                 else:
-                    c = '\0'
+                    c = NUL
                 if not bloom(mask, c):
                     i += m
                 else:
@@ -365,7 +550,7 @@ def _search(value, other, start, end, mode):
                 if i + m < len(value):
                     c = value[i + m]
                 else:
-                    c = '\0'
+                    c = NUL
                 if not bloom(mask, c):
                     i += m
     else:
@@ -413,6 +598,9 @@ class ParseStringError(Exception):
     def __init__(self, msg):
         self.msg = msg
 
+    def __str__(self):
+        return self.msg
+
 class InvalidBaseError(ParseStringError):
     """Signals an invalid base argument"""
 
@@ -427,48 +615,93 @@ class NumberStringParser:
         raise ParseStringError("invalid literal for %s() with base %d" %
                                (self.fname, self.original_base))
 
-    def __init__(self, s, literal, base, fname):
+    def __init__(self, s, literal, base, fname, allow_underscores=False,
+                 no_implicit_octal=False, start=0, end=-1):
         self.fname = fname
         sign = 1
-        if s.startswith('-'):
+        self.s = s
+        self.start = start
+        if end == -1:
+            end = len(s)
+        self.end = end
+        self._strip_spaces()
+        if self._startswith1('-'):
             sign = -1
-            s = strip_spaces(s[1:])
-        elif s.startswith('+'):
-            s = strip_spaces(s[1:])
+            self.start += 1
+            self._strip_spaces()
+        elif self._startswith1('+'):
+            self.start += 1
+            self._strip_spaces()
         self.sign = sign
         self.original_base = base
+        self.allow_underscores = allow_underscores
 
         if base == 0:
-            if s.startswith('0x') or s.startswith('0X'):
+            if self._startswith2('0x') or self._startswith2('0X'):
                 base = 16
-            elif s.startswith('0b') or s.startswith('0B'):
+            elif self._startswith2('0b') or self._startswith2('0B'):
                 base = 2
-            elif s.startswith('0'): # also covers the '0o' case
-                base = 8
+            elif self._startswith1('0'): # also covers the '0o' case
+                if no_implicit_octal and not (self._startswith2('0o') or
+                                              self._startswith2('0O')):
+                    base = 1    # this makes only the digit '0' valid...
+                else:
+                    base = 8
             else:
                 base = 10
         elif base < 2 or base > 36:
-            raise InvalidBaseError("%s() base must be >= 2 and <= 36" % fname)
+            raise InvalidBaseError("%s() base must be >= 2 and <= 36, or 0" % fname)
         self.base = base
 
-        if base == 16 and (s.startswith('0x') or s.startswith('0X')):
-            s = s[2:]
-        if base == 8 and (s.startswith('0o') or s.startswith('0O')):
-            s = s[2:]
-        if base == 2 and (s.startswith('0b') or s.startswith('0B')):
-            s = s[2:]
-        if not s:
+        # Leading underscores are not allowed
+        if self._startswith1('_'):
             self.error()
-        self.s = s
-        self.n = len(s)
-        self.i = 0
+
+        if base == 16 and (self._startswith2('0x') or self._startswith2('0X')):
+            self.start += 2
+        if base == 8 and (self._startswith2('0o') or self._startswith2('0O')):
+            self.start += 2
+        if base == 2 and (self._startswith2('0b') or self._startswith2('0B')):
+            self.start += 2
+        if self.start == self.end:
+            self.error()
+        self.i = self.start
+
+    def _startswith1(self, prefix):
+        if self.start >= self.end:
+            return False
+        return self.s[self.start] == prefix[0]
+        return startswith(self.s, prefix, start=self.start, end=self.end)
+
+    def _startswith2(self, prefix):
+        if self.start + 1 >= self.end:
+            return False
+        return self.s[self.start] == prefix[0] and self.s[self.start + 1] == prefix[1]
+
+    def _strip_spaces(self):
+        # XXX this is not locale-dependent
+        p = self.start
+        q = self.end
+        s = self.s
+        while p < q and s[p] in ' \f\n\r\t\v':
+            p += 1
+        while p < q and s[q-1] in ' \f\n\r\t\v':
+            q -= 1
+        assert q >= p
+        self.start = p
+        self.end = q
 
     def rewind(self):
-        self.i = 0
+        self.i = self.start
 
     def next_digit(self): # -1 => exhausted
-        if self.i < self.n:
+        if self.i < self.end:
             c = self.s[self.i]
+            if self.allow_underscores and c == '_':
+                self.i += 1
+                if self.i >= self.end:
+                    self.error()
+                c = self.s[self.i]
             digit = ord(c)
             if '0' <= c <= '9':
                 digit -= ord('0')
@@ -489,9 +722,14 @@ class NumberStringParser:
         # After exhausting all n digits in next_digit(), you can walk them
         # again in reverse order by calling prev_digit() exactly n times
         i = self.i - 1
-        assert i >= 0
+        assert i >= self.start
         self.i = i
         c = self.s[i]
+        if self.allow_underscores and c == '_':
+            i = self.i - 1
+            assert i >= 0
+            self.i = i
+            c = self.s[i]
         digit = ord(c)
         if '0' <= c <= '9':
             digit -= ord('0')
@@ -511,37 +749,37 @@ INIT_SIZE = 100 # XXX tweak
 class AbstractStringBuilder(object):
     # This is not the real implementation!
 
+    @not_rpython
     def __init__(self, init_size=INIT_SIZE):
-        "NOT_RPYTHON"
         self._l = []
         self._size = 0
 
+    @not_rpython
     def _grow(self, size):
-        "NOT_RPYTHON"
         self._size += size
 
+    @not_rpython
     def append(self, s):
-        "NOT_RPYTHON"
         assert isinstance(s, self._tp)
         self._l.append(s)
         self._grow(len(s))
 
+    @not_rpython
     def append_slice(self, s, start, end):
-        "NOT_RPYTHON"
         assert isinstance(s, self._tp)
         assert 0 <= start <= end <= len(s)
         s = s[start:end]
         self._l.append(s)
         self._grow(len(s))
 
+    @not_rpython
     def append_multiple_char(self, c, times):
-        "NOT_RPYTHON"
         assert isinstance(c, self._tp)
         self._l.append(c * times)
         self._grow(times)
 
+    @not_rpython
     def append_charpsize(self, s, size):
-        "NOT_RPYTHON"
         assert size >= 0
         l = []
         for i in xrange(size):
@@ -549,15 +787,15 @@ class AbstractStringBuilder(object):
         self._l.append(self._tp("").join(l))
         self._grow(size)
 
+    @not_rpython
     def build(self):
-        "NOT_RPYTHON"
         result = self._tp("").join(self._l)
         assert len(result) == self._size
         self._l = [result]
         return result
 
+    @not_rpython
     def getlength(self):
-        "NOT_RPYTHON"
         return self._size
 
 
@@ -570,18 +808,20 @@ class UnicodeBuilder(AbstractStringBuilder):
 
 class ByteListBuilder(object):
     def __init__(self, init_size=INIT_SIZE):
+        assert init_size >= 0
         self.l = newlist_hint(init_size)
 
     @specialize.argtype(1)
     def append(self, s):
+        l = self.l
         for c in s:
-            self.l.append(c)
+            l.append(c)
 
     @specialize.argtype(1)
     def append_slice(self, s, start, end):
-        assert 0 <= start <= end <= len(s)
-        for c in s[start:end]:
-            self.l.append(c)
+        l = self.l
+        for i in xrange(start, end):
+            l.append(s[i])
 
     def append_multiple_char(self, c, times):
         assert isinstance(c, str)
@@ -589,8 +829,9 @@ class ByteListBuilder(object):
 
     def append_charpsize(self, s, size):
         assert size >= 0
+        l = self.l
         for i in xrange(size):
-            self.l.append(s[i])
+            l.append(s[i])
 
     def build(self):
         return self.l
@@ -616,7 +857,7 @@ class SomeStringBuilder(SomeObject):
         return s_None
 
     def method_append_multiple_char(self, s_char, s_times):
-        assert isinstance(s_char, SomeChar)
+        assert isinstance(s_char, (SomeString, SomeChar))
         assert isinstance(s_times, SomeInteger)
         return s_None
 
@@ -629,7 +870,7 @@ class SomeStringBuilder(SomeObject):
         return SomeInteger(nonneg=True)
 
     def method_build(self):
-        return SomeString()
+        return SomeString(can_be_None=False)
 
     def rtyper_makerepr(self, rtyper):
         from rpython.rtyper.lltypesystem.rbuilder import stringbuilder_repr
@@ -669,7 +910,7 @@ class SomeUnicodeBuilder(SomeObject):
         return SomeInteger(nonneg=True)
 
     def method_build(self):
-        return SomeUnicodeString()
+        return SomeUnicodeString(can_be_None=False)
 
     def rtyper_makerepr(self, rtyper):
         from rpython.rtyper.lltypesystem.rbuilder import unicodebuilder_repr

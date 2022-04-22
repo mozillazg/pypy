@@ -242,10 +242,24 @@ _MAXHEADERS = 100
 #
 # VCHAR defined in http://tools.ietf.org/html/rfc5234#appendix-B.1
 
-# the patterns for both name and value are more leniant than RFC
+# the patterns for both name and value are more lenient than RFC
 # definitions to allow for backwards compatibility
 _is_legal_header_name = re.compile(r'\A[^:\s][^:\r\n]*\Z').match
 _is_illegal_header_value = re.compile(r'\n(?![ \t])|\r(?![ \t\n])').search
+
+# These characters are not allowed within HTTP URL paths.
+#  See https://tools.ietf.org/html/rfc3986#section-3.3 and the
+#  https://tools.ietf.org/html/rfc3986#appendix-A pchar definition.
+# Prevents CVE-2019-9740.  Includes control characters such as \r\n.
+# Restrict non-ASCII characters above \x7f (0x80-0xff).
+_contains_disallowed_url_pchar_re = re.compile('[\x00-\x20\x7f-\xff]')
+# Arguably only these _should_ allowed:
+#  _is_allowed_url_pchars_re = re.compile(r"^[/!$&'()*+,;=:@%a-zA-Z0-9._~-]+$")
+# We are more lenient for assumed real world compatibility purposes.
+
+# These characters are not allowed within HTTP method names
+# to prevent http header injection.
+_contains_disallowed_method_pchar_re = re.compile('[\x00-\x1f]')
 
 # We always set the Content-Length header for these methods because some
 # servers will otherwise respond with a 411
@@ -273,9 +287,8 @@ class HTTPMessage(mimetools.Message):
 
         Read header lines up to the entirely blank line that terminates them.
         The (normally blank) line that ends the headers is skipped, but not
-        included in the returned list.  If a non-header line ends the headers,
-        (which is an error), an attempt is made to backspace over it; it is
-        never included in the returned list.
+        included in the returned list.  If an invalid line is found in the
+        header section, it is skipped, and further lines are processed.
 
         The variable self.status is set to the empty string if all went well,
         otherwise it is an error message.  The variable self.headers is a
@@ -302,19 +315,17 @@ class HTTPMessage(mimetools.Message):
         self.status = ''
         headerseen = ""
         firstline = 1
-        startofline = unread = tell = None
-        if hasattr(self.fp, 'unread'):
-            unread = self.fp.unread
-        elif self.seekable:
+        tell = None
+        if not hasattr(self.fp, 'unread') and self.seekable:
             tell = self.fp.tell
         while True:
             if len(hlist) > _MAXHEADERS:
                 raise HTTPException("got more than %d headers" % _MAXHEADERS)
             if tell:
                 try:
-                    startofline = tell()
+                    tell()
                 except IOError:
-                    startofline = tell = None
+                    tell = None
                     self.seekable = 0
             line = self.fp.readline(_MAXLINE + 1)
             if len(line) > _MAXLINE:
@@ -345,26 +356,14 @@ class HTTPMessage(mimetools.Message):
                 # It's a legal header line, save it.
                 hlist.append(line)
                 self.addheader(headerseen, line[len(headerseen)+1:].strip())
-                continue
             elif headerseen is not None:
                 # An empty header name. These aren't allowed in HTTP, but it's
                 # probably a benign mistake. Don't add the header, just keep
                 # going.
-                continue
+                pass
             else:
-                # It's not a header line; throw it back and stop here.
-                if not self.dict:
-                    self.status = 'No headers'
-                else:
-                    self.status = 'Non-header line where header expected'
-                # Try to undo the read.
-                if unread:
-                    unread(line)
-                elif tell:
-                    self.fp.seek(startofline)
-                else:
-                    self.status = self.status + '; bad seek'
-                break
+                # It's not a header line; skip it and try the next line.
+                self.status = 'Non-header line where header expected'
 
 class HTTPResponse:
 
@@ -414,7 +413,7 @@ class HTTPResponse:
         if not line:
             # Presumably, the server closed the connection before
             # sending a valid response.
-            raise BadStatusLine(line)
+            raise BadStatusLine("No status line received - the server has closed the connection")
         try:
             [version, status, reason] = line.split(None, 2)
         except ValueError:
@@ -454,11 +453,14 @@ class HTTPResponse:
             if status != CONTINUE:
                 break
             # skip the header from the 100 response
+            header_count = 0
             while True:
                 skip = self.fp.readline(_MAXLINE + 1)
                 if len(skip) > _MAXLINE:
                     raise LineTooLong("header line")
-                skip = skip.strip()
+                header_count += 1
+                if header_count > _MAXHEADERS:
+                    raise HTTPException("got more than %d headers" % _MAXHEADERS)
                 if not skip:
                     break
                 if self.debuglevel > 0:
@@ -750,6 +752,8 @@ class HTTPConnection:
 
         (self.host, self.port) = self._get_hostport(host, port)
 
+        self._validate_host(self.host)
+
         # This is stored as an instance variable to allow unittests
         # to replace with a suitable mock
         self._create_connection = socket.create_connection
@@ -772,8 +776,7 @@ class HTTPConnection:
         if self.sock:
             raise RuntimeError("Can't setup tunnel for established connection.")
 
-        self._tunnel_host = host
-        self._tunnel_port = port
+        self._tunnel_host, self._tunnel_port = self._get_hostport(host, port)
         if headers:
             self._tunnel_headers = headers
         else:
@@ -802,8 +805,8 @@ class HTTPConnection:
         self.debuglevel = level
 
     def _tunnel(self):
-        (host, port) = self._get_hostport(self._tunnel_host, self._tunnel_port)
-        self.send("CONNECT %s:%d HTTP/1.0\r\n" % (host, port))
+        self.send("CONNECT %s:%d HTTP/1.0\r\n" % (self._tunnel_host,
+            self._tunnel_port))
         for header, value in self._tunnel_headers.iteritems():
             self.send("%s: %s\r\n" % (header, value))
         self.send("\r\n")
@@ -811,6 +814,11 @@ class HTTPConnection:
                                        method = self._method)
         (version, code, message) = response._read_status()
 
+        if version == "HTTP/0.9":
+            # HTTP/0.9 doesn't support the CONNECT verb, so if httplib has
+            # concluded HTTP/0.9 is being used something has gone wrong.
+            self.close()
+            raise socket.error("Invalid response from tunnel request")
         if code != 200:
             self.close()
             raise socket.error("Tunnel connection failed: %d %s" % (code,
@@ -934,13 +942,17 @@ class HTTPConnection:
         else:
             raise CannotSendRequest()
 
-        # Save the method we use, we need it later in the response phase
-        self._method = method
-        if not url:
-            url = '/'
-        hdr = '%s %s %s' % (method, url, self._http_vsn_str)
+        self._validate_method(method)
 
-        self._output(hdr)
+        # Save the method for use later in the response phase
+        self._method = method
+
+        url = url or '/'
+        self._validate_path(url)
+
+        request = '%s %s %s' % (method, url, self._http_vsn_str)
+
+        self._output(self._encode_request(request))
 
         if self._http_vsn == 11:
             # Issue some standard headers for better HTTP/1.1 compliance
@@ -1013,6 +1025,43 @@ class HTTPConnection:
             # For HTTP/1.0, the server will assume "not chunked"
             pass
 
+    def _encode_request(self, request):
+        # On Python 2, request is already encoded (default)
+        return request
+
+    def _validate_method(self, method):
+        """Validate a method name for putrequest."""
+        # prevent http header injection
+        match = _contains_disallowed_method_pchar_re.search(method)
+        if match:
+            msg = (
+                "method can't contain control characters. {method!r} "
+                "(found at least {matched!r})"
+            ).format(matched=match.group(), method=method)
+            raise ValueError(msg)
+
+    def _validate_path(self, url):
+        """Validate a url for putrequest."""
+        # Prevent CVE-2019-9740.
+        match = _contains_disallowed_url_pchar_re.search(url)
+        if match:
+            msg = (
+                "URL can't contain control characters. {url!r} "
+                "(found at least {matched!r})"
+            ).format(matched=match.group(), url=url)
+            raise InvalidURL(msg)
+
+    def _validate_host(self, host):
+        """Validate a host so it doesn't contain control characters."""
+        # Prevent CVE-2019-18348.
+        match = _contains_disallowed_url_pchar_re.search(host)
+        if match:
+            msg = (
+                "URL can't contain control characters. {host!r} "
+                "(found at least {matched!r})"
+            ).format(matched=match.group(), host=host)
+            raise InvalidURL(msg)
+
     def putheader(self, header, *values):
         """Send a request header line to the server.
 
@@ -1063,7 +1112,7 @@ class HTTPConnection:
         elif body is not None:
             try:
                 thelen = str(len(body))
-            except TypeError:
+            except (TypeError, AttributeError):
                 # If this is a file-like object, try to
                 # fstat its file descriptor
                 try:

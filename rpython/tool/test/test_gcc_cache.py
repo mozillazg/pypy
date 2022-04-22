@@ -64,10 +64,12 @@ def test_gcc_ask():
     assert try_compile_cache([f], eci)
     assert build_executable_cache([f], eci) == "hello\n"
     eci2 = ExternalCompilationInfo(include_dirs=[str(dir2)])
+    path = cache_file_path([f], eci, 'try_compile_cache')
+    if path.check():
+        path.remove()
     err = py.test.raises(CompilationError, try_compile_cache, [f], eci2)
-    print '<<<'
-    print err
-    print '>>>'
+    assert path.check
+    py.test.raises(CompilationError, try_compile_cache, [f], eci2)
 
 def test_gcc_ask_doesnt_log_errors():
     f = localudir.join('z.c')
@@ -93,3 +95,24 @@ def test_execute_code_ignore_errors():
     finally:
         sys.stderr = oldstderr
     assert 'ERROR' not in capture.getvalue().upper()
+
+def test_execute_code_show_runtime_error():
+    f = localudir.join('z.c')
+    f.write("""
+    #include <stdio.h>
+    int main()
+    {
+       fprintf(stderr, "hello\\n");
+       return 0;
+    }
+    """)
+    for i in range(2):
+        eci = ExternalCompilationInfo()
+        oldstderr = sys.stderr
+        try:
+            sys.stderr = capture = cStringIO.StringIO()
+            output = build_executable_cache([f], eci, True)
+        finally:
+            sys.stderr = oldstderr
+        assert 'hello' in capture.getvalue()
+        assert output == ''

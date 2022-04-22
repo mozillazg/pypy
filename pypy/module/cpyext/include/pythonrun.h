@@ -16,8 +16,8 @@ PyAPI_DATA(int) Py_InspectFlag;
 PyAPI_DATA(int) Py_OptimizeFlag;
 PyAPI_DATA(int) Py_NoSiteFlag;
 PyAPI_DATA(int) Py_BytesWarningFlag;
-PyAPI_DATA(int) Py_UseClassExceptionsFlag;
-PyAPI_DATA(int) Py_FrozenFlag;
+PyAPI_DATA(int) Py_UseClassExceptionsFlag; /* Unused, removed in 3.7 */
+PyAPI_DATA(int) Py_FrozenFlag; /* set when the python is "frozen" */
 PyAPI_DATA(int) Py_TabcheckFlag;
 PyAPI_DATA(int) Py_UnicodeFlag;
 PyAPI_DATA(int) Py_IgnoreEnvironmentFlag;
@@ -46,6 +46,11 @@ typedef struct {
 #define PyCF_ONLY_AST 0x0400
 
 #define Py_CompileString(str, filename, start) Py_CompileStringFlags(str, filename, start, NULL)
+
+/* Stuff with no proper home (yet) */
+PyAPI_DATA(int) (*PyOS_InputHook)(void);
+typedef int (*_pypy_pyos_inputhook)(void);
+PyAPI_FUNC(_pypy_pyos_inputhook) _PyPy_get_PyOS_InputHook(void);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,6 @@
 """Classes that replace tkinter gui objects used by an object being tested.
 
-A gui object is anything with a master or parent paramenter, which is
+A gui object is anything with a master or parent parameter, which is
 typically required in spite of what the doc strings say.
 """
 
@@ -260,7 +260,7 @@ class Text(object):
         elif op == '!=':
             return line1 != line2 or  char1 != char2
         else:
-            raise TclError('''bad comparison operator "%s":'''
+            raise TclError('''bad comparison operator "%s": '''
                                   '''must be <, <=, ==, >=, >, or !=''' % op)
 
     # The following Text methods normally do something and return None.

@@ -13,17 +13,17 @@ from rpython.jit.codewriter.policy import JitPolicy
 class JitHookInterfaceTests(object):
     # !!!note!!! - don't subclass this from the backend. Subclass the LL
     # class later instead
-    
+
     def test_abort_quasi_immut(self):
         reasons = []
 
         class MyJitIface(JitHookInterface):
-            def on_abort(self, reason, jitdriver, greenkey, greenkey_repr, logops, operations):
+            def on_abort(self, reason, jitdriver, greenkey, greenkey_repr, logops, ops):
                 assert jitdriver is myjitdriver
                 assert len(greenkey) == 1
                 reasons.append(reason)
                 assert greenkey_repr == 'blah'
-                assert len(operations) > 1
+                assert len(ops) > 1
 
         iface = MyJitIface()
 
@@ -94,7 +94,7 @@ class JitHookInterfaceTests(object):
 
     def test_on_compile_bridge(self):
         called = []
-        
+
         class MyJitIface(JitHookInterface):
             def after_compile(self, di):
                 called.append("compile")
@@ -104,7 +104,7 @@ class JitHookInterfaceTests(object):
 
             def before_compile_bridge(self, di):
                 called.append("before_compile_bridge")
-            
+
         driver = JitDriver(greens = ['n', 'm'], reds = ['i'])
 
         def loop(n, m):
@@ -231,14 +231,14 @@ class JitHookInterfaceTests(object):
         driver = JitDriver(greens = ['s'], reds = ['i'], name="name")
         class Hashes(object):
             check = False
-            
+
             def __init__(self):
                 self.l = []
                 self.t = []
 
         hashes = Hashes()
 
-        class Hooks(object):
+        class Hooks(JitHookInterface):
             def before_compile(self, debug_info):
                 pass
 
@@ -279,9 +279,80 @@ class JitHookInterfaceTests(object):
         self.meta_interp(main, [1, 1], policy=JitPolicy(hooks))
         assert len(hashes.t) == 1
 
+
+    def test_are_hooks_enabled(self):
+        reasons = []
+
+        class MyJitIface(JitHookInterface):
+            def are_hooks_enabled(self):
+                return False
+
+            def on_abort(self, reason, jitdriver, greenkey, greenkey_repr, logops, ops):
+                reasons.append(reason)
+
+        iface = MyJitIface()
+
+        myjitdriver = JitDriver(greens=['foo'], reds=['x', 'total'],
+                                get_printable_location=lambda *args: 'blah')
+
+        class Foo:
+            _immutable_fields_ = ['a?']
+
+            def __init__(self, a):
+                self.a = a
+
+        def f(a, x):
+            foo = Foo(a)
+            total = 0
+            while x > 0:
+                myjitdriver.jit_merge_point(foo=foo, x=x, total=total)
+                total += foo.a
+                foo.a += 1
+                x -= 1
+            return total
+        #
+        assert f(100, 7) == 721
+        res = self.meta_interp(f, [100, 7], policy=JitPolicy(iface))
+        assert res == 721
+        assert reasons == []
+
+    def test_memmgr_release_all(self):
+        driver = JitDriver(greens = [], reds = ['i'])
+        def loop(i):
+            while i > 0:
+                driver.jit_merge_point(i=i)
+                i -= 1
+        def num_loops():
+            return jit_hooks.stats_get_counter_value(None,
+                                           Counters.TOTAL_COMPILED_LOOPS)
+        def main():
+            loop(30)
+            if num_loops() != 1:
+                return 1000 + num_loops()
+            loop(30)
+            if num_loops() != 1:
+                return 1500 + num_loops()
+            #
+            jit_hooks.stats_memmgr_release_all(None)
+            from rpython.rlib import rgc
+            rgc.collect(); rgc.collect(); rgc.collect()
+            #
+            loop(30)
+            if num_loops() != 2:
+                return 2000 + num_loops()
+            loop(30)
+            if num_loops() != 2:
+                return 2500 + num_loops()
+            return 42
+
+        res = self.meta_interp(main, [], ProfilerClass=Profiler,
+                               no_stats_history=True)
+        assert res == 42
+
+
 class LLJitHookInterfaceTests(JitHookInterfaceTests):
     # use this for any backend, instead of the super class
-    
+
     def test_ll_get_stats(self):
         driver = JitDriver(greens = [], reds = ['i', 's'])
 
@@ -320,7 +391,6 @@ class LLJitHookInterfaceTests(JitHookInterfaceTests):
         # this so far does not work because of the way setup_once is done,
         # but fine, it's only about untranslated version anyway
         #self.meta_interp(main, [False], ProfilerClass=Profiler)
-        
 
 class TestJitHookInterface(JitHookInterfaceTests, LLJitMixin):
     pass

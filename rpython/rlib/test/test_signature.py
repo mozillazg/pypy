@@ -13,7 +13,7 @@ def annotate_at(f, policy=None):
     t = TranslationContext()
     t.config.translation.check_str_without_nul = True
     a = t.buildannotator(policy=policy)
-    a.annotate_helper(f, [model.s_ImpossibleValue]*f.func_code.co_argcount, policy=policy)
+    a.annotate_helper(f, [model.s_ImpossibleValue]*f.__code__.co_argcount, policy=policy)
     return a
 
 def sigof(a, f):
@@ -27,7 +27,7 @@ def getsig(f, policy=None):
 
 def check_annotator_fails(caller):
     exc = py.test.raises(model.AnnotatorError, annotate_at, caller).value
-    assert caller.func_name in str(exc)
+    assert caller.__name__ in str(exc)
 
 
 def test_bookkeeping():
@@ -36,7 +36,7 @@ def test_bookkeeping():
         return a + len(b)
     f.foo = 'foo'
     assert f._signature_ == (('x', 'y'), 'z')
-    assert f.func_name == 'f'
+    assert f.__name__ == 'f'
     assert f.foo == 'foo'
     assert f(1, 'hello') == 6
 
@@ -221,6 +221,36 @@ def test_instance():
     @check_annotator_fails
     def bad_for_body():
         f(C1())
+    @check_annotator_fails
+    def ok_for_body():
+        f(None)
+
+def test_instance_or_none():
+    class C1(object):
+        pass
+    class C2(C1):
+        pass
+    class C3(C2):
+        pass
+    @signature(types.instance(C3, can_be_None=True), returns=types.instance(C2, can_be_None=True))
+    def f(x):
+        assert isinstance(x, C2) or x is None
+        return x
+    argtype, rettype = getsig(f)
+    assert isinstance(argtype, model.SomeInstance)
+    assert argtype.classdef.classdesc.pyobj == C3
+    assert argtype.can_be_None
+    assert isinstance(rettype, model.SomeInstance)
+    assert rettype.classdef.classdesc.pyobj == C2
+    assert rettype.can_be_None
+
+    @check_annotator_fails
+    def ok_for_body():
+        f(C2())
+    @check_annotator_fails
+    def bad_for_body():
+        f(C1())
+
 
 def test_self():
     @finishsigs

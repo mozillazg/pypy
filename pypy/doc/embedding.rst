@@ -1,5 +1,5 @@
-Embedding PyPy
-==============
+Embedding PyPy (DEPRECATED)
+===========================
 
 PyPy has a very minimal and a very strange embedding interface, based on
 the usage of `cffi`_ and the philosophy that Python is a better language than
@@ -7,8 +7,7 @@ C. It was developed in collaboration with Roberto De Ioris from the `uwsgi`_
 project. The `PyPy uwsgi plugin`_ is a good example of using the embedding API.
 
 **NOTE**: You need a PyPy compiled with the option ``--shared``, i.e.
-with a ``libpypy-c.so`` or ``pypy-c.dll`` file.  This is the default in
-recent versions of PyPy.
+with a ``libpypy*-c.so`` or ``pypy*-c.dll`` file.  This is the default.
 
 .. note::
 
@@ -17,11 +16,12 @@ recent versions of PyPy.
    support,`__ which gives a simpler approach that works on CPython as well
    as PyPy.
 
-.. __: http://cffi.readthedocs.org/en/latest/embedding.html
+.. __: https://cffi.readthedocs.org/en/latest/embedding.html
 
-The resulting shared library exports very few functions, however they are
-enough to accomplish everything you need, provided you follow a few principles.
-The API is:
+The resulting shared library exports very few functions. These are defined in
+``PyPy.h`` which was removed in v7.3.8, but `is still available`_.
+They are enough to accomplish everything you need, provided you follow a few
+principles. The API is:
 
 .. function:: void rpython_startup_code(void);
 
@@ -34,9 +34,11 @@ The API is:
    This function searches the PyPy standard library starting from the given
    "PyPy home directory".  The arguments are:
 
-   * ``home``: NULL terminated path to an executable inside the pypy directory
+   * ``home``: path to an executable inside the pypy directory
      (can be a .so name, can be made up).  Used to look up the standard
-     library, and is also set as ``sys.executable``.
+     library, and is also set as ``sys.executable``.  From PyPy 5.5, you can
+     just say NULL here, as long as the ``libpypy-c.so/dylib/dll`` is itself
+     inside this directory.
 
    * ``verbose``: if non-zero, it will print error messages to stderr
 
@@ -64,7 +66,7 @@ The API is:
 
 .. function:: int pypy_execute_source_ptr(char* source, void* ptr);
 
-   .. note:: Not available in PyPy <= 2.2.1
+   .. note:: added in PyPy 2.3.1, June 2014 
    
    Just like the above, except it registers a magic argument in the source
    scope as ``c_argument``, where ``void*`` is encoded as Python int.
@@ -82,18 +84,14 @@ Minimal example
 
 Note that this API is a lot more minimal than say CPython C API, so at first
 it's obvious to think that you can't do much. However, the trick is to do
-all the logic in Python and expose it via `cffi`_ callbacks. Let's assume
-we're on linux and pypy is installed in ``/opt/pypy`` (with
-subdirectories like ``lib-python`` and ``lib_pypy``), and with the
-library in ``/opt/pypy/bin/libpypy-c.so``.  (It doesn't need to be
-installed; you can also replace these paths with a local extract of the
-installation tarballs, or with your local checkout of pypy.) We write a
-little C program:
+all the logic in Python and expose it via `cffi`_ callbacks.
+We write a little C program:
 
 .. code-block:: c
 
     #include "PyPy.h"
     #include <stdio.h>
+    #include <stdlib.h>
 
     static char source[] = "print 'hello from pypy'";
 
@@ -102,9 +100,9 @@ little C program:
         int res;
 
         rpython_startup_code();
-        /* note: in the path /opt/pypy/x, the final x is ignored and
-           replaced with lib-python and lib_pypy. */
-        res = pypy_setup_home("/opt/pypy/x", 1);
+        /* Before PyPy 5.5, you may need to say e.g. "/opt/pypy/bin" instead
+         * of NULL. */
+        res = pypy_setup_home(NULL, 1);
         if (res) {
             printf("Error setting pypy home!\n");
             return 1;
@@ -122,11 +120,6 @@ If we save it as ``x.c`` now, compile it and run it (on linux) with::
     $ gcc -g -o x x.c -lpypy-c -L/opt/pypy/bin -I/opt/pypy/include
     $ LD_LIBRARY_PATH=/opt/pypy/bin ./x
     hello from pypy
-
-.. note:: If the compilation fails because of missing PyPy.h header file,
-          you are running PyPy <= 2.2.1.  Get it here__.
-
-.. __: https://bitbucket.org/pypy/pypy/raw/c4cd6eca9358066571500ac82aaacfdaa3889e8c/include/PyPy.h
 
 On OSX it is necessary to set the rpath of the binary if one wants to link to it,
 with a command like::
@@ -181,6 +174,7 @@ embedding interface:
     /* C example */
     #include "PyPy.h"
     #include <stdio.h>
+    #include <stdlib.h>
 
     struct API {
         double (*add_numbers)(double x, double y);
@@ -196,7 +190,7 @@ embedding interface:
         int res;
 
         rpython_startup_code();
-        res = pypy_setup_home("/opt/pypy/x", 1);
+        res = pypy_setup_home(NULL, 1);
         if (res) {
             fprintf(stderr, "Error setting pypy home!\n");
             return -1;
@@ -236,6 +230,9 @@ communicate via this single C structure that defines your API.
 
 Finding pypy_home
 -----------------
+
+**You can usually skip this section if you are running PyPy >= 5.5, released
+Oct 2016** 
 
 The function pypy_setup_home() takes as first parameter the path to a
 file from which it can deduce the location of the standard library.
@@ -282,7 +279,8 @@ In case you want to use pthreads, what you need to do is to call
 ``pypy_thread_attach`` from each of the threads that you created (but not
 from the main thread) and call ``pypy_init_threads`` from the main thread.
 
-.. _`cffi`: http://cffi.readthedocs.org/
-.. _`uwsgi`: http://uwsgi-docs.readthedocs.org/en/latest/
-.. _`PyPy uwsgi plugin`: http://uwsgi-docs.readthedocs.org/en/latest/PyPy.html
+.. _`cffi`: https://cffi.readthedocs.org/
+.. _`uwsgi`: https://uwsgi-docs.readthedocs.org/en/latest/
+.. _`PyPy uwsgi plugin`: https://uwsgi-docs.readthedocs.org/en/latest/PyPy.html
 .. _`how to compile PyPy`: getting-started.html
+.. _`is still available`: pypy.h.html

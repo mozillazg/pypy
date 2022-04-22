@@ -234,7 +234,7 @@ class BaseTranslatorPage(GraphPage):
                 graph = obj
                 data = graph.name
                 if hasattr(graph, 'func'):
-                    data += ':%d' % graph.func.func_code.co_firstlineno
+                    data += ':%d' % graph.func.__code__.co_firstlineno
                 if hasattr(graph, 'source'):
                     data += '\n%s' % graph.source.split('\n', 1)[0]
             else:
@@ -405,13 +405,14 @@ def nameof(obj, cache={}):
 def try_show(obj):
     if isinstance(obj, FunctionGraph):
         obj.show()
+        return obj
     elif isinstance(obj, Link):
-        try_show(obj.prevblock)
+        return try_show(obj.prevblock)
     elif isinstance(obj, Block):
         graph = obj._slowly_get_graph()
         if isinstance(graph, FunctionGraph):
             graph.show()
-            return
+            return graph
         graph = IncompleteGraph(graph)
         SingleGraphPage(graph).display()
     else:

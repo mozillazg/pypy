@@ -16,13 +16,13 @@ def test_compilationerror_repr():
 class TestPlatform(object):
     platform = host
     strict_on_stderr = True
-    
+
     def check_res(self, res, expected='42\n'):
         assert res.out == expected
         if self.strict_on_stderr:
             assert res.err == ''
-        assert res.returncode == 0        
-    
+        assert res.returncode == 0
+
     def test_simple_enough(self):
         cfile = udir.join('test_simple_enough.c')
         cfile.write('''
@@ -64,7 +64,7 @@ class TestPlatform(object):
         cfile.write('')
         try:
             executable = self.platform.compile([cfile], ExternalCompilationInfo())
-        except CompilationError, e:
+        except CompilationError as e:
             filename = cfile.dirpath().join(cfile.purebasename + '.errors')
             assert filename.read('r') == e.err
         else:
@@ -113,8 +113,10 @@ class TestPlatform(object):
     def test_environment_inheritance(self):
         # make sure that environment is inherited
         cmd = 'import os; print os.environ["_SOME_VARIABLE_%d"]'
+        env = {'_SOME_VARIABLE_1':'xyz'}
+        env['PATH'] = os.environ['PATH']
         res = self.platform.execute(sys.executable, ['-c', cmd % 1],
-                                    env={'_SOME_VARIABLE_1':'xyz'})
+                                    env=env)
         assert 'xyz' in res.out
         os.environ['_SOME_VARIABLE_2'] = 'zyz'
         try:
@@ -126,7 +128,7 @@ class TestPlatform(object):
     def test_key(self):
         class XPlatform(Platform):
             relevant_environ = ['CPATH']
-            
+
             def __init__(self):
                 self.cc = 'xcc'
         x = XPlatform()
@@ -147,10 +149,13 @@ def test_equality():
 
 
 def test_is_host_build():
+    from platform import machine
     from rpython.translator import platform
     assert platform.host == platform.platform
 
     assert platform.is_host_build()
-    platform.set_platform('maemo', None)
-    assert platform.host != platform.platform
-    assert not platform.is_host_build()
+    # do we support non-host builds?
+    if machine().startswith('arm'):
+        platform.set_platform('arm', None)
+        assert platform.host != platform.platform
+        assert not platform.is_host_build()

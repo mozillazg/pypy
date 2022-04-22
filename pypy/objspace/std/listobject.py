@@ -3,17 +3,19 @@
 Lists optimize their storage by holding certain primitive datatypes in
 unwrapped form. For more information:
 
-http://morepypy.blogspot.com/2011/10/more-compact-lists-with-list-strategies.html
+https://www.pypy.org/posts/2011/10/more-compact-lists-with-list-strategies-8229304944653956829.html
 
 """
 
+import math
 import operator
 import sys
 
-from rpython.rlib import debug, jit, rerased
+from rpython.rlib import debug, jit, rerased, rutf8
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import (
     import_from_mixin, instantiate, newlist_hint, resizelist_hint, specialize)
+from rpython.rlib.rarithmetic import ovfcheck
 from rpython.rlib import longlong2float
 from rpython.tool.sourcetools import func_with_new_name
 
@@ -21,9 +23,9 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.gateway import (
     WrappedDefault, applevel, interp2app, unwrap_spec)
-from pypy.interpreter.generator import GeneratorIterator
 from pypy.interpreter.signature import Signature
 from pypy.interpreter.typedef import TypeDef
+from pypy.interpreter.miscutils import StringSort
 from pypy.objspace.std.bytesobject import W_BytesObject
 from pypy.objspace.std.floatobject import W_FloatObject
 from pypy.objspace.std.intobject import W_IntObject
@@ -95,13 +97,14 @@ def get_strategy_from_list_objects(space, list_w, sizehint):
         else:
             return space.fromcache(BytesListStrategy)
 
-    elif type(w_firstobj) is W_UnicodeObject:
-        # check for all-unicodes
+    elif type(w_firstobj) is W_UnicodeObject and w_firstobj.is_ascii():
+        # check for all-unicodes containing only ascii
         for i in range(1, len(list_w)):
-            if type(list_w[i]) is not W_UnicodeObject:
+            item = list_w[i]
+            if type(item) is not W_UnicodeObject or not item.is_ascii():
                 break
         else:
-            return space.fromcache(UnicodeListStrategy)
+            return space.fromcache(AsciiListStrategy)
 
     elif type(w_firstobj) is W_FloatObject:
         # check for all-floats
@@ -116,10 +119,10 @@ def get_strategy_from_list_objects(space, list_w, sizehint):
     if check_int_or_float:
         for w_obj in list_w:
             if type(w_obj) is W_IntObject:
-                if longlong2float.can_encode_int32(space.int_w(w_obj)):
+                if longlong2float.can_encode_int32(w_obj.int_w(space)):
                     continue    # ok
             elif type(w_obj) is W_FloatObject:
-                if longlong2float.can_encode_float(space.float_w(w_obj)):
+                if longlong2float.can_encode_float(w_obj.float_w(space)):
                     continue    # ok
             break
         else:
@@ -128,29 +131,29 @@ def get_strategy_from_list_objects(space, list_w, sizehint):
     return space.fromcache(ObjectListStrategy)
 
 
-def _get_printable_location(w_type):
-    return ('list__do_extend_from_iterable [w_type=%s]' %
-            w_type.getname(w_type.space))
+def _get_printable_location(strategy_type, greenkey):
+    return 'list__do_extend_from_iterable [%s, %s]' % (
+        strategy_type,
+        greenkey.iterator_greenkey_printable())
 
 
 _do_extend_jitdriver = jit.JitDriver(
     name='list__do_extend_from_iterable',
-    greens=['w_type'],
-    reds=['i', 'w_iterator', 'w_list'],
+    greens=['strategy_type', 'greenkey'],
+    reds='auto',
     get_printable_location=_get_printable_location)
 
 def _do_extend_from_iterable(space, w_list, w_iterable):
     w_iterator = space.iter(w_iterable)
-    w_type = space.type(w_iterator)
+    greenkey = space.iterator_greenkey(w_iterator)
     i = 0
     while True:
-        _do_extend_jitdriver.jit_merge_point(w_type=w_type,
-                                             i=i,
-                                             w_iterator=w_iterator,
-                                             w_list=w_list)
+        _do_extend_jitdriver.jit_merge_point(
+                greenkey=greenkey,
+                strategy_type=type(w_list.strategy))
         try:
             w_list.append(space.next(w_iterator))
-        except OperationError, e:
+        except OperationError as e:
             if not e.match(space, space.w_StopIteration):
                 raise
             break
@@ -195,8 +198,8 @@ class W_ListObject(W_Root):
         return W_ListObject.from_storage_and_strategy(space, storage, strategy)
 
     @staticmethod
-    def newlist_unicode(space, list_u):
-        strategy = space.fromcache(UnicodeListStrategy)
+    def newlist_ascii(space, list_u):
+        strategy = space.fromcache(AsciiListStrategy)
         storage = strategy.erase(list_u)
         return W_ListObject.from_storage_and_strategy(space, storage, strategy)
 
@@ -204,6 +207,12 @@ class W_ListObject(W_Root):
     def newlist_int(space, list_i):
         strategy = space.fromcache(IntegerListStrategy)
         storage = strategy.erase(list_i)
+        return W_ListObject.from_storage_and_strategy(space, storage, strategy)
+
+    @staticmethod
+    def newlist_float(space, list_f):
+        strategy = space.fromcache(FloatListStrategy)
+        storage = strategy.erase(list_f)
         return W_ListObject.from_storage_and_strategy(space, storage, strategy)
 
     def __repr__(self):
@@ -217,14 +226,12 @@ class W_ListObject(W_Root):
         return list(items)
 
     def switch_to_object_strategy(self):
-        list_w = self.getitems()
         object_strategy = self.space.fromcache(ObjectListStrategy)
+        if self.strategy is object_strategy:
+            return
+        list_w = self.getitems()
         self.strategy = object_strategy
         object_strategy.init_from_list_w(self, list_w)
-
-    def ensure_object_strategy(self):     # for cpyext
-        if self.strategy is not self.space.fromcache(ObjectListStrategy):
-            self.switch_to_object_strategy()
 
     def _temporarily_as_objects(self):
         if self.strategy is self.space.fromcache(ObjectListStrategy):
@@ -235,6 +242,16 @@ class W_ListObject(W_Root):
         w_objectlist = W_ListObject.from_storage_and_strategy(
                 self.space, storage, strategy)
         return w_objectlist
+
+    def convert_to_cpy_strategy(self, space):
+        from pypy.module.cpyext.sequence import CPyListStorage, CPyListStrategy
+
+        cpy_strategy = self.space.fromcache(CPyListStrategy)
+        if self.strategy is cpy_strategy:
+            return
+        lst = self.getitems()
+        self.strategy = cpy_strategy
+        self.lstorage = cpy_strategy.erase(CPyListStorage(space, lst))
 
     # ___________________________________________________
 
@@ -320,10 +337,10 @@ class W_ListObject(W_Root):
         not use the list strategy, return None."""
         return self.strategy.getitems_bytes(self)
 
-    def getitems_unicode(self):
+    def getitems_ascii(self):
         """Return the items in the list as unwrapped unicodes. If the list does
         not use the list strategy, return None."""
-        return self.strategy.getitems_unicode(self)
+        return self.strategy.getitems_ascii(self)
 
     def getitems_int(self):
         """Return the items in the list as unwrapped ints. If the list does not
@@ -389,6 +406,12 @@ class W_ListObject(W_Root):
         argument reverse. Argument must be unwrapped."""
         self.strategy.sort(self, reverse)
 
+    def physical_size(self):
+        """ return the physical (ie overallocated size) of the underlying list.
+        """
+        # exposed in __pypy__
+        return self.strategy.physical_size(self)
+
     # exposed to app-level
 
     @staticmethod
@@ -409,12 +432,8 @@ class W_ListObject(W_Root):
 
     def descr_repr(self, space):
         if self.length() == 0:
-            return space.wrap('[]')
-        ec = space.getexecutioncontext()
-        w_currently_in_repr = ec._py_repr
-        if w_currently_in_repr is None:
-            w_currently_in_repr = ec._py_repr = space.newdict()
-        return listrepr(space, w_currently_in_repr, self)
+            return space.newtext('[]')
+        return listrepr(space, space.get_objects_in_repr(), self)
 
     def descr_eq(self, space, w_other):
         if not isinstance(w_other, W_ListObject):
@@ -498,7 +517,7 @@ class W_ListObject(W_Root):
 
         try:
             self.extend(w_iterable)
-        except OperationError, e:
+        except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
             raise
@@ -507,7 +526,7 @@ class W_ListObject(W_Root):
     def descr_mul(self, space, w_times):
         try:
             times = space.getindex_w(w_times, space.w_OverflowError)
-        except OperationError, e:
+        except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
             raise
@@ -516,7 +535,7 @@ class W_ListObject(W_Root):
     def descr_inplace_mul(self, space, w_times):
         try:
             times = space.getindex_w(w_times, space.w_OverflowError)
-        except OperationError, e:
+        except OperationError as e:
             if e.match(space, space.w_TypeError):
                 return space.w_NotImplemented
             raise
@@ -536,8 +555,7 @@ class W_ListObject(W_Root):
             index = space.getindex_w(w_index, space.w_IndexError, "list index")
             return self.getitem(index)
         except IndexError:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("list index out of range"))
+            raise oefmt(space.w_IndexError, "list index out of range")
 
     def descr_getslice(self, space, w_start, w_stop):
         length = self.length()
@@ -550,22 +568,37 @@ class W_ListObject(W_Root):
 
     def descr_setitem(self, space, w_index, w_any):
         if isinstance(w_index, W_SliceObject):
+            # special case for l[:] = l2
+            if (space.is_w(w_index.w_start, space.w_None) and
+                    space.is_w(w_index.w_stop, space.w_None) and
+                    space.is_w(w_index.w_step, space.w_None)):
+                # use the extend logic
+                if isinstance(w_any, W_ListObject):
+                    if space.is_w(self, w_any):
+                        return
+                    w_other = w_any
+                else:
+                    sequence_w = space.listview(w_any)
+                    w_other = W_ListObject(space, sequence_w)
+                self.clear(space)
+                w_other.copy_into(self)
+                return
+
             oldsize = self.length()
             start, stop, step, slicelength = w_index.indices4(space, oldsize)
             if isinstance(w_any, W_ListObject):
-                self.setslice(start, step, slicelength, w_any)
+                w_other = w_any
             else:
                 sequence_w = space.listview(w_any)
                 w_other = W_ListObject(space, sequence_w)
-                self.setslice(start, step, slicelength, w_other)
+            self.setslice(start, step, slicelength, w_other)
             return
 
         idx = space.getindex_w(w_index, space.w_IndexError, "list index")
         try:
             self.setitem(idx, w_any)
         except IndexError:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("list index out of range"))
+            raise oefmt(space.w_IndexError, "list index out of range")
 
     def descr_setslice(self, space, w_start, w_stop, w_iterable):
         length = self.length()
@@ -591,8 +624,7 @@ class W_ListObject(W_Root):
         try:
             self.pop(idx)
         except IndexError:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("list index out of range"))
+            raise oefmt(space.w_IndexError, "list index out of range")
 
     def descr_delslice(self, space, w_start, w_stop):
         length = self.length()
@@ -617,7 +649,7 @@ class W_ListObject(W_Root):
             if space.eq_w(self.getitem(i), w_value):
                 count += 1
             i += 1
-        return space.wrap(count)
+        return space.newint(count)
 
     @unwrap_spec(index=int)
     def descr_insert(self, space, index, w_value):
@@ -632,8 +664,7 @@ class W_ListObject(W_Root):
         index (default last)'''
         length = self.length()
         if length == 0:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("pop from empty list"))
+            raise oefmt(space.w_IndexError, "pop from empty list")
         # clearly differentiate between list.pop() and list.pop(index)
         if index == -1:
             return self.pop_end()  # cannot raise because list is not empty
@@ -642,8 +673,7 @@ class W_ListObject(W_Root):
         try:
             return self.pop(index)
         except IndexError:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("pop index out of range"))
+            raise oefmt(space.w_IndexError, "pop index out of range")
 
     def descr_remove(self, space, w_value):
         'L.remove(value) -- remove first occurrence of value'
@@ -668,7 +698,7 @@ class W_ListObject(W_Root):
             i = self.find(w_value, i, stop)
         except ValueError:
             raise oefmt(space.w_ValueError, "%R is not in list", w_value)
-        return space.wrap(i)
+        return space.newint(i)
 
     @unwrap_spec(reverse=bool)
     def descr_sort(self, space, w_cmp=None, w_key=None, reverse=False):
@@ -739,10 +769,11 @@ class W_ListObject(W_Root):
             self.__init__(space, sorter.list)
 
         if mucked:
-            raise OperationError(space.w_ValueError,
-                                 space.wrap("list modified during sort"))
+            raise oefmt(space.w_ValueError, "list modified during sort")
 
-find_jmp = jit.JitDriver(greens = ['tp'], reds = 'auto', name = 'list.find')
+def get_printable_location(strategy_type, tp):
+    return "list.find [%s, %s]" % (strategy_type, tp.getname(tp.space), )
+find_jmp = jit.JitDriver(greens=['strategy_type', 'tp'], reds='auto', name='list.find', get_printable_location=get_printable_location)
 
 class ListStrategy(object):
 
@@ -770,8 +801,8 @@ class ListStrategy(object):
         # needs to be safe against eq_w mutating stuff
         tp = space.type(w_item)
         while i < stop and i < w_list.length():
-            find_jmp.jit_merge_point(tp=tp)
-            if space.eq_w(w_list.getitem(i), w_item):
+            find_jmp.jit_merge_point(tp=tp, strategy_type=type(self))
+            if space.eq_w(w_item, w_list.getitem(i)):
                 return i
             i += 1
         raise ValueError
@@ -794,7 +825,7 @@ class ListStrategy(object):
     def getitems_bytes(self, w_list):
         return None
 
-    def getitems_unicode(self, w_list):
+    def getitems_ascii(self, w_list):
         return None
 
     def getitems_int(self, w_list):
@@ -836,10 +867,17 @@ class ListStrategy(object):
         raise NotImplementedError
 
     def extend(self, w_list, w_any):
+        from pypy.objspace.std.tupleobject import W_AbstractTupleObject
+        space = self.space
         if type(w_any) is W_ListObject or (isinstance(w_any, W_ListObject) and
-                                           self.space._uses_list_iter(w_any)):
+                                           space._uses_list_iter(w_any)):
             self._extend_from_list(w_list, w_any)
-        elif isinstance(w_any, GeneratorIterator):
+        elif (isinstance(w_any, W_AbstractTupleObject) and
+                not w_any.user_overridden_class and
+                w_any.length() < UNROLL_CUTOFF
+        ):
+            self._extend_from_tuple(w_list, w_any.tolist())
+        elif space.is_generator(w_any):
             w_any.unpack_into_w(w_list)
         else:
             self._extend_from_iterable(w_list, w_any)
@@ -847,11 +885,28 @@ class ListStrategy(object):
     def _extend_from_list(self, w_list, w_other):
         raise NotImplementedError
 
+    @jit.look_inside_iff(lambda self, w_list, tup_w:
+            jit.loop_unrolling_heuristic(tup_w, len(tup_w), UNROLL_CUTOFF))
+    def _extend_from_tuple(self, w_list, tup_w):
+        try:
+            newsize_hint = ovfcheck(w_list.length() + len(tup_w))
+        except OverflowError:
+            pass
+        else:
+            w_list._resize_hint(newsize_hint)
+        for w_element in tup_w:
+            w_list.append(w_element)
+
     def _extend_from_iterable(self, w_list, w_iterable):
         """Extend w_list from a generic iterable"""
         length_hint = self.space.length_hint(w_iterable, 0)
         if length_hint:
-            w_list._resize_hint(w_list.length() + length_hint)
+            try:
+                newsize_hint = ovfcheck(w_list.length() + length_hint)
+            except OverflowError:
+                pass
+            else:
+                w_list._resize_hint(newsize_hint)
 
         extended = _do_extend_from_iterable(self.space, w_list, w_iterable)
 
@@ -867,6 +922,9 @@ class ListStrategy(object):
 
     def is_empty_strategy(self):
         return False
+
+    def physical_size(self, w_list):
+        raise oefmt(self.space.w_ValueError, "can't get physical size of list")
 
 
 class EmptyListStrategy(ListStrategy):
@@ -934,8 +992,8 @@ class EmptyListStrategy(ListStrategy):
             strategy = self.space.fromcache(IntegerListStrategy)
         elif type(w_item) is W_BytesObject:
             strategy = self.space.fromcache(BytesListStrategy)
-        elif type(w_item) is W_UnicodeObject:
-            strategy = self.space.fromcache(UnicodeListStrategy)
+        elif type(w_item) is W_UnicodeObject and w_item.is_ascii():
+            strategy = self.space.fromcache(AsciiListStrategy)
         elif type(w_item) is W_FloatObject:
             strategy = self.space.fromcache(FloatListStrategy)
         else:
@@ -965,6 +1023,14 @@ class EmptyListStrategy(ListStrategy):
 
     def setslice(self, w_list, start, step, slicelength, w_other):
         strategy = w_other.strategy
+        if step != 1:
+            len2 = strategy.length(w_other)
+            if len2 == 0:
+                return
+            else:
+                raise oefmt(self.space.w_ValueError,
+                            "attempt to assign sequence of size %d to extended "
+                            "slice of size %d", len2, 0)
         storage = strategy.getstorage_copy(w_other)
         w_list.strategy = strategy
         w_list.lstorage = storage
@@ -1005,9 +1071,9 @@ class EmptyListStrategy(ListStrategy):
             w_list.lstorage = strategy.erase(byteslist[:])
             return
 
-        unilist = space.listview_unicode(w_iterable)
+        unilist = space.listview_ascii(w_iterable)
         if unilist is not None:
-            w_list.strategy = strategy = space.fromcache(UnicodeListStrategy)
+            w_list.strategy = strategy = space.fromcache(AsciiListStrategy)
             # need to copy because intlist can share with w_iterable
             w_list.lstorage = strategy.erase(unilist[:])
             return
@@ -1019,6 +1085,9 @@ class EmptyListStrategy(ListStrategy):
 
     def is_empty_strategy(self):
         return True
+
+    def physical_size(self, w_list):
+        return 0
 
 
 class SizeListStrategy(EmptyListStrategy):
@@ -1042,7 +1111,7 @@ class BaseRangeListStrategy(ListStrategy):
         w_list.lstorage = strategy.erase(items)
 
     def wrap(self, intval):
-        return self.space.wrap(intval)
+        return self.space.newint(intval)
 
     def unwrap(self, w_int):
         return self.space.int_w(w_int)
@@ -1303,6 +1372,10 @@ class AbstractUnwrappedStrategy(object):
     def unwrap(self, wrapped):
         raise NotImplementedError
 
+    def _quick_cmp(self, a, b):
+        """ do a quick comparison between two unwrapped elements. """
+        raise NotImplementedError("abstract base class")
+
     @staticmethod
     def unerase(storage):
         raise NotImplementedError("abstract base class")
@@ -1367,15 +1440,29 @@ class AbstractUnwrappedStrategy(object):
             raise
         return self.wrap(r)
 
-    @jit.look_inside_iff(lambda self, w_list:
-            jit.loop_unrolling_heuristic(w_list, w_list.length(),
-                                         UNROLL_CUTOFF))
     def getitems_copy(self, w_list):
-        return [self.wrap(item) for item in self.unerase(w_list.lstorage)]
+        storage = self.unerase(w_list.lstorage)
+        if len(storage) == 0:
+            return []
+        res = [None] * len(storage)
+        prevvalue = storage[0]
+        w_item = self.wrap(prevvalue)
+        res[0] = w_item
+        for index in range(1, len(storage)):
+            item = storage[index]
+            if jit.we_are_jitted() or not self._quick_cmp(item, prevvalue):
+                prevvalue = item
+                w_item = self.wrap(item)
+            res[index] = w_item
+        return res
 
-    @jit.unroll_safe
-    def getitems_unroll(self, w_list):
-        return [self.wrap(item) for item in self.unerase(w_list.lstorage)]
+    getitems_unroll = jit.unroll_safe(
+            func_with_new_name(getitems_copy, "getitems_unroll"))
+
+    getitems_copy = jit.look_inside_iff(lambda self, w_list:
+            jit.loop_unrolling_heuristic(w_list, w_list.length(),
+                                         UNROLL_CUTOFF))(getitems_copy)
+
 
     @jit.look_inside_iff(lambda self, w_list:
             jit.loop_unrolling_heuristic(w_list, w_list.length(),
@@ -1459,14 +1546,15 @@ class AbstractUnwrappedStrategy(object):
 
     def setslice(self, w_list, start, step, slicelength, w_other):
         assert slicelength >= 0
+        space = self.space
 
-        if self is self.space.fromcache(ObjectListStrategy):
+        if self is space.fromcache(ObjectListStrategy):
             w_other = w_other._temporarily_as_objects()
         elif not self.list_is_correct_type(w_other) and w_other.length() != 0:
             w_list.switch_to_object_strategy()
             w_other_as_object = w_other._temporarily_as_objects()
             assert (w_other_as_object.strategy is
-                    self.space.fromcache(ObjectListStrategy))
+                    space.fromcache(ObjectListStrategy))
             w_list.setslice(start, step, slicelength, w_other_as_object)
             return
 
@@ -1492,7 +1580,7 @@ class AbstractUnwrappedStrategy(object):
                 assert start >= 0
                 del items[start:start + delta]
         elif len2 != slicelength:  # No resize for extended slices
-            raise oefmt(self.space.w_ValueError,
+            raise oefmt(space.w_ValueError,
                         "attempt to assign sequence of size %d to extended "
                         "slice of size %d", len2, slicelength)
 
@@ -1515,8 +1603,9 @@ class AbstractUnwrappedStrategy(object):
                     i -= 1
                 return
             else:
-                # Make a shallow copy to more easily handle the reversal case
-                w_list.reverse()
+                # other_items is items and step is < 0, therefore:
+                assert step == -1
+                items.reverse()
                 return
                 #other_items = list(other_items)
         for i in range(len2):
@@ -1585,6 +1674,11 @@ class AbstractUnwrappedStrategy(object):
     def reverse(self, w_list):
         self.unerase(w_list.lstorage).reverse()
 
+    def physical_size(self, w_list):
+        from rpython.rlib.objectmodel import list_get_physical_size
+        l = self.unerase(w_list.lstorage)
+        return list_get_physical_size(l)
+
 
 class ObjectListStrategy(ListStrategy):
     import_from_mixin(AbstractUnwrappedStrategy)
@@ -1597,9 +1691,24 @@ class ObjectListStrategy(ListStrategy):
     def wrap(self, item):
         return item
 
+    def _quick_cmp(self, a, b):
+        return a is b
+
     erase, unerase = rerased.new_erasing_pair("object")
     erase = staticmethod(erase)
     unerase = staticmethod(unerase)
+
+    @jit.look_inside_iff(lambda self, w_list:
+            jit.loop_unrolling_heuristic(w_list, w_list.length(),
+                                         UNROLL_CUTOFF))
+    def getitems_copy(self, w_list):
+        storage = self.unerase(w_list.lstorage)
+        return storage[:]
+
+    @jit.unroll_safe
+    def getitems_unroll(self, w_list):
+        storage = self.unerase(w_list.lstorage)
+        return storage[:]
 
     def is_correct_type(self, w_obj):
         return True
@@ -1629,10 +1738,13 @@ class IntegerListStrategy(ListStrategy):
     _none_value = 0
 
     def wrap(self, intval):
-        return self.space.wrap(intval)
+        return self.space.newint(intval)
 
     def unwrap(self, w_int):
         return self.space.int_w(w_int)
+
+    def _quick_cmp(self, a, b):
+        return a == b
 
     erase, unerase = rerased.new_erasing_pair("integer")
     erase = staticmethod(erase)
@@ -1725,7 +1837,7 @@ class FloatListStrategy(ListStrategy):
     _none_value = 0.0
 
     def wrap(self, floatval):
-        return self.space.wrap(floatval)
+        return self.space.newfloat(floatval)
 
     def unwrap(self, w_float):
         return self.space.float_w(w_float)
@@ -1733,6 +1845,9 @@ class FloatListStrategy(ListStrategy):
     erase, unerase = rerased.new_erasing_pair("float")
     erase = staticmethod(erase)
     unerase = staticmethod(unerase)
+
+    def _quick_cmp(self, a, b):
+        return longlong2float.float2longlong(a) == longlong2float.float2longlong(b)
 
     def is_correct_type(self, w_obj):
         return type(w_obj) is W_FloatObject
@@ -1777,11 +1892,9 @@ class FloatListStrategy(ListStrategy):
 
 
     def _safe_find(self, w_list, obj, start, stop):
-        from rpython.rlib.rfloat import isnan
-        #
         l = self.unerase(w_list.lstorage)
         stop = min(stop, len(l))
-        if not isnan(obj):
+        if not math.isnan(obj):
             for i in range(start, stop):
                 val = l[i]
                 if val == obj:
@@ -1836,10 +1949,10 @@ class IntOrFloatListStrategy(ListStrategy):
     def wrap(self, llval):
         if longlong2float.is_int32_from_longlong_nan(llval):
             intval = longlong2float.decode_int32_from_longlong_nan(llval)
-            return self.space.wrap(intval)
+            return self.space.newint(intval)
         else:
             floatval = longlong2float.longlong2float(llval)
-            return self.space.wrap(floatval)
+            return self.space.newfloat(floatval)
 
     def unwrap(self, w_int_or_float):
         if type(w_int_or_float) is W_IntObject:
@@ -1848,6 +1961,9 @@ class IntOrFloatListStrategy(ListStrategy):
         else:
             floatval = self.space.float_w(w_int_or_float)
             return longlong2float.float2longlong(floatval)
+
+    def _quick_cmp(self, a, b):
+        return a == b
 
     erase, unerase = rerased.new_erasing_pair("longlong")
     erase = staticmethod(erase)
@@ -1941,13 +2057,16 @@ class IntOrFloatListStrategy(ListStrategy):
 class BytesListStrategy(ListStrategy):
     import_from_mixin(AbstractUnwrappedStrategy)
 
-    _none_value = None
+    _none_value = ""
 
     def wrap(self, stringval):
-        return self.space.wrap(stringval)
+        return self.space.newbytes(stringval)
 
     def unwrap(self, w_string):
-        return self.space.str_w(w_string)
+        return self.space.bytes_w(w_string)
+
+    def _quick_cmp(self, a, b):
+        return a is b
 
     erase, unerase = rerased.new_erasing_pair("bytes")
     erase = staticmethod(erase)
@@ -1970,35 +2089,39 @@ class BytesListStrategy(ListStrategy):
         return self.unerase(w_list.lstorage)
 
 
-class UnicodeListStrategy(ListStrategy):
+class AsciiListStrategy(ListStrategy):
     import_from_mixin(AbstractUnwrappedStrategy)
 
-    _none_value = None
+    _none_value = ""
 
     def wrap(self, stringval):
-        return self.space.wrap(stringval)
+        assert stringval is not None
+        return self.space.newutf8(stringval, len(stringval))
 
     def unwrap(self, w_string):
-        return self.space.unicode_w(w_string)
+        return self.space.utf8_w(w_string)
+
+    def _quick_cmp(self, a, b):
+        return a is b
 
     erase, unerase = rerased.new_erasing_pair("unicode")
     erase = staticmethod(erase)
     unerase = staticmethod(unerase)
 
     def is_correct_type(self, w_obj):
-        return type(w_obj) is W_UnicodeObject
+        return type(w_obj) is W_UnicodeObject and w_obj.is_ascii()
 
     def list_is_correct_type(self, w_list):
-        return w_list.strategy is self.space.fromcache(UnicodeListStrategy)
+        return w_list.strategy is self.space.fromcache(AsciiListStrategy)
 
     def sort(self, w_list, reverse):
         l = self.unerase(w_list.lstorage)
-        sorter = UnicodeSort(l, len(l))
+        sorter = StringSort(l, len(l))
         sorter.sort()
         if reverse:
             l.reverse()
 
-    def getitems_unicode(self, w_list):
+    def getitems_ascii(self, w_list):
         return self.unerase(w_list.lstorage)
 
 # _______________________________________________________
@@ -2009,15 +2132,14 @@ init_defaults = [None]
 app = applevel("""
     def listrepr(currently_in_repr, l):
         'The app-level part of repr().'
-        list_id = id(l)
-        if list_id in currently_in_repr:
+        if l in currently_in_repr:
             return '[...]'
-        currently_in_repr[list_id] = 1
+        currently_in_repr[l] = 1
         try:
             return "[" + ", ".join([repr(x) for x in l]) + ']'
         finally:
             try:
-                del currently_in_repr[list_id]
+                del currently_in_repr[l]
             except:
                 pass
 """, filename=__file__)
@@ -2034,8 +2156,6 @@ TimSort = make_timsort_class()
 IntBaseTimSort = make_timsort_class()
 FloatBaseTimSort = make_timsort_class()
 IntOrFloatBaseTimSort = make_timsort_class()
-StringBaseTimSort = make_timsort_class()
-UnicodeBaseTimSort = make_timsort_class()
 
 
 class KeyContainer(W_Root):
@@ -2071,16 +2191,6 @@ class IntOrFloatSort(IntOrFloatBaseTimSort):
         return fa < fb
 
 
-class StringSort(StringBaseTimSort):
-    def lt(self, a, b):
-        return a < b
-
-
-class UnicodeSort(UnicodeBaseTimSort):
-    def lt(self, a, b):
-        return a < b
-
-
 class CustomCompareSort(SimpleSort):
     def lt(self, a, b):
         space = self.space
@@ -2088,10 +2198,10 @@ class CustomCompareSort(SimpleSort):
         w_result = space.call_function(w_cmp, a, b)
         try:
             result = space.int_w(w_result)
-        except OperationError, e:
+        except OperationError as e:
             if e.match(space, space.w_TypeError):
-                raise OperationError(space.w_TypeError,
-                    space.wrap("comparison function must return int"))
+                raise oefmt(space.w_TypeError,
+                            "comparison function must return int")
             raise
         return result < 0
 

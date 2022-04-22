@@ -138,7 +138,7 @@ class URLopener:
         self.key_file = x509.get('key_file')
         self.cert_file = x509.get('cert_file')
         self.context = context
-        self.addheaders = [('User-Agent', self.version)]
+        self.addheaders = [('User-Agent', self.version), ('Accept', '*/*')]
         self.__tempfiles = []
         self.__unlink = os.unlink # See cleanup()
         self.tempcache = None
@@ -203,7 +203,9 @@ class URLopener:
         name = 'open_' + urltype
         self.type = urltype
         name = name.replace('-', '_')
-        if not hasattr(self, name):
+
+        # bpo-35907: disallow the file reading with the type not allowed
+        if not hasattr(self, name) or name == 'open_local_file':
             if proxy:
                 return self.open_unknown_proxy(proxy, fullurl, data)
             else:
@@ -629,18 +631,20 @@ class FancyURLopener(URLopener):
     def http_error_302(self, url, fp, errcode, errmsg, headers, data=None):
         """Error 302 -- relocated (temporarily)."""
         self.tries += 1
-        if self.maxtries and self.tries >= self.maxtries:
-            if hasattr(self, "http_error_500"):
-                meth = self.http_error_500
-            else:
-                meth = self.http_error_default
+        try:
+            if self.maxtries and self.tries >= self.maxtries:
+                if hasattr(self, "http_error_500"):
+                    meth = self.http_error_500
+                else:
+                    meth = self.http_error_default
+                return meth(url, fp, 500,
+                            "Internal Server Error: Redirect Recursion",
+                            headers)
+            result = self.redirect_internal(url, fp, errcode, errmsg,
+                                            headers, data)
+            return result
+        finally:
             self.tries = 0
-            return meth(url, fp, 500,
-                        "Internal Server Error: Redirect Recursion", headers)
-        result = self.redirect_internal(url, fp, errcode, errmsg, headers,
-                                        data)
-        self.tries = 0
-        return result
 
     def redirect_internal(self, url, fp, errcode, errmsg, headers, data):
         if 'location' in headers:
@@ -1097,8 +1101,7 @@ def splithost(url):
     """splithost('//host[:port]/path') --> 'host[:port]', '/path'."""
     global _hostprog
     if _hostprog is None:
-        import re
-        _hostprog = re.compile('^//([^/?]*)(.*)$')
+        _hostprog = re.compile('//([^/#?]*)(.*)', re.DOTALL)
 
     match = _hostprog.match(url)
     if match:
@@ -1241,8 +1244,7 @@ def unquote(s):
         return s
     res = [bits[0]]
     append = res.append
-    for j in xrange(1, len(bits)):
-        item = bits[j]
+    for item in bits[1:]:
         try:
             append(_hextochr[item[:2]])
             append(item[2:])
@@ -1378,25 +1380,51 @@ def getproxies_environment():
     """Return a dictionary of scheme -> proxy server URL mappings.
 
     Scan the environment for variables named <scheme>_proxy;
-    this seems to be the standard convention.  If you need a
-    different way, you can pass a proxies dictionary to the
-    [Fancy]URLopener constructor.
+    this seems to be the standard convention.  In order to prefer lowercase
+    variables, we process the environment in two passes, first matches any
+    and second matches only lower case proxies.
 
+    If you need a different way, you can pass a proxies dictionary to the
+    [Fancy]URLopener constructor.
     """
+    # Get all variables
     proxies = {}
     for name, value in os.environ.items():
         name = name.lower()
         if value and name[-6:] == '_proxy':
             proxies[name[:-6]] = value
+
+    # CVE-2016-1000110 - If we are running as CGI script, forget HTTP_PROXY
+    # (non-all-lowercase) as it may be set from the web server by a "Proxy:"
+    # header from the client
+    # If "proxy" is lowercase, it will still be used thanks to the next block
+    if 'REQUEST_METHOD' in os.environ:
+        proxies.pop('http', None)
+
+    # Get lowercase variables
+    for name, value in os.environ.items():
+        if name[-6:] == '_proxy':
+            name = name.lower()
+            if value:
+                proxies[name[:-6]] = value
+            else:
+                proxies.pop(name[:-6], None)
+
     return proxies
 
-def proxy_bypass_environment(host):
+def proxy_bypass_environment(host, proxies=None):
     """Test if proxies should not be used for a particular host.
 
-    Checks the environment for a variable named no_proxy, which should
-    be a list of DNS suffixes separated by commas, or '*' for all hosts.
+    Checks the proxies dict for the value of no_proxy, which should be a
+    list of comma separated DNS suffixes, or '*' for all hosts.
     """
-    no_proxy = os.environ.get('no_proxy', '') or os.environ.get('NO_PROXY', '')
+    if proxies is None:
+        proxies = getproxies_environment()
+    # don't bypass, if no_proxy isn't specified
+    try:
+        no_proxy = proxies['no']
+    except KeyError:
+        return 0
     # '*' is special case for always bypass
     if no_proxy == '*':
         return 1
@@ -1405,8 +1433,13 @@ def proxy_bypass_environment(host):
     # check if the host ends with any of the DNS suffixes
     no_proxy_list = [proxy.strip() for proxy in no_proxy.split(',')]
     for name in no_proxy_list:
-        if name and (hostonly.endswith(name) or host.endswith(name)):
-            return 1
+        if name:
+            name = name.lstrip('.')  # ignore leading dots
+            name = re.escape(name)
+            pattern = r'(.+\.)?%s$' % name
+            if (re.match(pattern, hostonly, re.I)
+                    or re.match(pattern, host, re.I)):
+                return 1
     # otherwise, don't bypass
     return 0
 
@@ -1482,8 +1515,14 @@ if sys.platform == 'darwin':
         return _get_proxies()
 
     def proxy_bypass(host):
-        if getproxies_environment():
-            return proxy_bypass_environment(host)
+        """Return True, if a host should be bypassed.
+
+        Checks proxy settings gathered from the environment, if specified, or
+        from the MacOSX framework SystemConfiguration.
+        """
+        proxies = getproxies_environment()
+        if proxies:
+            return proxy_bypass_environment(host, proxies)
         else:
             return proxy_bypass_macosx_sysconf(host)
 
@@ -1599,14 +1638,14 @@ elif os.name == 'nt':
         return 0
 
     def proxy_bypass(host):
-        """Return a dictionary of scheme -> proxy server URL mappings.
+        """Return True, if the host should be bypassed.
 
-        Returns settings gathered from the environment, if specified,
+        Checks proxy settings gathered from the environment, if specified,
         or the registry.
-
         """
-        if getproxies_environment():
-            return proxy_bypass_environment(host)
+        proxies = getproxies_environment()
+        if proxies:
+            return proxy_bypass_environment(host, proxies)
         else:
             return proxy_bypass_registry(host)
 

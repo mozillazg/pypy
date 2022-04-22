@@ -155,6 +155,9 @@ class DebuggingServerTests(unittest.TestCase):
         self._threads = test_support.threading_setup()
         self.serv_evt = threading.Event()
         self.client_evt = threading.Event()
+        # Capture SMTPChannel debug output
+        self.old_DEBUGSTREAM = smtpd.DEBUGSTREAM
+        smtpd.DEBUGSTREAM = StringIO.StringIO()
         # Pick a random unused port by passing 0 for the port number
         self.serv = smtpd.DebuggingServer((HOST, 0), ('nowhere', -1))
         # Keep a note of what port was assigned
@@ -176,34 +179,48 @@ class DebuggingServerTests(unittest.TestCase):
         test_support.threading_cleanup(*self._threads)
         # restore sys.stdout
         sys.stdout = self.old_stdout
+        # restore DEBUGSTREAM
+        smtpd.DEBUGSTREAM.close()
+        smtpd.DEBUGSTREAM = self.old_DEBUGSTREAM
 
     def testBasic(self):
         # connect
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         smtp.quit()
 
     def testNOOP(self):
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         expected = (250, 'Ok')
         self.assertEqual(smtp.noop(), expected)
         smtp.quit()
 
     def testRSET(self):
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         expected = (250, 'Ok')
         self.assertEqual(smtp.rset(), expected)
         smtp.quit()
 
     def testNotImplemented(self):
         # EHLO isn't implemented in DebuggingServer
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         expected = (502, 'Error: command "EHLO" not implemented')
         self.assertEqual(smtp.ehlo(), expected)
         smtp.quit()
 
+
+    def test_issue43124_putcmd_escapes_newline(self):
+        # see: https://bugs.python.org/issue43124
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost',
+                            timeout=10)  # support.LOOPBACK_TIMEOUT in newer Pythons
+        self.addCleanup(smtp.close)
+        with self.assertRaises(ValueError) as exc:
+            smtp.putcmd('helo\nX-INJECTED')
+        self.assertIn("prohibited newline characters", str(exc.exception))
+        smtp.quit()
+
     def testVRFY(self):
         # VRFY isn't implemented in DebuggingServer
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         expected = (502, 'Error: command "VRFY" not implemented')
         self.assertEqual(smtp.vrfy('nobody@nowhere.com'), expected)
         self.assertEqual(smtp.verify('nobody@nowhere.com'), expected)
@@ -212,21 +229,21 @@ class DebuggingServerTests(unittest.TestCase):
     def testSecondHELO(self):
         # check that a second HELO returns a message that it's a duplicate
         # (this behavior is specific to smtpd.SMTPChannel)
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         smtp.helo()
         expected = (503, 'Duplicate HELO/EHLO')
         self.assertEqual(smtp.helo(), expected)
         smtp.quit()
 
     def testHELP(self):
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         self.assertEqual(smtp.help(), 'Error: command "HELP" not implemented')
         smtp.quit()
 
     def testSend(self):
         # connect and send mail
         m = 'A test message'
-        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=3)
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='localhost', timeout=15)
         smtp.sendmail('John', 'Sally', m)
         # XXX(nnorwitz): this test is flaky and dies with a bad file descriptor
         # in asyncore.  This sleep might help, but should really be fixed
@@ -239,6 +256,54 @@ class DebuggingServerTests(unittest.TestCase):
         self.output.flush()
         mexpect = '%s%s\n%s' % (MSG_BEGIN, m, MSG_END)
         self.assertEqual(self.output.getvalue(), mexpect)
+
+    def test_issue43124_escape_localhostname(self):
+        # see: https://bugs.python.org/issue43124
+        # connect and send mail
+        m = 'wazzuuup\nlinetwo'
+        smtp = smtplib.SMTP(HOST, self.port, local_hostname='hi\nX-INJECTED',
+                            timeout=10)  # support.LOOPBACK_TIMEOUT in newer Pythons
+        self.addCleanup(smtp.close)
+        with self.assertRaises(ValueError) as exc:
+            smtp.sendmail("hi@me.com", "you@me.com", m)
+        self.assertIn(
+            "prohibited newline characters: ehlo hi\\nX-INJECTED",
+            str(exc.exception),
+        )
+        # XXX (see comment in testSend)
+        time.sleep(0.01)
+        smtp.quit()
+
+        debugout = smtpd.DEBUGSTREAM.getvalue()
+        self.assertNotIn("X-INJECTED", debugout)
+
+    def test_issue43124_escape_options(self):
+        # see: https://bugs.python.org/issue43124
+        # connect and send mail
+        m = 'wazzuuup\nlinetwo'
+        smtp = smtplib.SMTP(
+            HOST, self.port, local_hostname='localhost',
+            timeout=10)  # support.LOOPBACK_TIMEOUT in newer Pythons
+
+        self.addCleanup(smtp.close)
+        smtp.sendmail("hi@me.com", "you@me.com", m)
+        # NB: gross hack but still cleaner than backporting whole ESMTP
+        # support to DebuggingServer
+        smtp.does_esmtp = 1
+        with self.assertRaises(ValueError) as exc:
+            smtp.mail("hi@me.com", ["X-OPTION\nX-INJECTED-1", "X-OPTION2\nX-INJECTED-2"])
+        msg = str(exc.exception)
+        self.assertIn("prohibited newline characters", msg)
+        self.assertIn("X-OPTION\\nX-INJECTED-1 X-OPTION2\\nX-INJECTED-2", msg)
+        # XXX (see comment in testSend)
+        time.sleep(0.01)
+        smtp.quit()
+
+        debugout = smtpd.DEBUGSTREAM.getvalue()
+        self.assertNotIn("X-OPTION", debugout)
+        self.assertNotIn("X-OPTION2", debugout)
+        self.assertNotIn("X-INJECTED-1", debugout)
+        self.assertNotIn("X-INJECTED-2", debugout)
 
 
 class NonConnectingTests(unittest.TestCase):
@@ -306,12 +371,14 @@ class TooLongLineTests(unittest.TestCase):
         self.sock.settimeout(15)
         self.port = test_support.bind_port(self.sock)
         servargs = (self.evt, self.respdata, self.sock)
-        threading.Thread(target=server, args=servargs).start()
+        self.thread = threading.Thread(target=server, args=servargs)
+        self.thread.start()
         self.evt.wait()
         self.evt.clear()
 
     def tearDown(self):
         self.evt.wait()
+        self.thread.join()
         sys.stdout = self.old_stdout
 
     def testLineTooLong(self):

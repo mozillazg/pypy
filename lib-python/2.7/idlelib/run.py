@@ -1,5 +1,4 @@
 import sys
-import io
 import linecache
 import time
 import socket
@@ -156,6 +155,7 @@ def show_socket_error(err, address):
     import Tkinter
     import tkMessageBox
     root = Tkinter.Tk()
+    fix_scaling(root)
     root.withdraw()
     if err.args[0] == 61: # connection refused
         msg = "IDLE's subprocess can't connect to %s:%d.  This may be due "\
@@ -165,7 +165,7 @@ def show_socket_error(err, address):
         tkMessageBox.showerror("IDLE Subprocess Error", msg, parent=root)
     else:
         tkMessageBox.showerror("IDLE Subprocess Error",
-                               "Socket Error: %s" % err.args[1])
+                               "Socket Error: %s" % err.args[1], parent=root)
     root.destroy()
 
 def print_exception():
@@ -211,6 +211,8 @@ def cleanup_traceback(tb, exclude):
         fn, ln, nm, line = tb[i]
         if nm == '?':
             nm = "-toplevel-"
+        if fn.startswith("<pyshell#") and IOBinding.encoding != 'utf-8':
+            ln -= 1  # correction for coding cookie
         if not line and fn.startswith("<pyshell#"):
             line = rpchandler.remotecall('linecache', 'getline',
                                               (fn, ln), {})
@@ -238,6 +240,19 @@ def exit():
             pass
     capture_warnings(False)
     sys.exit(0)
+
+
+def fix_scaling(root):
+    """Scale fonts on HiDPI displays."""
+    import tkFont
+    scaling = float(root.tk.call('tk', 'scaling'))
+    if scaling > 1.4:
+        for name in tkFont.names(root):
+            font = tkFont.Font(root=root, name=name, exists=True)
+            size = int(font['size'])
+            if size < 0:
+                font['size'] = int(round(-0.75*size))
+
 
 class MyRPCServer(rpc.RPCServer):
 

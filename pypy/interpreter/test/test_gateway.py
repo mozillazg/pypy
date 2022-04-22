@@ -4,6 +4,7 @@ from __future__ import division, print_function  # for test_app2interp_future
 from pypy.interpreter import gateway, argument
 from pypy.interpreter.gateway import ObjSpace, W_Root, WrappedDefault
 from pypy.interpreter.signature import Signature
+from pypy.interpreter.error import OperationError
 import py
 import sys
 
@@ -158,6 +159,9 @@ class TestGateway:
             def method_with_unwrap_spec(self, space, x):
                 pass
 
+            def method_with_args(self, space, __args__):
+                pass
+
         class A(BaseA):
             def method(self, space, x):
                 return space.wrap(x + 2)
@@ -168,6 +172,9 @@ class TestGateway:
             def method_with_unwrap_spec(self, space, x):
                 return space.wrap(x + 2)
 
+            def method_with_args(self, space, __args__):
+                return space.wrap(42)
+
         class B(BaseA):
             def method(self, space, x):
                 return space.wrap(x + 1)
@@ -177,6 +184,9 @@ class TestGateway:
 
             def method_with_unwrap_spec(self, space, x):
                 return space.wrap(x + 1)
+
+            def method_with_args(self, space, __args__):
+                return space.wrap(43)
 
         class FakeTypeDef(object):
             rawdict = {}
@@ -210,6 +220,17 @@ class TestGateway:
             BaseA.method_with_unwrap_spec)
         w_e = space.wrap(meth_with_unwrap_spec)
         assert space.int_w(space.call_function(w_e, w_a, space.wrap(4))) == 4 + 2
+
+        meth_with_args = gateway.interpindirect2app(
+            BaseA.method_with_args)
+        w_f = space.wrap(meth_with_args)
+        assert space.int_w(space.call_function(w_f, w_a)) == 42
+        assert space.int_w(space.call_function(w_f, w_b,
+                                        space.wrap("ignored"))) == 43
+        # check that the optimization works even though we are using
+        # interpindirect2app:
+        assert isinstance(meth_with_args._code,
+                          gateway.BuiltinCodePassThroughArguments1)
 
     def test_interp2app_unwrap_spec(self):
         space = self.space
@@ -247,6 +268,31 @@ class TestGateway:
         w_app_g = space.wrap(app_g)
         assert self.space.eq_w(space.call_function(w_app_g, space.wrap(True)),
                                space.wrap(True))
+
+    def test_interp2app_unwrap_spec_bytes(self):
+        # we can't use the "bytes" object for the unwrap_spec, because that's
+        # an alias for "str" on the underlying Python2
+        space = self.space
+        def g(space, b):
+            return space.newbytes(b)
+        app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, 'bytes'])
+        app_g2 = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, 'bytes'])
+        assert app_g is app_g2
+        w_app_g = space.wrap(app_g)
+        assert self.space.eq_w(space.call_function(w_app_g, space.newbytes("abc")),
+                               space.newbytes("abc"))
+
+    def test_interp2app_unwrap_spec_text(self):
+        space = self.space
+        def g(space, b):
+            assert isinstance(b, str)
+            return space.newtext(b)
+        app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, 'text'])
+        app_g2 = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, 'text'])
+        assert app_g is app_g2
+        w_app_g = space.wrap(app_g)
+        assert self.space.eq_w(space.call_function(w_app_g, space.newtext("abc")),
+                               space.newtext("abc"))
 
     def test_caching_methods(self):
         class Base(gateway.W_Root):
@@ -351,7 +397,7 @@ class TestGateway:
             return space.wrap(s0+s1)
         app_g3_ss = gateway.interp2app_temp(g3_ss,
                                          unwrap_spec=[gateway.ObjSpace,
-                                                      str, 'str_or_None'])
+                                                      'text', 'text_or_none'])
         w_app_g3_ss = space.wrap(app_g3_ss)
         assert self.space.eq_w(
             space.call(w_app_g3_ss,
@@ -486,7 +532,7 @@ class TestGateway:
 
         app_g3_s = gateway.interp2app_temp(g3_id,
                                          unwrap_spec=[gateway.ObjSpace,
-                                                      str])
+                                                      'text'])
         w_app_g3_s = space.wrap(app_g3_s)
         assert space.eq_w(space.call_function(w_app_g3_s,w("foo")),w("foo"))
         raises(gateway.OperationError,space.call_function,w_app_g3_s,w(None))
@@ -509,25 +555,33 @@ class TestGateway:
         w_app_g3_r = space.wrap(app_g3_r)
         raises(gateway.OperationError,space.call_function,w_app_g3_r,w(1.0))
 
-    def test_interp2app_unwrap_spec_unicode(self):
+    def test_interp2app_unwrap_spec_utf8(self):
         space = self.space
         w = space.wrap
-        def g3_u(space, uni):
-            return space.wrap(len(uni))
+        def g3_u(space, utf8):
+            return space.wrap(utf8)
         app_g3_u = gateway.interp2app_temp(g3_u,
                                          unwrap_spec=[gateway.ObjSpace,
-                                                      unicode])
+                                                      'utf8'])
         w_app_g3_u = space.wrap(app_g3_u)
+        encoded = u"gęść".encode('utf8')
         assert self.space.eq_w(
-            space.call_function(w_app_g3_u, w(u"foo")),
-            w(3))
+            space.call_function(w_app_g3_u, w(u"gęść")),
+            w(encoded))
         assert self.space.eq_w(
-            space.call_function(w_app_g3_u, w("baz")),
-            w(3))
+            space.call_function(w_app_g3_u, w("foo")),
+            w("foo"))
         raises(gateway.OperationError, space.call_function, w_app_g3_u,
                w(None))
         raises(gateway.OperationError, space.call_function, w_app_g3_u,
                w(42))
+        # XXX this part of the test seems wrong, why would "\x80" fail?
+        # w_ascii = space.appexec([], """():
+        #     import sys
+        #     return sys.getdefaultencoding() == 'ascii'""")
+        # if space.is_true(w_ascii):
+        #     raises(gateway.OperationError, space.call_function, w_app_g3_u,
+        #            w("\x80"))
 
     def test_interp2app_unwrap_spec_unwrapper(self):
         space = self.space
@@ -550,7 +604,7 @@ class TestGateway:
         space = self.space
         w = space.wrap
         def g_run(space, w_type):
-            assert space.is_w(w_type, space.w_str)
+            assert space.is_w(w_type, space.w_text)
             return w(42)
 
         app_g_run = gateway.interp2app_temp(g_run,
@@ -558,7 +612,7 @@ class TestGateway:
                                                          gateway.W_Root],
                                             as_classmethod=True)
         w_app_g_run = space.wrap(app_g_run)
-        w_bound = space.get(w_app_g_run, w("hello"), space.w_str)
+        w_bound = space.get(w_app_g_run, w("hello"), space.w_text)
         assert space.eq_w(space.call_function(w_bound), w(42))
 
     def test_interp2app_fastcall(self):
@@ -771,6 +825,42 @@ class TestGateway:
         w_g = space.wrap(gateway.interp2app_temp(g, doc='bar'))
         assert space.unwrap(space.getattr(w_g, space.wrap('__doc__'))) == 'bar'
 
+    def test_system_error(self):
+        py.test.skip("we don't wrap a random exception inside SystemError "
+                     "when untranslated, because it makes testing harder")
+        class UnexpectedException(Exception):
+            pass
+        space = self.space
+        def g(space):
+            raise UnexpectedException
+        w_g = space.wrap(gateway.interp2app_temp(g))
+        e = py.test.raises(OperationError, space.appexec, [w_g], """(my_g):
+            my_g()
+        """)
+        err = str(e.value)
+        assert 'SystemError' in err
+        assert ('unexpected internal exception (please '
+                'report a bug): UnexpectedException') in err
+
+    def test_system_error_2(self):
+        py.test.skip("we don't wrap a random exception inside SystemError "
+                     "when untranslated, because it makes testing harder")
+        class UnexpectedException(Exception):
+            pass
+        space = self.space
+        def g(space):
+            raise UnexpectedException
+        w_g = space.wrap(gateway.interp2app_temp(g))
+        w_msg = space.appexec([w_g], """(my_g):
+            try:
+                my_g()
+            except SystemError as e:
+                return str(e)
+        """)
+        err = space.str_w(w_msg)
+        assert ('unexpected internal exception (please '
+                'report a bug): UnexpectedException') in err
+
 
 class AppTestPyTestMark:
     @py.test.mark.unlikely_to_exist
@@ -896,6 +986,29 @@ y = a.m(33)
         # white-box check for opt
         assert called[0] is args
 
+    def test_base_regular_descr_mismatch(self):
+        space = self.space
+
+        def f():
+            raise gateway.DescrMismatch
+
+        w_f = space.wrap(gateway.interp2app_temp(f,
+                         unwrap_spec=[]))
+        args = argument.Arguments(space, [])
+        space.raises_w(space.w_SystemError, space.call_args, w_f, args)
+
+    def test_pass_trough_arguments0_descr_mismatch(self):
+        space = self.space
+
+        def f(space, __args__):
+            raise gateway.DescrMismatch
+
+        w_f = space.wrap(gateway.interp2app_temp(f,
+                         unwrap_spec=[gateway.ObjSpace,
+                                      gateway.Arguments]))
+        args = argument.Arguments(space, [])
+        space.raises_w(space.w_SystemError, space.call_args, w_f, args)
+
 
 class AppTestKeywordsToBuiltinSanity(object):
     def test_type(self):
@@ -935,3 +1048,19 @@ class AppTestKeywordsToBuiltinSanity(object):
 
         d.update(**{clash: 33})
         dict.update(d, **{clash: 33})
+
+
+
+class AppTestFastPathCrash(object):
+    def test_fast_path_crash(self):
+        # issue bb-3091 crash in BuiltinCodePassThroughArguments0.funcrun
+        import sys
+        if '__pypy__' in sys.modules:
+            msg_fmt = "%s instance as first argument (got %s"
+        else:
+            msg_fmt = "'%s' object but received a '%s'"
+        for obj in (dict, set):
+            with raises(TypeError) as excinfo:
+                obj.__init__(0)
+            msg = msg_fmt % (obj.__name__, 'int')
+            assert msg in str(excinfo.value)

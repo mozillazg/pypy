@@ -2,6 +2,9 @@
  pypy
 ======
 
+.. note: this is turned into a regular man page "pypy.1" by
+   doing "make man" in pypy/doc/
+
 SYNOPSIS
 ========
 
@@ -48,6 +51,10 @@ OPTIONS
 -B
     Disable writing bytecode (``.pyc``) files.
 
+-X track-resources
+    Produce a ``ResourceWarning`` whenever a file or socket is closed by the
+    garbage collector.
+
 --version
     Print the PyPy version.
 
@@ -92,6 +99,8 @@ ENVIRONMENT
     If set, equivalent to the ``-W`` option (warning control).
     The value should be a comma-separated list of ``-W`` parameters.
 
+.. _pypylog:
+
 ``PYPYLOG``
     If set to a non-empty value, enable logging, the format is:
 
@@ -120,7 +129,7 @@ ENVIRONMENT
 
 
 .. include:: ../gc_info.rst
-   :start-line: 7
+   :start-line: 305
 
 SEE ALSO
 ========

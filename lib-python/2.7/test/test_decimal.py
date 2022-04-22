@@ -16,7 +16,7 @@ test the pythonic behaviour according to PEP 327.
 
 Cowlishaw's tests can be downloaded from:
 
-   www2.hursley.ibm.com/decimal/dectest.zip
+   http://speleotrove.com/decimal/dectest.zip
 
 This test module can be called from command line with one parameter (Arithmetic
 or Behaviour) to test each part, or without parameter to test both parts. If
@@ -914,10 +914,10 @@ class DecimalFormatTest(unittest.TestCase):
         decimal_point = locale.localeconv()['decimal_point']
         thousands_sep = locale.localeconv()['thousands_sep']
         if decimal_point != '\xd9\xab':
-            self.skipTest('inappropriate decimal point separator'
+            self.skipTest('inappropriate decimal point separator '
                           '({!r} not {!r})'.format(decimal_point, '\xd9\xab'))
         if thousands_sep != '\xd9\xac':
-            self.skipTest('inappropriate thousands separator'
+            self.skipTest('inappropriate thousands separator '
                           '({!r} not {!r})'.format(thousands_sep, '\xd9\xac'))
 
         self.assertEqual(format(Decimal('100000000.123'), 'n'),

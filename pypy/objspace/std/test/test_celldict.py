@@ -124,7 +124,6 @@ class TestCellDict(object):
 
 
 class AppTestModuleDict(object):
-    spaceconfig = {"objspace.std.withcelldict": True}
 
     def setup_class(cls):
         cls.w_runappdirect = cls.space.wrap(cls.runappdirect)
@@ -171,6 +170,16 @@ class AppTestModuleDict(object):
         assert "s" not in d
         assert F() not in d
 
+    def test_copy(self):
+        m = type(__builtins__)("abc")
+        m.s = 12
+        m.s = 123 # int cell
+        m.x = object
+        d = m.__dict__
+        d["s"] = 12
+        d1 = d.copy()
+        assert d1 == {"__name__": "abc", "__doc__": None, "s": 12, "x": object}
+
 
 class TestModuleDictImplementation(BaseTestRDictImplementation):
     StrategyClass = ModuleDictStrategy
@@ -182,7 +191,6 @@ class TestDevolvedModuleDictImplementation(BaseTestDevolvedDictImplementation):
 
 
 class AppTestCellDict(object):
-    spaceconfig = {"objspace.std.withcelldict": True}
 
     def setup_class(cls):
         if cls.runappdirect:

@@ -307,10 +307,27 @@ class SystemRandom_TestBasicOps(TestBasicOps):
 class MersenneTwister_TestBasicOps(TestBasicOps):
     gen = random.Random()
 
+    @test_support.cpython_only
+    def test_bug_31478(self):
+        # _random.Random.seed() should ignore the __abs__() method of a
+        # long/int subclass argument.
+        class BadInt(int):
+            def __abs__(self):
+                1/0.0
+        class BadLong(long):
+            def __abs__(self):
+                1/0.0
+        self.gen.seed(42)
+        expected_value = self.gen.random()
+        for seed_arg in [42L, BadInt(42), BadLong(42)]:
+            self.gen.seed(seed_arg)
+            self.assertEqual(self.gen.random(), expected_value)
+
     def test_setstate_first_arg(self):
         self.assertRaises(ValueError, self.gen.setstate, (1, None, None))
 
     def test_setstate_middle_arg(self):
+        start_state = self.gen.getstate()
         # Wrong type, s/b tuple
         self.assertRaises(TypeError, self.gen.setstate, (2, None, None))
         # Wrong length, s/b 625
@@ -319,6 +336,15 @@ class MersenneTwister_TestBasicOps(TestBasicOps):
         self.assertRaises(TypeError, self.gen.setstate, (2, ('a',)*625, None))
         # Last element s/b an int also
         self.assertRaises(TypeError, self.gen.setstate, (2, (0,)*624+('a',), None))
+        # Last element s/b between 0 and 624
+        with self.assertRaises((ValueError, OverflowError)):
+            self.gen.setstate((2, (1,)*624+(625,), None))
+        with self.assertRaises((ValueError, OverflowError)):
+            self.gen.setstate((2, (1,)*624+(-1,), None))
+        # Failed calls to setstate() should not have changed the state.
+        bits100 = self.gen.getrandbits(100)
+        self.gen.setstate(start_state)
+        self.assertEqual(self.gen.getrandbits(100), bits100)
 
     def test_referenceImplementation(self):
         # Compare the python implementation with results from the original

@@ -1,10 +1,12 @@
 import py
+import pytest
 try:
     import _continuation
 except ImportError:
     py.test.skip("to run on top of a translated pypy-c")
 
 import sys, random
+from rpython.tool.udir import udir
 
 # ____________________________________________________________
 
@@ -92,6 +94,109 @@ class AppTestWrapper:
         from pypy.conftest import option
         if not option.runappdirect:
             py.test.skip("meant only for -A run")
+        cls.w_vmprof_file = cls.space.wrap(str(udir.join('profile.vmprof')))
+
+    def test_vmprof(self):
+        """
+        The point of this test is to check that we do NOT segfault.  In
+        particular, we need to ensure that vmprof does not sample the stack in
+        the middle of a switch, else we read nonsense.
+        """
+        _vmprof = pytest.importorskip('_vmprof')
+        def switch_forever(c):
+            while True:
+                c.switch()
+        #
+        f = open(self.vmprof_file, 'w+b')
+        _vmprof.enable(f.fileno(), 1/250.0, False, False, False, False)
+        c = _continuation.continulet(switch_forever)
+        for i in range(10**7):
+            if i % 100000 == 0:
+                print i
+            c.switch()
+        _vmprof.disable()
+        f.close()
+
+    def test_thread_switch_to_sub(self):
+        try:
+            import thread, time
+        except ImportError:
+            py.test.skip("no threads")
+        c_list = []
+        lock = thread.allocate_lock()
+        lock.acquire()
+        lock2 = thread.allocate_lock()
+        lock2.acquire()
+        #
+        def fn():
+            c = _continuation.continulet(lambda c_main: c_main.switch())
+            c.switch()
+            c_list.append(c)
+            lock.release()
+            lock2.acquire()
+        #
+        thread.start_new_thread(fn, ())
+        lock.acquire()
+        [c] = c_list
+        py.test.raises(_continuation.error, c.switch)
+        #
+        lock2.release()
+        time.sleep(0.5)
+        py.test.raises(_continuation.error, c.switch)
+
+    def test_thread_switch_to_sub_nonstarted(self):
+        try:
+            import thread, time
+        except ImportError:
+            py.test.skip("no threads")
+        c_list = []
+        lock = thread.allocate_lock()
+        lock.acquire()
+        lock2 = thread.allocate_lock()
+        lock2.acquire()
+        #
+        def fn():
+            c = _continuation.continulet(lambda c_main: None)
+            c_list.append(c)
+            lock.release()
+            lock2.acquire()
+        #
+        thread.start_new_thread(fn, ())
+        lock.acquire()
+        [c] = c_list
+        py.test.raises(_continuation.error, c.switch)
+        #
+        lock2.release()
+        time.sleep(0.5)
+        py.test.raises(_continuation.error, c.switch)
+
+    def test_thread_switch_to_main(self):
+        try:
+            import thread, time
+        except ImportError:
+            py.test.skip("no threads")
+        c_list = []
+        lock = thread.allocate_lock()
+        lock.acquire()
+        lock2 = thread.allocate_lock()
+        lock2.acquire()
+        #
+        def fn():
+            def in_continulet(c_main):
+                c_list.append(c_main)
+                lock.release()
+                lock2.acquire()
+            c = _continuation.continulet(in_continulet)
+            c.switch()
+        #
+        thread.start_new_thread(fn, ())
+        lock.acquire()
+        [c] = c_list
+        py.test.raises(_continuation.error, c.switch)
+        #
+        lock2.release()
+        time.sleep(0.5)
+        py.test.raises(_continuation.error, c.switch)
 
 def _setup():
     for _i in range(20):

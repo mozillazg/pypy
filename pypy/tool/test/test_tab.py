@@ -3,11 +3,15 @@ Verify that the PyPy source files have no tabs.
 """
 
 import os
-from pypy.conftest import pypydir
+from pypy import pypydir
 
 ROOT = os.path.abspath(os.path.join(pypydir, '..'))
 RPYTHONDIR = os.path.join(ROOT, "rpython")
-EXCLUDE = {'/virt_test/lib/python2.7/site-packages/setuptools'}
+
+EXCLUDE = {'/virt_test'}
+# ^^^ don't look inside this: it is created by virtualenv on buildslaves.
+# It contains third-party installations that may include tabs in their
+# .py files.
 
 
 def test_no_tabs():
@@ -40,6 +44,8 @@ def test_no_pypy_import_in_rpython():
         if os.path.isfile(path):
             if not path.lower().endswith('.py'):
                 return
+            if path.lower().endswith('rsre_constants.py'):
+                return   # exception in this file
             with file(path) as f:
                 for line in f:
                     if "import" not in line:

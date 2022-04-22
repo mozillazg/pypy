@@ -1,6 +1,6 @@
 import py
 from rpython.rlib.jit import JitDriver, hint, set_param, dont_look_inside,\
-     elidable
+     elidable, promote
 from rpython.rlib.objectmodel import compute_hash
 from rpython.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from rpython.jit.metainterp.test.support import LLJitMixin
@@ -236,43 +236,49 @@ class LoopTest(object):
         self.check_trace_count_at_most(19)
 
     def test_interp_many_paths_2(self):
-        myjitdriver = JitDriver(greens = ['i'], reds = ['x', 'node'])
-        NODE = self._get_NODE()
-        bytecode = "xxxxxxxb"
+        import sys
+        oldlimit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(10000)
+            myjitdriver = JitDriver(greens = ['i'], reds = ['x', 'node'])
+            NODE = self._get_NODE()
+            bytecode = "xxxxxxxb"
 
-        def can_enter_jit(i, x, node):
-            myjitdriver.can_enter_jit(i=i, x=x, node=node)
+            def can_enter_jit(i, x, node):
+                myjitdriver.can_enter_jit(i=i, x=x, node=node)
 
-        def f(node):
-            x = 0
-            i = 0
-            while i < len(bytecode):
-                myjitdriver.jit_merge_point(i=i, x=x, node=node)
-                op = bytecode[i]
-                if op == 'x':
-                    if not node:
-                        break
-                    if node.value < 100:   # a pseudo-random choice
-                        x += 1
-                    node = node.next
-                elif op == 'b':
-                    i = 0
-                    can_enter_jit(i, x, node)
-                    continue
-                i += 1
-            return x
+            def f(node):
+                x = 0
+                i = 0
+                while i < len(bytecode):
+                    myjitdriver.jit_merge_point(i=i, x=x, node=node)
+                    op = bytecode[i]
+                    if op == 'x':
+                        if not node:
+                            break
+                        if node.value < 100:   # a pseudo-random choice
+                            x += 1
+                        node = node.next
+                    elif op == 'b':
+                        i = 0
+                        can_enter_jit(i, x, node)
+                        continue
+                    i += 1
+                return x
 
-        node1 = self.nullptr(NODE)
-        for i in range(300):
-            prevnode = self.malloc(NODE)
-            prevnode.value = pow(47, i, 199)
-            prevnode.next = node1
-            node1 = prevnode
+            node1 = self.nullptr(NODE)
+            for i in range(300):
+                prevnode = self.malloc(NODE)
+                prevnode.value = pow(47, i, 199)
+                prevnode.next = node1
+                node1 = prevnode
 
-        expected = f(node1)
-        res = self.meta_interp(f, [node1])
-        assert res == expected
-        self.check_trace_count_at_most(19)
+            expected = f(node1)
+            res = self.meta_interp(f, [node1])
+            assert res == expected
+            self.check_trace_count_at_most(19)
+        finally:
+            sys.setrecursionlimit(oldlimit)
 
     def test_nested_loops(self):
         myjitdriver = JitDriver(greens = ['i'], reds = ['x', 'y'])
@@ -1107,6 +1113,125 @@ class LoopTest(object):
         self.meta_interp(f, [15])
         # one guard_false got removed
         self.check_resops(guard_false=4, guard_true=5)
+
+    def test_heapcache_bug(self):
+        class W_Object(object):
+            _attrs_ = []
+        class W_Nil(W_Object):
+            _attrs_ = []
+        class W_Cons(W_Object):
+            _attrs_ = ['first', 'rest']
+            _immutable_fields_ = ['first', 'rest']
+            def __init__(self, v1, v2):
+                self.first = v1
+                self.rest = v2
+
+        def reverse(xs):
+            result = W_Nil()
+            while isinstance(xs, W_Cons):
+                result = W_Cons(xs.first, result)
+                xs = xs.rest
+            return result
+
+        driver = JitDriver(reds=['repetitions', 'v'], greens=['pc'],
+                       get_printable_location=lambda pc: str(pc))
+        def entry_point():
+            repetitions = 0
+            while repetitions < 10:
+                pc = 0
+                v = W_Nil()
+                while pc < 10:
+                    driver.jit_merge_point(v=v, repetitions=repetitions, pc=pc)
+                    v = reverse(W_Cons(pc + 1, W_Cons(pc + 2, W_Cons(pc + 3, W_Cons(pc + 4, W_Nil())))))
+                    pc = pc + 1
+                repetitions += 1
+        
+        self.meta_interp(entry_point, [])
+
+    def test_unroll_shortpreamble_mutates_bug(self):
+        class List:
+            pass
+
+        class Cell:
+            pass
+
+        class Base:
+            pass
+        class Int(Base):
+            pass
+
+        class WNone(Base):
+            pass
+
+        l1 = List()
+        l1.strategy = 1
+        l1.content1 = Int()
+        l2 = List()
+        l2.strategy = 2
+        l2.content2 = WNone()
+        l = [l1, l2] * 100
+
+        c_int = Cell()
+        c_int.value = Int()
+        c_w_none = Cell()
+        c_w_none.value = WNone()
+
+        class Func:
+            pass
+
+        f1 = Func()
+        f1.fval = 1
+        f2 = Func()
+        f2.fval = 2
+
+        driver = JitDriver(reds=['i', 'c', 'l', 'func'], greens=['promoteint'])
+        def f(l, func, c, promoteint):
+            i = 0
+            while i < len(l):
+                subl = l[i]
+                # reading from the inner list
+                st = promote(subl.strategy)
+                if st == 1:
+                    lcontent = subl.content1
+                else:
+                    lcontent = subl.content2
+
+                # LOAD_DEREF
+                cellvalue = c.value
+                assert cellvalue is not None
+
+                # calling one of the two funcs
+                # two variants:
+                # - if we promote the int, then the erroneous bridge goes to
+                #   the preamble
+                # - if we don't the erroneous bridge goes to the main loop
+                # both cases are wrong
+                if promoteint:
+                    x = promote(func.fval)
+                else:
+                    x = func.fval
+                if x == 1:
+                    promote(type(cellvalue) is type(lcontent))
+                else:
+                    promote(type(lcontent) is not WNone)
+                i += 1
+                driver.jit_merge_point(i=i, func=func, c=c, l=l, promoteint=promoteint)
+
+        def main(promoteint):
+            set_param(None, 'retrace_limit', 0)
+            set_param(None, 'threshold', 8)
+            List().content1 = WNone() # ensure annotator doesn't think the fields are constants
+            Cell().value = None
+            List().content2 = Int()
+            f(l, f1, c_w_none, promoteint)
+            print "=================================================================="
+            f(l + [l1, l2], f2, c_int, promoteint)
+
+        self.meta_interp(main, [True])
+        self.check_trace_count_at_most(10)
+        self.meta_interp(main, [False])
+        self.check_trace_count_at_most(10)
+
 
 class TestLLtype(LoopTest, LLJitMixin):
     pass

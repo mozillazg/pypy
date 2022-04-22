@@ -29,11 +29,21 @@ _INSTALL_SCHEMES = {
     'pypy': {
         'stdlib': '{base}/lib-{implementation_lower}/{py_version_short}',
         'platstdlib': '{base}/lib-{implementation_lower}/{py_version_short}',
-        'purelib': '{base}/lib-{implementation_lower}/{py_version_short}',
-        'platlib': '{base}/lib-{implementation_lower}/{py_version_short}',
+        'purelib': '{base}/site-packages',
+        'platlib': '{base}/site-packages',
         'include': '{base}/include',
         'platinclude': '{base}/include',
         'scripts': '{base}/bin',
+        'data'   : '{base}',
+        },
+    'pypy_nt': {
+        'stdlib': '{base}/lib-{implementation_lower}/{py_version_short}',
+        'platstdlib': '{base}/lib-{implementation_lower}/{py_version_short}',
+        'purelib': '{base}/site-packages',
+        'platlib': '{base}/site-packages',
+        'include': '{base}/include',
+        'platinclude': '{base}/include',
+        'scripts': '{base}/Scripts',
         'data'   : '{base}',
         },
     'nt': {
@@ -127,6 +137,11 @@ if os.name == "nt" and "pcbuild" in _PROJECT_BASE[-8:].lower():
 # PC/VS7.1
 if os.name == "nt" and "\\pc\\v" in _PROJECT_BASE[-10:].lower():
     _PROJECT_BASE = _safe_realpath(os.path.join(_PROJECT_BASE, pardir, pardir))
+# PC/VS9.0/amd64
+if (os.name == "nt"
+   and os.path.basename(os.path.dirname(os.path.dirname(_PROJECT_BASE))).lower() == "pc"
+   and os.path.basename(os.path.dirname(_PROJECT_BASE)).lower() == "vs9.0"):
+    _PROJECT_BASE = _safe_realpath(os.path.join(_PROJECT_BASE, pardir, pardir, pardir))
 # PC/AMD64
 if os.name == "nt" and "\\pcbuild\\amd64" in _PROJECT_BASE[-14:].lower():
     _PROJECT_BASE = _safe_realpath(os.path.join(_PROJECT_BASE, pardir, pardir))
@@ -177,11 +192,14 @@ def _expand_vars(scheme, vars):
     return res
 
 def _get_default_scheme():
-    if '__pypy__' in sys.builtin_module_names:
-        return 'pypy'
-    elif os.name == 'posix':
+    if os.name == 'posix':
+        if '__pypy__' in sys.builtin_module_names:
+            return 'pypy'
         # the default scheme for posix is posix_prefix
         return 'posix_prefix'
+    if os.name == 'nt':
+        if '__pypy__' in sys.builtin_module_names:
+            return 'pypy_nt'
     return os.name
 
 def _getuserbase():
@@ -369,11 +387,8 @@ def _generate_posix_vars():
 
 def _init_posix(vars):
     """Initialize the module as appropriate for POSIX systems."""
-    # in cPython, _sysconfigdata is generated at build time, see _generate_posix_vars()
-    # in PyPy no such module exists
-    #from _sysconfigdata import build_time_vars
-    #vars.update(build_time_vars)
-    return
+    from _sysconfigdata import build_time_vars
+    vars.update(build_time_vars)
 
 def _init_non_posix(vars):
     """Initialize the module as appropriate for NT"""
@@ -385,6 +400,11 @@ def _init_non_posix(vars):
     vars['EXE'] = '.exe'
     vars['VERSION'] = _PY_VERSION_SHORT_NO_DOT
     vars['BINDIR'] = os.path.dirname(_safe_realpath(sys.executable))
+    # pypy only: give us control over the ABI tag in a wheel name
+    if '__pypy__' in sys.builtin_module_names:
+        import imp
+        so_ext = imp.get_suffixes()[0][0]
+        vars['SOABI']= '-'.join(so_ext.split('.')[1].split('-')[:2])
 
 #
 # public APIs
@@ -486,6 +506,7 @@ def get_config_vars(*args):
         _CONFIG_VARS['projectbase'] = _PROJECT_BASE
         _CONFIG_VARS['implementation'] = _get_implementation()
         _CONFIG_VARS['implementation_lower'] = _get_implementation().lower()
+        _CONFIG_VARS['LIBRARY'] = ''
 
         if os.name in ('nt', 'os2'):
             _init_non_posix(_CONFIG_VARS)
@@ -522,6 +543,8 @@ def get_config_vars(*args):
         # multi-architecture, multi-os-version installers
         if sys.platform == 'darwin':
             import _osx_support
+            #PyPy only - hardcode to 10.9, like in distutils/sysconfig_pypy.py
+            _CONFIG_VARS['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
             _osx_support.customize_config_vars(_CONFIG_VARS)
 
         # PyPy:
@@ -530,6 +553,8 @@ def get_config_vars(*args):
             if type_ == imp.C_EXTENSION:
                 _CONFIG_VARS['SOABI'] = suffix.split('.')[1]
                 break
+        _CONFIG_VARS['INCLUDEPY'] = os.path.join(_CONFIG_VARS['prefix'],
+                                                 'include')
 
     if args:
         vals = []

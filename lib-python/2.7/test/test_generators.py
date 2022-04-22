@@ -398,7 +398,10 @@ And more, added later.
 0
 >>> type(i.gi_frame)
 <type 'frame'>
->>> i.gi_running = 42
+
+PyPy prints "readonly attribute 'gi_running'" so ignore the exception detail
+
+>>> i.gi_running = 42 # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):
   ...
 TypeError: readonly attribute
@@ -1099,7 +1102,7 @@ class Queens:
 
         # For each square, compute a bit vector of the columns and
         # diagonals it covers, and for each row compute a function that
-        # generates the possiblities for the columns in that row.
+        # generates the possibilities for the columns in that row.
         self.rowgenerators = []
         for i in rangen:
             rowuses = [(1L << j) |                  # column ordinal
@@ -1895,6 +1898,16 @@ test_generators just happened to be the test that drew these out.
 
 """
 
+crash_test = """
+>>> def foo(): yield
+>>> gen = foo()
+>>> gen.next()
+>>> print gen.gi_frame.f_restricted  # This would segfault.
+False
+
+"""
+
+
 __test__ = {"tut":      tutorial_tests,
             "pep":      pep_tests,
             "email":    email_tests,
@@ -1904,6 +1917,7 @@ __test__ = {"tut":      tutorial_tests,
             "weakref":  weakref_tests,
             "coroutine":  coroutine_tests,
             "refleaks": refleaks_tests,
+            "crash": crash_test,
             }
 
 # Magic test name that regrtest.py invokes *after* importing this module.

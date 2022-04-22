@@ -199,7 +199,7 @@ def unaryoperation(OPCODE, operation):
         w_1 = self.popvalue()
         w_result = operation(w_1).eval(self)
         self.pushvalue(w_result)
-    UNARY_OP.func_name = OPCODE
+    UNARY_OP.__name__ = OPCODE
     return UNARY_OP
 
 _binary_ops = [
@@ -237,7 +237,7 @@ def binaryoperation(OPCODE, operation):
         w_1 = self.popvalue()
         w_result = operation(w_1, w_2).eval(self)
         self.pushvalue(w_result)
-    BINARY_OP.func_name = OPCODE
+    BINARY_OP.__name__ = OPCODE
     return BINARY_OP
 
 _unsupported_ops = [
@@ -258,7 +258,7 @@ _unsupported_ops = [
 def unsupportedoperation(OPCODE, msg):
     def UNSUPPORTED(self, *ignored):
         raise FlowingError("%s is not RPython" % (msg,))
-    UNSUPPORTED.func_name = OPCODE
+    UNSUPPORTED.__name__ = OPCODE
     return UNSUPPORTED
 
 compare_method = [
@@ -281,10 +281,10 @@ class FlowContext(object):
         self.graph = graph
         func = graph.func
         self.pycode = code
-        self.w_globals = Constant(func.func_globals)
+        self.w_globals = Constant(func.__globals__)
         self.blockstack = []
 
-        self.init_closure(func.func_closure)
+        self.init_closure(func.__closure__)
         self.f_lineno = code.co_firstlineno
         self.last_offset = 0
 
@@ -566,11 +566,12 @@ class FlowContext(object):
         if not isinstance(w_check_class, Constant):
             raise FlowingError("Non-constant except guard.")
         check_class = w_check_class.value
-        if check_class in (NotImplementedError, AssertionError):
-            raise FlowingError(
-                "Catching %s is not valid in RPython" % check_class.__name__)
         if not isinstance(check_class, tuple):
             # the simple case
+            if issubclass(check_class, (NotImplementedError, AssertionError)):
+                raise FlowingError(
+                    "Catching NotImplementedError, AssertionError, or a "
+                    "subclass is not valid in RPython (%r)" % (check_class,))
             return self.guessbool(op.issubtype(w_exc_type, w_check_class).eval(self))
         # special case for StackOverflow (see rlib/rstackovf.py)
         if check_class == rstackovf.StackOverflow:
@@ -597,6 +598,9 @@ class FlowContext(object):
 
         Returns an FSException object whose w_value is an instance of w_type.
         """
+        from rpython.rlib.debug import ll_assert_not_none
+
+        check_not_none = False
         w_is_type = op.isinstance(w_arg1, const(type)).eval(self)
         if self.guessbool(w_is_type):
             # this is for all cases of the form (Class, something)
@@ -608,6 +612,7 @@ class FlowContext(object):
                 if self.guessbool(op.issubtype(w_valuetype, w_arg1).eval(self)):
                     # raise Type, Instance: let etype be the exact type of value
                     w_value = w_arg2
+                    check_not_none = True
                 else:
                     # raise Type, X: assume X is the constructor argument
                     w_value = op.simple_call(w_arg1, w_arg2).eval(self)
@@ -618,6 +623,10 @@ class FlowContext(object):
                                 "separate value")
                 raise Raise(const(exc))
             w_value = w_arg1
+            check_not_none = True
+        if check_not_none:
+            w_value = op.simple_call(const(ll_assert_not_none),
+                                     w_value).eval(self)
         w_type = op.type(w_value).eval(self)
         return FSException(w_type, w_value)
 

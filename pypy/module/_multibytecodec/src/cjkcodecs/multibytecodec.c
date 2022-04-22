@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "src/cjkcodecs/multibytecodec.h"
+#include "src/cjkcodecs/fixnames.h"
 
 
 struct pypy_cjk_dec_s *pypy_cjk_dec_new(const MultibyteCodec *codec)
@@ -132,6 +133,11 @@ struct pypy_cjk_enc_s *pypy_cjk_enc_new(const MultibyteCodec *codec)
   d->codec = codec;
   d->outbuf_start = NULL;
   return d;
+}
+
+void pypy_cjk_enc_copystate(struct pypy_cjk_enc_s *dst, struct pypy_cjk_enc_s *src)
+{
+    dst->state = src->state;
 }
 
 Py_ssize_t pypy_cjk_enc_init(struct pypy_cjk_enc_s *d,

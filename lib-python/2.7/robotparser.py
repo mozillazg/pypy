@@ -136,7 +136,7 @@ class RobotFileParser:
 
         # Until the robots.txt file has been read or found not
         # to exist, we must assume that no url is allowable.
-        # This prevents false positives when a user erronenously
+        # This prevents false positives when a user erroneously
         # calls can_fetch() before calling read().
         if not self.last_checked:
             return False
@@ -160,7 +160,10 @@ class RobotFileParser:
 
 
     def __str__(self):
-        return ''.join([str(entry) + "\n" for entry in self.entries])
+        entries = self.entries
+        if self.default_entry is not None:
+            entries = entries + [self.default_entry]
+        return '\n'.join(map(str, entries)) + '\n'
 
 
 class RuleLine:

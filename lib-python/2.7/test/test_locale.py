@@ -425,7 +425,7 @@ class NormalizeTest(unittest.TestCase):
 
     def test_valencia_modifier(self):
         self.check('ca_ES.UTF-8@valencia', 'ca_ES.UTF-8@valencia')
-        self.check('ca_ES@valencia', 'ca_ES.ISO8859-15@valencia')
+        self.check('ca_ES@valencia', 'ca_ES.UTF-8@valencia')
         self.check('ca@valencia', 'ca_ES.ISO8859-1@valencia')
 
     def test_devanagari_modifier(self):
@@ -492,6 +492,16 @@ class TestMiscellaneous(unittest.TestCase):
         # Issue #1813 caused a regression where locale.normalize() would no
         # longer accept unicode strings.
         self.assertEqual(locale.normalize(u'en_US'), 'en_US.ISO8859-1')
+
+    def test_setlocale_unicode(self):
+        oldlocale = locale.getlocale()
+        self.addCleanup(locale.setlocale, locale.LC_CTYPE, oldlocale)
+
+        user_locale = locale.setlocale(locale.LC_CTYPE, '')
+        unicode_locale = user_locale.decode('utf-8')
+
+        user_locale2 = locale.setlocale(locale.LC_CTYPE, unicode_locale)
+        self.assertEqual(user_locale, user_locale2)
 
 
 def test_main():

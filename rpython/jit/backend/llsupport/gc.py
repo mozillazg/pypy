@@ -11,49 +11,18 @@ from rpython.translator.tool.cbuild import ExternalCompilationInfo
 from rpython.jit.codewriter import heaptracker
 from rpython.jit.metainterp.history import ConstPtr, AbstractDescr, ConstInt
 from rpython.jit.metainterp.resoperation import rop, ResOperation
+from rpython.jit.metainterp.support import ptr2int
 from rpython.jit.backend.llsupport import symbolic, jitframe
 from rpython.jit.backend.llsupport.symbolic import WORD
+from rpython.jit.backend.llsupport.memcpy import memcpy_fn
 from rpython.jit.backend.llsupport.descr import SizeDescr, ArrayDescr, FieldDescr
 from rpython.jit.backend.llsupport.descr import GcCache, get_field_descr
 from rpython.jit.backend.llsupport.descr import get_array_descr
 from rpython.jit.backend.llsupport.descr import get_call_descr
 from rpython.jit.backend.llsupport.descr import unpack_arraydescr
 from rpython.jit.backend.llsupport.rewrite import GcRewriterAssembler
-from rpython.memory.gctransform import asmgcroot
 from rpython.jit.codewriter.effectinfo import EffectInfo
 
-class MovableObjectTracker(object):
-
-    ptr_array_type = lltype.GcArray(llmemory.GCREF)
-    ptr_array_gcref = lltype.nullptr(llmemory.GCREF.TO)
-
-    def __init__(self, cpu, const_pointers):
-        size = len(const_pointers)
-        # check that there are any moving object (i.e. chaning pointers).
-        # Otherwise there is no reason for an instance of this class.
-        assert size > 0
-        #
-        # prepare GC array to hold the pointers that may change
-        self.ptr_array = lltype.malloc(MovableObjectTracker.ptr_array_type, size)
-        self.ptr_array_descr = cpu.arraydescrof(MovableObjectTracker.ptr_array_type)
-        self.ptr_array_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, self.ptr_array)
-        # use always the same ConstPtr to access the array
-        # (easer to read JIT trace)
-        self.const_ptr_gcref_array = ConstPtr(self.ptr_array_gcref)
-        #
-        # assign each pointer an index and put the pointer into the GC array.
-        # as pointers and addresses are not a good key to use before translation
-        # ConstPtrs are used as the key for the dict.
-        self._indexes = {}
-        for index in range(size):
-            ptr = const_pointers[index]
-            self._indexes[ptr] = index
-            self.ptr_array[index] = ptr.value
-
-    def get_array_index(self, const_ptr):
-        index = self._indexes[const_ptr]
-        assert const_ptr.value == self.ptr_array[index]
-        return index
 # ____________________________________________________________
 
 class GcLLDescription(GcCache):
@@ -67,6 +36,11 @@ class GcLLDescription(GcCache):
             self.fielddescr_vtable = get_field_descr(self, rclass.OBJECT,
                                                      'typeptr')
         self._generated_functions = []
+        self.memcpy_fn = memcpy_fn
+        self.memcpy_descr = get_call_descr(self,
+            [lltype.Signed, lltype.Signed, lltype.Signed], lltype.Void,
+            EffectInfo([], [], [], [], [], [], EffectInfo.EF_CANNOT_RAISE,
+                can_collect=False))
 
     def _setup_str(self):
         self.str_descr     = get_array_descr(self, rstr.STR)
@@ -80,7 +54,10 @@ class GcLLDescription(GcCache):
         anything, it must be an optional MemoryError.
         """
         FUNCPTR = lltype.Ptr(lltype.FuncType(ARGS, RESULT))
-        descr = get_call_descr(self, ARGS, RESULT)
+        # Note: the call may invoke the GC, which may run finalizers.
+        # Finalizers are constrained in what they can do, but we can't
+        # really express that in a useful way here.
+        descr = get_call_descr(self, ARGS, RESULT, EffectInfo.MOST_GENERAL)
         setattr(self, funcname, func)
         setattr(self, funcname + '_FUNCPTR', FUNCPTR)
         setattr(self, funcname + '_descr', descr)
@@ -95,7 +72,7 @@ class GcLLDescription(GcCache):
     @specialize.arg(1)
     def get_malloc_fn_addr(self, funcname):
         ll_func = self.get_malloc_fn(funcname)
-        return heaptracker.adr2int(llmemory.cast_ptr_to_adr(ll_func))
+        return ptr2int(ll_func)
 
     def _freeze_(self):
         return True
@@ -129,98 +106,9 @@ class GcLLDescription(GcCache):
     def gc_malloc_unicode(self, num_elem):
         return self._bh_malloc_array(num_elem, self.unicode_descr)
 
-    def _record_constptrs(self, op, gcrefs_output_list,
-                          ops_with_movable_const_ptr,
-                          changeable_const_pointers):
-        l = None
-        for i in range(op.numargs()):
-            v = op.getarg(i)
-            if isinstance(v, ConstPtr) and bool(v.value):
-                p = v.value
-                if rgc._make_sure_does_not_move(p):
-                    gcrefs_output_list.append(p)
-                else:
-                    if l is None:
-                        l = [i]
-                    else:
-                        l.append(i)
-                    if v not in changeable_const_pointers:
-                        changeable_const_pointers.append(v)
-        #
-        if op.is_guard() or op.getopnum() == rop.FINISH:
-            llref = cast_instance_to_gcref(op.getdescr())
-            assert rgc._make_sure_does_not_move(llref)
-            gcrefs_output_list.append(llref)
-        #
-        if l:
-            ops_with_movable_const_ptr[op] = l
-
-    def _rewrite_changeable_constptrs(self, op, ops_with_movable_const_ptr, moving_obj_tracker):
-        newops = []
-        for arg_i in ops_with_movable_const_ptr[op]:
-            v = op.getarg(arg_i)
-            # assert to make sure we got what we expected
-            assert isinstance(v, ConstPtr)
-            array_index = moving_obj_tracker.get_array_index(v)
-
-            size, offset, _ = unpack_arraydescr(moving_obj_tracker.ptr_array_descr)
-            scale = size
-            args = [moving_obj_tracker.const_ptr_gcref_array,
-                    ConstInt(array_index),
-                    ConstInt(scale),
-                    ConstInt(offset),
-                    ConstInt(size)]
-            load_op = ResOperation(rop.GC_LOAD_INDEXED_R, args)
-            newops.append(load_op)
-            op.setarg(arg_i, load_op)
-        #
-        newops.append(op)
-        return newops
-
     def rewrite_assembler(self, cpu, operations, gcrefs_output_list):
         rewriter = GcRewriterAssembler(self, cpu)
-        newops = rewriter.rewrite(operations)
-
-        # the key is an operation that contains a ConstPtr as an argument and
-        # this ConstPtrs pointer might change as it points to an object that
-        # can't be made non-moving (e.g. the object is pinned).
-        ops_with_movable_const_ptr = {}
-        #
-        # a list of such not really constant ConstPtrs.
-        changeable_const_pointers = []
-        for op in newops:
-            # record all GCREFs, because the GC (or Boehm) cannot see them and
-            # keep them alive if they end up as constants in the assembler.
-            # If such a GCREF can change and we can't make the object it points
-            # to non-movable, we have to handle it seperatly. Such GCREF's are
-            # returned as ConstPtrs in 'changeable_const_pointers' and the
-            # affected operation is returned in 'op_with_movable_const_ptr'.
-            # For this special case see 'rewrite_changeable_constptrs'.
-            self._record_constptrs(op, gcrefs_output_list,
-                    ops_with_movable_const_ptr, changeable_const_pointers)
-        #
-        # handle pointers that are not guaranteed to stay the same
-        if len(ops_with_movable_const_ptr) > 0:
-            moving_obj_tracker = MovableObjectTracker(cpu, changeable_const_pointers)
-            #
-            if not we_are_translated():
-                # used for testing
-                self.last_moving_obj_tracker = moving_obj_tracker
-            # make sure the array containing the pointers is not collected by
-            # the GC (or Boehm)
-            gcrefs_output_list.append(moving_obj_tracker.ptr_array_gcref)
-            rgc._make_sure_does_not_move(moving_obj_tracker.ptr_array_gcref)
-
-            ops = newops
-            newops = []
-            for op in ops:
-                if op in ops_with_movable_const_ptr:
-                    rewritten_ops = self._rewrite_changeable_constptrs(op,
-                            ops_with_movable_const_ptr, moving_obj_tracker)
-                    newops.extend(rewritten_ops)
-                else:
-                    newops.append(op)
-        #
+        newops = rewriter.rewrite(operations, gcrefs_output_list)
         return newops
 
     @specialize.memo()
@@ -228,7 +116,7 @@ class GcLLDescription(GcCache):
         descrs = JitFrameDescrs()
         descrs.arraydescr = cpu.arraydescrof(jitframe.JITFRAME)
         for name in ['jf_descr', 'jf_guard_exc', 'jf_force_descr',
-                     'jf_frame_info', 'jf_gcmap', 'jf_extra_stack_depth',
+                     'jf_frame_info', 'jf_gcmap',
                      'jf_savedata', 'jf_forward']:
             setattr(descrs, name, cpu.fielddescrof(jitframe.JITFRAME, name))
         descrs.jfi_frame_size = cpu.fielddescrof(jitframe.JITFRAMEINFO,
@@ -245,6 +133,14 @@ class GcLLDescription(GcCache):
         """ Allocate a new frame, overwritten by tests
         """
         return jitframe.JITFRAME.allocate(frame_info)
+
+    def make_gcref_tracer(self, array_base_addr, gcrefs):
+        # for tests, or for Boehm.  Overridden for framework GCs
+        from rpython.jit.backend.llsupport import gcreftracer
+        return gcreftracer.make_boehm_tracer(array_base_addr, gcrefs)
+
+    def clear_gcref_tracer(self, tracer):
+        pass    # nothing needed unless overridden
 
 class JitFrameDescrs:
     def _freeze_(self):
@@ -346,15 +242,6 @@ class GcLLDescr_boehm(GcLLDescription):
 
 # ____________________________________________________________
 # All code below is for the hybrid or minimark GC
-
-class GcRootMap_asmgcc(object):
-    is_shadow_stack = False
-
-    def __init__(self, gcdescr):
-        pass
-
-    def register_asm_addr(self, start, mark):
-        pass
 
 class GcRootMap_shadowstack(object):
     is_shadow_stack = True
@@ -753,6 +640,13 @@ class GcLLDescr_framework(GcLLDescription):
         p = base_type_info + (typeid << shift_by) + infobits_offset
         p = rffi.cast(rffi.CCHARP, p)
         return (ord(p[0]) & IS_OBJECT_FLAG) != 0
+
+    def make_gcref_tracer(self, array_base_addr, gcrefs):
+        from rpython.jit.backend.llsupport import gcreftracer
+        return gcreftracer.make_framework_tracer(array_base_addr, gcrefs)
+
+    def clear_gcref_tracer(self, tracer):
+        tracer.array_length = 0
 
 # ____________________________________________________________
 
