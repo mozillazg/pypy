@@ -1,3 +1,5 @@
+.. _building-from-source:
+
 Building PyPy from Source
 =========================
 
@@ -18,8 +20,8 @@ development. You can read more about how to develop PyPy here_, and latest
 translated (hopefully functional) binary packages are available on our
 buildbot's `nightly builds`_
 
-.. _here: getting-started-dev.html
-.. _`nightly builds`: http://buildbot.pypy.org/nightly
+.. _here: contributing.html
+.. _`nightly builds`: https://buildbot.pypy.org/nightly
 
 You will need the build dependencies below to run the tests.
 
@@ -32,12 +34,12 @@ will need to obtain a copy of the sources.  This can be done either by
 repository using mercurial.  We suggest using mercurial if you want to access
 the current development.
 
-.. _downloading them from the download page: http://pypy.org/download.html
+.. _downloading them from the download page: https://www.pypy.org/download.html
 
 You must issue the following command on your
 command line, DOS box, or terminal::
 
-    hg clone http://foss.heptapod.net/pypy/pypy pypy
+    hg clone https://foss.heptapod.net/pypy/pypy pypy
 
 This will clone the repository and place it into a directory
 named ``pypy``, and will get you the PyPy source in ``pypy/pypy`` and
@@ -54,7 +56,7 @@ using::
 
 where XXXXX is the revision id.
 
-.. _our nightly tests: http://buildbot.pypy.org/summary?branch=<trunk>
+.. _our nightly tests: https://buildbot.pypy.org/summary?branch=%3Ctrunk%3E
 
 
 Install build-time dependencies
@@ -63,7 +65,7 @@ Install build-time dependencies
 Windows, see the `windows document`_ . 
 
 .. _`windows document`: windows.html
-.. _`RPython documentation`: http://rpython.readthedocs.org
+.. _`RPython documentation`: https://rpython.readthedocs.org
 
 The host Python needs to have CFFI installed. If translating on PyPy, CFFI is
 already installed. If translating on CPython, you need to install it, e.g.
@@ -92,8 +94,10 @@ Make sure to have these libraries (with development headers) installed
 before building PyPy, otherwise the resulting binary will not contain
 these modules.  Furthermore, the following libraries should be present
 after building PyPy, otherwise the corresponding CFFI modules are not
-built (you can run or re-run `pypy/tool/release/package.py` to retry
-to build them; you don't need to re-translate the whole PyPy):
+built (you can run or re-run `lib_pypy/pypy_tools/build_cffi_imports.py`_ to
+build them; you don't need to re-translate the whole PyPy):
+
+.. _`lib_pypy/pypy_tools/build_cffi_imports.py`: https://foss.heptapod.net/pypy/pypy/-/blob/branch/default/lib_pypy/pypy_tools/build_cffi_imports.py
 
 sqlite3
     libsqlite3
@@ -142,21 +146,49 @@ On SLES11::
 
 On Mac OS X:
 
-Most of these build-time dependencies are installed alongside
-the Developer Tools. However, note that in order for the installation to
-find them you may need to run::
+Currently PyPy does not support M1 Apple Silicon (arm64). You must use the 
+x86_64 emulation mode, which requires pre-pending ``arch -x86_64`` to some
+commands. When installed properly, homebrew will use a second installation 
+at ``/usr/local/bin/brew``. 
+
+Most of the build-time dependencies are installed alongside the Developer
+Tools. ``libffi`` and ``openssl`` still need to be installed, and a
+brew-provided pypy will speed up translation:
+
+.. code-block:: shell
 
     xcode-select --install
+	# for M1 machines to use x86_64 mode
+	# softwareupdate --install-rosetta
+	# install brew, use the arch -x86_64 prefix on M1
+	/usr/local/bin/brew install libffi openssl pypy pkg-config
 
-An exception is OpenSSL, which is no longer provided with the operating
-system. It can be obtained via Homebrew (with ``$ brew install openssl``),
-but it will not be available on the system path by default. The easiest
-way to enable it for building pypy is to set an environment variable::
+After setting this up, translation (described next) will find the libs as
+expected via ``pkg-config``.
 
-    export PKG_CONFIG_PATH=$(brew --prefix)/opt/openssl/lib/pkgconfig
+Set environment variables that will affect translation
+------------------------------------------------------
 
-After setting this, translation (described next) will find the OpenSSL libs
-as expected.
+The following environment variables can be used to tweak the result:
+
++------------------------+-----------------------------------------------------------+
+| value                  | result                                                    |
++------------------------+-----------------------------------------------------------+
+| CC                     | compiler to use                                           |
++------------------------+-----------------------------------------------------------+
+| PYPY_MULTIARCH         | pypy 3.7+: ends up in ``sys.platform._multiarch``         |
+|                        | on posix                                                  |
++------------------------+-----------------------------------------------------------+
+| PYPY_USESSION_DIR      | base directory for temporary files, usually ``$TMP``      |
++------------------------+-----------------------------------------------------------+
+| PYPY_USESSION_BASENAME | each call to ``from rpython.tools import udir`` will get  |
+|                        | a temporary directory                                     |
+|                        | ``$PYPY_USESSION_DIR/usession-$PYPY_USESSION_BASENAME-N`` |
+|                        | where ``N`` increments on each call                       |
++------------------------+-----------------------------------------------------------+
+| PYPY_USESSION_KEEP     | how many old temporary directories to keep, any older     |
+|                        | ones will be deleted. Defaults to 3                       |
++------------------------+-----------------------------------------------------------+
 
 Run the translation
 -------------------
@@ -222,13 +254,12 @@ Build cffi import libraries for the stdlib
 ------------------------------------------
 
 Various stdlib modules require a separate build step to create the cffi
-import libraries in the `out-of-line API mode`_. This is done by the following
+import libraries in the :ref:`out-of-line API mode <performance>`. This is done by the following
 command::
 
    cd pypy/goal
-   PYTHONPATH=../.. ./pypy-c ../../lib_pypy/tools/build_cffi_imports.py
+   PYTHONPATH=../.. ./pypy-c ../../lib_pypy/pypy_tools/build_cffi_imports.py
 
-.. _`out-of-line API mode`: http://cffi.readthedocs.org/en/latest/overview.html#real-example-api-level-out-of-line
 
 Packaging (preparing for installation)
 --------------------------------------

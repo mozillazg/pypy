@@ -1,5 +1,5 @@
 import py
-from rpython.rlib.jit import JitDriver, hint, set_param
+from rpython.rlib.jit import JitDriver, hint, set_param, Counters
 from rpython.rlib.jit import unroll_safe, dont_look_inside, promote
 from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.debug import fatalerror
@@ -8,6 +8,7 @@ from rpython.jit.codewriter.policy import StopAtXPolicy
 from rpython.rtyper.annlowlevel import hlstr
 from rpython.jit.metainterp.warmspot import get_stats
 from rpython.jit.backend.llsupport import codemap
+from rpython.jit.metainterp.jitprof import Profiler
 
 class RecursiveTests:
 
@@ -1332,6 +1333,7 @@ class RecursiveTests:
 
     def check_get_unique_id(self, lst):
         pass
+
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass

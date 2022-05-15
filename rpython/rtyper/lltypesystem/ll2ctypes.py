@@ -344,7 +344,7 @@ def build_new_ctypes_type(T, delayed_builders):
     if isinstance(T, lltype.Ptr):
         if isinstance(T.TO, lltype.FuncType):
             functype = ctypes.CFUNCTYPE
-            if sys.platform == 'win32':
+            if sys.platform == 'win32' and not _64BIT:
                 from rpython.rlib.clibffi import FFI_STDCALL, FFI_DEFAULT_ABI
                 if getattr(T.TO, 'ABI', FFI_DEFAULT_ABI) == FFI_STDCALL:
                     # for win32 system call
@@ -374,9 +374,9 @@ def build_new_ctypes_type(T, delayed_builders):
     elif isinstance(T, lltype.OpaqueType):
         if T is lltype.RuntimeTypeInfo:
             return ctypes.c_char * 2
-        if T.hints.get('external', None) != 'C':
+        if T._hints.get('external', None) != 'C':
             raise TypeError("%s is not external" % T)
-        return ctypes.c_char * T.hints['getsize']()
+        return ctypes.c_char * T._hints['getsize']()
     else:
         _setup_ctypes_cache()
         if T in _ctypes_cache:
@@ -894,9 +894,11 @@ def lltype2ctypes(llobj, normalize=True):
                         #    import pdb; pdb.post_mortem(sys.exc_traceback)
                         global _callback_exc_info
                         _callback_exc_info = sys.exc_info()
-                        if hasattr(getattr(container, '_callable', None),
-                                   '_llhelper_can_raise_'):
-                            llres = T.TO.RESULT._defl()
+                        _callable = getattr(container, '_callable', None)
+                        if hasattr(_callable, '_llhelper_error_value_'):
+                            # see rlib.objectmodel.llhelper_error_value
+                            llres = _callable._llhelper_error_value_
+                            assert lltype.typeOf(llres) == T.TO.RESULT
                             return ctypes_return_value(llres)
                         else:
                             raise
@@ -932,7 +934,7 @@ def lltype2ctypes(llobj, normalize=True):
                     convert_array(container)
                 elif isinstance(T.TO, lltype.OpaqueType):
                     if T.TO != lltype.RuntimeTypeInfo:
-                        cbuf = ctypes.create_string_buffer(T.TO.hints['getsize']())
+                        cbuf = ctypes.create_string_buffer(T.TO._hints['getsize']())
                     else:
                         cbuf = ctypes.create_string_buffer("\x00")
                     cbuf = ctypes.cast(cbuf, ctypes.c_void_p)
@@ -1149,6 +1151,8 @@ if ctypes:
             else:
                 if version <= 6:
                     clibname = 'msvcrt'
+                elif version >= 13:
+                    clibname = 'ucrtbase'
                 else:
                     clibname = 'msvcr%d' % (version * 10)
 
@@ -1167,6 +1171,8 @@ if ctypes:
         rtld_default_lib = ctypes.CDLL("ld-elf.so.1", handle=RTLD_DEFAULT, **load_library_kwargs)
     # XXX is this always correct???
     standard_c_lib = ctypes.CDLL(libc_name, **load_library_kwargs)
+else:
+    libc_name = 'no ctypes'
 
 # ____________________________________________
 
@@ -1179,7 +1185,7 @@ if sys.platform == 'darwin':
         expr = r'[^\(\)\s]*lib%s\.[^\(\)\s]*' % re.escape(name)
         fdout, ccout = tempfile.mkstemp()
         os.close(fdout)
-        cmd = 'if type gcc >/dev/null 2>&1; then CC=gcc; else CC=cc; fi;' \
+        cmd = 'if type gcc >/dev/null 2>&1; then : ${CC:=gcc}; else : ${CC:=cc}; fi;' \
               '$CC -Wl,-t -o ' + ccout + ' 2>&1 -l' + name
         try:
             f = os.popen(cmd)
@@ -1350,6 +1356,10 @@ def get_ctypes_trampoline(FUNCTYPE, cfunc):
         _save_c_errno()
         if _callback_exc_info:
             etype, evalue, etb = _callback_exc_info
+            # cres is the actual C result returned by the function. Stick it
+            # into the exception so that we can check it inside tests (see
+            # e.g. test_llhelper_error_value)
+            evalue._ll2ctypes_c_result = cres
             _callback_exc_info = None
             raise etype, evalue, etb
         return ctypes2lltype(RESULT, cres)

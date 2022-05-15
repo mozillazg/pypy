@@ -44,10 +44,10 @@ def _emulated_start_new_thread(func):
         ident = thread.start_new_thread(func, ())
     except thread.error:
         ident = -1
-    return rffi.cast(rffi.LONG, ident)
+    return rffi.cast(lltype.Signed, ident)
 
 CALLBACK = lltype.Ptr(lltype.FuncType([], lltype.Void))
-c_thread_start = llexternal('RPyThreadStart', [CALLBACK], rffi.LONG,
+c_thread_start = llexternal('RPyThreadStart', [CALLBACK], lltype.Signed,
                             _callable=_emulated_start_new_thread,
                             releasegil=True)  # release the GIL, but most
                                               # importantly, reacquire it
@@ -129,7 +129,7 @@ def start_new_thread(x, y):
     nice, but at least it avoids some levels of GC issues.
     """
     assert len(y) == 0
-    return rffi.cast(lltype.Signed, ll_start_new_thread(x))
+    return ll_start_new_thread(x)
 
 class DummyLock(object):
     def acquire(self, flag):
@@ -163,7 +163,9 @@ class Lock(object):
 
     def acquire(self, flag):
         if flag:
-            c_thread_acquirelock(self._lock, 1)
+            res = c_thread_acquirelock(self._lock, 1)
+            if rffi.cast(lltype.Signed, res) != 1:
+                raise error("lock acquire returned an unexpected error")
             return True
         else:
             res = c_thread_acquirelock_timed_NOAUTO(

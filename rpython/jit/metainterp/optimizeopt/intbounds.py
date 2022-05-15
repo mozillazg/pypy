@@ -1,8 +1,7 @@
 import sys
 from rpython.jit.metainterp.history import ConstInt
 from rpython.jit.metainterp.optimize import InvalidLoop
-from rpython.jit.metainterp.optimizeopt.intutils import (IntBound,
-    IntLowerBound, IntUpperBound, ConstIntBound)
+from rpython.jit.metainterp.optimizeopt.intutils import IntBound
 from rpython.jit.metainterp.optimizeopt.optimizer import (Optimization, CONST_1,
     CONST_0)
 from rpython.jit.metainterp.optimizeopt.util import (
@@ -43,8 +42,8 @@ class OptIntBounds(Optimization):
         #        but the bounds produced by all instructions where box is
         #        an argument might also be tighten
         b = self.getintbound(box)
-        if b.has_lower and b.has_upper and b.lower == b.upper:
-            self.make_constant_int(box, b.lower)
+        if b.is_constant():
+            self.make_constant_int(box, b.getint())
 
         box1 = self.optimizer.as_operation(box)
         if box1 is not None:
@@ -155,6 +154,12 @@ class OptIntBounds(Optimization):
         b2 = self.getintbound(op.getarg(1))
         r = self.getintbound(op)
         b = b1.add_bound(b2)
+        # NB: the result only gets its bound updated if b has an upper and a
+        # lower bound. This is important, to do the right thing in the presence
+        # of overflow. Example:
+        # y = x + 1 where x >= 0
+        # here it's tempting to give a bound of y >= 1, but that would be
+        # wrong, due to wraparound
         if b.bounded():
             r.intersect(b)
 
@@ -208,7 +213,7 @@ class OptIntBounds(Optimization):
         # intbound.lshift_bound checks for an overflow and if the
         # lshift can be proven not to overflow sets b.has_upper and
         # b.has_lower
-        if b.has_lower and b.has_upper:
+        if b.bounded():
             # Synthesize the reverse op for optimize_default to reuse
             self.pure_from_args(rop.INT_RSHIFT,
                                 [op, arg1], arg0)
@@ -217,7 +222,7 @@ class OptIntBounds(Optimization):
         b1 = self.getintbound(op.getarg(0))
         b2 = self.getintbound(op.getarg(1))
         b = b1.rshift_bound(b2)
-        if b.has_lower and b.has_upper and b.lower == b.upper:
+        if b.is_constant():
             # constant result (likely 0, for rshifts that kill all bits)
             self.make_constant_int(op, b.lower)
             return None
@@ -378,6 +383,61 @@ class OptIntBounds(Optimization):
         else:
             return self.emit(op)
 
+    # The optimize_UINT_xx functions are disabled.  They work, but the
+    # resulting PyPy is subtly broken.  This is probably because we only
+    # have INT_ADD/INT_SUB, not the unsigned version, and the logic here
+    # assumes that they are non-overflowing signed arithmetic.  That's
+    # wrong, and they get too small intervals.  That's usually not a
+    # problem, but it can definitely be a problem if it's followed by
+    # one of the UINT_* comparisons.
+    def DISABLED_optimize_UINT_LT(self, op):
+        arg1 = get_box_replacement(op.getarg(0))
+        arg2 = get_box_replacement(op.getarg(1))
+        b1 = self.getintbound(arg1)
+        b2 = self.getintbound(arg2)
+        if b1.known_nonnegative() and b1.known_lt(b2):
+            self.make_constant_int(op, 1)
+        elif b2.known_nonnegative() and b1.known_ge(b2):
+            self.make_constant_int(op, 0)
+        else:
+            return self.emit(op)
+
+    def DISABLED_optimize_UINT_LE(self, op):
+        arg1 = get_box_replacement(op.getarg(0))
+        arg2 = get_box_replacement(op.getarg(1))
+        b1 = self.getintbound(arg1)
+        b2 = self.getintbound(arg2)
+        if b1.known_nonnegative() and b1.known_le(b2):
+            self.make_constant_int(op, 1)
+        elif b2.known_nonnegative() and b1.known_gt(b2):
+            self.make_constant_int(op, 0)
+        else:
+            return self.emit(op)
+
+    def DISABLED_optimize_UINT_GT(self, op):
+        arg1 = get_box_replacement(op.getarg(0))
+        arg2 = get_box_replacement(op.getarg(1))
+        b1 = self.getintbound(arg1)
+        b2 = self.getintbound(arg2)
+        if b2.known_nonnegative() and b1.known_gt(b2):
+            self.make_constant_int(op, 1)
+        elif b1.known_nonnegative() and b1.known_le(b2):
+            self.make_constant_int(op, 0)
+        else:
+            return self.emit(op)
+
+    def DISABLED_optimize_UINT_GE(self, op):
+        arg1 = get_box_replacement(op.getarg(0))
+        arg2 = get_box_replacement(op.getarg(1))
+        b1 = self.getintbound(arg1)
+        b2 = self.getintbound(arg2)
+        if b2.known_nonnegative() and b1.known_ge(b2):
+            self.make_constant_int(op, 1)
+        elif b1.known_nonnegative() and b1.known_lt(b2):
+            self.make_constant_int(op, 0)
+        else:
+            return self.emit(op)
+
     def optimize_INT_EQ(self, op):
         arg0 = get_box_replacement(op.getarg(0))
         b1 = self.getintbound(arg0)
@@ -428,7 +488,30 @@ class OptIntBounds(Optimization):
         numbits = op.getarg(1).getint() * 8
         start = -(1 << (numbits - 1))
         stop = 1 << (numbits - 1)
-        bounds = IntBound(start, stop - 1)
+        bres = self.getintbound(op)
+        bres.intersect_const(start, stop - 1)
+
+    def postprocess_INT_INVERT(self, op):
+        b = self.getintbound(op.getarg(0))
+        bounds = b.invert_bound()
+        bres = self.getintbound(op)
+        bres.intersect(bounds)
+
+    def propagate_bounds_INT_INVERT(self, op):
+        b = self.getintbound(op.getarg(0))
+        bres = self.getintbound(op)
+        bounds = bres.invert_bound()
+        b.intersect(bounds)
+
+    def propagate_bounds_INT_NEG(self, op):
+        b = self.getintbound(op.getarg(0))
+        bres = self.getintbound(op)
+        bounds = bres.neg_bound()
+        b.intersect(bounds)
+
+    def postprocess_INT_NEG(self, op):
+        b = self.getintbound(op.getarg(0))
+        bounds = b.neg_bound()
         bres = self.getintbound(op)
         bres.intersect(bounds)
 
@@ -462,12 +545,11 @@ class OptIntBounds(Optimization):
         v1 = self.getintbound(op)
         v2 = getptrinfo(op.getarg(0))
         intbound = self.getintbound(op.getarg(1))
-        if (intbound.has_lower and v2 is not None and
-            v2.getlenbound(vstring.mode_string) is not None):
-            lb = IntLowerBound(intbound.lower + 1)
-            v2.getlenbound(vstring.mode_string).make_ge(lb)
-        v1.make_ge(IntLowerBound(0))
-        v1.make_lt(IntUpperBound(256))
+        if intbound.has_lower and v2 is not None:
+            lenbound = v2.getlenbound(vstring.mode_string)
+            if lenbound is not None:
+                lenbound.make_gt_const(intbound.lower)
+        v1.intersect_const(0, 255)
 
     def optimize_GETFIELD_RAW_I(self, op):
         return self.emit(op)
@@ -476,8 +558,7 @@ class OptIntBounds(Optimization):
         descr = op.getdescr()
         if descr.is_integer_bounded():
             b1 = self.getintbound(op)
-            b1.make_ge(IntLowerBound(descr.get_integer_min()))
-            b1.make_le(IntUpperBound(descr.get_integer_max()))
+            b1.intersect_const(descr.get_integer_min(), descr.get_integer_max())
 
     optimize_GETFIELD_RAW_F = optimize_GETFIELD_RAW_I
     optimize_GETFIELD_RAW_R = optimize_GETFIELD_RAW_I
@@ -506,8 +587,7 @@ class OptIntBounds(Optimization):
         descr = op.getdescr()
         if descr and descr.is_item_integer_bounded():
             intbound = self.getintbound(op)
-            intbound.make_ge(IntLowerBound(descr.get_item_integer_min()))
-            intbound.make_le(IntUpperBound(descr.get_item_integer_max()))
+            intbound.intersect_const(descr.get_item_integer_min(), descr.get_item_integer_max())
 
     optimize_GETARRAYITEM_RAW_F = optimize_GETARRAYITEM_RAW_I
     optimize_GETARRAYITEM_GC_I = optimize_GETARRAYITEM_RAW_I
@@ -524,13 +604,13 @@ class OptIntBounds(Optimization):
 
     def postprocess_UNICODEGETITEM(self, op):
         b1 = self.getintbound(op)
-        b1.make_ge(IntLowerBound(0))
+        b1.make_ge_const(0)
         v2 = getptrinfo(op.getarg(0))
         intbound = self.getintbound(op.getarg(1))
-        if (intbound.has_lower and v2 is not None and
-            v2.getlenbound(vstring.mode_unicode) is not None):
-            lb = IntLowerBound(intbound.lower + 1)
-            v2.getlenbound(vstring.mode_unicode).make_ge(lb)
+        if intbound.has_lower and v2 is not None:
+            lenbound = v2.getlenbound(vstring.mode_unicode)
+            if lenbound is not None:
+                lenbound.make_gt_const(intbound.lower)
 
     def make_int_lt(self, box1, box2):
         b1 = self.getintbound(box1)
@@ -590,27 +670,90 @@ class OptIntBounds(Optimization):
                 assert r.getint() == 0
                 self.make_int_lt(op.getarg(0), op.getarg(1))
 
-    def propagate_bounds_INT_EQ(self, op):
+    def make_uint_lt(self, box1, box2):
+        b2 = self.getintbound(box2)
+        if b2.known_nonnegative:
+            b1 = self.getintbound(box1)
+            if b1.make_lt(b2) | b1.make_ge_const(0):
+                self.propagate_bounds_backward(box1)
+            #if b2.make_gt(b1):
+            # ^^ probably correct but I fail to see a case where it is helpful
+            #    self.propagate_bounds_backward(box2)
+        # elif box1 is known to be < 0... let's ignore that case
+
+    def make_uint_le(self, box1, box2):
+        b2 = self.getintbound(box2)
+        if b2.known_nonnegative:
+            b1 = self.getintbound(box1)
+            if b1.make_le(b2) | b1.make_ge_const(0):
+                self.propagate_bounds_backward(box1)
+            #if b2.make_ge(b1):
+            # ^^ probably correct but I fail to see a case where it is helpful
+            #    self.propagate_bounds_backward(box2)
+        # elif box1 is known to be < 0... let's ignore that case
+
+    def make_uint_gt(self, box1, box2):
+        self.make_uint_lt(box2, box1)
+
+    def make_uint_ge(self, box1, box2):
+        self.make_uint_le(box2, box1)
+
+    # see DISABLED_optimize_UINT_xx above.
+    def DISABLED_propagate_bounds_UINT_LT(self, op):
         r = self.getintbound(op)
         if r.is_constant():
-            if r.equal(1):
-                b1 = self.getintbound(op.getarg(0))
-                b2 = self.getintbound(op.getarg(1))
-                if b1.intersect(b2):
-                    self.propagate_bounds_backward(op.getarg(0))
-                if b2.intersect(b1):
-                    self.propagate_bounds_backward(op.getarg(1))
+            if r.getint() == 1:
+                self.make_uint_lt(op.getarg(0), op.getarg(1))
+            else:
+                assert r.getint() == 0
+                self.make_uint_ge(op.getarg(0), op.getarg(1))
+
+    def DISABLED_propagate_bounds_UINT_GT(self, op):
+        r = self.getintbound(op)
+        if r.is_constant():
+            if r.getint() == 1:
+                self.make_uint_gt(op.getarg(0), op.getarg(1))
+            else:
+                assert r.getint() == 0
+                self.make_uint_le(op.getarg(0), op.getarg(1))
+
+    def DISABLED_propagate_bounds_UINT_LE(self, op):
+        r = self.getintbound(op)
+        if r.is_constant():
+            if r.getint() == 1:
+                self.make_uint_le(op.getarg(0), op.getarg(1))
+            else:
+                assert r.getint() == 0
+                self.make_uint_gt(op.getarg(0), op.getarg(1))
+
+    def DISABLED_propagate_bounds_UINT_GE(self, op):
+        r = self.getintbound(op)
+        if r.is_constant():
+            if r.getint() == 1:
+                self.make_uint_ge(op.getarg(0), op.getarg(1))
+            else:
+                assert r.getint() == 0
+                self.make_uint_lt(op.getarg(0), op.getarg(1))
+
+    def propagate_bounds_INT_EQ(self, op):
+        r = self.getintbound(op)
+        if r.equal(1):
+            b1 = self.getintbound(op.getarg(0))
+            b2 = self.getintbound(op.getarg(1))
+            if b1.intersect(b2):
+                self.propagate_bounds_backward(op.getarg(0))
+            if b2.intersect(b1):
+                self.propagate_bounds_backward(op.getarg(1))
 
     def propagate_bounds_INT_NE(self, op):
         r = self.getintbound(op)
-        if r.is_constant():
-            if r.equal(0):
-                b1 = self.getintbound(op.getarg(0))
-                b2 = self.getintbound(op.getarg(1))
-                if b1.intersect(b2):
-                    self.propagate_bounds_backward(op.getarg(0))
-                if b2.intersect(b1):
-                    self.propagate_bounds_backward(op.getarg(1))
+        if r.equal(0):
+            b1 = self.getintbound(op.getarg(0))
+            b2 = self.getintbound(op.getarg(1))
+            if b1.intersect(b2):
+                self.propagate_bounds_backward(op.getarg(0))
+            if b2.intersect(b1):
+                self.propagate_bounds_backward(op.getarg(1))
 
     def _propagate_int_is_true_or_zero(self, op, valnonzero, valzero):
         if self.is_raw_ptr(op.getarg(0)):
@@ -620,16 +763,10 @@ class OptIntBounds(Optimization):
             if r.getint() == valnonzero:
                 b1 = self.getintbound(op.getarg(0))
                 if b1.known_nonnegative():
-                    b1.make_gt(IntBound(0, 0))
+                    b1.make_gt_const(0)
                     self.propagate_bounds_backward(op.getarg(0))
             elif r.getint() == valzero:
-                b1 = self.getintbound(op.getarg(0))
-                # XXX remove this hack maybe?
-                # Clever hack, we can't use self.make_constant_int yet because
-                # the args aren't in the values dictionary yet so it runs into
-                # an assert, this is a clever way of expressing the same thing.
-                b1.make_ge(IntBound(0, 0))
-                b1.make_lt(IntBound(1, 1))
+                self.make_constant_int(op.getarg(0), 0)
                 self.propagate_bounds_backward(op.getarg(0))
 
     def propagate_bounds_INT_IS_TRUE(self, op):

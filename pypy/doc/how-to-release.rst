@@ -79,7 +79,6 @@ To change the version, you need to edit three files:
 Other steps
 -----------
 
-
 * Make sure the RPython builds on the buildbot pass with no failures
 
 * Maybe bump the SOABI number in module/imp/importing. This has many
@@ -87,19 +86,17 @@ Other steps
   Wheels will use the major.minor release numbers in the name, so bump
   them if there is an incompatible change to cpyext.
 
+* Make sure the binary-testing_ CI is clean, or that the failures are understood.
+
 * Update and write documentation
 
   * update pypy/doc/contributor.rst (and possibly LICENSE)
     pypy/doc/tool/makecontributor.py generates the list of contributors
 
-  * rename pypy/doc/whatsnew_head.rst to whatsnew_VERSION.rst
-    create a fresh whatsnew_head.rst after the release
-    and add the new file to  pypy/doc/index-of-whatsnew.rst
-
   * write release announcement pypy/doc/release-VERSION.rst
     The release announcement should contain a direct link to the download page
 
-  * Add the new files to  pypy/doc/index-of-{whatsnew,release-notes}.rst
+  * Add the new files to  pypy/doc/index-of-release-notes.rst
 
 * Build and upload the release tar-balls
 
@@ -120,30 +117,43 @@ Other steps
   * download the builds, repackage binaries. Tag the release-candidate version
     (it is important to mark this as a candidate since usually at least two
     tries are needed to complete the process) and download and repackage source
-    from bitbucket. You may find it convenient to use the ``repackage.sh``
-    script in pypy/tool/release to do this. 
+    from the buildbot. You may find it convenient to use the ``repackage.sh``
+    script in ``pypy/tool/release`` to do this. 
 
-    Otherwise repackage and upload source "-src.tar.bz2" to bitbucket
-    and to cobra, as some packagers prefer a clearly labeled source package
-    ( download e.g.  https://bitbucket.org/pypy/pypy/get/release-2.5.x.tar.bz2,
-    unpack, rename the top-level directory to "pypy-2.5.0-src", repack, and upload)
+    Also repackage and upload source "-src.tar.bz2"
 
-  * Upload binaries to https://bitbucket.org/pypy/pypy/downloads
+  * Upload binaries to https://buildbot.pypy.org/mirror. Add the files to
+    the ``versions.json`` in ``pypy/tools/release``, upload it, and run the
+    ``check_versions.py`` file in that directory. This file is used by various
+    downstream tools like "github actions" to find valid pypy downloads. It
+    takes an hour for https://downloads.python.org/pypy/ to sync. Note the
+    "latest_pypy" attribute: it is per-python-version. So if the new release
+    overrides a current latest_pypy (both are 2.7.18, for instance), you must
+    find the older version and set its "lastest_pypy" to "false" or
+    ``check_versions.py`` (and the various tools) will fail.
 
 * Send out a mailing list message asking for last-minute comments and testing
 
 * RELEASE !  
 
-  * update pypy.org (under extradoc/pypy.org), rebuild and commit, using the
-    hashes produced from the ``repackage.sh`` script or by hand
+  * update pypy.org_ with the checksum hashes produced from the
+    ``repackage.sh`` script or by hand and the download pages
 
-  * post announcement on morepypy.blogspot.com
+  * post announcement on pypy.org
   * send announcements to twitter.com, pypy-dev, python-list,
     python-announce, python-dev ...
 
-* If all is OK, document the released version
+* If all is OK, document the released version and suggest popular tools update
+  to support it. Github actions will pick up the versions.json.
 
   * add a tag on the codespeed web site that corresponds to pypy release
   * revise versioning at https://readthedocs.org/projects/pypy
-  * tag the final release(s) with appropriate tags
+  * suggest updates to multibuild_ and cibuildwheel_
+  * update conda forge's `pypy3.6-feedstock`_ and `pypy-meta-feedstock`_
 
+.. _multibuild: https://github.com/matthew-brett/multibuild
+.. _cibuildwheel: https://github.com/joerick/cibuildwheel
+.. _`pypy3.6-feedstock`: https://github.com/conda-forge/pypy3.6-feedstock
+.. _`pypy-meta-feedstock`: https://github.com/conda-forge/pypy-meta-feedstock
+.. _binary-testing: https://github.com/pypy/binary-testing/actions
+.. _pypy.org: https://github.com/pypy/pypy.org

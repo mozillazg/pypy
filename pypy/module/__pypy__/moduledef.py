@@ -97,6 +97,7 @@ class Module(MixedModule):
         'get_hidden_tb'             : 'interp_magic.get_hidden_tb',
         'lookup_special'            : 'interp_magic.lookup_special',
         'do_what_I_mean'            : 'interp_magic.do_what_I_mean',
+        '_internal_crash'           : 'interp_magic._internal_crash',
         'resizelist_hint'           : 'interp_magic.resizelist_hint',
         'newlist_hint'              : 'interp_magic.newlist_hint',
         'add_memory_pressure'       : 'interp_magic.add_memory_pressure',
@@ -119,9 +120,11 @@ class Module(MixedModule):
         'pyos_inputhook'            : 'interp_magic.pyos_inputhook',
         'newmemoryview'             : 'interp_buffer.newmemoryview',
         'utf8content'               : 'interp_magic.utf8content',
+        'list_get_physical_size'    : 'interp_magic.list_get_physical_size',
     }
     if sys.platform == 'win32':
         interpleveldefs['get_console_cp'] = 'interp_magic.get_console_cp'
+        interpleveldefs['get_osfhandle'] = 'interp_magic.get_osfhandle'
 
     submodules = {
         "builders": BuildersModule,

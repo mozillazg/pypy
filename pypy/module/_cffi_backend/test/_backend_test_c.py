@@ -1,7 +1,11 @@
+# Copied from <cffi>/c/test_c.py
+# Make sure the files are identical starting from the # ________ line below
+
+
 # ____________________________________________________________
 
 import sys
-assert __version__ == "1.14.0", ("This test_c.py file is for testing a version"
+assert __version__ == "1.15.0", ("This test_c.py file is for testing a version"
                                  " of cffi that differs from the one that we"
                                  " get from 'import _cffi_backend'")
 if sys.version_info < (3,):
@@ -52,8 +56,10 @@ def find_and_load_library(name, flags=RTLD_NOW):
         path = ctypes.util.find_library(name)
         if path is None and name == 'c':
             assert sys.platform == 'win32'
-            assert sys.version_info >= (3,)
-            py.test.skip("dlopen(None) cannot work on Windows with Python 3")
+            assert (sys.version_info >= (3,) or
+                    '__pypy__' in sys.builtin_module_names)
+            py.test.skip("dlopen(None) cannot work on Windows "
+                         "with PyPy or Python 3")
     return load_library(path, flags)
 
 def test_load_library():
@@ -96,7 +102,7 @@ def test_cast_to_signed_char():
     p = new_primitive_type("signed char")
     x = cast(p, -65 + 17*256)
     assert repr(x) == "<cdata 'signed char' -65>"
-    assert repr(type(x)) == "<%s '_cffi_backend.CData'>" % type_or_class
+    assert repr(type(x)) == "<%s '_cffi_backend._CDataBase'>" % type_or_class
     assert int(x) == -65
     x = cast(p, -66 + (1<<199)*256)
     assert repr(x) == "<cdata 'signed char' -66>"
@@ -1313,7 +1319,11 @@ def test_callback_exception():
     except ImportError:
         import io as cStringIO    # Python 3
     import linecache
-    def matches(istr, ipattern):
+    def matches(istr, ipattern, ipattern38, ipattern311):
+        if sys.version_info >= (3, 8):
+            ipattern = ipattern38
+        if sys.version_info >= (3, 11):
+            ipattern = ipattern311
         str, pattern = istr, ipattern
         while '$' in pattern:
             i = pattern.index('$')
@@ -1346,6 +1356,8 @@ def test_callback_exception():
     try:
         linecache.getline = lambda *args: 'LINE'    # hack: speed up PyPy tests
         sys.stderr = cStringIO.StringIO()
+        if hasattr(sys, '__unraisablehook__'):          # work around pytest
+            sys.unraisablehook = sys.__unraisablehook__ # on recent CPythons
         assert f(100) == 300
         assert sys.stderr.getvalue() == ''
         assert f(10000) == -42
@@ -1357,6 +1369,24 @@ Traceback (most recent call last):
   File "$", line $, in check_value
     $
 ValueError: 42
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>:
+Traceback (most recent call last):
+  File "$", line $, in Zcb1
+    $
+  File "$", line $, in check_value
+    $
+ValueError: 42
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>:
+Traceback (most recent call last):
+  File "$", line $, in Zcb1
+    $
+    $
+  File "$", line $, in check_value
+    $
+    $
+ValueError: 42
 """)
         sys.stderr = cStringIO.StringIO()
         bigvalue = 20000
@@ -1364,6 +1394,19 @@ ValueError: 42
         assert matches(sys.stderr.getvalue(), """\
 From cffi callback <function$Zcb1 at 0x$>:
 Trying to convert the result back to C:
+OverflowError: integer 60000 does not fit 'short'
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>, trying to convert the result back to C:
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+OverflowError: integer 60000 does not fit 'short'
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>, trying to convert the result back to C:
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+    $
 OverflowError: integer 60000 does not fit 'short'
 """)
         sys.stderr = cStringIO.StringIO()
@@ -1402,11 +1445,37 @@ OverflowError: integer 60000 does not fit 'short'
 During the call to 'onerror', another exception occurred:
 
 TypeError: $integer$
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>, trying to convert the result back to C:
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+OverflowError: integer 60000 does not fit 'short'
+Exception ignored during handling of the above exception by 'onerror':
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+TypeError: $integer$
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>, trying to convert the result back to C:
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+    $
+OverflowError: integer 60000 does not fit 'short'
+Exception ignored during handling of the above exception by 'onerror':
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+    $
+TypeError: $integer$
 """)
         #
         sys.stderr = cStringIO.StringIO()
         seen = "not a list"    # this makes the oops() function crash
         assert ff(bigvalue) == -42
+        # the $ after the AttributeError message are for the suggestions that
+        # will be added in Python 3.10
         assert matches(sys.stderr.getvalue(), """\
 From cffi callback <function$Zcb1 at 0x$>:
 Trying to convert the result back to C:
@@ -1417,7 +1486,31 @@ During the call to 'onerror', another exception occurred:
 Traceback (most recent call last):
   File "$", line $, in oops
     $
-AttributeError: 'str' object has no attribute 'append'
+AttributeError: 'str' object has no attribute 'append$
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>, trying to convert the result back to C:
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+OverflowError: integer 60000 does not fit 'short'
+Exception ignored during handling of the above exception by 'onerror':
+Traceback (most recent call last):
+  File "$", line $, in oops
+    $
+AttributeError: 'str' object has no attribute 'append$
+""", """\
+Exception ignored from cffi callback <function$Zcb1 at 0x$>, trying to convert the result back to C:
+Traceback (most recent call last):
+  File "$", line $, in test_callback_exception
+    $
+    $
+OverflowError: integer 60000 does not fit 'short'
+Exception ignored during handling of the above exception by 'onerror':
+Traceback (most recent call last):
+  File "$", line $, in oops
+    $
+    $
+AttributeError: 'str' object has no attribute 'append$
 """)
     finally:
         sys.stderr = orig_stderr
@@ -1452,7 +1545,7 @@ def test_a_lot_of_callbacks():
     def make_callback(m):
         def cb(n):
             return n + m
-        return callback(BFunc, cb, 42)    # 'cb' and 'BFunc' go out of scope
+        return callback(BFunc, cb, 42)    # 'cb' goes out of scope
     #
     flist = [make_callback(i) for i in range(BIGNUM)]
     for i, f in enumerate(flist):
@@ -2535,8 +2628,8 @@ def test_errno():
     assert get_errno() == 95
 
 def test_errno_callback():
-    if globals().get('PY_DOT_PY') == '2.5':
-        py.test.skip("cannot run this test on py.py with Python 2.5")
+    if globals().get('PY_DOT_PY'):
+        py.test.skip("cannot run this test on py.py (e.g. fails on Windows)")
     set_errno(95)
     def cb():
         e = get_errno()
@@ -3956,6 +4049,20 @@ def test_from_buffer_types():
     with pytest.raises(ValueError):
         release(pv[0])
 
+def test_issue483():
+    BInt = new_primitive_type("int")
+    BIntP = new_pointer_type(BInt)
+    BIntA = new_array_type(BIntP, None)
+    lst = list(range(25))
+    bytestring = bytearray(buffer(newp(BIntA, lst))[:] + b'XYZ')
+    p1 = from_buffer(BIntA, bytestring)      # int[]
+    assert len(buffer(p1)) == 25 * size_of_int()
+    assert sizeof(p1) == 25 * size_of_int()
+    #
+    p2 = from_buffer(BIntP, bytestring)
+    assert sizeof(p2) == size_of_ptr()
+    assert len(buffer(p2)) == size_of_int()  # first element only, by default
+
 def test_memmove():
     Short = new_primitive_type("short")
     ShortA = new_array_type(new_pointer_type(Short), None)
@@ -4440,3 +4547,62 @@ def test_huge_structure():
     BStruct = new_struct_type("struct foo")
     complete_struct_or_union(BStruct, [('a1', BArray, -1)])
     assert sizeof(BStruct) == sys.maxsize
+
+def test_get_types():
+    import _cffi_backend
+    CData, CType = _get_types()
+    assert CData is _cffi_backend._CDataBase
+    assert CType is _cffi_backend.CType
+
+def test_type_available_with_correct_names():
+    import _cffi_backend
+    check_names = [
+        'CType',
+        'CField',
+        'CLibrary',
+        '_CDataBase',
+        'FFI',
+        'Lib',
+        'buffer',
+    ]
+    if '__pypy__' in sys.builtin_module_names:
+        check_names += [
+            '__CData_iterator',
+            '__FFIGlobSupport',
+            '__FFIAllocator',
+            '__FFIFunctionWrapper',
+        ]
+    else:
+        check_names += [
+            '__CDataOwn',
+            '__CDataOwnGC',
+            '__CDataFromBuf',
+            '__CDataGCP',
+            '__CData_iterator',
+            '__FFIGlobSupport',
+        ]
+    for name in check_names:
+        tp = getattr(_cffi_backend, name)
+        assert isinstance(tp, type)
+        assert (tp.__module__, tp.__name__) == ('_cffi_backend', name)
+
+def test_unaligned_types():
+    BByteArray = new_array_type(
+        new_pointer_type(new_primitive_type("unsigned char")), None)
+    pbuf = newp(BByteArray, 40)
+    buf = buffer(pbuf)
+    #
+    for name in ['short', 'int', 'long', 'long long', 'float', 'double',
+                 'float _Complex', 'double _Complex']:
+        p = new_primitive_type(name)
+        if name.endswith(' _Complex'):
+            num = cast(p, 1.23 - 4.56j)
+        else:
+            num = cast(p, 0x0123456789abcdef)
+        size = sizeof(p)
+        buf[0:40] = b"\x00" * 40
+        pbuf1 = cast(new_pointer_type(p), pbuf + 1)
+        pbuf1[0] = num
+        assert pbuf1[0] == num
+        assert buf[0] == b'\x00'
+        assert buf[1 + size] == b'\x00'

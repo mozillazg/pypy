@@ -89,9 +89,10 @@ class AppTestArray(object):
                 assert a[i] == v
                 assert type(a[i]) is pt or (
                     # A special case: we return ints in Array('I') on 64-bits,
+                    # and in Array('L') on 64-bit Windows,
                     # whereas CPython returns longs.  The difference is
                     # probably acceptable.
-                    tc == 'I' and
+                    (tc == 'I' or tc == 'L' and sys.platform == 'win32') and
                     sys.maxint > 2147483647 and type(a[i]) is int)
             for v in ok:
                 a[1] = v
@@ -366,6 +367,7 @@ class AppTestArray(object):
         assert repr(a[2:1:-1]) == "array('i', [20])"
         assert repr(a[2:-1:-1]) == "array('i')"
         assert repr(a[-1:0:-1]) == "array('i', [20, 21])"
+        del a
 
         for a in range(-4, 5):
             for b in range(-4, 5):
@@ -383,6 +385,7 @@ class AppTestArray(object):
                             assert repr(arr) == repr(self.array('i', lst))
                         except ValueError:
                             assert not ok
+                    del arr
 
     def test_getslice_large_step(self):
         import sys

@@ -9,7 +9,16 @@ install additional modules that require compilation, you may need to install
 additional packages such as pypy-dev. This will manifest as an error about
 "missing Python.h". Distributions do not as of yet supply many pypy-ready
 packages, if you require additional modules we recommend creating a virtualenv
-and using pip. 
+and using pip. If you require compiled (c-extension) modules like SciPy, we
+recommend you use conda, which works on Windows10, macOS, and linux x86_64:
+
+.. code-block:: console
+
+    $ conda create -my_cool_pypy pypy
+    $ conda activate my_cool_pypy
+    $ conda install scipy
+
+On macOS you can also use homebrew, which provides signed packages.
 
 .. _prebuilt-pypy:
 
@@ -23,12 +32,13 @@ builds depend on dynamically linked libraries that may not be available on your
 OS. See the section about `Linux binaries`_ for more info and alternatives that
 may work on your system.
 
-Please note that the nightly builds are not
-guaranteed to be as stable as official releases, use them at your own risk.
+Please note that the nightly builds are not guaranteed to be as stable as
+official releases, use them at your own risk. Also the macOS binaries are not
+signed, which means you need to convince macOS they are safe for use.
 
-.. _most recent release: http://pypy.org/download.html
-.. _development nightly build: http://buildbot.pypy.org/nightly/trunk/
-.. _Linux binaries: http://pypy.org/download.html#linux-binaries-and-common-distributions
+.. _most recent release: https://pypy.org/download.html
+.. _development nightly build: https://buildbot.pypy.org/nightly/trunk/
+.. _Linux binaries: https://pypy.org/download.html#linux-binaries-and-common-distributions
 
 Installing PyPy
 ~~~~~~~~~~~~~~~
@@ -99,7 +109,7 @@ You should still upgrade pip and wheel to the latest versions via::
 
     $ my-pypy-env/bin/pypy -mpip install -U pip wheel
 
-.. _pip: http://pypi.python.org/pypi/pip
+.. _pip: https://pypi.python.org/pypi/pip
 .. _ensurepip: https://docs.python.org/3/library/ensurepip.html
 
 Building PyPy yourself

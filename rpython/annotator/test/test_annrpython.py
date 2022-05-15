@@ -3462,17 +3462,6 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeUnicodeString)
         assert s.no_nul
 
-    def test_unicode_char(self):
-        def f(x, i):
-            for c in x:
-                if c == i:
-                    return c
-            return 'x'
-
-        a = self.RPythonAnnotator()
-        s = a.build_types(f, [unicode, str])
-        assert isinstance(s, annmodel.SomeUnicodeCodePoint)
-
     def test_strformatting_unicode(self):
         def f(x):
             return '%s' % unichr(x)
@@ -3745,6 +3734,16 @@ class TestAnnotateTestCase:
         def f():
             for i, x in enumerate(['a', 'b', 'c', 'd']):
                 if i == 2:
+                    return x
+            return '?'
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert isinstance(s, annmodel.SomeChar)
+
+    def test_enumerate_startindex(self):
+        def f():
+            for i, x in enumerate(['a', 'b', 'c', 'd'], 5):
+                if i == 7:
                     return x
             return '?'
         a = self.RPythonAnnotator()
@@ -4675,6 +4674,33 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [int])
         assert isinstance(listitem(s), annmodel.SomeChar)
+
+    def test_union_of_methods_of_frozen(self):
+        class A(Freezing):
+            def foo(self):
+                return 42
+            def bar(self):
+                return 43
+        class B(A):
+            def foo(self):
+                return 44
+
+        a = A()
+        b = B()
+        def f(n):
+            x = a if n > 0 else b
+            return x.foo()
+        def g(n):
+            x = a if n > 0 else b
+            return x.bar()
+        ann = self.RPythonAnnotator()
+        with py.test.raises(AnnotatorError):
+            # a.foo and b.foo are different functions -> BOOM
+            s = ann.build_types(f, [int])
+
+        # a.bar and b.bar are the same function -> OK
+        s = ann.build_types(g, [int])
+        assert s.const == 43
 
 
 def g(n):

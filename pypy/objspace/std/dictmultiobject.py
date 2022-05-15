@@ -250,9 +250,7 @@ class W_DictMultiObject(W_Root):
 
     def descr_copy(self, space):
         """D.copy() -> a shallow copy of D"""
-        w_new = W_DictMultiObject.allocate_and_init_instance(space)
-        update1_dict_dict(space, w_new, self)
-        return w_new
+        return self.copy()
 
     def descr_items(self, space):
         """D.items() -> list of D's (key, value) pairs, as 2-tuples"""
@@ -403,12 +401,20 @@ class W_ModuleDictObject(W_DictMultiObject):
     def set_strategy(self, strategy):
         self.mstrategy = strategy
 
+    def get_global_cache(self, key):
+        from pypy.objspace.std.celldict import ModuleDictStrategy
+        strategy = self.mstrategy
+        if isinstance(strategy, ModuleDictStrategy):
+            return strategy.get_global_cache(self, key)
+        else:
+            return None
 
 
+# called below DictStrategy
 
 def _add_indirections():
     dict_methods = "getitem getitem_str setitem setdefault \
-                    popitem delitem clear \
+                    popitem delitem clear copy \
                     length w_keys values items \
                     iterkeys itervalues iteritems \
                     listview_bytes listview_ascii listview_int \
@@ -421,9 +427,8 @@ def _add_indirections():
         return f
 
     for method in dict_methods:
+        assert hasattr(DictStrategy, method)
         setattr(W_DictMultiObject, method, make_method(method))
-
-_add_indirections()
 
 
 app = applevel('''
@@ -524,9 +529,40 @@ class DictStrategy(object):
     def get_empty_storage(self):
         raise NotImplementedError
 
+    def getitem(self, w_dict, w_key):
+        raise NotImplementedError
+
+    def getitem_str(self, w_dict, key):
+        return w_dict.getitem(self.space.newtext(key))
+
+    def setitem(self, w_dict, w_key, w_value):
+        raise NotImplementedError
+
     def setitem_str(self, w_dict, key, w_value):
         w_dict.setitem(self.space.newtext(key), w_value)
 
+    def delitem(self, w_dict, w_key):
+        raise NotImplementedError
+
+    def length(self, w_dict):
+        raise NotImplementedError
+
+    def setdefault(self, w_dict, w_key, w_value):
+        # slow default implementation
+        w_result = self.getitem(w_dict, w_key)
+        if w_result is not None:
+            return w_result
+        self.setitem(w_dict, w_key, w_value)
+        return w_value
+
+    def iterkeys(self, w_dict):
+        raise NotImplementedError
+
+    def itervalues(self, w_dict):
+        raise NotImplementedError
+
+    def iteritems(self, w_dict):
+        raise NotImplementedError
 
     @jit.look_inside_iff(lambda self, w_dict:
                          w_dict_unrolling_heuristic(w_dict))
@@ -611,6 +647,13 @@ class DictStrategy(object):
                 break
             w_updatedict.setitem(w_key, w_value)
 
+    def copy(self, w_dict):
+        # fallback
+        iteritems = self.iteritems(w_dict)
+        w_copy = W_DictMultiObject.allocate_and_init_instance(self.space)
+        DictStrategy.rev_update1_dict_dict(self, w_dict, w_copy)
+        return w_copy
+
     def prepare_update(self, w_dict, num_extra):
         pass
 
@@ -656,6 +699,9 @@ class DictStrategy(object):
         # fall-back if getiterreversed is not present
         w_keys = self.w_keys(w_dict)
         return self.space.call_method(w_keys, '__reversed__')
+
+_add_indirections()
+
 
 class EmptyDictStrategy(DictStrategy):
     erase, unerase = rerased.new_erasing_pair("empty")
@@ -761,6 +807,9 @@ class EmptyDictStrategy(DictStrategy):
             return w_default
         else:
             raise KeyError
+
+    def copy(self, w_dict):
+        return W_DictMultiObject.allocate_and_init_instance(self.space)
 
     # ---------- iterator interface ----------------
 
@@ -1091,6 +1140,10 @@ class AbstractTypedStrategy(object):
         w_dict.set_strategy(strategy)
         w_dict.dstorage = strategy.erase(d_new)
 
+    def copy(self, w_dict):
+        dstorage = self.unerase(w_dict.dstorage)
+        return W_DictObject(self.space, self, self.erase(dstorage.copy()))
+
     # --------------- iterator interface -----------------
 
     def getiterkeys(self, w_dict):
@@ -1350,7 +1403,12 @@ def update1(space, w_dict, w_data):
 
 
 def update1_dict_dict(space, w_dict, w_data):
-    w_data.get_strategy().rev_update1_dict_dict(w_data, w_dict)
+    if isinstance(w_dict.get_strategy(), EmptyDictStrategy):
+        w_copy = w_data.get_strategy().copy(w_data)
+        w_dict.set_strategy(w_copy.get_strategy())
+        w_dict.dstorage = w_copy.dstorage
+    else:
+        w_data.get_strategy().rev_update1_dict_dict(w_data, w_dict)
 
 
 def update1_pairs(space, w_dict, data_w):
@@ -1432,43 +1490,27 @@ class W_BaseDictMultiIterObject(W_Root):
         At unpickling time, we just use that list
         and create an iterator on it.
         This is of course not the standard way.
-
-        XXX to do: remove this __reduce__ method and do
-        a registration with copy_reg, instead.
         """
         w_mod    = space.getbuiltinmodule('_pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         new_inst = mod.get('dictiter_surrogate_new')
-        w_typeobj = space.type(self)
 
-        raise oefmt(space.w_TypeError,
-                    "can't pickle dictionary-keyiterator objects")
-        # XXXXXX get that working again
+        w_dict = self.iteratorimplementation.w_dict
 
-        # we cannot call __init__ since we don't have the original dict
         if isinstance(self, W_DictMultiIterKeysObject):
-            w_clone = space.allocate_instance(W_DictMultiIterKeysObject,
-                                              w_typeobj)
+            w_clone = W_DictMultiIterKeysObject(space, w_dict.iterkeys())
         elif isinstance(self, W_DictMultiIterValuesObject):
-            w_clone = space.allocate_instance(W_DictMultiIterValuesObject,
-                                              w_typeobj)
+            w_clone = W_DictMultiIterValuesObject(space, w_dict.itervalues())
         elif isinstance(self, W_DictMultiIterItemsObject):
-            w_clone = space.allocate_instance(W_DictMultiIterItemsObject,
-                                              w_typeobj)
+            w_clone = W_DictMultiIterItemsObject(space, w_dict.iteritems())
         else:
             raise oefmt(space.w_TypeError,
                         "unsupported dictiter type '%R' during pickling", self)
-        w_clone.space = space
-        w_clone.content = self.content
-        w_clone.len = self.len
-        w_clone.pos = 0
-        w_clone.setup_iterator()
+
         # spool until we have the same pos
-        while w_clone.pos < self.pos:
-            w_clone.next_entry()
-            w_clone.pos += 1
-        stuff = [w_clone.next_entry() for i in range(w_clone.pos, w_clone.len)]
-        w_res = space.newlist(stuff)
+        for x in xrange(self.iteratorimplementation.pos):
+            w_clone.descr_next(space)
+        w_res = space.call_function(space.w_list, w_clone)
         w_ret = space.newtuple([new_inst, space.newtuple([w_res])])
         return w_ret
 

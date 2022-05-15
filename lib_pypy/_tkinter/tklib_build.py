@@ -15,12 +15,13 @@ elif sys.platform.startswith("freebsd"):
     libdirs = ['/usr/local/lib']
 elif sys.platform == 'win32':
     incdirs = []
-    linklibs = ['tcl85', 'tk85']
+    linklibs = ['tcl86t', 'tk86t']
     libdirs = []
 elif sys.platform == 'darwin':
-    incdirs = ['/System/Library/Frameworks/Tk.framework/Versions/Current/Headers/']
-    linklibs = ['tcl', 'tk']
-    libdirs = []
+    # homebrew
+    incdirs = ['/usr/local/opt/tcl-tk/include']
+    linklibs = ['tcl8.6', 'tk8.6']
+    libdirs = ['/usr/local/opt/tcl-tk/lib']
 else:
     # On some Linux distributions, the tcl and tk libraries are
     # stored in /usr/include, so we must check this case also

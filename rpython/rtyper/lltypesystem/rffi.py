@@ -190,7 +190,14 @@ def llexternal(name, args, result, _callable=None,
                 if %(save_err)d:
                     from rpython.rlib import rposix
                     rposix._errno_before(%(save_err)d)
-                res = funcptr(%(argnames)s)
+                if we_are_translated():
+                    res = funcptr(%(argnames)s)
+                else:
+                    try:    # only when non-translated
+                        res = funcptr(%(argnames)s)
+                    except:
+                        rgil.acquire()
+                        raise
                 if %(save_err)d:
                     from rpython.rlib import rposix
                     rposix._errno_after(%(save_err)d)
@@ -199,6 +206,7 @@ def llexternal(name, args, result, _callable=None,
         """ % locals())
         miniglobals = {'funcptr':     funcptr,
                        '__name__':    __name__, # for module name propagation
+                       'we_are_translated': we_are_translated,
                        }
         exec source.compile() in miniglobals
         call_external_function = miniglobals['call_external_function']
@@ -517,9 +525,10 @@ if os.name != 'nt':
           'int_fast64_t', 'uint_fast64_t',
           'intmax_t', 'uintmax_t'])
 else:
-    MODE_T = lltype.Signed
+    # MODE_T is set later
     PID_T = lltype.Signed
     SSIZE_T = lltype.Signed
+    PTRDIFF_T = lltype.Signed
 
 def populate_inttypes():
     names = []
@@ -531,6 +540,8 @@ def populate_inttypes():
             signed = False
         elif (name == 'size_t' or name.startswith('uint')
                                or name.startswith('__uint')):
+            signed = False
+        elif name == 'wchar_t' and sys.platform == 'win32':
             signed = False
         else:
             signed = True
@@ -584,6 +595,9 @@ NUMBER_TYPES.append(INT_real)
 # rarithmetic.r_int, etc!  rffi.INT/r_int correspond to the C-level
 # 'int' type, whereas rarithmetic.r_int corresponds to the
 # Python-level int type (which is a C long).  Fun.
+
+if os.name == 'nt':
+    MODE_T = INT
 
 def CStruct(name, *fields, **kwds):
     """ A small helper to create external C structure, not the
@@ -750,6 +764,10 @@ SIGNED = lltype.Signed
 SIGNEDP = lltype.Ptr(lltype.Array(lltype.Signed, hints={'nolength': True}))
 SIGNEDPP = lltype.Ptr(lltype.Array(SIGNEDP, hints={'nolength': True}))
 
+# Unsigned, Unsigned *
+UNSIGNED = lltype.Unsigned
+UNSIGNEDP = lltype.Ptr(lltype.Array(lltype.Unsigned, hints={'nolength': True}))
+
 
 # various type mapping
 
@@ -820,6 +838,16 @@ def make_string_mappings(strtype):
     # char* -> str
     # doesn't free char*
     def charp2str(cp):
+        if not we_are_translated():
+            res = []
+            size = 0
+            while True:
+                c = cp[size]
+                if c == lastchar:
+                    return assert_str0("".join(res))
+                res.append(c)
+                size += 1
+
         size = 0
         while cp[size] != lastchar:
             size += 1
@@ -1014,6 +1042,31 @@ def make_string_mappings(strtype):
  ) = make_string_mappings(unicode)
 
 
+def constcharp2str(cp):
+    """
+    Like charp2str, but takes a CONST_CCHARP instead
+    """
+    cp = cast(CCHARP, cp)
+    return charp2str(cp)
+constcharp2str._annenforceargs_ = [lltype.SomePtr(CONST_CCHARP)]
+
+
+def constcharpsize2str(cp, size):
+    """
+    Like charpsize2str, but takes a CONST_CCHARP instead
+    """
+    cp = cast(CCHARP, cp)
+    return charpsize2str(cp, size)
+constcharpsize2str._annenforceargs_ = [lltype.SomePtr(CONST_CCHARP), int]
+
+def str2constcharp(s):
+    """
+    Like str2charp, but returns a CONST_CCHARP instead
+    """
+    cp = str2charp(s)
+    return cast(CONST_CCHARP, cp)
+str2constcharp._annenforceargs_ = [str]
+
 @not_rpython
 def _deprecated_get_nonmovingbuffer(*args):
     raise Exception(
@@ -1129,7 +1182,7 @@ def size_and_sign(tp):
     except AttributeError:
         if not isinstance(tp, lltype.Primitive):
             unsigned = False
-        elif tp in (lltype.Signed, FLOAT, DOUBLE, llmemory.Address):
+        elif tp in (lltype.Signed, FLOAT, DOUBLE, LONGDOUBLE, llmemory.Address):
             unsigned = False
         elif tp in (lltype.Char, lltype.UniChar, lltype.Bool):
             unsigned = True
@@ -1151,7 +1204,7 @@ def sizeof(tp):
         if size is None:
             size = llmemory.sizeof(tp)    # a symbolic result in this case
         return size
-    if (tp is lltype.Signed or isinstance(tp, lltype.Ptr) 
+    if (tp is lltype.Signed or isinstance(tp, lltype.Ptr)
                             or tp is llmemory.Address):
         return LONG_BIT/8
     if tp is lltype.Char or tp is lltype.Bool:

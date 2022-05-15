@@ -108,9 +108,10 @@ translation_optiondescription = OptionDescription(
                default=False, cmdline="--thread"),
     BoolOption("sandbox", "Produce a fully-sandboxed executable",
                default=False, cmdline="--sandbox",
-               requires=[("translation.thread", False)],
                suggests=[("translation.gc", "generation"),
-                         ("translation.gcrootfinder", "shadowstack")]),
+                         ("translation.gcrootfinder", "shadowstack"),
+                         ("translation.thread", False),
+                        ]),
     BoolOption("rweakref", "The backend supports RPython-level weakrefs",
                default=True),
 
@@ -201,6 +202,8 @@ translation_optiondescription = OptionDescription(
                default=False, cmdline="--lto",
                requires=[("translation.gcrootfinder", "shadowstack")]),
     StrOption("icon", "Path to the (Windows) icon to use for the executable"),
+    StrOption("manifest",
+              "Path to the (Windows) manifest to embed in the executable"),
     StrOption("libname",
               "Windows: name and possibly location of the lib file to create"),
 
@@ -294,6 +297,9 @@ translation_optiondescription = OptionDescription(
                          ('translation.jit', False),
                          ('translation.gc', 'boehm'),
                          ('translation.continuation', False)]),
+    BoolOption("rpython_translate",
+               "Set to true by rpython/bin/rpython and translate.py",
+               default=False),
 ])
 
 def get_combined_translation_config(other_optdescr=None,

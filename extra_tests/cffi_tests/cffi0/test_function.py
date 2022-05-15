@@ -6,7 +6,7 @@ import math, os, sys
 import ctypes.util
 from cffi.backend_ctypes import CTypesBackend
 from extra_tests.cffi_tests.udir import udir
-from extra_tests.cffi_tests.support import FdWriteCapture
+from extra_tests.cffi_tests.support import FdWriteCapture, StdErrCapture
 from .backend_tests import needs_dlopen_none
 
 try:
@@ -228,18 +228,31 @@ class TestFunction(object):
             def cb():
                 return returnvalue
             fptr = ffi.callback("void(*)(void)", cb)
-            old_stderr = sys.stderr
-            try:
-                sys.stderr = StringIO()
+            with StdErrCapture() as f:
                 returned = fptr()
-                printed = sys.stderr.getvalue()
-            finally:
-                sys.stderr = old_stderr
+            printed = f.getvalue()
             assert returned is None
             if returnvalue is None:
                 assert printed == ''
             else:
                 assert "None" in printed
+
+    def test_callback_returning_struct_three_bytes(self):
+        if self.Backend is CTypesBackend:
+            py.test.skip("not supported with the ctypes backend")
+        ffi = FFI(backend=self.Backend())
+        ffi.cdef("""
+            typedef struct {
+                unsigned char a, b, c;
+            } THREEBYTES;
+        """)
+        def cb():
+            return (12, 34, 56)
+        fptr = ffi.callback("THREEBYTES(*)(void)", cb)
+        tb = fptr()
+        assert tb.a == 12
+        assert tb.b == 34
+        assert tb.c == 56
 
     def test_passing_array(self):
         ffi = FFI(backend=self.Backend())

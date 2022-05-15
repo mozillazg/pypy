@@ -162,7 +162,7 @@ class W_Socket(W_Root):
             self.register_finalizer(space)
 
     def _finalize_(self):
-        is_open = self.sock.fd >= 0
+        is_open = self.sock.fd != rsocket.INVALID_SOCKET
         if is_open and self.space.sys.track_resources:
             w_repr = self.space.repr(self)
             str_repr = self.space.text_w(w_repr)
@@ -550,13 +550,13 @@ class W_Socket(W_Root):
             try:
                 if cmd == _c.SIO_RCVALL:
                     option_ptr = rffi.cast(rffi.INTP, value_ptr)
-                    option_ptr[0] = space.int_w(w_option)
+                    option_ptr[0] = rffi.cast(rffi.INT, space.int_w(w_option))
                 elif cmd == _c.SIO_KEEPALIVE_VALS:
                     w_onoff, w_time, w_interval = space.unpackiterable(w_option, 3)
                     option_ptr = rffi.cast(lltype.Ptr(_c.tcp_keepalive), value_ptr)
-                    option_ptr.c_onoff = space.uint_w(w_onoff)
-                    option_ptr.c_keepalivetime = space.uint_w(w_time)
-                    option_ptr.c_keepaliveinterval = space.uint_w(w_interval)
+                    option_ptr.c_onoff = rffi.cast(rffi.UINT, space.uint_w(w_onoff))
+                    option_ptr.c_keepalivetime = rffi.cast(rffi.UINT, space.uint_w(w_time))
+                    option_ptr.c_keepaliveinterval = rffi.cast(rffi.UINT, space.uint_w(w_interval))
 
                 res = _c.WSAIoctl(
                     self.sock.fd, cmd, value_ptr, value_size,

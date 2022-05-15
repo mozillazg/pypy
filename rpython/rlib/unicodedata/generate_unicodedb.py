@@ -574,7 +574,7 @@ def writeUnicodedata(version, version_tuple, table, outfile, base):
                         " 0x20000 <= code <= 0x2A6D6 or"
                         " 0x2A700 <= code <= 0x2B734 or"
                         " 0x2B740 <= code <= 0x2B81D)")
-    elif version_tuple == (9, 0, 0):
+    elif version_tuple < (10, 0, 0):
         cjk_interval = ("(0x3400 <= code <= 0x4DB5 or"
                         " 0x4E00 <= code <= 0x9FD5 or"
                         " 0x20000 <= code <= 0x2A6D6 or"
@@ -588,6 +588,20 @@ def writeUnicodedata(version, version_tuple, table, outfile, base):
                         " 0x2A700 <= code <= 0x2B734 or"
                         " 0x2B740 <= code <= 0x2B81D or"
                         " 0x2B820 <= code <= 0x2CEA1)")
+    elif version_tuple == (12, 1, 0):
+        cjk_interval = ("(0x3400 <= code <= 0x4DB5 or"
+                        " 0x4E00 <= code <= 0x9FEF or"
+                        " 0x20000 <= code <= 0x2A6D6 or"
+                        " 0x2A700 <= code <= 0x2B734 or"
+                        " 0x2B740 <= code <= 0x2CEA1 or"
+                        " 0x2CEB0 <= code <= 0x2EBE0)")
+    elif version_tuple == (13, 0, 0):
+        cjk_interval = ("(0x3400 <= code <= 0x4DB5 or"
+                        " 0x4E00 <= code <= 0x9FFC or"
+                        " 0x20000 <= code <= 0x2A6D6 or"
+                        " 0x2A700 <= code <= 0x2B734 or"
+                        " 0x2B740 <= code <= 0x2CEA1 or"
+                        " 0x2CEB0 <= code <= 0x2EBE0)")
     else:
         raise ValueError("please look up CJK ranges and fix the script, e.g. here: https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)")
 
@@ -749,9 +763,17 @@ def numeric(code):
     totitle = {}
     for code, char in table.enum_chars():
         if char.upper:
-            toupper[code] = char.upper
+            if code < 128:
+                assert ord('a') <= code <= ord('z')
+                assert char.upper == code - 32
+            else:
+                toupper[code] = char.upper
         if char.lower:
-            tolower[code] = char.lower
+            if code < 128:
+                assert ord('A') <= code <= ord('Z')
+                assert char.lower == code + 32
+            else:
+                tolower[code] = char.lower
         if char.title:
             totitle[code] = char.title
     writeDict(outfile, '_toupper', toupper, base_mod)
@@ -760,6 +782,10 @@ def numeric(code):
     writeDict(outfile, '_special_casing', table.special_casing, base_mod)
     print >> outfile, '''
 def toupper(code):
+    if code < 128:
+        if ord('a') <= code <= ord('z'):
+            return code - 32
+        return code
     try:
         return _toupper[code]
     except KeyError:
@@ -769,6 +795,10 @@ def toupper(code):
             return code
 
 def tolower(code):
+    if code < 128:
+        if ord('A') <= code <= ord('Z'):
+            return code + 32
+        return code
     try:
         return _tolower[code]
     except KeyError:
@@ -787,6 +817,10 @@ def totitle(code):
             return code
 
 def toupper_full(code):
+    if code < 128:
+        if ord('a') <= code <= ord('z'):
+            return [code - 32]
+        return [code]
     try:
         return _special_casing[code][2]
     except KeyError:
@@ -798,6 +832,10 @@ def toupper_full(code):
     return [toupper(code)]
 
 def tolower_full(code):
+    if code < 128:
+        if ord('A') <= code <= ord('Z'):
+            return [code + 32]
+        return [code]
     try:
         return _special_casing[code][0]
     except KeyError:
@@ -987,7 +1025,7 @@ def main():
         casefolding = 'CaseFolding-%(version)s.txt',
     )
     version_tuple = tuple(int(x) for x in options.unidata_version.split("."))
-    if version_tuple[0] > 5:
+    if version_tuple[0] >= 5:
         filenames['special_casing'] = 'SpecialCasing-%(version)s.txt'
     filenames = dict((name, filename % dict(version=options.unidata_version))
                      for (name, filename) in filenames.items())
