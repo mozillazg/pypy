@@ -150,7 +150,8 @@ class IntegerRepr(FloatRepr):
         from rpython.rtyper.lltypesystem.ll_str import ll_int2dec
         from rpython.rtyper.lltypesystem.rstr import LLHelpers
         res = ll_int2dec(i)
-        jit.record_known_result(i, LLHelpers.ll_int, res, 10)
+        if typeOf(i) is Signed:
+            jit.record_known_result(i, LLHelpers.ll_int, res, 10)
         return res
 
     def rtype_hex(self, hop):

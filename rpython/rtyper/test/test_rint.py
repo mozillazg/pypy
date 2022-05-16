@@ -58,6 +58,12 @@ class TestRint(BaseRtypingTest):
         res = self.interpret(dummy, [-sys.maxint-1])
         assert self.ll_to_string(res) == str(-sys.maxint-1)
 
+    def test_str_of_int_and_unsigned(self):
+        def dummy(i):
+            return len(str(i) + str(r_uint(i)))
+        res = self.interpret(dummy, [0])
+        assert res == 2
+
     def test_hex_of_int(self):
         def dummy(i):
             return hex(i)
