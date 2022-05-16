@@ -236,7 +236,7 @@ class TestString(BaseTestPyPyC):
         i50 = int_add(i47, 1)
         setfield_gc(p15, i50, descr=<FieldS pypy.module.__builtin__.functional.W_XRangeIterator.inst_current 8>)
         guard_not_invalidated(descr=...)
-        p80 = call_r(ConstClass(ll_str__IntegerR_SignedConst_Signed), i47, descr=<Callr . i EF=3>)
+        p80 = call_r(_, i47, descr=<Callr . i EF=3>) # ll_int2dec
         guard_no_exception(descr=...)
         i51 = call_i(ConstClass(first_non_ascii_char), p80, descr=<Calli . r EF=4>)
         guard_no_exception(descr=...)
