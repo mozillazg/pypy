@@ -127,7 +127,8 @@ def test_str_join():
                     # the calls to join() and str() should be residual
                     mod = called_graph.func.__module__
                     assert (mod == 'rpython.rtyper.rlist' or
-                            mod == 'rpython.rtyper.lltypesystem.rlist')
+                            mod == 'rpython.rtyper.lltypesystem.rlist' or
+                            called_graph.name.startswith("ll_str"))
 
 def test_access_directly_but_not_seen():
     class X:
