@@ -1014,7 +1014,7 @@ class TestLLtypeUnicode(TestLLtype):
             while z < 10:
                 jitdriver.jit_merge_point(x=x, res=res, z=z)
                 s = pick(x)
-                # the following lines emulate unicode.find
+                # the following lines emulate str.find
                 byteindex = s.find(pick_s(x))
                 if byteindex < 0:
                     return -1001
@@ -1025,10 +1025,14 @@ class TestLLtypeUnicode(TestLLtype):
             return res
         res = self.meta_interp(f, [1], backendopt=True)
         assert res == f(1)
-        self.check_simple_loop(guard_false=1)  # only one guard, to check for -1
+        # guard_true(len(search_string) <= 1)
+        # guard_false(len(search_string) == 0)
+        # guard_false(res >= 0)
+        # guard_true(z < 10)
+        self.check_simple_loop(guard_true=2, guard_false=2)
         res = self.meta_interp(f, [10], backendopt=True)
         assert res == f(10)
-        # one guard to check whether the search string is len == 1, one to check for result -1
+        # guard_false(len(search_string) <= 1), guard_false(res >= 0)
         self.check_simple_loop(guard_false=2)
 
     def test_codepoint_index_at_byte_position_record_known_result_and_invariants(self):
@@ -1055,11 +1059,12 @@ class TestLLtypeUnicode(TestLLtype):
                 byteindex = s.find(search[z])
                 if byteindex < 0:
                     return -1001
-                storage = rutf8.create_utf8_index_storage(s, len(s) - 1)
-                index = rutf8.codepoint_index_at_byte_position(s, storage, byteindex, len(s) - 1)
+                num_codepoints = len(s) - 1
+                storage = rutf8.create_utf8_index_storage(s, num_codepoints)
+                index = rutf8.codepoint_index_at_byte_position(s, storage, byteindex, num_codepoints)
                 if index < 0:  # no guard
                     return -1000
-                if index >= len(s) - 1:  # no guard
+                if index > num_codepoints:  # no guard
                     return -1004
                 # then we use the resulting codepoint index in conjunction with
                 # the string to get at a byte index
