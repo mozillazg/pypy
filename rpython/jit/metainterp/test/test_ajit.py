@@ -4053,6 +4053,9 @@ class BaseLLtypeTests(BasicTests):
         def f(x):
             y = make(x)
             record_exact_value(y >= 0, True)
+            record_exact_value(y >= 0, True)
+            record_exact_value(y >= 0, True)
+            record_exact_value(y >= 0, True)
             return y < 0
         res = self.interp_operations(f, [1])
         assert res == 0

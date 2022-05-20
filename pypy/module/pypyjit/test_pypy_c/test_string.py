@@ -399,3 +399,24 @@ class TestString(BaseTestPyPyC):
             i115 = int_sub(i112, i105)
             --TICK--
         ''')
+
+    def test_int_str_int(self):
+        log = self.run("""
+        def main(n):
+            s = 0
+            for i in range(n):
+                s += int(str(i)) # ID: str
+            return s
+        """, [10000])
+        loop, = log.loops_by_filename(self.filepath)
+        assert loop.match_by_id('str', '''
+            setfield_gc(p18, i39, descr=...)
+            guard_nonnull_class(p12, ConstClass(W_IntObject), descr=...)
+
+            # only one call
+            p43 = call_r(ConstClass(ll_int2dec__Signed), i30, descr=...)
+            guard_no_exception(descr=...)
+            i44 = getfield_gc_i(p12, descr=...)
+            i45 = int_add_ovf(i44, i30)
+            guard_no_overflow(descr=...)
+        ''')

@@ -475,6 +475,7 @@ class W_IntObject(W_AbstractIntObject):
 
     def descr_repr(self, space):
         res = str(self.intval)
+        jit.record_known_result(self.intval, string_to_int, res, 10, False, False)
         return space.newtext(res)
     descr_str = func_with_new_name(descr_repr, 'descr_str')
 

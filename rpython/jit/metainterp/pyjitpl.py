@@ -345,6 +345,7 @@ class MIFrame(object):
     @arguments("box", "box")
     def opimpl_record_exact_value_r(self, box, const_box):
         return self._record_exact_value(rop.RECORD_EXACT_VALUE_R, box, const_box)
+
     @arguments("box", "box")
     def opimpl_record_exact_value_i(self, box, const_box):
         return self._record_exact_value(rop.RECORD_EXACT_VALUE_I, box, const_box)
