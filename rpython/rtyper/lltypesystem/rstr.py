@@ -741,7 +741,6 @@ class LLHelpers(AbstractLLHelpers):
         if m <= 1:
             if m == 0:
                 return end
-            LLHelpers.ll_find_char(s1, s2.chars[0], start, end)
             res = LLHelpers.ll_rfind_char(s1, s2.chars[0], start, end)
             jit.record_exact_value(res < end, True)
             return res
