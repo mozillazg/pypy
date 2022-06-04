@@ -107,6 +107,9 @@ _STMT_TYPE_OTHER = 4
 _STMT_TYPE_SELECT = 5
 _STMT_TYPE_INVALID = 6
 
+# flag that signals if base types need adaption
+BASE_TYPE_ADAPTED = False
+
 
 class Error(StandardError):
     pass
@@ -1110,10 +1113,11 @@ class Statement(object):
                             "just switch your application to Unicode strings.")
 
     def __set_param(self, idx, param):
-        try:
-            param = adapt(param)
-        except:
-            pass  # And use previous value
+        if BASE_TYPE_ADAPTED:
+            try:
+                param = adapt(param)
+            except:
+                pass  # And use previous value
 
         if param is None:
             rc = _lib.sqlite3_bind_null(self._statement, idx)
@@ -1342,6 +1346,8 @@ class PrepareProtocol(object):
 
 
 def register_adapter(typ, callable):
+    global BASE_TYPE_ADAPTED
+    BASE_TYPE_ADAPTED = True
     adapters[typ, PrepareProtocol] = callable
 
 
