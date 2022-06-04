@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 import pytest
 import sys
+from unittest import mock
 
 _sqlite3 = pytest.importorskip('_sqlite3')
 
@@ -330,3 +331,28 @@ def test_empty_statement():
         r = cur.execute(sql)
         assert r.description is None
         assert cur.fetchall() == []
+
+
+need_adapt_test_cases = (
+    (bytearray([1, 2, 3]), False),
+    (3.14, False),
+    (42, False),
+    ("pypy", False),
+    (None, False),
+)
+
+@pytest.mark.parametrize("param,is_called", need_adapt_test_cases)
+def test_need_adapt_flag(param, is_called):
+    adapters = dict(_sqlite3.adapters)
+    flag = bool(_sqlite3.BASE_TYPE_ADAPTED)
+
+    _sqlite3.register_adapter(type(param), lambda x: pass)
+
+    with mock.patch("_sqlite3.adapt") as mock_adapt:
+        # TODO: What do I have to call here?
+        mock_adapt.assert_not_called()
+
+    _sqlite3.adapters = adapters
+    _sqlite3.BASE_TYPE_ADAPTED = flag
+
+
