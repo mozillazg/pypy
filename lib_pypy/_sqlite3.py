@@ -1348,7 +1348,7 @@ class PrepareProtocol(object):
 def register_adapter(typ, callable):
     global BASE_TYPE_ADAPTED
     # only set flag if typ is not a base type supported by SQLite3
-    if type(typ) not in {bytearray, float, int, str, NoneType}:
+    if typ not in {bytearray, float, int, str, NoneType}:
         BASE_TYPE_ADAPTED = True
     adapters[typ, PrepareProtocol] = callable
 
