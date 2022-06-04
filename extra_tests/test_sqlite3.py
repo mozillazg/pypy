@@ -339,6 +339,7 @@ need_adapt_test_cases = (
     (42, False),
     ("pypy", False),
     (None, False),
+    ([1, 2, 3], True),
 )
 
 @pytest.mark.parametrize("param,is_called", need_adapt_test_cases)
@@ -350,7 +351,10 @@ def test_need_adapt_flag(param, is_called):
 
     with mock.patch("_sqlite3.adapt") as mock_adapt:
         # TODO: What do I have to call here?
-        mock_adapt.assert_not_called()
+        if not is_called:
+            mock_adapt.assert_not_called()
+        else:
+            mock_adapt.assert_called()
 
     _sqlite3.adapters = adapters
     _sqlite3.BASE_TYPE_ADAPTED = flag
