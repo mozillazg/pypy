@@ -333,28 +333,29 @@ def test_empty_statement():
         assert cur.fetchall() == []
 
 
-need_adapt_test_cases = (
-    (bytearray([1, 2, 3]), False),
-    (3.14, False),
-    (42, False),
-    ("pypy", False),
-    (None, False),
-    ([1, 2, 3], True),
+NEED_ADAPT_TESTCASES = (
+    (bytearray([1, 2, 3]), 0),
+    (3.14, 0),
+    (42, 0),
+    ("pypy", 0),
+    (None, 0),
 )
 
-@pytest.mark.parametrize("param,is_called", need_adapt_test_cases)
-def test_need_adapt_flag(param, is_called):
+@pytest.mark.parametrize("param,call_count", NEED_ADAPT_TESTCASES)
+def test_need_adapt_flag(con, param, call_count):
     adapters = dict(_sqlite3.adapters)
     flag = bool(_sqlite3.BASE_TYPE_ADAPTED)
 
-    _sqlite3.register_adapter(type(param), lambda x: pass)
+    def noop():
+        pass
+
+    _sqlite3.register_adapter(type(param), noop)
 
     with mock.patch("_sqlite3.adapt") as mock_adapt:
-        # TODO: What do I have to call here?
-        if not is_called:
-            mock_adapt.assert_not_called()
-        else:
-            mock_adapt.assert_called()
+        cur = con.cursor()
+        cur.execute("select ?", (param,))
+
+        assert mock_adapt.call_count == call_count
 
     _sqlite3.adapters = adapters
     _sqlite3.BASE_TYPE_ADAPTED = flag
