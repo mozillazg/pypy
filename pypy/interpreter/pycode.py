@@ -44,29 +44,16 @@ assert pypy_incremental_magic < 3000 # the magic number of Python 3. There are
                                      # no known magic numbers below this value
 default_magic = pypy_incremental_magic | (ord('\r')<<16) | (ord('\n')<<24)
 
-# cpython_code_signature helper
-def cpython_code_signature(code):
+def make_signature(code):
     """Return a Signature instance."""
-    argcount = code.co_argcount
+    kwonlyargcount = code.co_kwonlyargcount
+    argcount = code.co_argcount + kwonlyargcount
     varnames = code.co_varnames
-    if we_are_translated():
-        posonlyargcount = code.co_posonlyargcount
-        kwonlyargcount = code.co_kwonlyargcount
-    else:
-        # for compatibility with CPython 2.7 code objects
-        # XXX really?
-        posonlyargcount = getattr(code, 'co_posonlyargcount', 0)
-        kwonlyargcount = getattr(code, 'co_kwonlyargcount', 0)
+    posonlyargcount = code.co_posonlyargcount
     assert argcount >= 0     # annotator hint
     assert kwonlyargcount >= 0
     assert posonlyargcount >= 0
     argnames = list(varnames[:argcount])
-    if kwonlyargcount > 0:
-        kwonlyargs = list(varnames[argcount:argcount + kwonlyargcount])
-        argcount += kwonlyargcount
-        assert posonlyargcount >= -1
-    else:
-        kwonlyargs = None
     if code.co_flags & CO_VARARGS:
         varargname = varnames[argcount]
         argcount += 1
@@ -76,7 +63,7 @@ def cpython_code_signature(code):
         kwargname = code.co_varnames[argcount]
     else:
         kwargname = None
-    return Signature(argnames, varargname, kwargname, kwonlyargs, posonlyargcount)
+    return Signature(argnames, varargname, kwargname, kwonlyargcount, posonlyargcount)
 
 class CodeHookCache(object):
     def __init__(self, space):
@@ -150,7 +137,7 @@ class PyCode(eval.Code):
         self.w_globals = None
         self.hidden_applevel = hidden_applevel
         self.magic = magic
-        self._signature = cpython_code_signature(self)
+        self._signature = make_signature(self)
         self._initialize()
         self._init_ready()
         self.new_code_hook()
@@ -194,6 +181,7 @@ class PyCode(eval.Code):
         self._compute_flatcall()
 
         init_mapdict_cache(self)
+        self._globals_caches = [None] * len(self.co_names_w)
 
     def _init_ready(self):
         "This is a hook for the vmprof module, which overrides this method."
@@ -347,7 +335,7 @@ class PyCode(eval.Code):
     def descr_code__eq__(self, w_other):
         space = self.space
         if not isinstance(w_other, PyCode):
-            return space.w_False
+            return space.w_NotImplemented
         areEqual = (self.co_name == w_other.co_name and
                     self.co_argcount == w_other.co_argcount and
                     self.co_posonlyargcount == w_other.co_posonlyargcount and
@@ -373,6 +361,12 @@ class PyCode(eval.Code):
                 return space.w_False
 
         return space.w_True
+
+    def descr_code__ne__(self, w_other):
+        space = self.space
+        if not isinstance(w_other, PyCode):
+            return space.w_NotImplemented
+        return space.not_(self.descr_code__eq__(w_other))
 
     def descr_code__hash__(self):
         space = self.space
@@ -464,7 +458,7 @@ class PyCode(eval.Code):
             space.newtuple([space.newtext(v) for v in self.co_cellvars]),
             space.newint(self.magic),
         ]
-        return space.newtuple([new_inst, space.newtuple(tup)])
+        return space.newtuple2(new_inst, space.newtuple(tup))
 
     def descr_replace(self, space, __args__):
         """ replace(self, /, *, co_argcount=-1, co_posonlyargcount=-1, co_kwonlyargcount=-1, co_nlocals=-1, co_stacksize=-1, co_flags=-1, co_firstlineno=-1, co_code=None, co_consts=None, co_names=None, co_varnames=None, co_freevars=None, co_cellvars=None, co_filename=None, co_name=None, co_lnotab=None)
@@ -536,10 +530,10 @@ def _convert_const(space, w_a):
     w_type = space.type(w_a)
     if space.is_w(w_type, space.w_unicode):
         # unicodes are supposed to compare by value, but not equal to bytes
-        return space.newtuple([w_type, w_a])
+        return space.newtuple2(w_type, w_a)
     if space.is_w(w_type, space.w_bytes):
         # and vice versa
-        return space.newtuple([w_type, w_a])
+        return space.newtuple2(w_type, w_a)
     if type(w_a) is PyCode:
         return w_a
     # for tuples and frozensets convert recursively

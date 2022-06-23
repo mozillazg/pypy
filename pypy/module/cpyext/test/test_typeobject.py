@@ -400,11 +400,10 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         module = self.import_extension('test', [
            ("hack_tp_dict", "METH_VARARGS",
             '''
-                 PyTypeObject *type, *obj;
+                 PyTypeObject *type;
                  PyObject *a1 = PyLong_FromLong(1);
                  PyObject *a2 = PyLong_FromLong(2);
-                 PyObject *value;
-                 PyObject * key;
+                 PyObject *obj, *value, *key;
                  if (!PyArg_ParseTuple(args, "OO", &obj, &key))
                      return NULL;
                  type = obj->ob_type;
@@ -857,7 +856,7 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                  return Py_None;
              '''
              )
-            ])
+        ])
         x = [42]
         assert module.tp_init(list, x, ("hi",)) is None
         assert x == ["h", "i"]
@@ -867,6 +866,15 @@ class AppTestSlots(AppTestCpythonExtensionBase):
         x = LL.__new__(LL)
         assert module.tp_init(list, x, ("hi",)) is None
         assert x == ["h", "i"]
+
+        init_called = []
+        class CALL(object):
+            def __init__(self):
+                init_called.append(42)
+        x = object.__new__(CALL)
+        x.__init__()
+        module.tp_init(CALL, x, ())
+        assert len(init_called) == 2, '%s' % len(init_called)
 
     def test_mp_subscript(self):
         module = self.import_extension('foo', [

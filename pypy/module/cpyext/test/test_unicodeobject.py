@@ -694,8 +694,7 @@ class AppTestUnicodeObject(AppTestCpythonExtensionBase):
             ], prologue="""
                 #include <Python.h>
                 PyTypeObject PyUnicodeSubtype = {
-                    PyObject_HEAD_INIT(NULL)
-                    0,                            /* ob_size */
+                    PyVarObject_HEAD_INIT(NULL, 0)
                     "foo.unicode_",               /* tp_name*/
                     sizeof(PyUnicodeObject),      /* tp_basicsize*/
                     0                             /* tp_itemsize */
@@ -1078,6 +1077,15 @@ class TestUnicode(BaseApiTest):
         rffi.free_wcharp(wbuf)
         assert space.type(w_bytes) is space.w_bytes
         assert space.utf8_w(w_bytes) == "abc?"
+
+    def test_codepage(self, space):
+        if sys.platform != 'win32':
+            py.test.skip("codepage encoding only exists on Windows")
+        chars = "abc"
+        w_obj = space.newtext(chars)
+        w_bytes = PyUnicode_EncodeCodePage(space, 932, w_obj, None)
+        assert space.type(w_bytes) is space.w_bytes
+        assert space.utf8_w(w_bytes) == "abc"
 
     def test_escape(self, space):
         def test(ustr):

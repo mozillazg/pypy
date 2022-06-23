@@ -24,7 +24,7 @@ class AppTestModule(pytest.Module):
         spaceconfig = extract_spaceconfig_from_source(source)
         space = objspace.gettestobjspace(**spaceconfig)
         w_rootdir = space.newtext(
-            os.path.join(pypydir, 'tool', 'pytest', 'ast-rewriter'))
+            os.path.join(pypydir, 'tool', 'pytest', 'astrewriter'))
         w_source = space.newtext(source)
         fname = str(self.fspath)
         w_name = space.newtext(str(self.fspath.purebasename))
@@ -106,7 +106,7 @@ class AppTestFunction(pytest.Item):
     def execute_appex(self, space, w_func):
         space.getexecutioncontext().set_sys_exc_info(None)
         sig = w_func.code._signature
-        if sig.varargname or sig.kwargname or sig.kwonlyargnames:
+        if sig.varargname or sig.kwargname or sig.num_kwonlyargnames():
             raise ValueError(
                 'Test functions may not use *args, **kwargs or '
                 'keyword-only args')
