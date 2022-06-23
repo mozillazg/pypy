@@ -9,6 +9,8 @@ def factorial(x):
 
     "Find x!. Raise a ValueError if x is negative or non-integral."""
     if isinstance(x, float):
+        import warnings
+        warnings.warn("Using factorial() with floats is deprecated", DeprecationWarning)
         fl = int(x)
         if fl != x:
             raise ValueError("float arguments must be integral")
@@ -137,8 +139,7 @@ def isqrt(n):
     """
     Return the integer part of the square root of the input.
     """
-    import operator
-    n = operator.index(n)
+    n = index(n)
 
     if n < 0:
         raise ValueError("isqrt() argument must be nonnegative")
@@ -185,9 +186,8 @@ def comb(n, k, /):
     Raises TypeError if either of the arguments are not integers.
     Raises ValueError if either of the arguments are negative.
     """
-    import operator
-    n = operator.index(n)
-    k = operator.index(k)
+    n = index(n)
+    k = index(k)
 
     if n < 0:
         raise ValueError("n must be a non-negative integer")
@@ -216,13 +216,12 @@ def perm(n, k=None, /):
     Raises TypeError if either of the arguments are not integers.
     Raises ValueError if either of the arguments are negative.
     """
-    import operator
 
-    n = operator.index(n)
+    n = index(n)
     if k is None:
         k = n
     else:
-        k = operator.index(k)
+        k = index(k)
 
     if n < 0:
         raise ValueError("n must be a non-negative integer")
@@ -234,4 +233,26 @@ def perm(n, k=None, /):
     res = 1
     for x in range(n, n - k, -1):
         res *= x
+    return res
+
+def lcm(*integers):
+    import math
+    if not integers:
+        return 1
+    if len(integers) == 1:
+        return abs(index(integers[0]))
+    if len(integers) == 2:
+        a, b = integers
+        a, b = index(a), index(b)
+        if a == 0 or b == 0:
+            return 0
+        return abs(a // math.gcd(a, b) * b)
+    res = index(integers[0])
+    if res == 0:
+        return res
+    for i in range(1, len(integers)):
+        v = index(integers[i])
+        if v == 0:
+            return 0
+        res = abs(res // math.gcd(res, v) * v)
     return res

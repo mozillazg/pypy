@@ -20,8 +20,9 @@ import codecs
 import os.path
 import shutil
 from urllib.error import URLError
+import urllib.request
 from test import support
-from test.support import findfile, run_unittest, FakePath, TESTFN
+from test.support import findfile, FakePath, TESTFN
 
 TEST_XMLFILE = findfile("test.xml", subdir="xmltestdata")
 TEST_XMLFILE_OUT = findfile("test.xml.out", subdir="xmltestdata")
@@ -979,6 +980,9 @@ class ExpatReaderTest(XmlTestBase):
         self.assertEqual(handler._entities, [("img", None, "expat.gif", "GIF")])
 
     def test_expat_external_dtd_enabled(self):
+        # clear _opener global variable
+        self.addCleanup(urllib.request.urlcleanup)
+
         parser = create_parser()
         parser.setFeature(feature_external_ges, True)
         resolver = self.TestEntityRecorder()
@@ -1349,19 +1353,5 @@ class XmlReaderTest(XmlTestBase):
         self.assertEqual(attrs.getQNameByName((ns_uri, "attr")), "ns:attr")
 
 
-def test_main():
-    run_unittest(MakeParserTest,
-                 ParseTest,
-                 SaxutilsTest,
-                 PrepareInputSourceTest,
-                 StringXmlgenTest,
-                 BytesXmlgenTest,
-                 WriterXmlgenTest,
-                 StreamWriterXmlgenTest,
-                 StreamReaderWriterXmlgenTest,
-                 ExpatReaderTest,
-                 ErrorReportingTest,
-                 XmlReaderTest)
-
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

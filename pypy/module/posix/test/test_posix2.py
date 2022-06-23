@@ -517,6 +517,7 @@ class AppTestPosix:
             assert pid1 == pid
             assert os.WIFEXITED(status1)
             assert os.WEXITSTATUS(status1) == 4
+            assert os.waitstatus_to_exitcode(status1) == 4
         pass # <- please, inspect.getsource(), don't crash
 
 
@@ -1051,6 +1052,7 @@ class AppTestPosix:
             assert pid1 == pid
             assert os.WIFSIGNALED(status1)
             assert os.WTERMSIG(status1) == self.SIGABRT
+            assert os.waitstatus_to_exitcode(status1) == -self.SIGABRT
         pass # <- please, inspect.getsource(), don't crash
 
     def test_closerange(self):
@@ -1477,6 +1479,7 @@ class AppTestPosix:
 
     def test_urandom(self):
         os = self.posix
+        raises(ValueError, os.urandom, -1)
         s = os.urandom(5)
         assert isinstance(s, bytes)
         assert len(s) == 5

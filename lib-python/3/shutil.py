@@ -261,28 +261,37 @@ def copyfile(src, dst, *, follow_symlinks=True):
     if not follow_symlinks and _islink(src):
         os.symlink(os.readlink(src), dst)
     else:
-        with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
-            # macOS
-            if _HAS_FCOPYFILE:
-                try:
-                    _fastcopy_fcopyfile(fsrc, fdst, posix._COPYFILE_DATA)
-                    return dst
-                except _GiveupOnFastCopy:
-                    pass
-            # Linux
-            elif _USE_CP_SENDFILE:
-                try:
-                    _fastcopy_sendfile(fsrc, fdst)
-                    return dst
-                except _GiveupOnFastCopy:
-                    pass
-            # Windows, see:
-            # https://github.com/python/cpython/pull/7160#discussion_r195405230
-            elif _WINDOWS and file_size > 0:
-                _copyfileobj_readinto(fsrc, fdst, min(file_size, COPY_BUFSIZE))
-                return dst
+        with open(src, 'rb') as fsrc:
+            try:
+                with open(dst, 'wb') as fdst:
+                    # macOS
+                    if _HAS_FCOPYFILE:
+                        try:
+                            _fastcopy_fcopyfile(fsrc, fdst, posix._COPYFILE_DATA)
+                            return dst
+                        except _GiveupOnFastCopy:
+                            pass
+                    # Linux
+                    elif _USE_CP_SENDFILE:
+                        try:
+                            _fastcopy_sendfile(fsrc, fdst)
+                            return dst
+                        except _GiveupOnFastCopy:
+                            pass
+                    # Windows, see:
+                    # https://github.com/python/cpython/pull/7160#discussion_r195405230
+                    elif _WINDOWS and file_size > 0:
+                        _copyfileobj_readinto(fsrc, fdst, min(file_size, COPY_BUFSIZE))
+                        return dst
 
-            copyfileobj(fsrc, fdst)
+                    copyfileobj(fsrc, fdst)
+
+            # Issue 43219, raise a less confusing exception
+            except IsADirectoryError as e:
+                if not os.path.exists(dst):
+                    raise FileNotFoundError(f'Directory does not exist: {dst}') from e
+                else:
+                    raise
 
     return dst
 
@@ -647,6 +656,7 @@ def _rmtree_safe_fd(topfd, path, onerror):
         if is_dir:
             try:
                 dirfd = os.open(entry.name, os.O_RDONLY, dir_fd=topfd)
+                dirfd_closed = False
             except OSError:
                 onerror(os.open, fullname, sys.exc_info())
             else:
@@ -654,6 +664,8 @@ def _rmtree_safe_fd(topfd, path, onerror):
                     if os.path.samestat(orig_st, os.fstat(dirfd)):
                         _rmtree_safe_fd(dirfd, fullname, onerror)
                         try:
+                            os.close(dirfd)
+                            dirfd_closed = True
                             os.rmdir(entry.name, dir_fd=topfd)
                         except OSError:
                             onerror(os.rmdir, fullname, sys.exc_info())
@@ -667,7 +679,8 @@ def _rmtree_safe_fd(topfd, path, onerror):
                         except OSError:
                             onerror(os.path.islink, fullname, sys.exc_info())
                 finally:
-                    os.close(dirfd)
+                    if not dirfd_closed:
+                        os.close(dirfd)
         else:
             try:
                 os.unlink(entry.name, dir_fd=topfd)
@@ -710,6 +723,7 @@ def rmtree(path, ignore_errors=False, onerror=None):
             return
         try:
             fd = os.open(path, os.O_RDONLY)
+            fd_closed = False
         except Exception:
             onerror(os.open, path, sys.exc_info())
             return
@@ -717,6 +731,8 @@ def rmtree(path, ignore_errors=False, onerror=None):
             if os.path.samestat(orig_st, os.fstat(fd)):
                 _rmtree_safe_fd(fd, path, onerror)
                 try:
+                    os.close(fd)
+                    fd_closed = True
                     os.rmdir(path)
                 except OSError:
                     onerror(os.rmdir, path, sys.exc_info())
@@ -727,7 +743,8 @@ def rmtree(path, ignore_errors=False, onerror=None):
                 except OSError:
                     onerror(os.path.islink, path, sys.exc_info())
         finally:
-            os.close(fd)
+            if not fd_closed:
+                os.close(fd)
     else:
         try:
             if _rmtree_islink(path):
@@ -744,8 +761,20 @@ def rmtree(path, ignore_errors=False, onerror=None):
 rmtree.avoids_symlink_attacks = _use_fd_functions
 
 def _basename(path):
-    # A basename() variant which first strips the trailing slash, if present.
-    # Thus we always get the last component of the path, even for directories.
+    """A basename() variant which first strips the trailing slash, if present.
+    Thus we always get the last component of the path, even for directories.
+
+    path: Union[PathLike, str]
+
+    e.g.
+    >>> os.path.basename('/bar/foo')
+    'foo'
+    >>> os.path.basename('/bar/foo/')
+    ''
+    >>> _basename('/bar/foo/')
+    'foo'
+    """
+    path = os.fspath(path)
     sep = os.path.sep + (os.path.altsep or '')
     return os.path.basename(path.rstrip(sep))
 
@@ -784,7 +813,10 @@ def move(src, dst, copy_function=copy2):
             os.rename(src, dst)
             return
 
+        # Using _basename instead of os.path.basename is important, as we must
+        # ignore any trailing slash to avoid the basename returning ''
         real_dst = os.path.join(dst, _basename(src))
+
         if os.path.exists(real_dst):
             raise Error("Destination path '%s' already exists" % real_dst)
     try:

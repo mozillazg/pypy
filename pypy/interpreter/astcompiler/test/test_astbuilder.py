@@ -8,14 +8,17 @@ import textwrap
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.error import SyntaxError
-from pypy.interpreter.astcompiler.astbuilder import ast_from_node
+from pypy.interpreter.error import OperationError
 from pypy.interpreter.astcompiler import ast, consts
 
 
-class TestAstBuilder:
+class TestAstBuilding:
 
     def setup_class(cls):
-        cls.parser = pyparse.PythonParser(cls.space)
+        cls.parser = pyparse.PegParser(cls.space)
+
+    def setup_method(self, method):
+        self.info = None
 
     def get_ast(self, source, p_mode=None, flags=None, with_async_hacks=False):
         if p_mode is None:
@@ -25,8 +28,9 @@ class TestAstBuilder:
         if with_async_hacks:
             flags |= consts.PyCF_ASYNC_HACKS
         info = pyparse.CompileInfo("<test>", p_mode, flags)
-        tree = self.parser.parse_source(source, info)
-        ast_node = ast_from_node(self.space, tree, info, self.parser)
+        self.info = info
+        ast_node = self.parser.parse_source(source, info)
+        ast_node.to_object(self.space) # does not crash
         return ast_node
 
     def get_first_expr(self, source, p_mode=None, flags=None):
@@ -66,6 +70,9 @@ class TestAstBuilder:
         assert len(mod.body) == 3
         for stmt in mod.body:
             assert isinstance(stmt, ast.Assign)
+
+    def test_constant_kind_bug(self):
+        d = self.get_first_expr("None") # used to crash in to_object
 
     def test_del(self):
         d = self.get_first_stmt("del x")
@@ -195,8 +202,8 @@ class TestAstBuilder:
         input = "from x import a, b,"
         with pytest.raises(SyntaxError) as excinfo:
             self.get_ast(input)
-        assert excinfo.value.msg == "trailing comma is only allowed with surronding " \
-            "parenthesis"
+        assert excinfo.value.msg == "trailing comma not allowed without surrounding " \
+            "parentheses"
         assert excinfo.value.text == input + "\n"
 
     def test_global(self):
@@ -567,9 +574,8 @@ class TestAstBuilder:
         assert len(fn.args.kw_defaults) == 1
         assert isinstance(fn.args.kw_defaults[0], ast.Constant)
         input = "def f(p1, *, **k1):  pass"
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast(input)
-        assert excinfo.value.msg == "named arguments must follows bare *"
+        exc = pytest.raises(SyntaxError, self.get_ast, input).value
+        assert exc.msg == "named arguments must follow bare *"
 
     def test_posonly_arguments(self):
         fn = self.get_first_stmt("def f(a, b, c, /, arg): pass")
@@ -614,78 +620,49 @@ class TestAstBuilder:
         fundef3 += "lastarg):\n  pass\n"
         self.get_first_stmt(fundef3)
 
-    @pytest.mark.parametrize(['stmt', 'node'], [
-        ("def f(): pass", ast.FunctionDef),
-        ("class x: pass", ast.ClassDef),
-    ])
-    def test_decorators(self, stmt, node):
-        definition = self.get_first_stmt("@dec\n%s" % (stmt,))
-        assert isinstance(definition, node)
-        assert len(definition.decorator_list) == 1
-        dec = definition.decorator_list[0]
-        assert isinstance(dec, ast.Name)
-        assert dec.id == "dec"
-        assert dec.ctx == ast.Load
-        assert definition.lineno == 2
-        assert dec.lineno == 1
-        #
-        definition = self.get_first_stmt("@mod.hi.dec\n%s" % (stmt,))
-        assert len(definition.decorator_list) == 1
-        dec = definition.decorator_list[0]
-        assert isinstance(dec, ast.Attribute)
-        assert dec.ctx == ast.Load
-        assert dec.attr == "dec"
-        assert isinstance(dec.value, ast.Attribute)
-        assert dec.value.attr == "hi"
-        assert isinstance(dec.value.value, ast.Name)
-        assert dec.value.value.id == "mod"
-        assert definition.lineno == 2
-        assert dec.lineno == 1
-        #
-        definition = self.get_first_stmt("@dec\n@dec2\n%s" % (stmt,))
-        assert len(definition.decorator_list) == 2
-        for dec in definition.decorator_list:
+    def test_decorators(self):
+        to_examine = (("def f(): pass", ast.FunctionDef),
+                      ("class x: pass", ast.ClassDef))
+        for stmt, node in to_examine:
+            definition = self.get_first_stmt("@dec\n%s" % (stmt,))
+            assert isinstance(definition, node)
+            assert len(definition.decorator_list) == 1
+            dec = definition.decorator_list[0]
             assert isinstance(dec, ast.Name)
+            assert dec.id == "dec"
             assert dec.ctx == ast.Load
-        assert definition.decorator_list[0].id == "dec"
-        assert definition.decorator_list[0].lineno == 1
-        assert definition.decorator_list[1].id == "dec2"
-        assert definition.decorator_list[1].lineno == 2
-        assert definition.lineno == 3
-        #
-        definition = self.get_first_stmt("@dec()\n%s" % (stmt,))
-        assert len(definition.decorator_list) == 1
-        dec = definition.decorator_list[0]
-        assert isinstance(dec, ast.Call)
-        assert isinstance(dec.func, ast.Name)
-        assert dec.func.id == "dec"
-        assert dec.args is None
-        assert dec.keywords is None
-        assert definition.lineno == 2
-        assert dec.lineno == 1
-        #
-        definition = self.get_first_stmt("@dec(a, b)\n%s" % (stmt,))
-        assert len(definition.decorator_list) == 1
-        dec = definition.decorator_list[0]
-        assert isinstance(dec, ast.Call)
-        assert dec.func.id == "dec"
-        assert len(dec.args) == 2
-        assert dec.keywords is None
-        assert definition.lineno == 2
-        assert dec.lineno == 1
-        #
-        definition = self.get_first_stmt("@dec(a for a in b)\n%s" % (stmt,))
-        assert len(definition.decorator_list) == 1
-        dec = definition.decorator_list[0]
-        assert isinstance(dec, ast.Call)
-        assert dec.func.id == "dec"
-        assert dec.keywords is None
-        assert definition.lineno == 2
-        assert dec.lineno == 1
-        assert len(dec.args) == 1
-        assert isinstance(dec.args[0], ast.GeneratorExp)
-        assert dec.args[0].col_offset == 4
-
+            definition = self.get_first_stmt("@mod.hi.dec\n%s" % (stmt,))
+            assert len(definition.decorator_list) == 1
+            dec = definition.decorator_list[0]
+            assert isinstance(dec, ast.Attribute)
+            assert dec.ctx == ast.Load
+            assert dec.attr == "dec"
+            assert isinstance(dec.value, ast.Attribute)
+            assert dec.value.attr == "hi"
+            assert isinstance(dec.value.value, ast.Name)
+            assert dec.value.value.id == "mod"
+            definition = self.get_first_stmt("@dec\n@dec2\n%s" % (stmt,))
+            assert len(definition.decorator_list) == 2
+            for dec in definition.decorator_list:
+                assert isinstance(dec, ast.Name)
+                assert dec.ctx == ast.Load
+            assert definition.decorator_list[0].id == "dec"
+            assert definition.decorator_list[1].id == "dec2"
+            definition = self.get_first_stmt("@dec()\n%s" % (stmt,))
+            assert len(definition.decorator_list) == 1
+            dec = definition.decorator_list[0]
+            assert isinstance(dec, ast.Call)
+            assert isinstance(dec.func, ast.Name)
+            assert dec.func.id == "dec"
+            assert dec.args is None
+            assert dec.keywords is None
+            definition = self.get_first_stmt("@dec(a, b)\n%s" % (stmt,))
+            assert len(definition.decorator_list) == 1
+            dec = definition.decorator_list[0]
+            assert isinstance(dec, ast.Call)
+            assert dec.func.id == "dec"
+            assert len(dec.args) == 2
+            assert dec.keywords is None
 
     def test_annassign(self):
         simple = self.get_first_stmt('a: int')
@@ -715,42 +692,40 @@ class TestAstBuilder:
         assert isinstance(subscript, ast.AnnAssign)
         assert isinstance(subscript.target, ast.Subscript)
 
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast('a, b: int')
-        assert excinfo.value.msg == "only single target (not tuple) can be annotated"
+        exc_tuple = pytest.raises(SyntaxError, self.get_ast, 'a, b: int').value
+        assert exc_tuple.msg == "only single target (not tuple) can be annotated"
 
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast('[]: int')
-        assert excinfo.value.msg == "only single target (not list) can be annotated"
+        exc_list = pytest.raises(SyntaxError, self.get_ast, '[]: int').value
+        assert exc_list.msg == "only single target (not list) can be annotated"
 
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast('{}: int')
-        assert excinfo.value.msg == "illegal target for annotation"
+        exc_bad_target = pytest.raises(SyntaxError, self.get_ast, '{}: int').value
+        assert exc_bad_target.msg == "illegal target for annotation"
 
 
-    @pytest.mark.parametrize("op, ast_type", [
-        ("+=", ast.Add),
-        ("-=", ast.Sub),
-        ("/=", ast.Div),
-        ("//=", ast.FloorDiv),
-        ("%=", ast.Mod),
-        ("@=", ast.MatMult),
-        ("<<=", ast.LShift),
-        (">>=", ast.RShift),
-        ("&=", ast.BitAnd),
-        ("|=", ast.BitOr),
-        ("^=", ast.BitXor),
-        ("*=", ast.Mult),
-        ("**=", ast.Pow)
-    ])
-    def test_augassign(self, op, ast_type):
-        input = "x %s 4" % (op,)
-        assign = self.get_first_stmt(input)
-        assert isinstance(assign, ast.AugAssign)
-        assert assign.op is ast_type
-        assert isinstance(assign.target, ast.Name)
-        assert assign.target.ctx == ast.Store
-        assert isinstance(assign.value, ast.Constant)
+    def test_augassign(self):
+        aug_assigns = (
+            ("+=", ast.Add),
+            ("-=", ast.Sub),
+            ("/=", ast.Div),
+            ("//=", ast.FloorDiv),
+            ("%=", ast.Mod),
+            ("@=", ast.MatMult),
+            ("<<=", ast.LShift),
+            (">>=", ast.RShift),
+            ("&=", ast.BitAnd),
+            ("|=", ast.BitOr),
+            ("^=", ast.BitXor),
+            ("*=", ast.Mult),
+            ("**=", ast.Pow)
+        )
+        for op, ast_type in aug_assigns:
+            input = "x %s 4" % (op,)
+            assign = self.get_first_stmt(input)
+            assert isinstance(assign, ast.AugAssign)
+            assert assign.op is ast_type
+            assert isinstance(assign.target, ast.Name)
+            assert assign.target.ctx == ast.Store
+            assert isinstance(assign.value, ast.Constant)
 
     def test_assign(self):
         assign = self.get_first_stmt("hi = 32")
@@ -901,12 +876,16 @@ class TestAstBuilder:
                 input = template % (expr,)
                 with pytest.raises(SyntaxError) as excinfo:
                     self.get_ast(input)
-                assert excinfo.value.msg == "cannot %s %s" % (ctx_type, type_str)
+                assert excinfo.value.msg.startswith("cannot %s %s" % (ctx_type, type_str))
 
     def test_assignment_to_forbidden_names(self):
         invalid = (
             "%s = x",
             "%s, x = y",
+            "[%s, x] = y",
+            "[%s, x] = y",
+            "*%s, x = y",
+            "[*%s, x] = y",
             "def %s(): pass",
             "class %s(): pass",
             "def f(%s): pass",
@@ -920,13 +899,65 @@ class TestAstBuilder:
             "from x import %s",
             "from x import y as %s",
             "for %s in x: pass",
+            "x.%s = y",
+            "x.%s += y",
+            "%s += 1",
         )
         for name in "__debug__",:
             for template in invalid:
                 input = template % (name,)
-                with pytest.raises(SyntaxError) as excinfo:
-                    self.get_ast(input)
-                assert excinfo.value.msg == "cannot assign to %s" % (name,)
+                ast = self.get_ast(input) # error now caught during codegen!
+                ec = self.space.getexecutioncontext()
+                with pytest.raises(OperationError) as excinfo:
+                    ec.compiler.compile_ast(ast, "", "exec")
+                msg = self.space.text_w(self.space.repr(excinfo.value.get_w_value(self.space)))
+                assert ("cannot assign to %s" % (name,)) in msg
+
+    def test_delete_forbidden_name(self):
+        invalid = (
+            "del %s",
+            "del %s, a",
+            "del [%s, a]",
+            "del a.%s",
+        )
+        for name in "__debug__",:
+            for template in invalid:
+                input = template % (name,)
+                ast = self.get_ast(input) # error now caught during codegen!
+                ec = self.space.getexecutioncontext()
+                with pytest.raises(OperationError) as excinfo:
+                    ec.compiler.compile_ast(ast, "", "exec")
+                msg = self.space.text_w(self.space.repr(excinfo.value.get_w_value(self.space)))
+                assert ("cannot delete %s" % (name,)) in msg
+
+    def test_cannot_delete_messages(self):
+        invalid = [
+            ("del (1, x)", "cannot delete literal"),
+            ("del [x, z, a, {1, 2}]", "cannot delete set display"),
+            ("del [a, (b, *c)]", "cannot delete starred"),
+            ("del (a := 5)", "cannot delete named expression"),
+        ]
+        for wrong, msg in invalid:
+            with pytest.raises(SyntaxError) as excinfo:
+                self.get_ast(wrong)
+            assert msg in excinfo.value.msg
+
+    def test_cannot_assign_messages(self):
+        invalid = [
+            ("(1, x) = 5", "cannot assign to literal"),
+            ("[x, z, a, {1, 2}] = 12", "cannot assign to set display"),
+            ("for (1, x) in []: pass", "cannot assign to literal"),
+            ("with foo as (1, 2): pass", "cannot assign to literal"),
+            ("(a, *True, c) = (1, 2, 3)", "cannot assign to True"),
+            ("for (x, *(y, z.d())) in b: pass", "cannot assign to function call"),
+        ]
+        for wrong, msg in invalid:
+            with pytest.raises(SyntaxError) as excinfo:
+                self.get_ast(wrong)
+            assert msg in excinfo.value.msg
+
+    def test_assign_bug(self):
+        self.get_ast("direct = (__debug__ and optimize == 0)") # used to crash
 
     def test_lambda(self):
         lam = self.get_first_expr("lambda x: expr")
@@ -1017,8 +1048,7 @@ class TestAstBuilder:
 
     def test_flufl(self):
         source = "x <> y"
-        with pytest.raises(SyntaxError):
-            self.get_ast(source)
+        pytest.raises(SyntaxError, self.get_ast, source)
         comp = self.get_first_expr(source,
                                    flags=consts.CO_FUTURE_BARRY_AS_BDFL)
         assert isinstance(comp, ast.Compare)
@@ -1131,33 +1161,28 @@ class TestAstBuilder:
         call = self.get_first_expr("f(x for x in y)")
         assert len(call.args) == 1
         assert isinstance(call.args[0], ast.GeneratorExp)
-        assert call.args[0].col_offset == 1
         input = "f(x for x in y, 1)"
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast(input)
-        assert excinfo.value.msg == "Generator expression must be parenthesized if not " \
-            "sole argument"
+        exc = pytest.raises(SyntaxError, self.get_ast, input).value
+        assert exc.msg == "Generator expression must be parenthesized"
+
         input = "f(x for x in y, )"
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast(input)
-        assert excinfo.value.msg == "Generator expression must be parenthesized if not " \
-            "sole argument"
+        exc = pytest.raises(SyntaxError, self.get_ast, input).value
+        assert exc.msg == "Generator expression must be parenthesized"
+
         many_args = ", ".join("x%i" % i for i in range(256))
         input = "f(%s)" % (many_args,)
         self.get_ast(input) # doesn't crash any more
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast("f((a+b)=c)")
-        assert excinfo.value.msg == 'expression cannot contain assignment, perhaps you meant "=="?'
-        with pytest.raises(SyntaxError) as excinfo:
-            self.get_ast("f(a=c, a=d)")
-        assert excinfo.value.msg == "keyword argument repeated: 'a'"
+        exc = pytest.raises(SyntaxError, self.get_ast, "f((a+b)=c)").value
+        assert exc.msg == 'expression cannot contain assignment, perhaps you meant "=="?'
+        exc = pytest.raises(SyntaxError, self.get_ast, "deff f(a=1, a=2): pass").value
+        assert  'invalid syntax' in exc.msg # used to be "keyword argument repeated: 'a'"
         with pytest.raises(SyntaxError) as excinfo:
             self.get_ast("f((x)=1)")
         assert excinfo.value.msg == 'expression cannot contain assignment, perhaps you meant "=="?'
         with pytest.raises(SyntaxError) as excinfo:
             self.get_ast("f(True=1)")
         assert excinfo.value.msg == 'cannot assign to True'
-        assert excinfo.value.offset == 2
+        assert excinfo.value.offset == 3
 
 
     def test_attribute(self):
@@ -1181,8 +1206,7 @@ class TestAstBuilder:
         assert isinstance(sub.value, ast.Name)
         assert sub.value.ctx == ast.Load
         assert sub.ctx == ast.Load
-        assert isinstance(sub.slice, ast.Index)
-        assert isinstance(sub.slice.value, ast.Name)
+        assert isinstance(sub.slice, ast.Name)
         slc = self.get_first_expr("x[:]").slice
         assert slc.upper is None
         assert slc.lower is None
@@ -1232,14 +1256,13 @@ class TestAstBuilder:
             assert isinstance(field, ast.Constant)
         sub = self.get_first_expr("x[1,2,3]")
         slc = sub.slice
-        assert isinstance(slc, ast.Index)
-        assert isinstance(slc.value, ast.Tuple)
-        assert len(slc.value.elts) == 3
-        assert slc.value.ctx == ast.Load
+        assert isinstance(slc, ast.Tuple)
+        assert len(slc.elts) == 3
+        assert slc.ctx == ast.Load
         slc = self.get_first_expr("x[1,3:4]").slice
-        assert isinstance(slc, ast.ExtSlice)
-        assert len(slc.dims) == 2
-        complex_slc = slc.dims[1]
+        assert isinstance(slc, ast.Tuple)
+        assert len(slc.elts) == 2
+        complex_slc = slc.elts[1]
         assert isinstance(complex_slc, ast.Slice)
         assert isinstance(complex_slc.lower, ast.Constant)
         assert isinstance(complex_slc.upper, ast.Constant)
@@ -1251,8 +1274,8 @@ class TestAstBuilder:
         assert self.space.is_w(e.value, self.space.w_Ellipsis)
 
         sub = self.get_first_expr("x[...]")
-        assert isinstance(sub.slice.value, ast.Constant)
-        assert self.space.is_w(sub.slice.value.value, self.space.w_Ellipsis)
+        assert isinstance(sub.slice, ast.Constant)
+        assert self.space.is_w(sub.slice.value, self.space.w_Ellipsis)
 
     def test_string(self):
         space = self.space
@@ -1265,27 +1288,25 @@ class TestAstBuilder:
         s = self.get_first_expr("b'hi' b' implicitly' b' extra'")
         assert isinstance(s, ast.Constant)
         assert space.eq_w(s.value, space.newbytes("hi implicitly extra"))
-        with pytest.raises(SyntaxError):
-            self.get_first_expr("b'hello' 'world'")
+        excinfo = pytest.raises(SyntaxError, self.get_first_expr, "b'hello' 'world'")
+        assert excinfo.value.offset == 1
+        excinfo = pytest.raises(SyntaxError, self.get_first_expr, "'foo' b'hello' 'world'")
+        assert excinfo.value.offset == 7
         sentence = u"Die Männer ärgern sich!"
         source = u"# coding: utf-7\nstuff = '%s'" % (sentence,)
-        info = pyparse.CompileInfo("<test>", "exec")
-        tree = self.parser.parse_source(source.encode("utf-7"), info)
-        assert info.encoding == "utf-7"
-        s = ast_from_node(space, tree, info).body[0].value
-        assert isinstance(s, ast.Constant)
-        assert space.eq_w(s.value, space.wrap(sentence))
+        s = self.get_first_stmt(source.encode("utf-7"))
+        assert self.info.encoding == "utf-7"
+        assert isinstance(s.value, ast.Constant)
+        assert space.eq_w(s.value.value, space.wrap(sentence))
 
     def test_string_pep3120(self):
         space = self.space
         japan = u'日本'
         source = u"foo = '%s'" % japan
-        info = pyparse.CompileInfo("<test>", "exec")
-        tree = self.parser.parse_source(source.encode("utf-8"), info)
-        assert info.encoding == "utf-8"
-        s = ast_from_node(space, tree, info).body[0].value
-        assert isinstance(s, ast.Constant)
-        assert space.eq_w(s.value, space.wrap(japan))
+        s = self.get_first_stmt(source.encode("utf-8"))
+        assert self.info.encoding == "utf-8"
+        assert isinstance(s.value, ast.Constant)
+        assert space.eq_w(s.value.value, space.wrap(japan))
 
     def test_name_pep3131(self):
         assign = self.get_first_stmt("日本 = 32")
@@ -1315,19 +1336,16 @@ class TestAstBuilder:
         space = self.space
         source = u'# coding: Latin-1\nu = "Ç"\n'
         info = pyparse.CompileInfo("<test>", "exec")
-        tree = self.parser.parse_source(source.encode("Latin-1"), info)
-        assert info.encoding == "iso-8859-1"
-        s = ast_from_node(space, tree, info).body[0].value
+        s = self.get_first_stmt(source.encode("Latin-1")).value
+        assert self.info.encoding == "iso-8859-1"
         assert isinstance(s, ast.Constant)
         assert space.eq_w(s.value, space.wrap(u'Ç'))
 
     def test_string_bug(self):
         space = self.space
         source = '# -*- encoding: utf8 -*-\nstuff = "x \xc3\xa9 \\n"\n'
-        info = pyparse.CompileInfo("<test>", "exec")
-        tree = self.parser.parse_source(source, info)
-        assert info.encoding == "utf8"
-        s = ast_from_node(space, tree, info).body[0].value
+        s = self.get_first_stmt(source).value
+        assert self.info.encoding == "utf8"
         assert isinstance(s, ast.Constant)
         assert space.eq_w(s.value, space.wrap(u'x \xe9 \n'))
 
@@ -1344,8 +1362,8 @@ class TestAstBuilder:
         assert space.eq_w(get_num("2"), space.wrap(2))
         assert space.eq_w(get_num("13j"), space.wrap(13j))
         assert space.eq_w(get_num("13J"), space.wrap(13J))
-        assert space.eq_w(get_num("0o53"), space.wrap(0o53))
-        assert space.eq_w(get_num("0o0053"), space.wrap(0O53))
+        assert space.eq_w(get_num("0o53"), space.wrap(053))
+        assert space.eq_w(get_num("0o0053"), space.wrap(053))
         for num in ("0x53", "0X53", "0x0000053", "0X00053"):
             assert space.eq_w(get_num(num), space.wrap(0x53))
         assert space.eq_w(get_num("0Xb0d2"), space.wrap(0xb0d2))
@@ -1353,15 +1371,19 @@ class TestAstBuilder:
         assert space.eq_w(get_num("0"), space.wrap(0))
         assert space.eq_w(get_num("00000"), space.wrap(0))
         for num in ("0o53", "0O53", "0o0000053", "0O00053"):
-            assert space.eq_w(get_num(num), space.wrap(0o53))
+            assert space.eq_w(get_num(num), space.wrap(053))
         for num in ("0b00101", "0B00101", "0b101", "0B101"):
             assert space.eq_w(get_num(num), space.wrap(5))
 
-    @pytest.mark.parametrize('literal',
-        ["0x", "0b", "0o", "32L", "32l", "0L", "-0xAAAAAAL", "053", "00053"])
-    def test_bad_number(self, literal):
-        with pytest.raises(SyntaxError):
-            self.get_ast(literal)
+        pytest.raises(SyntaxError, self.get_ast, "0x")
+        pytest.raises(SyntaxError, self.get_ast, "0b")
+        pytest.raises(SyntaxError, self.get_ast, "0o")
+        pytest.raises(SyntaxError, self.get_ast, "32L")
+        pytest.raises(SyntaxError, self.get_ast, "32l")
+        pytest.raises(SyntaxError, self.get_ast, "0L")
+        pytest.raises(SyntaxError, self.get_ast, "-0xAAAAAAL")
+        pytest.raises(SyntaxError, self.get_ast, "053")
+        pytest.raises(SyntaxError, self.get_ast, "00053")
 
     def check_comprehension(self, brackets, ast_type):
         def brack(s):
@@ -1369,8 +1391,6 @@ class TestAstBuilder:
         gen = self.get_first_expr(brack("x for x in y"))
         assert isinstance(gen, ast_type)
         assert isinstance(gen.elt, ast.Name)
-        assert gen.col_offset == 0
-        assert gen.end_col_offset == 14
         assert gen.elt.ctx == ast.Load
         assert len(gen.generators) == 1
         comp = gen.generators[0]
@@ -1459,10 +1479,8 @@ class TestAstBuilder:
         assert isinstance(if2, ast.Name)
 
     def test_cpython_issue12983(self):
-        with pytest.raises(SyntaxError):
-            self.get_ast(r"""b'\x'""")
-        with pytest.raises(SyntaxError):
-            self.get_ast(r"""b'\x0'""")
+        pytest.raises(SyntaxError, self.get_ast, r"""b'\x'""")
+        pytest.raises(SyntaxError, self.get_ast, r"""b'\x0'""")
 
     def test_matmul(self):
         mod = self.get_ast("a @ b")
@@ -1508,8 +1526,6 @@ class TestAstBuilder:
         assert len(asyncdef.body) == 1
         asyncfor = asyncdef.body[0]
         assert isinstance(asyncfor, ast.AsyncFor)
-        assert asyncfor.lineno == 2
-        assert asyncfor.col_offset == 1
         assert isinstance(asyncfor.target, ast.Name)
         assert isinstance(asyncfor.iter, ast.Name)
         assert len(asyncfor.body) == 1
@@ -1532,8 +1548,6 @@ class TestAstBuilder:
         asyncwith = asyncdef.body[0]
         assert isinstance(asyncwith, ast.AsyncWith)
         assert len(asyncwith.items) == 1
-        assert asyncwith.lineno == 2
-        assert asyncwith.col_offset == 1
         asyncitem = asyncwith.items[0]
         assert isinstance(asyncitem, ast.withitem)
         assert isinstance(asyncitem.context_expr, ast.Name)
@@ -1605,7 +1619,7 @@ class TestAstBuilder:
         assert exc.msg == ("(unicode error) 'unicodeescape' codec can't decode"
                            " bytes in position 0-1: truncated \\xXX escape")
         assert exc.lineno == 2
-        assert exc.offset == 6
+        assert exc.offset == 7
 
     def test_fstring_lineno(self):
         mod = self.get_ast('x=1\nf"{    x + 1}"')
@@ -1828,7 +1842,7 @@ class TestAstBuilder:
         for function in module.body:
             args = function.args
             all_args = []
-            all_args.extend(args.args)
+            all_args.extend(args.args or [])
             all_args.extend(args.kwonlyargs or [])
             if args.vararg:
                 all_args.append(args.vararg)
@@ -1874,7 +1888,7 @@ class TestAstBuilder:
 
     def test_func_type(self):
         func = self.get_ast("() -> int", p_mode="func_type")
-        assert len(func.argtypes) == 0
+        assert not func.argtypes
         assert isinstance(func.returns, ast.Name)
         assert func.returns.id == 'int'
 
@@ -1936,8 +1950,8 @@ class TestAstBuilder:
         assert tree.end_col_offset == len(s)
         assert tree.col_offset == 0
         gen = tree.args[0]
-        assert gen.end_col_offset == len(s)
-        assert gen.col_offset == 1
+        assert gen.end_col_offset in (len(s), len(s) - 1)
+        assert gen.col_offset in (1, 2)
         assert fdef.get_source_segment(s) == s
 
         s = "(x for x in y)"
@@ -2024,4 +2038,10 @@ class TestAstBuilder:
             tree = self.get_ast("f'{((}')")
         assert excinfo.value.msg == "unmatched ')'"
 
+    def test_keyword_position(self):
+        tree = self.get_first_expr("f(a=1, **kwarg)")
+        assert tree.keywords[0].col_offset == 2
+        assert tree.keywords[0].end_col_offset == 5
+        assert tree.keywords[1].col_offset == 7
+        assert tree.keywords[1].end_col_offset == 14
 

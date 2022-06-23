@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from test import support
 from test.support.script_helper import (
@@ -135,6 +136,17 @@ class CmdLineTest(unittest.TestCase):
         self.assertTrue(data.find(b'1 loop') != -1)
         self.assertTrue(data.find(b'__main__.Timer') != -1)
 
+    def test_relativedir_bug46421(self):
+        # Test `python -m unittest` with a relative directory beginning with ./
+        # Note: We have to switch to the project's top module's directory, as per
+        # the python unittest wiki. We will switch back when we are done.
+        defaultwd = os.getcwd()
+        projectlibpath = os.path.dirname(__file__).removesuffix("test")
+        with support.change_cwd(projectlibpath):
+            # Testing with and without ./
+            assert_python_ok('-m', 'unittest', "test/test_longexp.py")
+            assert_python_ok('-m', 'unittest', "./test/test_longexp.py")
+
     def test_run_code(self):
         # Test expected operation of the '-c' switch
         # Switch needs an argument
@@ -257,6 +269,21 @@ class CmdLineTest(unittest.TestCase):
         self.assertEqual(stdout, expected)
         self.assertEqual(p.returncode, 0)
 
+    def test_non_interactive_output_buffering(self):
+        code = textwrap.dedent("""
+            import sys
+            out = sys.stdout
+            print(out.isatty(), out.write_through, out.line_buffering)
+            err = sys.stderr
+            print(err.isatty(), err.write_through, err.line_buffering)
+        """)
+        args = [sys.executable, '-c', code]
+        proc = subprocess.run(args, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True, check=True)
+        self.assertEqual(proc.stdout,
+                         'False False False\n'
+                         'False False True\n')
+
     def test_unbuffered_output(self):
         # Test expected operation of the '-u' switch
         for stream in ('stdout', 'stderr'):
@@ -370,10 +397,10 @@ class CmdLineTest(unittest.TestCase):
 
         if sys.platform == 'win32':
             self.assertEqual(b'1\r\n2\r\n', out)
-            self.assertEqual(b'3\r\n4', err)
+            self.assertEqual(b'3\r\n4\r\n', err)
         else:
             self.assertEqual(b'1\n2\n', out)
-            self.assertEqual(b'3\n4', err)
+            self.assertEqual(b'3\n4\n', err)
 
     def test_unmached_quote(self):
         # Issue #10206: python program starting with unmatched quote
@@ -429,7 +456,7 @@ class CmdLineTest(unittest.TestCase):
             stderr=subprocess.PIPE,
             preexec_fn=preexec)
         out, err = p.communicate()
-        self.assertEqual(support.strip_python_stderr(err), b'')
+        self.assertEqual(err, b'')
         self.assertEqual(p.returncode, 42)
 
     def test_no_stdin(self):
@@ -829,9 +856,9 @@ class IgnoreEnvironmentTest(unittest.TestCase):
         )
 
 
-def test_main():
-    support.run_unittest(CmdLineTest, IgnoreEnvironmentTest)
+def tearDownModule():
     support.reap_children()
 
+
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

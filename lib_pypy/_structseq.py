@@ -84,6 +84,7 @@ builtin_dict = dict
 
 MISSING = object()
 
+@hidden_applevel
 def structseq_new(cls, sequence, dict=MISSING):
     if dict is MISSING:
         dict = {}

@@ -585,9 +585,26 @@ only close to themselves."""
               diff <= abs_tol)
     return space.newbool(result)
 
+def gcd(space, args_w):
+    """greatest common divisor"""
+    if len(args_w) == 0:
+        return space.newint(0)
+    if len(args_w) == 1:
+        space.index(args_w[0]) # for the error
+        return space.abs(args_w[0])
+    if len(args_w) == 2:
+        return gcd_two(space, args_w[0], args_w[1])
+    return _gcd_many(space, args_w)
 
-def gcd(space, w_a, w_b):
-    """greatest common divisor of a and b"""
+def _gcd_many(space, args_w):
+    w_res = args_w[0]
+    # could jit this, but do we care?
+    for i in range(1, len(args_w)):
+        w_res = gcd_two(space, w_res, args_w[i])
+    return w_res
+
+
+def gcd_two(space, w_a, w_b):
     from rpython.rlib import rbigint
     w_a = space.abs(space.index(w_a))
     w_b = space.abs(space.index(w_b))
@@ -605,3 +622,28 @@ def gcd(space, w_a, w_b):
     else:
         g = rbigint.gcd_binary(a, b)
         return space.newint(g)
+
+def nextafter(space, w_a, w_b):
+    """ Return the next floating-point value after x towards y. """
+    a = _get_double(space, w_a)
+    b = _get_double(space, w_b)
+    return space.newfloat(rfloat.nextafter(a, b))
+
+def ulp(space, w_x):
+    """Return the value of the least significant bit of the
+    float x.
+    """
+    x = _get_double(space, w_x)
+    if math.isnan(x):
+        return w_x
+    x = math.fabs(float(x))
+    if math.isinf(x):
+        return space.newfloat(x)
+
+    x2 = rfloat.nextafter(x, rfloat.INFINITY)
+    if math.isinf(x2):
+        # special case: x is the largest positive representable float
+        x2 = rfloat.nextafter(x, -rfloat.INFINITY)
+        return space.newfloat(x - x2)
+    return space.newfloat(x2 - x)
+

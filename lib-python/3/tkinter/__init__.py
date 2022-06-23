@@ -32,12 +32,12 @@ tk.mainloop()
 
 import enum
 import sys
+import types
 
 import _tkinter # If this fails your Python may not be configured for Tk
 TclError = _tkinter.TclError
 from tkinter.constants import *
 import re
-
 
 wantobjects = 1
 
@@ -2248,7 +2248,7 @@ class Tk(Misc, Wm):
     _w = '.'
 
     def __init__(self, screenName=None, baseName=None, className='Tk',
-                 useTk=1, sync=0, use=None):
+                 useTk=True, sync=False, use=None):
         """Return a new Toplevel widget on screen SCREENNAME. A new Tcl interpreter will
         be created. BASENAME will be used for the identification of the profile file (see
         readprofile).
@@ -2266,7 +2266,7 @@ class Tk(Misc, Wm):
             baseName, ext = os.path.splitext(baseName)
             if ext not in ('.py', '.pyc'):
                 baseName = baseName + ext
-        interactive = 0
+        interactive = False
         self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
         if useTk:
             self._loadtk()
@@ -2368,7 +2368,7 @@ class Tk(Misc, Wm):
 # copied into the Pack, Place or Grid class.
 
 
-def Tcl(screenName=None, baseName=None, className='Tk', useTk=0):
+def Tcl(screenName=None, baseName=None, className='Tk', useTk=False):
     return Tk(screenName, baseName, className, useTk)
 
 
@@ -2707,7 +2707,7 @@ class Canvas(Widget, XView, YView):
         """Add tag NEWTAG to item which is closest to pixel at X, Y.
         If several match take the top-most.
         All items closer than HALO are considered overlapping (all are
-        closests). If START is specified the next below this tag is taken."""
+        closest). If START is specified the next below this tag is taken."""
         self.addtag(newtag, 'closest', x, y, halo, start)
 
     def addtag_enclosed(self, newtag, x1, y1, x2, y2):
@@ -3302,7 +3302,7 @@ class Menu(Widget):
         self.add('command', cnf or kw)
 
     def add_radiobutton(self, cnf={}, **kw):
-        """Addd radio menu item."""
+        """Add radio menu item."""
         self.add('radiobutton', cnf or kw)
 
     def add_separator(self, cnf={}, **kw):
@@ -3327,7 +3327,7 @@ class Menu(Widget):
         self.insert(index, 'command', cnf or kw)
 
     def insert_radiobutton(self, index, cnf={}, **kw):
-        """Addd radio menu item at INDEX."""
+        """Add radio menu item at INDEX."""
         self.insert(index, 'radiobutton', cnf or kw)
 
     def insert_separator(self, index, cnf={}, **kw):
@@ -4573,6 +4573,10 @@ def _test():
     root.deiconify()
     root.mainloop()
 
+
+__all__ = [name for name, obj in globals().items()
+           if not name.startswith('_') and not isinstance(obj, types.ModuleType)
+           and name not in {'wantobjects'}]
 
 if __name__ == '__main__':
     _test()

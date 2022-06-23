@@ -1,4 +1,6 @@
 /* Do not renumber the file; these numbers are part of the stable ABI. */
+#define Py_bf_getbuffer 1
+#define Py_bf_releasebuffer 2
 #define Py_mp_ass_subscript 3
 #define Py_mp_length 4
 #define Py_mp_subscript 5

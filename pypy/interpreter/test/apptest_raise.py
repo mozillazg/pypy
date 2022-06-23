@@ -379,6 +379,49 @@ def test_context_cycle_broken():
     else:
         fail("No exception raised")
 
+def test_context_preexisting_cycle():
+    def chain(e, i=0):
+        res = Exception(i)
+        res.__context__ = e
+        return res
+    def cycle():
+        try:
+            raise ValueError(1)
+        except ValueError as ex:
+            start = curr = Exception()
+            for i in range(chainlength):
+                curr = chain(curr, i) # make cycle ourselves
+            start.__context__ = curr
+            for i in range(prelength):
+                curr = chain(curr, i + chainlength)
+            ex.__context__ = curr
+            raise TypeError(2) # shouldn't hang here
+    for chainlength in range(2, 7):
+        for prelength in range(2, 7):
+            print(chainlength, prelength)
+            raises(TypeError, cycle)
+
+def test_context_long_cycle_broken():
+    def chain(e, i=0):
+        res = Exception(i)
+        res.__context__ = e
+        return res
+    def cycle():
+        try:
+            raise ValueError(1)
+        except ValueError as ex:
+            start = curr = TypeError()
+            for i in range(chainlength):
+                curr = chain(curr, i) # make cycle ourselves
+            ex.__context__ = curr
+            raise start
+    for chainlength in range(2, 7):
+        print(chainlength)
+        exc = raises(TypeError, cycle).value
+        for i in range(chainlength + 1):
+            exc = exc.__context__
+        assert exc.__context__ is None # got broken
+
 def test_context_reraise_cycle_broken():
     try:
         try:

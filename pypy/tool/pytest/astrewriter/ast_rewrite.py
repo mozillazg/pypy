@@ -68,7 +68,7 @@ def set_location(node, lineno, col_offset):
     return node
 
 FIELDS = {name: (fields1 or []) + (fields2 or [])
-        for (name, base, fields1, fields2) in ast.State.AST_TYPES}
+        for (name, base, fields1, fields2, _, _) in ast.State.AST_TYPES}
 
 def iter_fields(node):
     fields = FIELDS[type(node).__name__]
@@ -399,7 +399,7 @@ class AssertionRewriter(ast.ASTVisitor):
             new_args.append(res)
         for keyword in call.keywords or []:
             res, expl = self.visit(keyword.value)
-            new_kwargs.append(ast.keyword(keyword.arg, res))
+            new_kwargs.append(b(ast.keyword, keyword.arg, res))
             if keyword.arg:
                 arg_expls.append(keyword.arg + "=" + expl)
             else:  # **args have `arg` keywords with an .arg of None

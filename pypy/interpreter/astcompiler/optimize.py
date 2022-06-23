@@ -57,11 +57,6 @@ class __extend__(ast.Name):
         else:
             return None
 
-
-class __extend__(ast.Index):
-    def as_constant(self, space, compile_info):
-        return self.value.as_constant(space, compile_info)
-
 class __extend__(ast.Slice):
     def as_constant(self, space, compile_info):
         # XXX: this ought to return a slice object if all the indices are
@@ -240,7 +235,7 @@ class OptimizingVisitor(ast.ASTVisitor):
 
     def visit_Name(self, name):
         """Turn loading None, True, and False into a constant lookup."""
-        if name.ctx == ast.Del:
+        if name.ctx == ast.Del or name.ctx == ast.Store:
             return name
         space = self.space
         w_const = None

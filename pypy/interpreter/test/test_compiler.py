@@ -40,12 +40,10 @@ class TestPythonAstCompiler:
             assert c2 is not None
             assert c8 is not None
             assert c9 is not None
-            c3 = self.compiler.compile_command('if 1:\n  x', '?', mode, 0)
             c4 = self.compiler.compile_command('x = (', '?', mode, 0)
             c5 = self.compiler.compile_command('x = (\n', '?', mode, 0)
             c6 = self.compiler.compile_command('x = (\n\n', '?', mode, 0)
             c7 = self.compiler.compile_command('x = """a\n', '?', mode, 0)
-            assert c3 is None
             assert c4 is None
             assert c5 is None
             assert c6 is None
@@ -55,6 +53,11 @@ class TestPythonAstCompiler:
                            'if 1:\n  x x', '?', mode, 0)
             space.raises_w(space.w_SyntaxError, self.compiler.compile_command,
                            ')', '?', mode, 0)
+        c3 = self.compiler.compile_command('if 1:\n  x', '?', 'single', 0)
+        assert c3 is None
+
+    def test_compile_bug(self):
+        self.compiler.compile_command("if 1: pass", "", "single", 0)
 
     def test_hidden_applevel(self):
         code = self.compiler.compile("def f(x): pass", "<test>", "exec", 0,
@@ -68,17 +71,6 @@ class TestPythonAstCompiler:
         space = self.space
         space.raises_w(space.w_SyntaxError, self.compiler.compile_command,
                        'if 1:\n  x\n y\n', '?', 'exec', 0)
-
-    def test_syntaxerror_attrs(self):
-        w_args = self.space.appexec([], r"""():
-            try:
-                exec('if 1:\n  x\n y\n')
-            except SyntaxError as e:
-                return e.args
-        """)
-        assert self.space.unwrap(w_args) == (
-            'unindent does not match any outer indentation level',
-            ('<string>', 3, 2, ' y\n'))
 
     def test_getcodeflags(self):
         code = self.compiler.compile('from __future__ import division, annotations\n',
@@ -481,6 +473,23 @@ def testing():
         w_fline = space.getitem(w_d, space.wrap('fline'))
         assert space.int_w(w_fline) == 3
 
+    def test_firstlineno_decorators_class(self):
+        snippet = str(py.code.Source(r'''
+            def foo(x): return x
+            def f():
+                @foo       # line 4
+                @foo       # line 5
+                class AWrong:
+                    pass   # line 7
+            Aline = f.__code__.co_consts[1].co_firstlineno
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        code.exec_code(space, w_d, w_d)
+        w_fline = space.getitem(w_d, space.wrap('Aline'))
+        assert space.int_w(w_fline) == 4
+
     def test_mangling(self):
         snippet = str(py.code.Source(r'''
             __g = "42"
@@ -813,20 +822,20 @@ with somtehing as stuff:
                 if isinstance(w_const, PyCode):
                     return w_const
 
-        snippet = 'def f(a, b, m=1, n=2, **kwargs): pass'
+        snippet = 'def f(a, b, m=1, n=2, **kwargs):\n pass\n'
         containing_co = self.compiler.compile(snippet, '<string>', 'single', 0)
         co = find_func(containing_co)
         sig = make_signature(co)
         assert sig == Signature(['a', 'b', 'm', 'n'], None, 'kwargs')
 
-        snippet = 'def f(a, b, *, m=1, n=2, **kwargs): pass'
+        snippet = 'def f(a, b, *, m=1, n=2, **kwargs):\n pass\n'
         containing_co = self.compiler.compile(snippet, '<string>', 'single', 0)
         co = find_func(containing_co)
         sig = make_signature(co)
         assert sig == Signature(['a', 'b', 'm', 'n'], None, 'kwargs', 2)
 
         # a variant with varargname, which was buggy before issue2996
-        snippet = 'def f(*args, offset=42): pass'
+        snippet = 'def f(*args, offset=42):\n pass\n'
         containing_co = self.compiler.compile(snippet, '<string>', 'single', 0)
         co = find_func(containing_co)
         sig = make_signature(co)
@@ -967,6 +976,11 @@ class AppTestCompiler(object):
         raises(SyntaxError, eval, b'\xff\x20')
         raises(SyntaxError, eval, b'\xef\xbb\x20')
 
+    def test_unicode_identifier_error_offset(self):
+        info = raises(SyntaxError, eval, b'\xe2\x82\xac = 1')
+        assert info.value.offset == 1
+        assert raises(SyntaxError, eval, b'\xc3\xa4 + \xe2\x82\xac').value.offset == 5
+
     def test_import_nonascii(self):
         c = compile('from os import 日本', '', 'exec')
         assert ('日本',) in c.co_consts
@@ -1023,7 +1037,7 @@ class AppTestCompiler(object):
         excinfo = raises(SyntaxError, compile, b'# coding: utf-8\nx = b"a" b"c" b"\xfd"\n',
                "dummy", "exec")
         assert excinfo.value.lineno == 2
-        assert excinfo.value.offset == 14
+        assert excinfo.value.offset == 17
 
     def test_zeros_not_mixed_in_lambdas(self):
         import math

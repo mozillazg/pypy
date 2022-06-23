@@ -10,6 +10,7 @@ from rpython.rlib.jit import promote
 from rpython.rlib.objectmodel import compute_identity_hash, specialize
 from rpython.rlib.objectmodel import instantiate, not_rpython, try_inline, dont_inline
 from rpython.tool.sourcetools import compile2, func_with_new_name
+from pypy.objspace.std.util import generic_alias_class_getitem
 
 
 class TypeDef(object):
@@ -910,6 +911,7 @@ NotImplemented.typedef = TypeDef("NotImplementedType",
     __new__ = interp2app(NotImplemented.descr_new_notimplemented),
     __repr__ = interp2app(NotImplemented.descr__repr__),
     __reduce__ = interp2app(NotImplemented.descr__reduce__),
+    __bool__ = interp2app(NotImplemented.descr_bool),
 )
 NotImplemented.typedef.acceptable_as_base_class = False
 

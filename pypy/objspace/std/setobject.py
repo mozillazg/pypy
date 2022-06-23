@@ -6,7 +6,8 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.objspace.std.bytesobject import W_BytesObject
 from pypy.objspace.std.listobject import is_plain_int1, plain_int_w
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
-from pypy.objspace.std.util import IDTAG_SPECIAL, IDTAG_SHIFT
+from pypy.objspace.std.util import IDTAG_SPECIAL, IDTAG_SHIFT, \
+    generic_alias_class_getitem
 
 from rpython.rlib.objectmodel import r_dict
 from rpython.rlib.objectmodel import iterkeys_with_hash, contains_with_hash
@@ -528,6 +529,9 @@ Build an unordered collection.""",
     __repr__ = gateway.interp2app(W_SetObject.descr_repr),
     __hash__ = None,
 
+    __class_getitem__ = gateway.interp2app(
+        generic_alias_class_getitem, as_classmethod=True),
+
     # comparison operators
     __eq__ = gateway.interp2app(W_SetObject.descr_eq),
     __ne__ = gateway.interp2app(W_SetObject.descr_ne),
@@ -581,12 +585,13 @@ set_typedef = W_SetObject.typedef
 
 
 class W_FrozensetObject(W_BaseSetObject):
-    hash = 0
+    DEFAULT_HASH = -1
+    hash = DEFAULT_HASH
 
     def _cleanup_(self):
         # in case there are frozenset objects existing during
         # translation, make sure we don't translate a cached hash
-        self.hash = 0
+        self.hash = self.DEFAULT_HASH
 
     def is_w(self, space, w_other):
         if not isinstance(w_other, W_FrozensetObject):
@@ -619,11 +624,12 @@ class W_FrozensetObject(W_BaseSetObject):
         return w_obj
 
     def descr_hash(self, space):
-        multi = r_uint(1822399083) + r_uint(1822399083) + 1
-        if self.hash != 0:
+        if self.hash != -1:
             return space.newint(self.hash)
+        multi = r_uint(1822399083) + r_uint(1822399083) + 1
         hash = r_uint(1927868237)
         hash *= r_uint(self.length() + 1)
+        # jit driver, maybe?
         w_iterator = self.iter()
         while True:
             w_item = w_iterator.next_entry()
@@ -632,16 +638,17 @@ class W_FrozensetObject(W_BaseSetObject):
             h = space.hash_w(w_item)
             value = (r_uint(h ^ (h << 16) ^ 89869747)  * multi)
             hash = hash ^ value
+        hash ^= (hash >> 11) ^ (hash >> 25)
         hash = hash * 69069 + 907133923
-        if hash == 0:
-            hash = 590923713
         hash = intmask(hash)
+        if hash == -1:
+            hash = 590923713
         self.hash = hash
 
         return space.newint(hash)
 
     def cpyext_add_frozen(self, w_key):
-        if self.hash != 0:
+        if self.hash != self.DEFAULT_HASH:
             return False
         self.add(w_key)
         return True
@@ -653,6 +660,9 @@ Build an immutable unordered collection.""",
     __new__ = gateway.interp2app(W_FrozensetObject.descr_new2),
     __repr__ = gateway.interp2app(W_FrozensetObject.descr_repr),
     __hash__ = gateway.interp2app(W_FrozensetObject.descr_hash),
+
+    __class_getitem__ = gateway.interp2app(
+        generic_alias_class_getitem, as_classmethod=True),
 
     # comparison operators
     __eq__ = gateway.interp2app(W_FrozensetObject.descr_eq),

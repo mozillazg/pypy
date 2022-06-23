@@ -6,6 +6,7 @@ from pypy.interpreter.typedef import TypeDef, make_weakref_descr, interp_attrpro
 from pypy.interpreter.typedef import interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.astcompiler import consts
+from pypy.objspace.std.util import generic_alias_class_getitem
 from rpython.rlib import jit, rgc, rweakref
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rarithmetic import r_uint
@@ -126,6 +127,11 @@ return next yielded value or raise StopIteration."""
         if self.saved_operr is not None:
             ec.set_sys_exc_info(self.saved_operr)
             self.saved_operr = None
+        d = frame.getdebug()
+        if d is not None:
+            # on CPython, those don't live on the frame and start with default
+            # value when running execute_frame
+            d.instr_lb = d.instr_ub = d.instr_prev_plus_one = 0
         self.running = True
         try:
             w_result = frame.execute_frame(w_arg_or_err)
@@ -671,6 +677,8 @@ AsyncGenerator.typedef = TypeDef("async_generator",
                                   AsyncGenerator.descr_set__qualname__,
                                   doc="qualified name of the async generator"),
     __weakref__ = make_weakref_descr(AsyncGenerator),
+    __class_getitem__ = interp2app(
+        generic_alias_class_getitem, as_classmethod=True),
 )
 assert not AsyncGenerator.typedef.acceptable_as_base_class  # no __new__
 

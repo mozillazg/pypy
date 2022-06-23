@@ -13,6 +13,7 @@ from asyncio.proactor_events import _ProactorWritePipeTransport
 from asyncio.proactor_events import _ProactorDuplexPipeTransport
 from asyncio.proactor_events import _ProactorDatagramTransport
 from test import support
+from test.support import socket_helper
 from test.test_asyncio import utils as test_utils
 
 
@@ -71,6 +72,7 @@ class ProactorSocketTransportTests(test_utils.TestCase):
         self.loop._proactor.recv.assert_called_with(self.sock, 32768)
         self.protocol.data_received.assert_called_with(b'data')
 
+    @unittest.skipIf(sys.flags.optimize, "Assertions are disabled in optimized mode")
     def test_loop_reading_no_data(self):
         res = self.loop.create_future()
         res.set_result(b'')
@@ -234,6 +236,14 @@ class ProactorSocketTransportTests(test_utils.TestCase):
         tr.close()
         test_utils.run_briefly(self.loop)
         self.assertFalse(self.protocol.connection_lost.called)
+
+    def test_close_invalid_sockobj(self):
+        tr = self.socket_transport()
+        self.sock.fileno.return_value = -1
+        tr.close()
+        test_utils.run_briefly(self.loop)
+        self.protocol.connection_lost.assert_called_with(None)
+        self.assertFalse(self.sock.shutdown.called)
 
     @mock.patch('asyncio.base_events.logger')
     def test_fatal_error(self, m_logging):
@@ -821,6 +831,7 @@ class BaseProactorEventLoopTests(test_utils.TestCase):
     def test_make_datagram_transport(self):
         tr = self.datagram_transport()
         self.assertIsInstance(tr, _ProactorDatagramTransport)
+        self.assertIsInstance(tr, asyncio.DatagramTransport)
         close_transport(tr)
 
     def test_datagram_loop_writing(self):
@@ -852,6 +863,7 @@ class BaseProactorEventLoopTests(test_utils.TestCase):
         self.protocol.datagram_received.assert_called_with(b'data', ('127.0.0.1', 12068))
         close_transport(tr)
 
+    @unittest.skipIf(sys.flags.optimize, "Assertions are disabled in optimized mode")
     def test_datagram_loop_reading_no_data(self):
         res = self.loop.create_future()
         res.set_result((b'', ('127.0.0.1', 12068)))
@@ -951,7 +963,7 @@ class ProactorEventLoopUnixSockSendfileTests(test_utils.TestCase):
     def prepare(self):
         sock = self.make_socket()
         proto = self.MyProto(self.loop)
-        port = support.find_unused_port()
+        port = socket_helper.find_unused_port()
         srv_sock = self.make_socket(cleanup=False)
         srv_sock.bind(('127.0.0.1', port))
         server = self.run_loop(self.loop.create_server(

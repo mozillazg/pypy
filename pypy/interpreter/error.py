@@ -471,21 +471,36 @@ class OperationError(Exception):
 
 
 def _break_context_cycle(space, w_value, w_context):
-    """Break reference cycles in the __context__ chain.
+    """Don't create new context chain cycles, but be prepared to not hang on
+    existing ones.
 
-    This is O(chain length) but context chains are usually very short
+    This is O(chain length) but context chains are usually very short. Uses
+    Floyd's cycle algorithm.
     """
     from pypy.module.exceptions.interp_exceptions import W_BaseException
+    w_rabbit = w_context
+    w_tortoise = w_context
+    update_tortoise_toggle = False
+
     while True:
-        if not isinstance(w_context, W_BaseException):
-            raise oefmt(space.w_SystemError, "not an instance of Exception: %T", w_context)
-        w_next = w_context.descr_getcontext(space)
+        if not isinstance(w_rabbit, W_BaseException):
+            raise oefmt(space.w_SystemError, "not an instance of Exception: %T", w_rabbit)
+        w_next = w_rabbit.descr_getcontext(space)
         if space.is_none(w_next):
             break
         if space.is_w(w_next, w_value):
-            w_context.descr_setcontext(space, space.w_None)
+            w_rabbit.descr_setcontext(space, space.w_None)
             break
-        w_context = w_next
+        w_rabbit = w_next
+        if space.is_w(w_rabbit, w_tortoise):
+            # pre-excisting cycle, don't set anything to None
+            break
+        if update_tortoise_toggle:
+            # every other iteration
+            if not isinstance(w_tortoise, W_BaseException):
+                raise oefmt(space.w_SystemError, "not an instance of Exception: %T", w_tortoise)
+            w_tortoise = w_tortoise.descr_getcontext(space)
+        update_tortoise_toggle = not update_tortoise_toggle
 
 
 class ClearedOpErr:

@@ -201,7 +201,6 @@ class PythonCodeMaker(ast.ASTVisitor):
         self.argcount = 0
         self.posonlyargcount = 0
         self.kwonlyargcount = 0
-        self.lineno_set = False
         self.lineno = 0
         self.add_none_to_final_return = True
 
@@ -238,9 +237,7 @@ class PythonCodeMaker(ast.ASTVisitor):
     def emit_op(self, op):
         """Emit an opcode without an argument."""
         instr = Instruction(op)
-        if not self.lineno_set:
-            instr.lineno = self.lineno
-            self.lineno_set = True
+        instr.lineno = self.lineno
         if not self.is_dead_code():
             self.current_block.instructions.append(instr)
             if op == ops.RETURN_VALUE:
@@ -250,9 +247,7 @@ class PythonCodeMaker(ast.ASTVisitor):
     def emit_op_arg(self, op, arg):
         """Emit an opcode with an integer argument."""
         instr = Instruction(op, arg)
-        if not self.lineno_set:
-            instr.lineno = self.lineno
-            self.lineno_set = True
+        instr.lineno = self.lineno
         if not self.is_dead_code():
             self.current_block.instructions.append(instr)
 
@@ -302,11 +297,9 @@ class PythonCodeMaker(ast.ASTVisitor):
         index = self.add_const(obj)
         self.emit_op_arg(ops.LOAD_CONST, index)
 
-    def update_position(self, lineno, force=False):
-        """Possibly change the lineno for the next instructions."""
-        if force or lineno > self.lineno:
-            self.lineno = lineno
-            self.lineno_set = False
+    def update_position(self, lineno):
+        """Change the lineno for the next instructions."""
+        self.lineno = lineno
 
     def _resolve_block_targets(self, blocks):
         """Compute the arguments of jump instructions."""
@@ -375,6 +368,19 @@ class PythonCodeMaker(ast.ASTVisitor):
         """Get an extra flags that should be attached to the code object."""
         raise NotImplementedError
 
+    def _stacksize_error_pos(self, depth):
+        # This case occurs if this code object uses some
+        # construction for which the stack depth computation
+        # is wrong (too high).  If you get here while working
+        # on the astcompiler, then you should at first ignore
+        # the error, and comment out the 'raise' below.  Such
+        # an error is not really bad: it is just a bit
+        # wasteful.  For release-ready versions, though, we'd
+        # like not to be wasteful. :-)
+        os.write(2, "StackDepthComputationError(POS) in %s at %s:%s depth %s\n"
+          % (self.compile_info.filename, self.name, self.first_lineno, depth))
+        raise StackDepthComputationError   # would-be-nice-not-to-have
+
     def _stacksize(self, blocks):
         """Compute co_stacksize."""
         for block in blocks:
@@ -387,17 +393,7 @@ class PythonCodeMaker(ast.ASTVisitor):
         for block in blocks:
             depth = self._do_stack_depth_walk(block)
             if block.auto_inserted_return and depth != 0:
-                # This case occurs if this code object uses some
-                # construction for which the stack depth computation
-                # is wrong (too high).  If you get here while working
-                # on the astcompiler, then you should at first ignore
-                # the error, and comment out the 'raise' below.  Such
-                # an error is not really bad: it is just a bit
-                # wasteful.  For release-ready versions, though, we'd
-                # like not to be wasteful. :-)
-                os.write(2, "StackDepthComputationError(POS) in %s at %s:%s\n"
-                  % (self.compile_info.filename, self.name, self.first_lineno))
-                raise StackDepthComputationError   # would-be-nice-not-to-have
+                self._stacksize_error_pos(depth)
         return self._max_depth
 
     def _next_stack_depth_walk(self, nextblock, depth, source):
@@ -427,35 +423,23 @@ class PythonCodeMaker(ast.ASTVisitor):
                 self._max_depth = depth
             jump_op = instr.opcode
             if instr.has_jump:
-                target_depth = depth
-                if jump_op == ops.FOR_ITER:
-                    target_depth -= 2
-                elif (jump_op == ops.SETUP_FINALLY or
-                      jump_op == ops.SETUP_EXCEPT or
-                      jump_op == ops.SETUP_WITH or
-                      jump_op == ops.SETUP_ASYNC_WITH or
-                      jump_op == ops.CALL_FINALLY):
-                    if jump_op == ops.SETUP_FINALLY:
-                        target_depth += 4
-                    elif jump_op == ops.SETUP_EXCEPT:
-                        target_depth += 4
-                    elif jump_op == ops.SETUP_WITH:
-                        target_depth += 3
-                    elif jump_op == ops.SETUP_ASYNC_WITH:
-                        target_depth += 3
-                    elif jump_op == ops.CALL_FINALLY:
-                        target_depth += 1
-                    if target_depth > self._max_depth:
-                        self._max_depth = target_depth
-                elif (jump_op == ops.JUMP_IF_TRUE_OR_POP or
+                target_depth = depth + _opcode_stack_effect_jump(jump_op)
+                if target_depth > self._max_depth:
+                    self._max_depth = target_depth
+                if (jump_op == ops.JUMP_IF_TRUE_OR_POP or
                       jump_op == ops.JUMP_IF_FALSE_OR_POP):
                     depth -= 1
                 self._next_stack_depth_walk(instr.jump[0], target_depth, (block, instr))
                 if jump_op == ops.JUMP_ABSOLUTE or jump_op == ops.JUMP_FORWARD:
                     # Nothing more can occur.
                     break
-            elif jump_op == ops.RETURN_VALUE or jump_op == ops.RAISE_VARARGS:
-                # Nothing more can occur.
+            elif jump_op == ops.RETURN_VALUE:
+                if depth:
+                    self._stacksize_error_pos(depth)
+                break
+            elif jump_op == ops.RAISE_VARARGS:
+                break
+            elif jump_op == ops.RERAISE:
                 break
         else:
             if block.next_block:
@@ -473,21 +457,8 @@ class PythonCodeMaker(ast.ASTVisitor):
                 if instr.lineno:
                     # compute deltas
                     line = instr.lineno - current_line
-                    if line < 0:
-                        continue
                     addr = offset - current_off
-                    # Python assumes that lineno always increases with
-                    # increasing bytecode address (lnotab is unsigned
-                    # char).  Depending on when SET_LINENO instructions
-                    # are emitted this is not always true.  Consider the
-                    # code:
-                    #     a = (1,
-                    #          b)
-                    # In the bytecode stream, the assignment to "a"
-                    # occurs after the loading of "b".  This works with
-                    # the C Python compiler because it only generates a
-                    # SET_LINENO instruction for the assignment.
-                    if line or addr:
+                    if line:
                         _encode_lnotab_pair(addr, line, table)
                         current_line = instr.lineno
                         current_off = offset
@@ -566,9 +537,6 @@ def _encode_lnotab_pair(addr, line, table):
         table.append(chr(255))
         table.append(chr(0))
         addr -= 255
-    # this implements CPython's logic to be complete. However, the calling code
-    # ensures that line is never negative at all. We could fix this, if we
-    # wanted.
     while line < -128:
         table.append(chr(addr))
         table.append(chr(-128 + 256))
@@ -593,6 +561,7 @@ _static_opcode_stack_effects = {
     ops.POP_TOP: -1,
     ops.ROT_TWO: 0,
     ops.ROT_THREE: 0,
+    ops.ROT_FOUR: 0,
     ops.DUP_TOP: 1,
     ops.DUP_TOP_TWO: 2,
 
@@ -602,7 +571,10 @@ _static_opcode_stack_effects = {
     ops.UNARY_INVERT: 0,
 
     ops.LIST_APPEND: -1,
+    ops.LIST_EXTEND: -1,
+    ops.LIST_TO_TUPLE: 0,
     ops.SET_ADD: -1,
+    ops.SET_UPDATE: -1,
     ops.MAP_ADD: -2,
 
     ops.BINARY_POWER: -1,
@@ -642,16 +614,9 @@ _static_opcode_stack_effects = {
 
     ops.PRINT_EXPR: -1,
 
-    ops.WITH_CLEANUP_START: 0,
-    ops.WITH_CLEANUP_FINISH: -1,
     ops.LOAD_BUILD_CLASS: 1,
     ops.POP_BLOCK: 0,
     ops.POP_EXCEPT: -1,
-    ops.BEGIN_FINALLY: 4,
-    ops.END_FINALLY: -4,     # assume always 4: we pretend that SETUP_FINALLY
-                             # pushes 4.  In truth, it would only push 1 and
-                             # the corresponding END_FINALLY only pops 1.
-    ops.POP_FINALLY: -4,     # same
     ops.SETUP_WITH: 1,
     ops.SETUP_FINALLY: 0,
     ops.SETUP_EXCEPT: 0,
@@ -660,8 +625,10 @@ _static_opcode_stack_effects = {
     ops.YIELD_VALUE: 0,
     ops.YIELD_FROM: -1,
     ops.COMPARE_OP: -1,
+    ops.IS_OP: -1,
+    ops.CONTAINS_OP: -1,
 
-    ops.LOOKUP_METHOD: 1,
+    ops.LOAD_METHOD: 1,
 
     ops.LOAD_NAME: 1,
     ops.STORE_NAME: -1,
@@ -706,16 +673,23 @@ _static_opcode_stack_effects = {
     ops.JUMP_IF_FALSE_OR_POP: 0,
     ops.POP_JUMP_IF_TRUE: -1,
     ops.POP_JUMP_IF_FALSE: -1,
+    ops.JUMP_IF_NOT_EXC_MATCH: -2,
 
     ops.SETUP_ANNOTATIONS: 0,
+
+    ops.DICT_MERGE: -1,
+    ops.DICT_UPDATE: -1,
 
     # TODO
     ops.BUILD_LIST_FROM_ARG: 1,
     ops.LOAD_REVDB_VAR: 1,
 
     ops.LOAD_CLASSDEREF: 1,
+    ops.LOAD_ASSERTION_ERROR: 1,
 
-    ops.CALL_FINALLY: 0,
+    ops.RERAISE: -1,
+
+    ops.WITH_EXCEPT_START: 0
 }
 
 
@@ -728,29 +702,14 @@ def _compute_UNPACK_EX(arg):
 def _compute_BUILD_TUPLE(arg):
     return 1 - arg
 
-def _compute_BUILD_TUPLE_UNPACK(arg):
-    return 1 - arg
-
 def _compute_BUILD_LIST(arg):
-    return 1 - arg
-
-def _compute_BUILD_LIST_UNPACK(arg):
     return 1 - arg
 
 def _compute_BUILD_SET(arg):
     return 1 - arg
 
-def _compute_BUILD_SET_UNPACK(arg):
-    return 1 - arg
-
 def _compute_BUILD_MAP(arg):
     return 1 - 2 * arg
-
-def _compute_BUILD_MAP_UNPACK(arg):
-    return 1 - arg
-
-def _compute_BUILD_MAP_UNPACK_WITH_CALL(arg):
-    return 1 - (arg & 0xFF)
 
 def _compute_MAKE_FUNCTION(arg):
     return -1 - bool(arg & 0x01) - bool(arg & 0x02) - bool(arg & 0x04) - bool(arg & 0x08)
@@ -826,3 +785,32 @@ def _opcode_stack_effect(op, arg):
             except KeyError:
                 raise KeyError("Unknown stack effect for %s (%s)" %
                                (ops.opname[op], op))
+
+def _opcode_stack_effect_jump(op):
+    if op == ops.FOR_ITER:
+        return -2
+    elif op == ops.SETUP_FINALLY:
+        return 2
+    elif op == ops.SETUP_EXCEPT:
+        return 4 # XXX why is this not 3?
+    elif op == ops.SETUP_WITH:
+        return 1
+    elif op == ops.SETUP_ASYNC_WITH:
+        return 1
+    elif op == ops.JUMP_IF_TRUE_OR_POP:
+        return 0
+    elif op == ops.JUMP_IF_FALSE_OR_POP:
+        return 0
+    elif op == ops.JUMP_IF_NOT_EXC_MATCH:
+        return 0
+    elif op == ops.POP_JUMP_IF_TRUE:
+        return 0
+    elif op == ops.POP_JUMP_IF_FALSE:
+        return 0
+    elif op == ops.JUMP_FORWARD:
+        return 0
+    elif op == ops.JUMP_ABSOLUTE:
+        return 0
+    raise KeyError
+
+

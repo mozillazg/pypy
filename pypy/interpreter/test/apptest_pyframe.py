@@ -1,4 +1,5 @@
 import pytest
+import sys
 
 @pytest.fixture
 def tempfile(tmpdir):
@@ -138,8 +139,6 @@ def test_f_lineno_set(tempfile):
     # assert did not crash
 
 def test_f_lineno_set_2():
-    skip("this test is known to crash CPython (verified in 3.6.9).  "
-         "Now it crashes PyPy too. Too bad?")
     counter = [0]
     errors = []
 
@@ -167,7 +166,7 @@ def test_f_lineno_set_2():
     assert x == 42
     assert len(errors) == 1
     assert str(errors[0]).startswith(
-        "can't jump into or out of an 'expect' or 'finally' block")
+        "can't jump into an 'except' block as there's no exception")
 
 def test_f_lineno_set_3():
     def jump_in_nested_finally(output):
@@ -212,6 +211,44 @@ def test_f_lineno_set_4():
         sys.settrace(None)
         assert False, 'did not raise'
     assert output == [2, 7]
+
+def test_jump_forwards_out_of_with_block():
+    class tracecontext:
+        """Context manager that traces its enter and exit."""
+        def __init__(self, output, value):
+            self.output = output
+            self.value = value
+
+        def __enter__(self):
+            self.output.append(self.value)
+
+        def __exit__(self, *exc_info):
+            self.output.append(-self.value)
+
+    def jump_forwards_out_of_with_block(output):
+        with tracecontext(output, 1):
+            output.append(2)
+        output.append(3)
+    output = []
+    tracer = JumpTracer(jump_forwards_out_of_with_block, 2, 3)
+    sys.settrace(tracer.trace)
+    jump_forwards_out_of_with_block(output)
+    sys.settrace(None)
+    assert output == [1, 3]
+
+def test_jump_forwards_out_of_try_finally_block():
+    def jump_forwards_out_of_try_finally_block(output):
+        try:
+            output.append(2)
+        finally:
+            output.append(4)
+        output.append(5)
+    output = []
+    tracer = JumpTracer(jump_forwards_out_of_try_finally_block, 2, 5)
+    sys.settrace(tracer.trace)
+    jump_forwards_out_of_try_finally_block(output)
+    sys.settrace(None)
+    assert output == [5]
 
 def test_f_lineno_set_firstline():
     seen = []
@@ -472,15 +509,15 @@ def test_trace_generator_finalisation():
 
     d = {}
     exec("""if 1:
-    def g():
+    def called_generator_with_finally(): # line 2
         try:
             yield True
         finally:
             pass
 
-    def f():
+    def f(): # line 8
         try:
-            gen = g()
+            gen = called_generator_with_finally()
             next(gen)
             gen.close()
         except:
@@ -508,6 +545,7 @@ def test_trace_generator_finalisation():
                     (6, 'return'),
                     (12, 'return')]
 
+
 def test_dont_trace_on_reraise():
     import sys
     l = []
@@ -529,6 +567,90 @@ def test_dont_trace_on_reraise():
     sys.settrace(None)
     assert len(l) == 1
     assert issubclass(l[0][0], Exception)
+
+def test_dont_trace_on_reraise2():
+    import sys
+    l = []
+    got_exc = []
+    def trace(frame, event, arg):
+        l.append((frame.f_lineno, event))
+        if event == 'exception':
+            got_exc.append(arg)
+        return trace
+
+
+    d = {}
+    exec("""
+def b(reraise): # line 2
+    try:
+        try:
+            raise Exception(exc)
+        except Exception as e:
+            if reraise:
+                raise
+            print("after raise") # Not run, line 9
+    except:
+        pass
+    """, d)
+
+    sys.settrace(trace)
+    d['b'](True)
+    sys.settrace(None)
+    assert l == [(2, 'call'), (3, 'line'), (4, 'line'),
+                 (5, 'line'), (5, 'exception'), (6, 'line'),
+                 (7, 'line'), (8, 'line'), # not 9!
+                 (10, 'line'), (11, 'line'),
+                 (11, 'return')]
+
+def test_issue_3673():
+    import sys
+    l = []
+    got_exc = []
+    def trace(frame, event, arg):
+        l.append((frame.f_lineno, event))
+        if event == 'exception':
+            got_exc.append(arg)
+        return trace
+
+
+    d = {}
+    exec("""def regression():
+    try: # line 2
+        a = 1
+        try:
+            raise Exception("foo")
+        finally:
+            b = 123
+    except:
+        a = 99
+    assert a == 99 and b == 123
+    """, d)
+    sys.settrace(trace)
+    d['regression']()
+    sys.settrace(None)
+    goal = [(1, 'call'), (2, 'line'), (3, 'line'), (4, 'line'),
+                 (5, 'line'), (5, 'exception'), (7, 'line'), (8, 'line'),
+                 (9, 'line'), (10, 'line'), (10, 'return')]
+    assert l == goal
+
+    d = {}
+    exec("""def regression():
+    try:
+        a = 1
+        try:
+            g() # not defined
+        finally:
+            b = 123
+    except:
+        a = 99
+    assert a == 99 and b == 123
+    """, d)
+    l = []
+    sys.settrace(trace)
+    d['regression']()
+    sys.settrace(None)
+    print(l)
+    assert l == goal
 
 def test_trace_changes_locals():
     import sys

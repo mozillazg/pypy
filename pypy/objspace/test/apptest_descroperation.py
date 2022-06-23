@@ -866,4 +866,4 @@ def test_64bit_hash():
 
 def test_class_getitem():
     excinfo = raises(TypeError, "int[int]")
-    assert "object is not subscriptable" in str(excinfo.value)
+    assert "'type' object is not subscriptable" in str(excinfo.value)

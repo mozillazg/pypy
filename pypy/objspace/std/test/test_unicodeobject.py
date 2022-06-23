@@ -494,6 +494,11 @@ class AppTestUnicodeString:
         s = "a" * (2**16)
         raises(OverflowError, s.replace, "", s)
 
+    def test_empty_replace_empty(self):
+        assert "".replace("", "a", 0) == ""
+        assert "".replace("", "a", 1) == "a"
+        assert "".replace("", "a", 121344) == "a"
+
     def test_strip(self):
         s = " a b "
         assert s.strip() == "a b"
@@ -1366,3 +1371,13 @@ class AppTestUnicodeString:
     def test_replace_no_occurrence(self):
         x = u"xyz"
         assert x.replace(u"a", u"b") is x
+
+    def test_removeprefix(self):
+        assert u'abc'.removeprefix(u'x') == u'abc'
+        assert u'abc'.removeprefix(u'ab') == u'c'
+
+    def test_removesuffix(self):
+        assert u'abc'.removesuffix(u'x') == u'abc'
+        assert u'abc'.removesuffix(u'bc') == u'a'
+        assert u'abc'.removesuffix(u'') == u'abc'
+        assert u'spam'.removesuffix(u'am') == u'sp'

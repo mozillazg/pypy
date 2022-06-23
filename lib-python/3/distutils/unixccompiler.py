@@ -63,22 +63,7 @@ class UnixCCompiler(CCompiler):
                   }
 
     if sys.platform[:6] == "darwin":
-        import platform
-        if platform.machine() == 'i386':
-            if platform.architecture()[0] == '32bit':
-                arch = 'i386'
-            else:
-                arch = 'x86_64'
-        else:
-            # just a guess
-            arch = platform.machine()
         executables['ranlib'] = ["ranlib"]
-        executables['linker_so'] += ['-undefined', 'dynamic_lookup']
-
-        for k, v in executables.items():
-            if v and v[0] == 'cc':
-                v += ['-arch', arch]
-
 
     # Needed for the filename generation methods provided by the base
     # class, CCompiler.  NB. whoever instantiates/uses a particular
@@ -234,7 +219,8 @@ class UnixCCompiler(CCompiler):
             if (compiler_name.startswith('cc') or
                 compiler_name.startswith('c++')):
                 return True
-        return "gcc" in compiler_name or "g++" in compiler_name
+        # clang uses same syntax for rpath as gcc
+        return any(name in compiler_name for name in ("gcc", "g++", "clang"))
 
     def runtime_library_dir_option(self, dir):
         # XXX Hackish, at the very least.  See Python bug #445902:

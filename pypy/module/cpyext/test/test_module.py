@@ -76,6 +76,40 @@ class AppTestModuleObject(AppTestCpythonExtensionBase):
             """)
         assert 'foo' in module.check___file__()
 
+    def test_PyModule_AddType(self):
+        module = self.import_extension('foo', [
+            ('is_ascii', "METH_O",
+             '''
+                if (!PyUnicode_Check(args)) {
+                    Py_RETURN_FALSE;
+                }
+                if (PyUnicode_IS_ASCII(args)) {
+                    Py_RETURN_TRUE;
+                }
+                Py_RETURN_FALSE;
+             '''),
+            ], prologue="""
+                #include <Python.h>
+                PyTypeObject PyUnicodeSubtype = {
+                    PyVarObject_HEAD_INIT(NULL,0)
+                    "foo.subtype",                /* tp_name*/
+                    sizeof(PyUnicodeObject),      /* tp_basicsize*/
+                    0                             /* tp_itemsize */
+                    };
+
+            """, more_init = '''
+                PyUnicodeSubtype.tp_alloc = NULL;
+                PyUnicodeSubtype.tp_free = NULL;
+
+                PyUnicodeSubtype.tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE;
+                PyUnicodeSubtype.tp_itemsize = sizeof(char);
+                PyUnicodeSubtype.tp_base = &PyUnicode_Type;
+                PyModule_AddType(mod, &PyUnicodeSubtype);
+            ''')
+
+        a = module.subtype('abc')
+        assert module.is_ascii(a) is True
+
 
 class AppTestMultiPhase(AppTestCpythonExtensionBase):
     def test_basic(self):
@@ -249,6 +283,14 @@ class AppTestMultiPhase2(AppTestCpythonExtensionBase):
         # Simulate what importlib.reload() does, without recomputing the spec
         module.__spec__.loader.exec_module(module)
         assert ex_class is module.Example
+
+    def test_try_registration(self):
+        module = self.import_module(name=self.name, use_imp=True)
+        assert module.call_state_registration_func(0) is None
+        with raises(SystemError):
+            module.call_state_registration_func(1)
+        with raises(SystemError):
+            module.call_state_registration_func(2)
 
     def w_load_from_name(self, name, origin=None, use_prefix=True):
         from importlib import machinery, util

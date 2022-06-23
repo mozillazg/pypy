@@ -7,7 +7,7 @@ import sys
 import threading
 import unittest
 from unittest import mock
-
+from types import GenericAlias
 import asyncio
 from asyncio import futures
 from test.test_asyncio import utils as test_utils
@@ -109,6 +109,11 @@ class BaseFutureTests:
         self.loop = self.new_test_loop()
         self.addCleanup(self.loop.close)
 
+    def test_generic_alias(self):
+        future = self.cls[str]
+        self.assertEqual(future.__args__, (str,))
+        self.assertIsInstance(future, GenericAlias)
+
     def test_isfuture(self):
         class MyFuture:
             _asyncio_future_blocking = None
@@ -200,6 +205,27 @@ class BaseFutureTests:
         fut = self.cls.__new__(self.cls, loop=self.loop)
         self.assertFalse(fut.cancelled())
         self.assertFalse(fut.done())
+
+    def test_future_cancel_message_getter(self):
+        f = self._new_future(loop=self.loop)
+        self.assertTrue(hasattr(f, '_cancel_message'))
+        self.assertEqual(f._cancel_message, None)
+
+        f.cancel('my message')
+        with self.assertRaises(asyncio.CancelledError):
+            self.loop.run_until_complete(f)
+        self.assertEqual(f._cancel_message, 'my message')
+
+    def test_future_cancel_message_setter(self):
+        f = self._new_future(loop=self.loop)
+        f.cancel('my message')
+        f._cancel_message = 'my new message'
+        self.assertEqual(f._cancel_message, 'my new message')
+
+        # Also check that the value is used for cancel().
+        with self.assertRaises(asyncio.CancelledError):
+            self.loop.run_until_complete(f)
+        self.assertEqual(f._cancel_message, 'my new message')
 
     def test_cancel(self):
         f = self._new_future(loop=self.loop)
@@ -853,6 +879,7 @@ class PyFutureInheritanceTests(BaseFutureInheritanceTests,
                                test_utils.TestCase):
     def _get_future_cls(self):
         return futures._PyFuture
+
 
 @unittest.skipUnless(hasattr(futures, '_CFuture'),
                      'requires the C _asyncio module')

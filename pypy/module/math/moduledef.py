@@ -10,6 +10,7 @@ class Module(MixedModule):
        'prod'      : 'app_math.prod',
        'comb'      : 'app_math.comb',
        'perm'      : 'app_math.perm',
+       'lcm'       : 'app_math.lcm',
     }
 
     interpleveldefs = {
@@ -63,5 +64,7 @@ class Module(MixedModule):
        'lgamma'         : 'interp_math.lgamma',
        'isclose'        : 'interp_math.isclose',
        'gcd'            : 'interp_math.gcd',
+       'nextafter'      : 'interp_math.nextafter',
+       'ulp'            : 'interp_math.ulp',
 }
 

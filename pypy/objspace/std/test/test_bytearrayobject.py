@@ -267,6 +267,12 @@ class AppTestBytesArray:
         check(bytearray(b'abc').rstrip(memoryview(b'c')), b'ab')
         check(bytearray(b'aba').strip(b'a'), b'b')
 
+    def test_empty_replace_empty(self):
+        assert bytearray(b"").replace(b"", b"a", 0) == bytearray(b"")
+        assert bytearray(b"").replace(b"", b"a", 1) == bytearray(b"a")
+        assert bytearray(b"").replace(b"", b"a", 121344) == bytearray(b"a")
+
+
     def test_xjust_no_mutate(self):
         # a previous regression
         b = bytearray(b'')
@@ -780,3 +786,11 @@ class AppTestBytesArray:
         class subclass(bytearray):
             pass
         assert repr(subclass(b'test')) == "subclass(b'test')"
+
+    def test_removeprefix(self):
+        assert bytearray(b'abc').removeprefix(b'x') == bytearray(b'abc')
+        assert bytearray(b'abc').removeprefix(b'ab') == bytearray(b'c')
+
+    def test_removesuffix(self):
+        assert bytearray(b'abc').removesuffix(b'x') == bytearray(b'abc')
+        assert bytearray(b'abc').removesuffix(b'bc') == bytearray(b'a')

@@ -1092,7 +1092,7 @@ class _TestMboxMMDF(_TestSingleFile):
             # Signal the child it can now release the lock and exit.
             p.send(b'p')
             # Wait for child to exit.  Locking should now succeed.
-            exited_pid, status = os.waitpid(pid, 0)
+            support.wait_process(pid, exitcode=0)
 
         self._box.lock()
         self._box.unlock()
@@ -1420,7 +1420,7 @@ class TestMessage(TestBase, unittest.TestCase):
         # Initialize with invalid argument
         self.assertRaises(TypeError, lambda: self._factory(object()))
 
-    def test_all_eMM_attribues_exist(self):
+    def test_all_eMM_attributes_exist(self):
         # Issue 12537
         eMM = email.message_from_string(_sample_message)
         msg = self._factory(_sample_message)
@@ -2299,15 +2299,9 @@ class MiscTestCase(unittest.TestCase):
         support.check__all__(self, mailbox, blacklist=blacklist)
 
 
-def test_main():
-    tests = (TestMailboxSuperclass, TestMaildir, TestMbox, TestMMDF, TestMH,
-             TestBabyl, TestMessage, TestMaildirMessage, TestMboxMessage,
-             TestMHMessage, TestBabylMessage, TestMMDFMessage,
-             TestMessageConversion, TestProxyFile, TestPartialFile,
-             MaildirTestCase, TestFakeMailBox, MiscTestCase)
-    support.run_unittest(*tests)
+def tearDownModule():
     support.reap_children()
 
 
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

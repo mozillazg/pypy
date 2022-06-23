@@ -25,19 +25,19 @@ def get_errstr():
         return _str_from_buf(reason)
 
 
-def new(name, string=b''):
-    h = HASH(name)
+def new(name, string=b'', usedforsecurity=True):
+    h = HASH(name, usedforsecurity=usedforsecurity)
     h.update(string)
     return h
 
+
 class HASH(object):
 
-    def __init__(self, name, copy_from=None):
+    def __init__(self, name=None, copy_from=None, usedforsecurity=True):
         self.ctx = ffi.NULL
-        try:
-            self.name = name.lower().replace('-', '_')
-        except AttributeError:
-            raise TypeError('In HASH(name), name must be a string')
+        if name is None:
+            raise TypeError("cannot create '%s' instance" % type(self).__name__)
+        self.name = str(name).lower()
         digest_type = self.digest_type_by_name()
         self.digest_size = lib.EVP_MD_size(digest_type)
 
@@ -46,14 +46,16 @@ class HASH(object):
         # and use a custom lock only when needed.
         self.lock = Lock()
 
+        # Start EVPnew
         ctx = lib.Cryptography_EVP_MD_CTX_new()
         if ctx == ffi.NULL:
             raise MemoryError
         ctx = ffi.gc(ctx, lib.Cryptography_EVP_MD_CTX_free)
 
+
         try:
             if copy_from is not None:
-                # cpython uses EVP_MD_CTX_copy(...)
+                # cpython uses EVP_MD_CTX_copy(...) and calls this from EVP_copy
                 if not lib.EVP_MD_CTX_copy_ex(ctx, copy_from):
                     raise ValueError
             else:
@@ -63,6 +65,9 @@ class HASH(object):
         except:
             # no need to gc ctx! 
             raise
+        if not usedforsecurity and lib.EVP_MD_CTX_FLAG_NON_FIPS_ALLOW:
+            lib.EVP_MD_CTX_set_flags(ctx, lib.EVP_MD_CTX_FLAG_NON_FIPS_ALLOW)
+        # End EVPnew
 
     def digest_type_by_name(self):
         c_name = _str_to_ffi_buffer(self.name)
@@ -125,6 +130,9 @@ class HASH(object):
         finally:
             lib.Cryptography_EVP_MD_CTX_free(ctx)
 
+class HASHXOF(HASH):
+    pass
+
 algorithms = ('md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512')
 
 class NameFetcher:
@@ -170,10 +178,12 @@ def __openssl_hash_name_mapper(evp_md, userdata):
     nid = lib.EVP_MD_nid(evp_md)
     if nid == lib.NID_undef:
         return
-    name_fetcher = ffi.from_handle(userdata)
     from_name = lib.OBJ_nid2ln(nid)
     lowered = _str_from_buf(from_name).lower().replace('-', '_')
     name = name_mapping.get(lowered, lowered)
+    if name in ('blake2b512', 'sha3-512'):
+        return
+    name_fetcher = ffi.from_handle(userdata)
     name_fetcher.meth_names.append(name)
 
 openssl_md_meth_names = _fetch_names()
@@ -181,8 +191,8 @@ del _fetch_names
 
 # shortcut functions
 def make_new_hash(name, funcname):
-    def new_hash(string=b''):
-        return new(name, string)
+    def new_hash(string=b'', usedforsecurity=True):
+        return new(name, string, usedforsecurity=True)
     new_hash.__name__ = funcname
     return builtinify(new_hash)
 
@@ -209,12 +219,12 @@ if hasattr(lib, 'PKCS5_PBKDF2_HMAC'):
             raise ValueError("iteration value must be greater than 0.")
         if iterations >= sys.maxsize:
             raise OverflowError("iteration value is too great.")
-        buf = ffi.new("unsigned char[]", dklen)
+        key = ffi.new("unsigned char[]", dklen)
         c_password = ffi.from_buffer(bytes(password))
         c_salt = ffi.from_buffer(bytes(salt))
         r = lib.PKCS5_PBKDF2_HMAC(c_password, len(c_password),
                 ffi.cast("unsigned char*",c_salt), len(c_salt),
-                iterations, digest, dklen, buf)
+                iterations, digest, dklen, key)
         if r == 0:
             raise ValueError
-        return _bytes_with_len(buf, dklen)
+        return _bytes_with_len(key, dklen)

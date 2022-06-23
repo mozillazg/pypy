@@ -104,6 +104,16 @@ class APITests(
             for dep in deps
             )
 
+    def test_requires_egg_info_empty(self):
+        fixtures.build_files(
+            {
+                'requires.txt': '',
+            },
+            self.site_dir.joinpath('egginfo_pkg.egg-info'),
+        )
+        deps = requires('egginfo-pkg')
+        assert deps == []
+
     def test_requires_dist_info(self):
         deps = requires('distinfo-pkg')
         assert len(deps) == 2
@@ -121,6 +131,7 @@ class APITests(
 
             [extra1]
             dep4
+            dep6@ git+https://example.com/python/dep.git@v1.0.0
 
             [extra2:python_version < "3"]
             dep5
@@ -132,6 +143,7 @@ class APITests(
             'dep3; python_version < "3"',
             'dep4; extra == "extra1"',
             'dep5; (python_version < "3") and extra == "extra2"',
+            'dep6@ git+https://example.com/python/dep.git@v1.0.0 ; extra == "extra1"',
             ]
         # It's important that the environment marker expression be
         # wrapped in parentheses to avoid the following 'and' binding more

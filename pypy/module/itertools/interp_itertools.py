@@ -2,9 +2,10 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError, oefmt
 from pypy.interpreter.typedef import TypeDef, make_weakref_descr
 from pypy.interpreter.gateway import interp2app, unwrap_spec, WrappedDefault
+from pypy.objspace.std.util import generic_alias_class_getitem
 from rpython.rlib import jit
 
-from pypy.module.__builtin__.functional import W_Filter, W_Map
+from pypy.module.__builtin__.functional import W_Filter, build_iterators_from_args
 
 class W_Count(W_Root):
     def __init__(self, space, w_firstval, w_step):
@@ -548,14 +549,16 @@ def chain_from_iterable(space, w_cls, w_arg):
     return r
 
 W_Chain.typedef = TypeDef(
-        'itertools.chain',
-        __new__  = interp2app(W_Chain___new__),
-        __iter__ = interp2app(W_Chain.iter_w),
-        __next__ = interp2app(W_Chain.next_w),
-        __reduce__ = interp2app(W_Chain.descr_reduce),
-        __setstate__ = interp2app(W_Chain.descr_setstate),
-        from_iterable = interp2app(chain_from_iterable, as_classmethod=True),
-        __doc__  = """Make an iterator that returns elements from the first iterable
+    'itertools.chain',
+    __new__  = interp2app(W_Chain___new__),
+    __iter__ = interp2app(W_Chain.iter_w),
+    __next__ = interp2app(W_Chain.next_w),
+    __reduce__ = interp2app(W_Chain.descr_reduce),
+    __setstate__ = interp2app(W_Chain.descr_setstate),
+    from_iterable = interp2app(chain_from_iterable, as_classmethod=True),
+    __class_getitem__ = interp2app(
+        generic_alias_class_getitem, as_classmethod=True),
+    __doc__  = """Make an iterator that returns elements from the first iterable
     until it is exhausted, then proceeds to the next iterable, until
     all of the iterables are exhausted. Used for treating consecutive
     sequences as a single sequence.
@@ -566,12 +569,19 @@ W_Chain.typedef = TypeDef(
         for it in iterables:
             for element in it:
                 yield element
-    """)
+""")
 
 
-class W_ZipLongest(W_Map):
-    _error_name = "zip_longest"
-    _immutable_fields_ = ["w_fillvalue"]
+class W_ZipLongest(W_Root):
+    _immutable_fields_ = ["w_fillvalue", "iterators"]
+
+    def __init__(self, space, w_fun, args_w):
+        self.space = space
+        self.w_fun = w_fun
+        self.iterators_w = build_iterators_from_args(space, args_w, "zip_longest")
+
+    def iter_w(self):
+        return self
 
     def _fetch(self, index):
         w_iter = self.iterators_w[index]
@@ -592,10 +602,10 @@ class W_ZipLongest(W_Map):
     def next_w(self):
         # common case: 2 arguments
         if len(self.iterators_w) == 2:
-            objects = [self._fetch(0), self._fetch(1)]
+            return self.space.newtuple2(self._fetch(0), self._fetch(1))
         else:
             objects = self._get_objects()
-        return self.space.newtuple(objects)
+            return self.space.newtuple(objects)
 
     def _get_objects(self):
         # the loop is out of the way of the JIT
@@ -620,6 +630,14 @@ class W_ZipLongest(W_Map):
 
     def descr_setstate(self, space, w_state):
         self.w_fillvalue = w_state
+
+    def iterator_greenkey(self, space):
+        # XXX in theory we should tupleize the greenkeys of all the
+        # sub-iterators, but much more work
+        if len(self.iterators_w) > 0:
+            return space.iterator_greenkey(self.iterators_w[0])
+        return None
+
 
 def W_ZipLongest___new__(space, w_subtype, __args__):
     arguments_w, kwds_w = __args__.unpack()

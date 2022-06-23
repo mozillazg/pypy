@@ -6,7 +6,7 @@ import struct
 import sys
 import unittest
 from multiprocessing import Process
-from test.support import (verbose, TESTFN, unlink, run_unittest, import_module,
+from test.support import (verbose, TESTFN, unlink, import_module,
                           cpython_only)
 
 # Skip test if no fcntl module.
@@ -181,9 +181,13 @@ class TestFcntl(unittest.TestCase):
         self.assertRaises(OverflowError, fcntl.flock, _testcapi.INT_MAX+1,
                           fcntl.LOCK_SH)
 
+    @unittest.skipIf(sys.platform != 'darwin', "F_GETPATH is only available on macos")
+    def test_fcntl_f_getpath(self):
+        self.f = open(TESTFN, 'wb')
+        expected = os.path.abspath(TESTFN).encode('utf-8')
+        res = fcntl.fcntl(self.f.fileno(), fcntl.F_GETPATH, bytes(len(expected)))
+        self.assertEqual(expected, res)
 
-def test_main():
-    run_unittest(TestFcntl)
 
 if __name__ == '__main__':
-    test_main()
+    unittest.main()

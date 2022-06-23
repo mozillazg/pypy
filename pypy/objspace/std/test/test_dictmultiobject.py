@@ -784,6 +784,29 @@ class AppTest_DictObject:
         d2 = my_dict_2({'a': 1, 'b': 2})
         assert dict(d2) == {'b': 2}  # uses overridden keys()
 
+    def test_or(self):
+        d = {'spam': 1, 'eggs': 2, 'cheese': 3}
+        e = {'cheese': 'cheddar', 'aardvark': 'Ethel'}
+        assert d | e == {'spam': 1, 'eggs': 2, 'cheese': 'cheddar', 'aardvark': 'Ethel'}
+        assert e | d == {'cheese': 3, 'aardvark': 'Ethel', 'spam': 1, 'eggs': 2}
+        assert d.__or__(None) is NotImplemented
+
+    def test_ior(self):
+        orig = d = {'spam': 1, 'eggs': 2, 'cheese': 3}
+        e = {'cheese': 'cheddar', 'aardvark': 'Ethel'}
+        d |= e
+        assert orig == {'spam': 1, 'eggs': 2, 'cheese': 'cheddar', 'aardvark': 'Ethel'}
+
+        d = orig = {"a": 6, "b": 7}
+        d |= [("b", 43), ("c", -1j)]
+        assert orig == {"a": 6, "b": 43, "c": -1j}
+
+
+    def test_class_getitem(self):
+        assert dict[int, str].__origin__ is dict
+        assert dict[int, str].__args__ == (int, str)
+
+
 class AppTest_DictMultiObject(AppTest_DictObject):
 
     def test_emptydict_unhashable(self):

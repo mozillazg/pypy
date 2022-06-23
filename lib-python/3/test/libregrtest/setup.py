@@ -10,6 +10,8 @@ try:
 except ImportError:
     gc = None
 
+from test.libregrtest.utils import setup_unraisable_hook
+
 
 def setup_tests(ns):
     try:
@@ -33,6 +35,7 @@ def setup_tests(ns):
         for signum in signals:
             faulthandler.register(signum, chain=True, file=stderr_fd)
 
+    _adjust_resource_limits()
     replace_stdout()
     support.record_original_stdout(sys.stdout)
 
@@ -77,6 +80,19 @@ def setup_tests(ns):
             pass
         sys.addaudithook(_test_audit_hook)
 
+    setup_unraisable_hook()
+
+    if ns.timeout is not None:
+        # For a slow buildbot worker, increase SHORT_TIMEOUT and LONG_TIMEOUT
+        support.SHORT_TIMEOUT = max(support.SHORT_TIMEOUT, ns.timeout / 40)
+        support.LONG_TIMEOUT = max(support.LONG_TIMEOUT, ns.timeout / 4)
+
+        # If --timeout is short: reduce timeouts
+        support.LOOPBACK_TIMEOUT = min(support.LOOPBACK_TIMEOUT, ns.timeout)
+        support.INTERNET_TIMEOUT = min(support.INTERNET_TIMEOUT, ns.timeout)
+        support.SHORT_TIMEOUT = min(support.SHORT_TIMEOUT, ns.timeout)
+        support.LONG_TIMEOUT = min(support.LONG_TIMEOUT, ns.timeout)
+
 
 def replace_stdout():
     """Set stdout encoder error handler to backslashreplace (as stderr error
@@ -102,3 +118,26 @@ def replace_stdout():
         sys.stdout.close()
         sys.stdout = stdout
     atexit.register(restore_stdout)
+
+
+def _adjust_resource_limits():
+    """Adjust the system resource limits (ulimit) if needed."""
+    try:
+        import resource
+        from resource import RLIMIT_NOFILE, RLIM_INFINITY
+    except ImportError:
+        return
+    fd_limit, max_fds = resource.getrlimit(RLIMIT_NOFILE)
+    # On macOS the default fd limit is sometimes too low (256) for our
+    # test suite to succeed.  Raise it to something more reasonable.
+    # 1024 is a common Linux default.
+    desired_fds = 1024
+    if fd_limit < desired_fds and fd_limit < max_fds:
+        new_fd_limit = min(desired_fds, max_fds)
+        try:
+            resource.setrlimit(RLIMIT_NOFILE, (new_fd_limit, max_fds))
+            print(f"Raised RLIMIT_NOFILE: {fd_limit} -> {new_fd_limit}")
+        except (ValueError, OSError) as err:
+            print(f"Unable to raise RLIMIT_NOFILE from {fd_limit} to "
+                  f"{new_fd_limit}: {err}.")
+

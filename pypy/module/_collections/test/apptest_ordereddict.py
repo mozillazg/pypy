@@ -2,6 +2,9 @@
 
 from _collections import OrderedDict
 
+class MyODict(OrderedDict):
+    pass
+
 def test_ordereddict_present():
     assert issubclass(OrderedDict, dict)
     assert hasattr(OrderedDict, 'move_to_end')
@@ -46,3 +49,30 @@ def test_call_key_first():
 
     OrderedDict(Spam())
     assert calls == ['keys']
+
+def test_generic_alias():
+    import _collections
+    ga = _collections.OrderedDict[int]
+    assert ga.__origin__ is _collections.OrderedDict
+    assert ga.__args__ == (int, )
+
+def test_or():
+    d1 = OrderedDict({1: 2, 3: 4})
+    d2 = MyODict({1: 4, 5: 6})
+    assert type(d1 | d2) is OrderedDict
+    assert d1 | d2 == {1: 4, 3: 4, 5: 6}
+    assert type(dict(d1) | d2) is MyODict
+    assert d1 | d2 == {1: 4, 3: 4, 5: 6}
+
+def test_ior():
+    orig = d = OrderedDict({'spam': 1, 'eggs': 2, 'cheese': 3})
+    e = {'cheese': 'cheddar', 'aardvark': 'Ethel'}
+    d |= e
+    assert orig == {'spam': 1, 'eggs': 2, 'cheese': 'cheddar', 'aardvark': 'Ethel'}
+
+def test_mixed_type_or_bug():
+    d = {1: 1} | OrderedDict({1: 2})
+    assert type(d) is OrderedDict
+    assert d == OrderedDict({1: 2})
+
+

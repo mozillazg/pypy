@@ -65,7 +65,6 @@ class AppTestUserObject:
         raises(TypeError, "proxy['a'] = 4")
         raises(TypeError, "del proxy['a']")
         raises(AttributeError, "proxy.clear()")
-        raises(TypeError, reversed, proxy)
         #
         class D(dict):
             def copy(self): return 3
@@ -76,6 +75,33 @@ class AppTestUserObject:
         raises(TypeError, dictproxy, [3])
         #
         {}.update(proxy)
+
+    def test_or(self):
+        dictproxy = type(int.__dict__)
+        mapping = orig = dictproxy(dict(a=1, b=2, c=3))
+        mapping2 = mapping | dict(a=2, d=5)
+        assert type(mapping2) is dict
+        assert mapping2 == dict(a=2, b=2, c=3, d=5)
+
+        mapping2 = mapping | dictproxy(dict(a=2, d=5))
+        assert type(mapping2) is dict
+        assert mapping2 == dict(a=2, b=2, c=3, d=5)
+
+        # __ior__ raises
+        with raises(TypeError):
+            mapping = dictproxy(dict(a=1, b=2, c=3))
+            mapping |= 'not a dict'
+            
+        # __ror__
+        mapping = dictproxy(dict(a=1, b=2, c=3))
+        res = dict(a=2, d=5) | mapping
+        assert res == dict(a=1, b=2, c=3, d=5)
+
+
+    def test_reversed(self):
+        dictproxy = type(int.__dict__)
+        mapping = dictproxy(dict(a=1, b=2, c=3))
+        assert list(reversed(mapping)) == list(reversed(list(mapping)))
 
 
 class AppTestUserObjectMethodCache(AppTestUserObject):

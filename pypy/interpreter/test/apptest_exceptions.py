@@ -59,4 +59,17 @@ def test_raise_in_generator():
             next(i)
             next(i)
 
+def test_assertion_error_global_ignored():
+    if hasattr(pytest, 'py3k_skip'):
+        pytest.py3k_skip('only untranslated')
+    global AssertionError
 
+    class Foo(Exception):
+        pass
+    OrigAssertionError = AssertionError
+    AssertionError = Foo
+    try:
+        with pytest.raises(OrigAssertionError): # not Foo!
+            exec("assert 0") # to stop the pytest ast rewriting from touching it
+    finally:
+        AssertionError = OrigAssertionError

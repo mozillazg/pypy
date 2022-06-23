@@ -91,14 +91,42 @@ def bad_utf8(location_msg, line, lnum, pos, token_list, flags):
     return TokenError(msg, line, lnum, pos, token_list)
 
 
-def verify_identifier(token):
-    # 1=ok; 0=not an identifier; -1=bad utf-8
+def verify_identifier(token, line, lnum, start, token_list, flags):
+    # -2=ok; positive=not an identifier; -1=bad utf-8
+    from pypy.module.unicodedata.interp_ucd import unicodedb
     try:
         rutf8.check_utf8(token, False)
     except rutf8.CheckError:
-        return -1
-    from pypy.objspace.std.unicodeobject import _isidentifier
-    return _isidentifier(token)
+        raise bad_utf8("identifier", line, lnum, start + 1,
+                       token_list, flags)
+    if not token:
+        return
+    first = token[0]
+    it = rutf8.Utf8StringIterator(token)
+    code = it.next()
+    if not (unicodedb.isxidstart(code) or first == '_'):
+        raise_invalid_unicode_char(code, token, line, lnum, start, token_list)
+    pos = it.get_pos()
+    for ch in it:
+        if not unicodedb.isxidcontinue(ch):
+            raise_invalid_unicode_char(ch, token, line, lnum, start + pos, token_list)
+        pos = it.get_pos()
+
+def raise_invalid_unicode_char(code, token, line, lnum, start, token_list):
+    from pypy.module.unicodedata.interp_ucd import unicodedb
+    # valid utf-8, but it gives a unicode char that cannot
+    # be used in identifiers
+    assert code >= 0
+    h = hex(code)[2:].upper()
+    if len(h) < 4:
+        h = "0" * (4 - len(h)) + h
+    if not unicodedb.isprintable(code):
+        msg = "invalid non-printable character U+%s" % h
+    else:
+        msg = "invalid character '%s' (U+%s)" % (
+            rutf8.unichr_as_utf8(code), h)
+    raise TokenError(msg, line, lnum, start + 1, token_list)
+
 
 
 DUMMY_DFA = automata.DFA([], [])
@@ -151,7 +179,7 @@ def generate_tokens(lines, flags):
     pos = 0
     lines.append("")
     strstart = (0, 0, "")
-    for line in lines:
+    for lines_index, line in enumerate(lines):
         lnum = lnum + 1
         line = universal_newline(line)
         pos, max = 0, len(line)
@@ -205,6 +233,10 @@ def generate_tokens(lines, flags):
 
             if line[pos] in '\r\n':
                 # skip blank lines
+                continue
+            if line[pos] == '\\' and line[pos + 1] in '\r\n' and lines[lines_index + 1] != "":
+                # skip lines that are only a line continuation char, but only
+                # if there are further lines
                 continue
             if line[pos] == '#':
                 # skip full-line comment, but still check that it is valid utf-8
@@ -264,6 +296,10 @@ def generate_tokens(lines, flags):
                 end = pseudomatch
 
                 if start == end:
+                    if line[start] == "\\":
+                        raise TokenError("unexpected character after line continuation character", line,
+                                         lnum, start + 2, token_list)
+
                     raise TokenError("Unknown character", line,
                                      lnum, start + 1, token_list)
 
@@ -273,6 +309,7 @@ def generate_tokens(lines, flags):
                    (initial == '.' and token != '.' and token != '...')):
                     # ordinary number
                     token_list.append(Token(tokens.NUMBER, token, lnum, start, line, lnum, end))
+                    _maybe_raise_number_error(token, line, lnum, start, end, token_list)
                     last_comment = ''
                 elif initial in '\r\n':
                     if not parenstack:
@@ -331,15 +368,7 @@ def generate_tokens(lines, flags):
                         last_comment = ''
                 elif (initial in namechars or              # ordinary name
                       ord(initial) >= 0x80):               # unicode identifier
-                    valid = verify_identifier(token)
-                    if valid <= 0:
-                        if valid == -1:
-                            raise bad_utf8("identifier", line, lnum, start + 1,
-                                           token_list, flags)
-                        # valid utf-8, but it gives a unicode char that cannot
-                        # be used in identifiers
-                        raise TokenError("invalid character in identifier",
-                                         line, lnum, start + 1, token_list)
+                    verify_identifier(token, line, lnum, start, token_list, flags)
                     # inside 'async def' function or no async_hacks
                     # so recognize them unconditionally.
                     if not async_hacks or async_def:
@@ -404,6 +433,9 @@ def generate_tokens(lines, flags):
                 if start<max and line[start] in single_quoted:
                     raise TokenError("end of line (EOL) while scanning string literal",
                              line, lnum, start+1, token_list)
+                if line[pos] == "0":
+                    raise TokenError("leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers",
+                            line, lnum, pos+1, token_list)
                 tok = Token(tokens.ERRORTOKEN, line[pos], lnum, pos, line)
                 token_list.append(tok)
                 last_comment = ''
@@ -422,6 +454,67 @@ def generate_tokens(lines, flags):
     token_list.append(Token(tokens.ENDMARKER, '', lnum, pos, line))
     return token_list
 
+def _maybe_raise_number_error(token, line, lnum, start, end, token_list):
+    ch = _get_next_or_nul(line, end)
+    if end == start + 1 and token[0] == "0":
+        if ch == "b":
+            token = "0b"
+            end += 1
+            ch = _get_next_or_nul(line, end)
+            if not ch.isdigit():
+                raise TokenError("invalid binary literal",
+                        line, lnum, end, token_list)
+        elif ch == "o":
+            token = "0o"
+            end += 1
+            ch = _get_next_or_nul(line, end)
+            if not ch.isdigit():
+                raise TokenError("invalid octal literal",
+                        line, lnum, end, token_list)
+        elif ch == "x":
+            token = "0x"
+            end += 1
+            ch = _get_next_or_nul(line, end)
+            if not ch.isdigit():
+                raise TokenError("invalid hexadecimal literal",
+                        line, lnum, end, token_list)
+    if token.startswith("0b"):
+        nextch = _skip_underscore(ch, line, end)
+        if nextch.isdigit():
+            raise TokenError("invalid digit '%s' in binary literal" % (nextch, ),
+                    line, lnum, end + 1, token_list)
+        elif ch == "_":
+            raise TokenError("invalid binary literal",
+                    line, lnum, end, token_list)
+
+    elif token.startswith("0o"):
+        nextch = _skip_underscore(ch, line, end)
+        if nextch.isdigit():
+            raise TokenError("invalid digit '%s' in octal literal" % (nextch, ),
+                    line, lnum, end + 1, token_list)
+        elif ch == "_":
+            raise TokenError("invalid octal literal",
+                    line, lnum, end, token_list)
+
+    elif token.startswith("0x"):
+        if ch == "_":
+            raise TokenError("invalid hexadecimal literal",
+                    line, lnum, end + 1, token_list)
+
+    else:
+        if ch == "_":
+            raise TokenError("invalid decimal literal",
+                    line, lnum, end + 1, token_list)
+
+def _get_next_or_nul(line, end):
+    if end < len(line):
+        return line[end]
+    return chr(0)
+
+def _skip_underscore(ch, line, end):
+    if ch == "_":
+        return _get_next_or_nul(line, end + 1)
+    return ch
 
 def universal_newline(line):
     # show annotator that indexes below are non-negative

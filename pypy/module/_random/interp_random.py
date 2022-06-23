@@ -85,10 +85,11 @@ class W_Random(W_Root):
 
     @unwrap_spec(k=int)
     def getrandbits(self, space, k):
-        """ getrandbits(k) -> x.  Generates a long int with k random bits. """
-        if k <= 0:
+        if k < 0:
             raise oefmt(space.w_ValueError,
-                        "number of bits must be greater than zero")
+                        "number of bits must be non-negative")
+        if k == 0:
+            return space.newint(0)
         if k < 32: # XXX could go up to 63 bits, but let's start with this
             # fits an int, don't do the bytes-to-long-to-int dance
             r = self._rnd.genrand32()

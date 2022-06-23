@@ -7,7 +7,7 @@ SHA3_LANESIZE = (20 * 8) # ExtractLane needs max uint64_t[20] extra.
 class _sha3:
     _keccak_init = None  # Overridden in subclasses
 
-    def __new__(cls, string=None):
+    def __new__(cls, string=None, usedforsecurity=True):
         self = super().__new__(cls)
         self._hash_state = _ffi.new("Keccak_HashInstance*")
 

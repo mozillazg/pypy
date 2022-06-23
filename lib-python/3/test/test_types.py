@@ -8,6 +8,7 @@ import pickle
 import locale
 import sys
 import types
+import typing
 import unittest.mock
 import weakref
 
@@ -467,7 +468,7 @@ class TypesTests(unittest.TestCase):
 
         # No format code means use g, but must have a decimal
         # and a number after the decimal.  This is tricky, because
-        # a totaly empty format specifier means something else.
+        # a totally empty format specifier means something else.
         # So, just use a sign flag
         test(1e200, '+g', '+1e+200')
         test(1e200, '+', '+1e+200')
@@ -625,8 +626,13 @@ class MappingProxyTests(unittest.TestCase):
         self.assertEqual(attrs, {
              '__contains__',
              '__getitem__',
+             '__class_getitem__',
+             '__ior__',
              '__iter__',
              '__len__',
+             '__or__',
+             '__reversed__',
+             '__ror__',
              'copy',
              'get',
              'items',
@@ -767,6 +773,14 @@ class MappingProxyTests(unittest.TestCase):
         self.assertEqual(set(view.values()), set(values))
         self.assertEqual(set(view.items()), set(items))
 
+    def test_reversed(self):
+        d = {'a': 1, 'b': 2, 'foo': 0, 'c': 3, 'd': 4}
+        mp = self.mappingproxy(d)
+        del d['foo']
+        r = reversed(mp)
+        self.assertEqual(list(r), list('dcba'))
+        self.assertRaises(StopIteration, next, r)
+
     def test_copy(self):
         original = {'key1': 27, 'key2': 51, 'key3': 93}
         view = self.mappingproxy(original)
@@ -776,6 +790,22 @@ class MappingProxyTests(unittest.TestCase):
         original['key1'] = 70
         self.assertEqual(view['key1'], 70)
         self.assertEqual(copy['key1'], 27)
+
+    def test_union(self):
+        mapping = {'a': 0, 'b': 1, 'c': 2}
+        view = self.mappingproxy(mapping)
+        with self.assertRaises(TypeError):
+            view | [('r', 2), ('d', 2)]
+        with self.assertRaises(TypeError):
+            [('r', 2), ('d', 2)] | view
+        with self.assertRaises(TypeError):
+            view |= [('r', 2), ('d', 2)]
+        other = {'c': 3, 'p': 0}
+        self.assertDictEqual(view | other, {'a': 0, 'b': 1, 'c': 3, 'p': 0})
+        self.assertDictEqual(other | view, {'c': 2, 'p': 0, 'a': 0, 'b': 1})
+        self.assertEqual(view, {'a': 0, 'b': 1, 'c': 2})
+        self.assertDictEqual(mapping, {'a': 0, 'b': 1, 'c': 2})
+        self.assertDictEqual(other, {'c': 3, 'p': 0})
 
 
 class ClassCreationTests(unittest.TestCase):
@@ -861,6 +891,17 @@ class ClassCreationTests(unittest.TestCase):
         self.assertEqual(D.__bases__, (A,))
         self.assertEqual(D.__orig_bases__, (c,))
         self.assertEqual(D.__mro__, (D, A, object))
+
+    def test_new_class_with_mro_entry_genericalias(self):
+        L1 = types.new_class('L1', (typing.List[int],), {})
+        self.assertEqual(L1.__bases__, (list, typing.Generic))
+        self.assertEqual(L1.__orig_bases__, (typing.List[int],))
+        self.assertEqual(L1.__mro__, (L1, list, typing.Generic, object))
+
+        L2 = types.new_class('L2', (list[int],), {})
+        self.assertEqual(L2.__bases__, (list,))
+        self.assertEqual(L2.__orig_bases__, (list[int],))
+        self.assertEqual(L2.__mro__, (L2, list, object))
 
     def test_new_class_with_mro_entry_none(self):
         class A: pass
@@ -976,6 +1017,11 @@ class ClassCreationTests(unittest.TestCase):
         t = (A, C, B)
         for bases in [x, y, z, t]:
             self.assertIs(types.resolve_bases(bases), bases)
+
+    def test_resolve_bases_with_mro_entry(self):
+        self.assertEqual(types.resolve_bases((typing.List[int],)),
+                         (list, typing.Generic))
+        self.assertEqual(types.resolve_bases((list[int],)), (list,))
 
     def test_metaclass_derivation(self):
         # issue1294232: correct metaclass calculation
@@ -1236,8 +1282,13 @@ class SimpleNamespaceTests(unittest.TestCase):
         ns2._y = 5
         name = "namespace"
 
-        self.assertEqual(repr(ns1), "{name}(w=3, x=1, y=2)".format(name=name))
-        self.assertEqual(repr(ns2), "{name}(_y=5, x='spam')".format(name=name))
+        if sys.implementation.name == 'pypy':
+            # PyPy sorts fields alphabetically
+            self.assertEqual(repr(ns1), "{name}(w=3, x=1, y=2)".format(name=name))
+            self.assertEqual(repr(ns2), "{name}(_y=5, x='spam')".format(name=name))
+        else:
+            self.assertEqual(repr(ns1), "{name}(x=1, y=2, w=3)".format(name=name))
+            self.assertEqual(repr(ns2), "{name}(x='spam', _y=5)".format(name=name))
 
     def test_equal(self):
         ns1 = types.SimpleNamespace(x=1)
@@ -1286,7 +1337,11 @@ class SimpleNamespaceTests(unittest.TestCase):
         ns3.spam = ns2
         name = "namespace"
         repr1 = "{name}(c='cookie', spam={name}(...))".format(name=name)
-        repr2 = "{name}(spam={name}(spam={name}(...), x=1))".format(name=name)
+        if sys.implementation.name == 'pypy':
+            # PyPy sorts fields alphabetically
+            repr2 = "{name}(spam={name}(spam={name}(...), x=1))".format(name=name)
+        else:
+            repr2 = "{name}(spam={name}(x=1, spam={name}(...)))".format(name=name)
 
         self.assertEqual(repr(ns1), repr1)
         self.assertEqual(repr(ns2), repr2)

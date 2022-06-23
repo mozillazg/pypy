@@ -1146,10 +1146,6 @@ class W_UnicodeObject(W_Root):
 
         w_sub = self.convert_arg_to_w_unicode(space, w_old)
         w_by = self.convert_arg_to_w_unicode(space, w_new)
-        # the following two lines are for being bug-to-bug compatible
-        # with CPython: see issue #2448
-        if count >= 0 and len(input) == 0:
-            return self._empty()
         try:
             res, replacements = replace_count(input, w_sub._utf8, w_by._utf8,
                                               count, isutf8=True)
@@ -1426,6 +1422,28 @@ class W_UnicodeObject(W_Root):
         assert isinstance(self, W_UnicodeObject)
         return self._getitem_result(space, index)
 
+    def descr_removeprefix(self, space, w_prefix):
+        w_prefix = self.convert_arg_to_w_unicode(space, w_prefix)
+        prefix = w_prefix._utf8
+        selfval = self._utf8
+        if startswith(selfval, prefix):
+            return W_UnicodeObject(selfval[len(prefix):], self._length - w_prefix._length)
+        if type(self) is W_UnicodeObject:
+            return self
+        return W_UnicodeObject(selfval, self._length)
+
+    def descr_removesuffix(self, space, w_suffix):
+        w_suffix = self.convert_arg_to_w_unicode(space, w_suffix)
+        suffix = w_suffix._utf8
+        selfval = self._utf8
+        if suffix and endswith(selfval, suffix):
+            end = len(selfval) - len(suffix)
+            assert end >= 0
+            return W_UnicodeObject(selfval[:end], self._length - w_suffix._length)
+        if type(self) is W_UnicodeObject:
+            return self
+        return W_UnicodeObject(selfval, self._length)
+
 
 def _isidentifier(u):
     if not u:
@@ -1464,7 +1482,8 @@ def get_encoding_and_errors(space, w_encoding, w_errors):
     return encoding, errors
 
 def encode_object(space, w_obj, encoding, errors):
-    from pypy.module._codecs.interp_codecs import _call_codec, lookup_text_codec
+    from pypy.module._codecs.interp_codecs import(
+            _call_codec, lookup_text_codec, lookup_error)
     # fast paths, only ascii, in the other cases it's too easy to mess up
     # the errors
     if ((errors is None or errors == 'strict') and
@@ -1478,6 +1497,8 @@ def encode_object(space, w_obj, encoding, errors):
     if encoding is None:
         encoding = space.sys.defaultencoding
     w_codec_info = lookup_text_codec(space, 'encode', encoding)
+    if errors is not None and space.sys.get_flag('dev_mode'):
+        lookup_error(space, errors)
     w_encfunc = space.getitem(w_codec_info, space.newint(0))
     w_retval = _call_codec(space, w_encfunc, w_obj, "encoding", encoding, errors)
     if not space.isinstance_w(w_retval, space.w_bytes):
@@ -1490,7 +1511,8 @@ def encode_object(space, w_obj, encoding, errors):
 
 
 def decode_object(space, w_obj, encoding, errors=None):
-    from pypy.module._codecs.interp_codecs import _call_codec, lookup_text_codec
+    from pypy.module._codecs.interp_codecs import(
+            _call_codec, lookup_text_codec, lookup_error)
     # in all cases, call space.charbuf_w() first.  This will fail with a
     # TypeError if w_obj is of a random type.  Do this even if we're not
     # going to use 's'
@@ -1512,6 +1534,8 @@ def decode_object(space, w_obj, encoding, errors=None):
             return space.newutf8(s, lgt)
     if encoding is None:
         encoding = space.sys.defaultencoding
+    if errors is not None and space.sys.get_flag('dev_mode'):
+        lookup_error(space, errors)
     w_codec_info = lookup_text_codec(space, 'decode', encoding)
     w_encfunc = space.getitem(w_codec_info, space.newint(1))
     w_retval = _call_codec(space, w_encfunc, w_obj, "decoding", encoding, errors)
@@ -2128,6 +2152,9 @@ W_UnicodeObject.typedef = TypeDef(
     maketrans = interp2app(W_UnicodeObject.descr_maketrans,
                            as_classmethod=True,
                            doc=UnicodeDocstrings.maketrans.__doc__),
+
+    removeprefix = interp2app(W_UnicodeObject.descr_removeprefix),
+    removesuffix = interp2app(W_UnicodeObject.descr_removesuffix),
 )
 W_UnicodeObject.typedef.flag_sequence_bug_compat = True
 

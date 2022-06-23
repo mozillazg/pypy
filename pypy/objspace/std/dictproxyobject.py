@@ -8,6 +8,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import oefmt
 from pypy.interpreter.gateway import unwrap_spec, WrappedDefault
 from pypy.interpreter.typedef import TypeDef, interp2app
+from pypy.objspace.std.util import generic_alias_class_getitem
 
 class W_DictProxyObject(W_Root):
     "Read-only proxy for mappings."
@@ -47,6 +48,26 @@ class W_DictProxyObject(W_Root):
         return space.newtext(b"mappingproxy(%s)" %
                                 (space.utf8_w(space.repr(self.w_mapping)),))
 
+    def descr_or(self, space, w_other):
+        if isinstance(w_other, W_DictProxyObject):
+            w_other = w_other.w_mapping
+        if not space.isinstance_w(w_other, space.w_dict):
+            return space.w_NotImplemented
+        w_copyself = self.copy_w(space)
+        space.call_method(w_copyself, "update", w_other)
+        return w_copyself
+
+    def descr_ror(self, space, w_other):
+        if isinstance(w_other, W_DictProxyObject):
+            w_other = w_other.w_mapping
+        if not space.isinstance_w(w_other, space.w_dict):
+            return space.w_NotImplemented
+        return space.call_method(w_other, "__or__", self.w_mapping)
+
+    def descr_ior(self, space, w_other):
+        raise oefmt(space.w_TypeError,
+            "'|=' is not supported by mappingproxy; use '|' instead")
+
     @unwrap_spec(w_default=WrappedDefault(None))
     def get_w(self, space, w_key, w_default):
         return space.call_method(self.w_mapping, "get", w_key, w_default)
@@ -62,6 +83,9 @@ class W_DictProxyObject(W_Root):
 
     def copy_w(self, space):
         return space.call_method(self.w_mapping, "copy")
+
+    def descr_reversed(self, space):
+        return space.call_method(self.w_mapping, "__reversed__")
 
 cmp_methods = {}
 def make_cmp_method(op):
@@ -86,6 +110,12 @@ W_DictProxyObject.typedef = TypeDef(
     __iter__=interp2app(W_DictProxyObject.descr_iter),
     __str__=interp2app(W_DictProxyObject.descr_str),
     __repr__=interp2app(W_DictProxyObject.descr_repr),
+    __or__=interp2app(W_DictProxyObject.descr_or),
+    __ror__=interp2app(W_DictProxyObject.descr_ror),
+    __ior__=interp2app(W_DictProxyObject.descr_ior),
+    __reversed__ = interp2app(W_DictProxyObject.descr_reversed),
+    __class_getitem__ = interp2app(
+        generic_alias_class_getitem, as_classmethod=True),
     get=interp2app(W_DictProxyObject.get_w),
     keys=interp2app(W_DictProxyObject.keys_w),
     values=interp2app(W_DictProxyObject.values_w),

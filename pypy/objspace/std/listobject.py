@@ -35,7 +35,7 @@ from pypy.objspace.std.iterobject import (
 from pypy.objspace.std.sliceobject import W_SliceObject, unwrap_start_stop
 from pypy.objspace.std.tupleobject import W_AbstractTupleObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
-from pypy.objspace.std.util import get_positive_index, negate
+from pypy.objspace.std.util import get_positive_index, negate, generic_alias_class_getitem
 
 __all__ = ['W_ListObject', 'make_range_list', 'make_empty_list_with_size']
 
@@ -811,7 +811,7 @@ class ListStrategy(object):
         tp = space.type(w_item)
         while i < stop and i < w_list.length():
             find_or_count_jmp.jit_merge_point(tp=tp, strategy_type=type(self), count=count)
-            if space.eq_w(w_item, w_list.getitem(i)):
+            if space.eq_w(w_list.getitem(i), w_item):
                 if count:
                     result += 1
                 else:
@@ -2295,6 +2295,9 @@ list(iterable) -> new list initialized from iterable's items""",
     __getitem__ = interp2app(W_ListObject.descr_getitem),
     __setitem__ = interp2app(W_ListObject.descr_setitem),
     __delitem__ = interp2app(W_ListObject.descr_delitem),
+
+    __class_getitem__ = interp2app(
+        generic_alias_class_getitem, as_classmethod=True),
 
     sort = interp2app(W_ListObject.descr_sort),
     index = interp2app(W_ListObject.descr_index),

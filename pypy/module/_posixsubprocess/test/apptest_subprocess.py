@@ -8,6 +8,12 @@ import traceback  # Work around a recursion limit
 import subprocess
 import os
 import posix
+import errno
+try:
+    import pwd
+    import grp
+except ImportError:
+    pwd = grp = None
 
 directory = dirname(__file__)
 
@@ -54,11 +60,11 @@ def test_cpython_issue15736():
             return sys.maxsize + n
         def __getitem__(self, i):
             return b'x'
-    raises(MemoryError, _posixsubprocess.fork_exec,
-           1,Z(),3,(1, 2),5,6,7,8,9,10,11,12,13,14,15,16,17)
+    pytest.raises(MemoryError, _posixsubprocess.fork_exec,
+           1,Z(),3,(1, 2),5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21)
     n = 1
-    raises(OverflowError, _posixsubprocess.fork_exec,
-           1,Z(),3,(1, 2),5,6,7,8,9,10,11,12,13,14,15,16,17)
+    pytest.raises(OverflowError, _posixsubprocess.fork_exec,
+           1,Z(),3,(1, 2),5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21)
 
 def test_pass_fds_make_inheritable():
     fd1, fd2 = posix.pipe()
@@ -73,6 +79,79 @@ def test_pass_fds_make_inheritable():
     posix.close(fd1)
     posix.close(fd2)
 
+def test_user():
+    uid = os.geteuid()
+    test_users = [65534 if uid != 65534 else 65533, uid]
+
+    for user in test_users:
+        try:
+            output = subprocess.check_output(
+                    ["python", "-c",
+                     "import os; print(os.getuid())"],
+                    user=user)
+        except OSError as e:
+            if e.errno != errno.EPERM:
+                raise
+        else:
+            if isinstance(user, str):
+                user_uid = pwd.getpwnam(user).pw_uid
+            else:
+                user_uid = user
+            child_user = int(output)
+            assert child_user == user_uid
+
+    with pytest.raises(ValueError):
+        subprocess.check_call(["python", "-c", "pass"], user=-1)
+
+def test_extra_groups():
+    gid = os.getegid()
+    group_list = [65534 if gid != 65534 else 65533]
+    perm_error = False
+
+    try:
+        output = subprocess.check_output(
+                ["python", "-c",
+                 "import os, sys, json; json.dump(os.getgroups(), sys.stdout)"],
+                extra_groups=group_list)
+    except OSError as ex:
+        if ex.errno != errno.EPERM:
+            raise
+        perm_error = True
+
+    else:
+        parent_groups = os.getgroups()
+        child_groups = json.loads(output)
+
+        if grp is not None:
+            desired_gids = [grp.getgrnam(g).gr_gid if isinstance(g, str) else g
+                            for g in group_list]
+        else:
+            desired_gids = group_list
+
+        if perm_error:
+            assert set(child_groups) == set(parent_groups)
+        else:
+            assert set(desired_gids) == set(parent_groups)
+
+def test_umask():
+    import tempfile, shutil
+    tmpdir = None
+    try:
+        tmpdir = tempfile.mkdtemp()
+        name = os.path.join(tmpdir, "beans")
+        # We set an unusual umask in the child so as a unique mode
+        # for us to test the child's touched file for.
+        subprocess.check_call(
+                ["python", "-c", f"open({name!r}, 'w').close()"],
+                umask=0o053)
+        # Ignore execute permissions entirely in our test,
+        # filesystems could be mounted to ignore or force that.
+        st_mode = os.stat(name).st_mode & 0o666
+        expected_mode = 0o624
+        assert expected_mode == st_mode
+    finally:
+        if tmpdir is not None:
+            shutil.rmtree(tmpdir)
 
 def test_issue_3630():
     import time
@@ -92,7 +171,9 @@ def test_issue_3630():
             return _posixsubprocess.fork_exec(
                 args, [os.fsencode(path)], True, passfds, None, None,
                 -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
-                False, False, preexec_fn)
+                False, False,
+                None, None, None, -1,
+                preexec_fn)
         finally:
             os.close(errpipe_read)
             os.close(errpipe_write)
@@ -151,7 +232,7 @@ def test_issue_3630():
 
 def test_restore_signals():
     import posix as os
-    # Copied from lib-python/3/subprocess.execute_child
+    # Copied from lib-python/3/subprocess._execute_child
     # when calling subprocess.check_output(['cat', '/proc/self/status'],
     #       restore_signals=True, universal_newlines=True)
     def check_output(restore_signals):
@@ -171,13 +252,15 @@ def test_restore_signals():
             cwd = None
             env_list = None
             p2cread = p2cwrite = -1
-            errread = errwrite = -1
+            errread = errwrite = umask = -1
             call_setsid = False
             preexec_fn = None
+            gid = gids = uid = None
             pid = _posixsubprocess.fork_exec(args, executable_list, close_fds,
                         fds_to_keep, cwd, env_list, p2cread, p2cwrite, c2pread,
                         c2pwrite, errread, errwrite, errpipe_read,
                         errpipe_write, restore_signals, call_setsid,
+                        gid, gids, uid, umask,
                         preexec_fn)
             os.close(errpipe_write)
             # Wait for exec to fail or succeed; possibly raising an

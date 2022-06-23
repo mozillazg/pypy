@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -* -
 import pytest
 from pypy.interpreter.astcompiler import consts
 from pypy.interpreter.pyparser import pytokenizer
@@ -132,3 +133,99 @@ whatisthis"""'''
         columns = [t.column for t in tks]
         assert columns == [0, 2, 4, 6, 8, 10, 12, 14, 16]
         assert [t.end_column - 1 for t in tks] == columns
+
+    def test_PyCF_DONT_IMPLY_DEDENT(self):
+        input = "if 1:\n  1\n"
+        # regular mode
+        tks = tokenize(input)
+        lines = input.splitlines(True)
+        del tks[-2] # new parser deletes one newline anyway
+        assert tks == [
+            Token(tokens.NAME, 'if', 1, 0, lines[0], 1, 2),
+            Token(tokens.NUMBER, '1', 1, 3, lines[0], 1, 4),
+            Token(tokens.COLON, ':', 1, 4, lines[0], 1, 5),
+            Token(tokens.NEWLINE, '', 1, 5, lines[0], -1, -1),
+            Token(tokens.INDENT, '  ', 2, 0, lines[1], 2, 2),
+            Token(tokens.NUMBER, '1', 2, 2, lines[1], 2, 3),
+            Token(tokens.NEWLINE, '', 2, 3, lines[1], -1, -1),
+            Token(tokens.DEDENT, '', 3, 0, '', -1, -1),
+            Token(tokens.ENDMARKER, '', 3, 0, '', -1, -1),
+        ]
+        # single mode
+        tks = tokenize(input, flags=consts.PyCF_DONT_IMPLY_DEDENT)
+        lines = input.splitlines(True)
+        del tks[-2] # new parser deletes one newline anyway
+        assert tks == [
+            Token(tokens.NAME, 'if', 1, 0, lines[0], 1, 2),
+            Token(tokens.NUMBER, '1', 1, 3, lines[0], 1, 4),
+            Token(tokens.COLON, ':', 1, 4, lines[0], 1, 5),
+            Token(tokens.NEWLINE, '', 1, 5, lines[0], -1, -1),
+            Token(tokens.INDENT, '  ', 2, 0, lines[1], 2, 2),
+            Token(tokens.NUMBER, '1', 2, 2, lines[1], 2, 3),
+            Token(tokens.NEWLINE, '', 2, 3, lines[1], -1, -1),
+            Token(tokens.ENDMARKER, '', 3, 0, '', -1, -1),
+        ]
+
+    def test_ignore_just_linecont(self):
+        input = "pass\n    \\\n\npass"
+        tks = tokenize(input)
+        tps = [tk.token_type for tk in tks]
+        assert tps == [tokens.NAME, tokens.NEWLINE, tokens.NAME,
+                tokens.NEWLINE, tokens.NEWLINE, tokens.ENDMARKER]
+
+    def test_error_linecont(self):
+        check_token_error("a \\ b",
+                          "unexpected character after line continuation character",
+                          4)
+
+    def test_error_integers(self):
+        check_token_error("0b106",
+                "invalid digit '6' in binary literal",
+                5)
+        check_token_error("0b10_6",
+                "invalid digit '6' in binary literal",
+                5)
+        check_token_error("0b6",
+                "invalid digit '6' in binary literal",
+                3)
+        check_token_error("0b \n",
+                "invalid binary literal",
+                2)
+        check_token_error("0o129",
+                "invalid digit '9' in octal literal",
+                5)
+        check_token_error("0o12_9",
+                "invalid digit '9' in octal literal",
+                5)
+        check_token_error("0o9",
+                "invalid digit '9' in octal literal",
+                3)
+        check_token_error("0o \n",
+                "invalid octal literal",
+                2)
+        check_token_error("0x1__ \n",
+                "invalid hexadecimal literal",
+                4)
+        check_token_error("0x\n",
+                "invalid hexadecimal literal",
+                2)
+        check_token_error("1_ \n",
+                "invalid decimal literal",
+                2)
+        check_token_error("0b1_ \n",
+                "invalid binary literal",
+                3)
+        check_token_error("01212 \n",
+                "leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers",
+                1)
+        tokenize("1 2 \n") # does not raise
+        tokenize("1 _ \n") # does not raise
+
+
+    def test_invalid_identifier(self):
+        check_token_error("aänc€",
+                "invalid character '€' (U+20AC)",
+                6)
+        check_token_error("a\xc2\xa0b",
+                "invalid non-printable character U+00A0",
+                2)

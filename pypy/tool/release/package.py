@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 """ packages PyPy, provided that it's already built.
-It uses 'pypy/goal/pypy3-c' and parts of the rest of the working
+It uses 'pypy/goal/pypy%d.%d-c' and parts of the rest of the working
 copy.  Usage:
 
     package.py [--options] --archive-name=pypy-VER-PLATFORM
@@ -38,9 +38,7 @@ ARCH = get_arch()
 USE_ZIPFILE_MODULE = ARCH == 'win32'
 
 STDLIB_VER = "3"
-IMPLEMENTATION = "pypy3.8"
-
-POSIX_EXE = 'pypy3'
+POSIX_EXE = 'pypy3.9'
 
 
 from lib_pypy.pypy_tools.build_cffi_imports import (create_cffi_import_libraries,
@@ -134,6 +132,15 @@ def get_python_ver(pypy_c, quiet=False):
              'import sysconfig as s; print(s.get_python_version())'], **kwds)
     return ver.strip()
 
+def get_platlibdir(pypy_c, quiet=False):
+    kwds = {'universal_newlines': True}
+    if quiet:
+        kwds['stderr'] = subprocess.NULL
+    ver = subprocess.check_output([str(pypy_c), '-c',
+             'import sysconfig as s; print(s.get_config_var("platlibdir"))'], **kwds)
+    return ver.strip()
+
+    
 def generate_sysconfigdata(pypy_c, stdlib):
     """Create a _sysconfigdata_*.py file that is platform specific and can be
     parsed by non-python tools. Used in cross-platform package building and
@@ -194,16 +201,20 @@ def create_package(basedir, options, _fake=False):
             ' with --override_pypy_c' % pypy_c)
     builddir = py.path.local(options.builddir)
     pypydir = builddir.ensure(name, dir=True)
+    if _fake:
+        python_ver = '3.9'
+    else:
+        python_ver = get_python_ver(pypy_c)
+    IMPLEMENTATION = 'pypy{}'.format(python_ver)
     if ARCH == 'win32':
         target = pypydir.join('Lib')
+    elif _fake:
+        target = pypydir.join('lib', IMPLEMENTATION)
     else:
-        target = pypydir.join('lib').join(IMPLEMENTATION)
+        target = pypydir.join(get_platlibdir(pypy_c), IMPLEMENTATION)
     os.makedirs(str(target))
-    if _fake:
-        python_ver = '3.6'
-    else:
+    if not _fake:
         generate_sysconfigdata(pypy_c, str(target))
-        python_ver = get_python_ver(pypy_c)
     if ARCH == 'win32':
         os.environ['PATH'] = str(basedir.join('externals').join('bin')) + ';' + \
                             os.environ.get('PATH', '')
@@ -346,9 +357,6 @@ def create_package(basedir, options, _fake=False):
                                            '*.lib', '*.exp', '*.manifest', '__pycache__'))
     for file in ['README.rst',]:
         shutil.copy(str(basedir.join(file)), str(pypydir))
-    for file in ['_testcapimodule.c', '_ctypes_test.c']:
-        shutil.copyfile(str(basedir.join('lib_pypy', file)),
-                        str(target.join(file)))
     # Use original LICENCE file
     base_file = str(basedir.join('LICENSE'))
     with open(base_file) as fid:
@@ -381,8 +389,8 @@ def create_package(basedir, options, _fake=False):
         os.chdir(str(bindir))
         try:
             os.symlink(POSIX_EXE, 'pypy')
-            os.symlink(POSIX_EXE, 'pypy{}'.format(python_ver))
-            # os.symlink(POSIX_EXE, 'pypy{}'.format(python_ver[0]))
+            # os.symlink(POSIX_EXE, 'pypy{}'.format(python_ver))
+            os.symlink(POSIX_EXE, 'pypy{}'.format(python_ver[0]))
             os.symlink(POSIX_EXE, 'python')
             os.symlink(POSIX_EXE, 'python{}'.format(python_ver))
             os.symlink(POSIX_EXE, 'python{}'.format(python_ver[0]))
@@ -512,7 +520,7 @@ def package(*args, **kwds):
     parser.add_argument('--targetdir', type=str, default='',
         help='destination dir for archive')
     parser.add_argument('--override_pypy_c', type=str, default='',
-        help='use as pypy3 exe instead of pypy/goal/pypy3-c')
+        help='use as pypy3 exe, default is %s' % POSIX_EXE)
     parser.add_argument('--embedded-dependencies', '--no-embedded-dependencies',
                         dest='embed_dependencies',
                         action=NegateAction,

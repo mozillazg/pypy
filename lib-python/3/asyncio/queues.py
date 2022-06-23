@@ -3,6 +3,7 @@ __all__ = ('Queue', 'PriorityQueue', 'LifoQueue', 'QueueFull', 'QueueEmpty')
 import collections
 import heapq
 import warnings
+from types import GenericAlias
 
 from . import events
 from . import locks
@@ -75,6 +76,8 @@ class Queue:
 
     def __str__(self):
         return f'<{type(self).__name__} {self._format()}>'
+
+    __class_getitem__ = classmethod(GenericAlias)
 
     def _format(self):
         result = f'maxsize={self._maxsize!r}'

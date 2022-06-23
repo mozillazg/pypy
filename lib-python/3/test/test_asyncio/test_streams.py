@@ -9,7 +9,7 @@ import sys
 import threading
 import unittest
 from unittest import mock
-from test import support
+from test.support import socket_helper
 try:
     import ssl
 except ImportError:
@@ -66,7 +66,7 @@ class StreamTests(test_utils.TestCase):
                                                loop=self.loop)
             self._basetest_open_connection(conn_fut)
 
-    @support.skip_unless_bind_unix_socket
+    @socket_helper.skip_unless_bind_unix_socket
     def test_open_unix_connection(self):
         with test_utils.run_test_unix_server() as httpd:
             conn_fut = asyncio.open_unix_connection(httpd.address,
@@ -99,7 +99,7 @@ class StreamTests(test_utils.TestCase):
 
             self._basetest_open_connection_no_loop_ssl(conn_fut)
 
-    @support.skip_unless_bind_unix_socket
+    @socket_helper.skip_unless_bind_unix_socket
     @unittest.skipIf(ssl is None, 'No ssl module')
     def test_open_unix_connection_no_loop_ssl(self):
         with test_utils.run_test_unix_server(use_ssl=True) as httpd:
@@ -130,7 +130,7 @@ class StreamTests(test_utils.TestCase):
                                                loop=self.loop)
             self._basetest_open_connection_error(conn_fut)
 
-    @support.skip_unless_bind_unix_socket
+    @socket_helper.skip_unless_bind_unix_socket
     def test_open_unix_connection_error(self):
         with test_utils.run_test_unix_server() as httpd:
             conn_fut = asyncio.open_unix_connection(httpd.address,
@@ -655,7 +655,7 @@ class StreamTests(test_utils.TestCase):
 
         self.assertEqual(messages, [])
 
-    @support.skip_unless_bind_unix_socket
+    @socket_helper.skip_unless_bind_unix_socket
     def test_start_unix_server(self):
 
         class MyServer:
@@ -736,7 +736,7 @@ class StreamTests(test_utils.TestCase):
         # See asyncio issue 168.  This test is derived from the example
         # subprocess_attach_read_pipe.py, but we configure the
         # StreamReader's limit so that twice it is less than the size
-        # of the data writter.  Also we must explicitly attach a child
+        # of the data writer.  Also we must explicitly attach a child
         # watcher to the event loop.
 
         code = """\

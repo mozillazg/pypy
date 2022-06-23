@@ -338,6 +338,24 @@ class TestInterpreter:
         assert "TypeError:" in resg4
         assert "got multiple values for keyword argument 'a'" in resg4
 
+    def test_build_map_unpack_with_call_mapping_lies_about_length(self):
+        code = """
+        class M:
+            def keys(self):
+                return ['a', 'b', 'c']
+            def __getitem__(self, key):
+                return 1
+            def __len__(self):
+                return 2
+
+        def f(**kwargs): return kwargs
+        def g():
+            return f(**{'a': 3}, **M())
+        """
+        resg = self.codetest(code, 'g', [])
+        assert "TypeError:" in resg
+        assert "got multiple values for keyword argument 'a'" in resg
+
 try:
     from hypothesis import given, strategies
 except ImportError:
@@ -518,11 +536,17 @@ class AppTestInterpreter:
             """
 
     def test_errormsg_unpacking(self):
+        """
         with raises(TypeError) as excinfo:
             a, b, c = 1
+        assert str(excinfo.value) == "cannot unpack non-iterable int object"
+
+        with raises(TypeError) as excinfo:
+            a, *b, c = 1
         assert str(excinfo.value) == "cannot unpack non-iterable int object"
 
         with raises(TypeError) as excinfo:
             for a, b in range(10):
                 pass
         assert str(excinfo.value) == "cannot unpack non-iterable int object"
+        """

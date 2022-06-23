@@ -520,8 +520,8 @@ class AppTestSocket:
                 raises(OverflowError, func, 2 ** size)
 
     def test_newsocket(self):
-        import socket
-        s = socket.socket()
+        import _socket
+        s = _socket.socket()
 
     def test_subclass(self):
         from _socket import socket
@@ -738,7 +738,7 @@ class AppTestSocket:
 
     def test_subclass_init(self):
         # Socket is not created in __new__, but in __init__.
-        import socket
+        import _socket as socket
         class Socket_IPV6(socket.socket):
             def __init__(self):
                 socket.socket.__init__(self, family=socket.AF_INET6)
@@ -1002,7 +1002,7 @@ class AppTestSocketTCP:
         assert not self.serv.getblocking()
 
     def test_recv_into(self):
-        import socket
+        import _socket as socket
         import array
         import _io
         MSG = b'dupa was here\n'
@@ -1036,7 +1036,7 @@ class AppTestSocketTCP:
         conn.close()
 
     def test_recvfrom_into(self):
-        import socket
+        import _socket as socket
         import array
         import _io
         MSG = b'dupa was here\n'
@@ -1092,7 +1092,7 @@ class AppTestSocketTCP:
         cli.close()
 
     def test_family(self):
-        import socket
+        import _socket as socket
         cli = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         assert cli.family == socket.AF_INET
 
@@ -1166,10 +1166,10 @@ class AppTestErrno:
     spaceconfig = {'usemodules': ['_socket', 'select']}
 
     def test_errno(self):
-        from socket import socket, AF_INET, SOCK_STREAM, error
+        from _socket import socket, AF_INET, SOCK_STREAM, error
         import errno
         s = socket(AF_INET, SOCK_STREAM)
-        exc = raises(error, s.accept)
+        exc = raises(error, s._accept)
         assert isinstance(exc.value, error)
         assert isinstance(exc.value, IOError)
         # error is EINVAL, or WSAEINVAL on Windows

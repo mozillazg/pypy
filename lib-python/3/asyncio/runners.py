@@ -46,6 +46,7 @@ def run(main, *, debug=None):
         try:
             _cancel_all_tasks(loop)
             loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.run_until_complete(loop.shutdown_default_executor())
         finally:
             events.set_event_loop(None)
             loop.close()
@@ -60,7 +61,7 @@ def _cancel_all_tasks(loop):
         task.cancel()
 
     loop.run_until_complete(
-        tasks.gather(*to_cancel, loop=loop, return_exceptions=True))
+        tasks._gather(*to_cancel, loop=loop, return_exceptions=True))
 
     for task in to_cancel:
         if task.cancelled():

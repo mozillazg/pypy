@@ -6,7 +6,7 @@
 
 import threading
 import functools
-import collections
+import collections.abc
 import weakref
 import sys
 import io

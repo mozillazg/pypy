@@ -95,6 +95,11 @@ CLASSES
      |  say_no(self)
      |\x20\x20
      |  ----------------------------------------------------------------------
+     |  Class methods defined here:
+     |\x20\x20
+     |  __class_getitem__(item) from builtins.type
+     |\x20\x20
+     |  ----------------------------------------------------------------------
      |  Data descriptors defined here:
      |\x20\x20
      |  __dict__
@@ -114,6 +119,10 @@ FUNCTIONS
 
 DATA
     __xyz__ = 'X, Y and Z'
+    c_alias = test.pydoc_mod.C[int]
+    list_alias1 = typing.List[int]
+    list_alias2 = list[int]
+    type_union1 = typing.Union[int, str]
 
 VERSION
     1.2.3.4
@@ -156,6 +165,15 @@ expected_html_pattern = ("""
 ><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:%s">%s</a>%s</font></td></tr></table>
     <p><tt>This&nbsp;is&nbsp;a&nbsp;test&nbsp;module&nbsp;for&nbsp;test_pydoc</tt></p>
 <p>""" + module_section + """\
+<table width="100%%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+\x20\x20\x20\x20
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%%"><table width="100%%" summary="list"><tr><td width="25%%" valign=top><a href="types.html">types</a><br>
+</td><td width="25%%" valign=top><a href="typing.html">typing</a><br>
+</td><td width="25%%" valign=top></td><td width="25%%" valign=top></td></tr></table></td></tr></table><p>
 <table width="100%%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#ee77aa">
 <td colspan=3 valign=bottom>&nbsp;<br>
@@ -227,6 +245,10 @@ Data and other attributes defined here:<br>
 <dl><dt><a name="C-say_no"><strong>say_no</strong></a>(self)</dt></dl>
 
 <hr>
+Class methods defined here:<br>
+<dl><dt><a name="C-__class_getitem__"><strong>__class_getitem__</strong></a>(item)<font color="#909090"><font face="helvetica, arial"> from <a href="builtins.html#type">builtins.type</a></font></font></dt></dl>
+
+<hr>
 Data descriptors defined here:<br>
 <dl><dt><strong>__dict__</strong></dt>
 <dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
@@ -253,7 +275,11 @@ war</tt></dd></dl>
 <font color="#ffffff" face="helvetica, arial"><big><strong>Data</strong></big></font></td></tr>
 \x20\x20\x20\x20
 <tr><td bgcolor="#55aa55"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
-<td width="100%%"><strong>__xyz__</strong> = 'X, Y and Z'</td></tr></table><p>
+<td width="100%%"><strong>__xyz__</strong> = 'X, Y and Z'<br>
+<strong>c_alias</strong> = test.pydoc_mod.C[int]<br>
+<strong>list_alias1</strong> = typing.List[int]<br>
+<strong>list_alias2</strong> = list[int]<br>
+<strong>type_union1</strong> = typing.Union[int, str]</td></tr></table><p>
 <table width="100%%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#7799ee">
 <td colspan=3 valign=bottom>&nbsp;<br>
@@ -492,6 +518,7 @@ class PydocDocTest(unittest.TestCase):
     def test_non_str_name(self):
         # issue14638
         # Treat illegal (non-str) name like no name
+
         class A:
             __name__ = 42
         class B:
@@ -1065,6 +1092,37 @@ class TestDescriptions(unittest.TestCase):
         expected = 'C in module %s object' % __name__
         self.assertIn(expected, pydoc.render_doc(c))
 
+    def test_generic_alias(self):
+        self.assertEqual(pydoc.describe(typing.List[int]), '_GenericAlias')
+        doc = pydoc.render_doc(typing.List[int], renderer=pydoc.plaintext)
+        self.assertIn('_GenericAlias in module typing', doc)
+        self.assertIn('\nclass list(object)', doc)
+        self.assertIn(list.__doc__.strip().splitlines()[0], doc)
+
+        self.assertEqual(pydoc.describe(list[int]), 'GenericAlias')
+        doc = pydoc.render_doc(list[int], renderer=pydoc.plaintext)
+        self.assertIn('GenericAlias in module builtins', doc)
+        self.assertIn('\nclass list(object)', doc)
+        self.assertIn(list.__doc__.strip().splitlines()[0], doc)
+
+    def test_union_type(self):
+        self.assertEqual(pydoc.describe(typing.Union[int, str]), '_UnionGenericAlias')
+        doc = pydoc.render_doc(typing.Union[int, str], renderer=pydoc.plaintext)
+        self.assertIn('_UnionGenericAlias in module typing', doc)
+        self.assertIn('\ntyping.Union', doc)
+        if typing.Union.__doc__:
+            self.assertIn(typing.Union.__doc__.strip().splitlines()[0], doc)
+
+    def test_special_form(self):
+        self.assertEqual(pydoc.describe(typing.Any), '_SpecialForm')
+        doc = pydoc.render_doc(typing.Any, renderer=pydoc.plaintext)
+        self.assertIn('_SpecialForm in module typing', doc)
+        if typing.Any.__doc__:
+            self.assertIn('\ntyping.Any', doc)
+            self.assertIn(typing.Any.__doc__.strip().splitlines()[0], doc)
+        else:
+            self.assertIn('\nclass _SpecialForm(_Final)', doc)
+
     def test_typing_pydoc(self):
         def foo(data: typing.List[typing.Any],
                 x: int) -> typing.Iterator[typing.Tuple[int, typing.Any]]:
@@ -1272,7 +1330,9 @@ cm(x) method of builtins.type instance
 
         X.attr.__doc__ = 'Custom descriptor'
         self.assertEqual(self._get_summary_lines(X.attr), """\
-<test.test_pydoc.TestDescriptions.test_custom_non_data_descriptor.<locals>.Descr object>""")
+<test.test_pydoc.TestDescriptions.test_custom_non_data_descriptor.<locals>.Descr object>
+    Custom descriptor
+""")
 
         X.attr.__name__ = 'foo'
         self.assertEqual(self._get_summary_lines(X.attr), """\
@@ -1329,6 +1389,17 @@ foo
             'async <a name="-an_async_generator"><strong>an_async_generator',
             html)
 
+    def test_html_for_https_links(self):
+        def a_fn_with_https_link():
+            """a link https://localhost/"""
+            pass
+
+        html = pydoc.HTMLDoc().document(a_fn_with_https_link)
+        self.assertIn(
+            '<a href="https://localhost/">https://localhost/</a>',
+            html
+        )
+
 class PydocServerTest(unittest.TestCase):
     """Tests for pydoc._start_server"""
 
@@ -1343,7 +1414,7 @@ class PydocServerTest(unittest.TestCase):
         self.assertIn('0.0.0.0', serverthread.docserver.address)
 
         starttime = time.monotonic()
-        timeout = 1  #seconds
+        timeout = test.support.SHORT_TIMEOUT
 
         while serverthread.serving:
             time.sleep(.01)
@@ -1573,20 +1644,11 @@ class TestInternalUtilities(unittest.TestCase):
                 self.assertIsNone(self._get_revised_path(trailing_argv0dir))
 
 
-@reap_threads
-def test_main():
-    try:
-        test.support.run_unittest(PydocDocTest,
-                                  PydocImportTest,
-                                  TestDescriptions,
-                                  PydocServerTest,
-                                  PydocUrlHandlerTest,
-                                  TestHelper,
-                                  PydocWithMetaClasses,
-                                  TestInternalUtilities,
-                                  )
-    finally:
-        reap_children()
+def setUpModule():
+    thread_info = test.support.threading_setup()
+    unittest.addModuleCleanup(test.support.threading_cleanup, *thread_info)
+    unittest.addModuleCleanup(reap_children)
+
 
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

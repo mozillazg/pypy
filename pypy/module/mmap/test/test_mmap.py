@@ -31,6 +31,7 @@ class AppTestMMap:
         assert isinstance(mmap.ACCESS_READ, int)
         assert isinstance(mmap.ACCESS_WRITE, int)
         assert isinstance(mmap.ACCESS_COPY, int)
+        assert isinstance(mmap.ACCESS_DEFAULT, int)
         if os.name == "posix":
             assert isinstance(mmap.MAP_ANON, int)
             assert isinstance(mmap.MAP_ANONYMOUS, int)
@@ -80,7 +81,8 @@ class AppTestMMap:
         f = open(self.tmpname + "a", "wb+")
 
         f.write(b"c")
-        f.flush()
+        ret = f.flush()
+        assert ret is None
         raises(ValueError, mmap, f.fileno(), 123)
         f.close()
 
@@ -894,7 +896,7 @@ class AppTestMMap:
         assert list(enumerate(m)) == [(0, b"A"), (1, b"B")]
 
     def test_madvise(self):
-        import mmap
+        import mmap, sys
         m = mmap.mmap(-1, 1024)
         if not hasattr(m, "madvise"):
             m.close()
@@ -902,3 +904,10 @@ class AppTestMMap:
 
         m.madvise(mmap.MADV_NORMAL)
         m.close()
+
+    def test_repr(self):
+        import mmap
+        m = mmap.mmap(-1, 1024)
+        assert repr(m) == "<mmap.mmap closed=False, access=ACCESS_DEFAULT, length=1024, pos=0, offset=0>"
+        m.close()
+        assert repr(m) == "<mmap.mmap closed=True>"

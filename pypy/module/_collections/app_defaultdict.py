@@ -61,3 +61,19 @@ class defaultdict(dict):
         """
         return (type(self), (self.default_factory,), None, None,
                 iter(self.items()))
+
+    def __or__(self, other):
+        if not isinstance(other, dict):
+            return NotImplemented
+        copyself = self.copy()
+        copyself.update(other)
+        return copyself
+
+    def __ror__(self, other):
+        if not isinstance(other, dict):
+            return NotImplemented
+        res = type(self)(self.default_factory, other)
+        res.update(self)
+        return res
+
+    # for __ior__ the dict implementation is fine

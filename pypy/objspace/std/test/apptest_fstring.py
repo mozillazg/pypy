@@ -229,23 +229,43 @@ def test_crash_debugging():
         eval('f"{pow(x, k, j)="')
     with raises(SyntaxError):
         eval('f"{pow(x, k, j)=    "')
+    with raises(SyntaxError):
+        eval("f'{4:{/5}}'")
 
 def test_parseerror_lineno():
     with raises(SyntaxError) as excinfo:
         eval('\n\nf"{,}"')
     assert excinfo.value.lineno == 3
     assert excinfo.value.offset == 4
+    assert excinfo.value.msg == "f-string: invalid syntax"
     with raises(SyntaxError) as excinfo:
         eval('f"\\\n\\\n{,}"')
     assert excinfo.value.lineno == 3
     assert excinfo.value.offset == 2
     assert excinfo.value.text == '{,}"'
+    assert excinfo.value.msg == "f-string: invalid syntax"
     with raises(SyntaxError) as excinfo:
         eval('''f"""{
 ,}"""''')
     assert excinfo.value.lineno == 2
     assert excinfo.value.offset == 1
     assert excinfo.value.text == ',}"""'
+    assert excinfo.value.msg == "f-string: invalid syntax"
+
+def test_joined_positions():
+    expr = """('a'
+    "b"
+    f"wat2"
+)
+"""
+    t = ast.parse(expr)
+    # check the fstring
+    fstring = t.body[0].value
+    for x in fstring, fstring.values[0]:
+        assert fstring.lineno == 1
+        assert fstring.col_offset == 1
+        assert fstring.end_lineno == 3
+        assert fstring.end_col_offset == 11
 
 def test_tokenerror_lineno():
     with raises(SyntaxError) as excinfo:
@@ -263,4 +283,27 @@ $}"""''')
     assert excinfo.value.lineno == 2
     assert excinfo.value.offset == 1
     assert excinfo.value.text == '$}"""'
+    with raises(SyntaxError) as excinfo:
+        eval("f'''{\xa0}'''")
+    assert excinfo.value.lineno == 1
+    print(excinfo.value.offset)
+    assert excinfo.value.offset == 6
+    assert 'f-string: invalid non-printable character U+00A0' in str(excinfo.value)
 
+def test_fstring_escape_N_bug():
+    with raises(SyntaxError) as excinfo:
+        eval(r"f'\N '")
+    with raises(SyntaxError) as excinfo:
+        eval(r"f'\N  '")
+
+def test_fstring_no_closing_brace():
+    with raises(SyntaxError) as excinfo:
+        eval(r"f'{<'")
+    assert excinfo.value.msg == "f-string: expecting '}'"
+
+def test_fstring_triple_bug():
+    assert eval('''
+f\'\'\'{"""
+"""}
+\'\'\'
+''') == "\n\n"

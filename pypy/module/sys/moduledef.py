@@ -181,6 +181,7 @@ class Module(MixedModule):
             rootdir = os.path.dirname(pypydir)
             for attr in ['prefix', 'exec_prefix', 'base_prefix', 'base_exec_prefix']:
                 space.setitem(self.w_dict, space.wrap(attr), space.wrap(rootdir))
+        space.setitem(self.w_dict, space.wrap("platlibdir"), space.wrap(space.config.objspace.platlibdir))
 
 
     def flush_std_files(self, space):

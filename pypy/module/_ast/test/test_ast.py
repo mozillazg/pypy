@@ -66,14 +66,14 @@ class AppTestAST:
         mod = ast.Module()
         raises(AttributeError, getattr, mod, "body")
         exc = raises(TypeError, com, mod).value
-        assert str(exc) == "required field \"body\" missing from Module"
+        assert str(exc) == "required field 'body' missing from Module"
         expr = ast.Name()
         expr.id = "hi"
         expr.ctx = ast.Load()
         expr.lineno = 4
         exc = raises(TypeError, com, ast.Module([ast.Expr(expr)], [])).value
         assert (str(exc) == "required field \"lineno\" missing from stmt" or # cpython
-                str(exc) == "required field \"lineno\" missing from Expr")   # pypy, better
+                str(exc) == "required field 'lineno' missing from Expr")   # pypy, better
 
     def test_int(self):
         ast = self.ast
@@ -490,7 +490,7 @@ def f():
         empty_yield_from = ast.parse("def f():\n yield from g()")
         empty_yield_from.body[0].body[0].value.value = None
         exc = raises(ValueError, compile, empty_yield_from, "<test>", "exec")
-        assert "field value is required" in str(exc.value)
+        assert "field 'value' is required for YieldFrom" in str(exc.value)
 
     def test_compare(self):
         import ast as ast_utils
@@ -598,3 +598,23 @@ def f():
 
             assert len(tree_1.type_ignores) == 6
             assert len(tree_2.type_ignores) == 6
+
+    def test_fstring_self_documenting_feature_version(self):
+        raises(SyntaxError, self.get_ast, "f'{x=}'", feature_version=7)
+        self.get_ast("'f{x=}'", feature_version=7)
+
+    def test_ast_feature_version_asynccomp_bug(self):
+        import ast
+        raises(SyntaxError, ast.parse, 'async def foo(xs):\n    [x async for x in xs]\n', feature_version=(3, 4))
+
+    def test_ast_feature_version_underscore_number(self):
+        import ast
+        raises(SyntaxError, ast.parse, '12_12', feature_version=(3, 4))
+
+    def test_crash_bug(self):
+        import ast
+        raises(SyntaxError, ast.parse, 'def fa(\n    a = 1,  # type: A\n    /\n):\n    pass\n\ndef fab(\n    a,  # type: A\n    /,\n    b,  # type: B\n):\n    pass\n\ndef fav(\n    a,  # type: A\n    /,\n    *v,  # type: V\n):\n    pass\n\ndef fak(\n    a,  # type: A\n    /,\n    **k,  # type: K\n):\n    pass\n\ndef favk(\n    a,  # type: A\n    /,\n    *v,  # type: V\n    **k,  # type: K\n):\n    pass\n\n', feature_version=4)
+
+    def test_module(self):
+        import ast
+        assert ast.expr.__module__ == 'ast'

@@ -192,7 +192,7 @@ def test_valid_mode(tempfile):
 
 def test_array_write(tempfile):
     a = array.array('i', range(10))
-    n = len(a.tostring())
+    n = len(a.tobytes())
     with _io.open(tempfile, "wb", 0) as f:
         res = f.write(a)
         assert res == n

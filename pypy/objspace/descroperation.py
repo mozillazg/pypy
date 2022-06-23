@@ -349,6 +349,10 @@ class DescrOperation(object):
     def getitem(space, w_obj, w_key):
         w_descr = space.lookup(w_obj, '__getitem__')
         if w_descr is None and space.isinstance_w(w_obj, space.w_type):
+            # you've got to be kidding me :-( - cpython does the same
+            if space.is_w(w_obj, space.w_type):
+                from pypy.objspace.std.util import generic_alias_class_getitem
+                return generic_alias_class_getitem(space, w_obj, w_key)
             try:
                 w_descr = space.getattr(w_obj, space.newtext('__class_getitem__'))
             except OperationError as e:
@@ -453,7 +457,7 @@ class DescrOperation(object):
                 if not e.match(space, space.w_StopIteration):
                     raise
                 return space.w_False
-            if space.eq_w(w_item, w_next):
+            if space.eq_w(w_next, w_item):
                 return space.w_True
 
     def sequence_count(space, w_container, w_item):

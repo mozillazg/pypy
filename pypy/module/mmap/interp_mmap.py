@@ -119,9 +119,12 @@ class W_MMap(W_Root):
 
     @unwrap_spec(offset=int, size=int)
     def flush(self, offset=0, size=0):
+        # flush() should return None on success, raise an
+        # exception on error under all platforms.
         self.check_valid()
         try:
-            return self.space.newint(self.mmap.flush(offset, size))
+            self.mmap.flush(offset, size)
+            return self.space.w_None
         except RValueError as v:
             raise mmap_error(self.space, v)
         except OSError as e:
@@ -254,8 +257,8 @@ class W_MMap(W_Root):
             return iterate()
         """)
 
-    @unwrap_spec(flags=int, start=int, length=int)
-    def descr_madvise(self, space, flags, start=0, length=sys.maxint):
+    @unwrap_spec(flags=int, start=int)
+    def descr_madvise(self, space, flags, start=0, w_length=None):
         """
         madvise(option[, start[, length]])
 
@@ -267,16 +270,41 @@ class W_MMap(W_Root):
         """
         if start < 0 or start >= self.mmap.size:
             raise oefmt(space.w_ValueError, "madvise start out of bounds")
+        if w_length is None:
+            length = self.mmap.size
+        else:
+            length = space.int_w(w_length)
         if length < 0:
-            raise oefmt(space.w_ValueError, "madvise length can't be negative")
+            raise oefmt(space.w_ValueError, "madvise length invalid, can't be negative")
         try:
             end = rarithmetic.ovfcheck(start + length)
         except OverflowError:
-            length = self.mmap.size - start
+            raise oefmt(space.w_OverflowError, "madvise length too large")
         else:
             if end > self.mmap.size:
                 length = self.mmap.size - start
         self.mmap.madvise(flags, start, length)
+
+    def descr_repr(self, space):
+        try:
+            self.mmap.check_valid()
+        except RValueError:
+            return space.newtext("<%s closed=True>" % space.getfulltypename(self))
+        if self.mmap.access == rmmap._ACCESS_DEFAULT:
+            access_str = "ACCESS_DEFAULT"
+        elif self.mmap.access == rmmap.ACCESS_READ:
+            access_str = "ACCESS_READ"
+        elif self.mmap.access == rmmap.ACCESS_WRITE:
+            access_str = "ACCESS_WRITE"
+        elif self.mmap.access == rmmap.ACCESS_COPY:
+            access_str = "ACCESS_COPY"
+        else:
+            raise oefmt(space.w_RuntimeError, "invalid accesss mode in mmap")
+        return space.newtext(
+            "<%s closed=False, access=%s, length=%d, pos=%d, offset=%d>" %(
+            space.getfulltypename(self), access_str, self.mmap.size,
+            self.mmap.pos, self.mmap.offset))
+                        
 
 
 if rmmap._POSIX:
@@ -341,14 +369,15 @@ W_MMap.typedef = TypeDef("mmap.mmap", None, None, 'read-write',
     move = interp2app(W_MMap.move),
     resize = interp2app(W_MMap.resize),
 
-    __len__ = interp2app(W_MMap.__len__),
-    __getitem__ = interp2app(W_MMap.descr_getitem),
-    __setitem__ = interp2app(W_MMap.descr_setitem),
-    __enter__ = interp2app(W_MMap.descr_enter),
-    __exit__ = interp2app(W_MMap.descr_exit),
-    __weakref__ = make_weakref_descr(W_MMap),
-    __iter__ = interp2app(W_MMap.descr_iter),
-    __reversed__ = interp2app(W_MMap.descr_reversed),
+    __len__       = interp2app(W_MMap.__len__),
+    __getitem__   = interp2app(W_MMap.descr_getitem),
+    __setitem__   = interp2app(W_MMap.descr_setitem),
+    __enter__     = interp2app(W_MMap.descr_enter),
+    __exit__      = interp2app(W_MMap.descr_exit),
+    __weakref__   = make_weakref_descr(W_MMap),
+    __iter__      = interp2app(W_MMap.descr_iter),
+    __reversed__  = interp2app(W_MMap.descr_reversed),
+    __repr__      = interp2app(W_MMap.descr_repr),
 
     closed = GetSetProperty(W_MMap.closed_get),
 
@@ -361,6 +390,7 @@ ALLOCATIONGRANULARITY = rmmap.ALLOCATIONGRANULARITY
 ACCESS_READ  = rmmap.ACCESS_READ
 ACCESS_WRITE = rmmap.ACCESS_WRITE
 ACCESS_COPY  = rmmap.ACCESS_COPY
+ACCESS_DEFAULT  = rmmap._ACCESS_DEFAULT
 
 
 @objectmodel.dont_inline

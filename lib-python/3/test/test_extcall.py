@@ -79,6 +79,24 @@ Here we add keyword arguments
     >>> f(1, 2, 3, *(4, 5), x=6, y=7, **UserDict(a=8, b=9))
     (1, 2, 3, 4, 5) {'a': 8, 'b': 9, 'x': 6, 'y': 7}
 
+Mix keyword arguments and dict unpacking
+
+    >>> d1 = {'a':1}
+
+    >>> d2 = {'c':3}
+
+    >>> f(b=2, **d1, **d2)
+    () {'a': 1, 'b': 2, 'c': 3}
+
+    >>> f(**d1, b=2, **d2)
+    () {'a': 1, 'b': 2, 'c': 3}
+
+    >>> f(**d1, **d2, b=2)
+    () {'a': 1, 'b': 2, 'c': 3}
+
+    >>> f(**d1, b=2, **d2, d=4)
+    () {'a': 1, 'b': 2, 'c': 3, 'd': 4}
+
 Examples with invalid arguments (TypeErrors). We're also testing the function
 names in the exception messages.
 
@@ -244,15 +262,15 @@ What about willful misconduct?
       ...
     TypeError: h() got an unexpected keyword argument 'e'
 
-    >>> h(*h)
+    >>> h(*h)  #doctest: +ELLIPSIS
     Traceback (most recent call last):
       ...
-    TypeError: h() argument after * must be an iterable, not function
+    TypeError: ...argument after * must be an iterable, not function
 
     >>> h(1, *h)
     Traceback (most recent call last):
       ...
-    TypeError: h() argument after * must be an iterable, not function
+    TypeError: Value after * must be an iterable, not function
 
     >>> h(*[1], *h)  #doctest: +ELLIPSIS
     Traceback (most recent call last):
@@ -265,31 +283,31 @@ What about willful misconduct?
     TypeError: dir() argument after * must be an iterable, not function
 
     >>> nothing = None
-    >>> nothing(*h)
+    >>> nothing(*h)  #doctest: +ELLIPSIS
     Traceback (most recent call last):
       ...
-    TypeError: NoneType object argument after * must be an iterable, \
+    TypeError: ...argument after * must be an iterable, \
 not function
 
     >>> h(**h)
     Traceback (most recent call last):
       ...
-    TypeError: h() argument after ** must be a mapping, not function
+    TypeError: argument after ** must be a mapping, not function
 
     >>> h(**[])
     Traceback (most recent call last):
       ...
-    TypeError: h() argument after ** must be a mapping, not list
+    TypeError: argument after ** must be a mapping, not list
 
-    >>> h(a=1, **h)
+    >>> h(a=1, **h)  #doctest: +ELLIPSIS
     Traceback (most recent call last):
       ...
-    TypeError: h() argument after ** must be a mapping, not function
+    TypeError: ...argument after ** must be a mapping, not function
 
-    >>> h(a=1, **[])
+    >>> h(a=1, **[])  #doctest: +ELLIPSIS
     Traceback (most recent call last):
       ...
-    TypeError: h() argument after ** must be a mapping, not list
+    TypeError: ...argument after ** must be a mapping, not list
 
     >>> h(**{'a': 1}, **h)  #doctest: +ELLIPSIS
     Traceback (most recent call last):
@@ -301,16 +319,15 @@ not function
       ...
     TypeError: ...argument after ** must be a mapping, not list
 
-    >>> dir(**h)
+    >>> dir(**h)  #doctest: +ELLIPSIS
     Traceback (most recent call last):
       ...
-    TypeError: dir() argument after ** must be a mapping, not function
+    TypeError: ...argument after ** must be a mapping, not function
 
-    >>> nothing(**h)
+    >>> nothing(**h)  #doctest: +ELLIPSIS
     Traceback (most recent call last):
       ...
-    TypeError: NoneType object argument after ** must be a mapping, \
-not function
+    TypeError: ...argument after ** must be a mapping, not function
 
     >>> dir(b=1, **{'b': 1})                   #doctest: +ELLIPSIS
     Traceback (most recent call last):
@@ -351,17 +368,17 @@ Test a kwargs mapping with duplicated keys.
     >>> g(**MultiDict([('x', 1), ('x', 2)]))
     Traceback (most recent call last):
       ...
-    TypeError: g() got multiple values for keyword argument 'x'
+    TypeError: test.test_extcall.g() got multiple values for keyword argument 'x'
 
     >>> g(a=3, **MultiDict([('x', 1), ('x', 2)]))
     Traceback (most recent call last):
       ...
-    TypeError: g() got multiple values for keyword argument 'x'
+    TypeError: test.test_extcall.g() got multiple values for keyword argument 'x'
 
     >>> g(**MultiDict([('a', 3)]), **MultiDict([('x', 1), ('x', 2)]))
     Traceback (most recent call last):
       ...
-    TypeError: g() got multiple values for keyword argument 'x'
+    TypeError: test.test_extcall.g() got multiple values for keyword argument 'x'
 
 Another helper function
 
@@ -501,6 +518,10 @@ Same with keyword only args:
     TypeError: f() missing 5 required keyword-only arguments: 'a', 'b', 'c', 'd', and 'e'
 
 """
+
+# Adjusted for PyPy:
+# - exceptions sometimes use different or no repr for the functions that caused
+#   them
 
 import sys
 from test import support

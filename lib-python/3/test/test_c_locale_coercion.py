@@ -49,6 +49,10 @@ elif sys.platform == "cygwin":
     # TODO: Work out a robust dynamic test for this that doesn't rely on
     #       CPython's own locale handling machinery
     EXPECT_COERCION_IN_DEFAULT_LOCALE = False
+elif sys.platform == "vxworks":
+    # VxWorks defaults to using UTF-8 for all system interfaces
+    EXPECTED_C_LOCALE_STREAM_ENCODING = "utf-8"
+    EXPECTED_C_LOCALE_FS_ENCODING = "utf-8"
 
 # Note that the above expectations are still wrong in some cases, such as:
 # * Windows when PYTHONLEGACYWINDOWSFSENCODING is set
@@ -423,12 +427,9 @@ class LocaleCoercionTests(_LocaleHandlingTestCase):
         self.assertEqual(cmd.stdout.rstrip(), loc)
 
 
-def test_main():
-    support.run_unittest(
-        LocaleConfigurationTests,
-        LocaleCoercionTests
-    )
+def tearDownModule():
     support.reap_children()
 
+
 if __name__ == "__main__":
-    test_main()
+    unittest.main()

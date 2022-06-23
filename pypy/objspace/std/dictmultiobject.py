@@ -13,7 +13,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 from pypy.interpreter.signature import Signature
 from pypy.interpreter.typedef import TypeDef, interp_attrproperty_w
 from pypy.interpreter.unicodehelper import decode_utf8sp
-from pypy.objspace.std.util import negate
+from pypy.objspace.std.util import negate, generic_alias_class_getitem
 
 
 UNROLL_CUTOFF = 5
@@ -305,6 +305,17 @@ class W_DictMultiObject(W_Root):
             strategy.switch_to_object_strategy(self)
         return object_strategy
 
+    def descr_or(self, space, w_other):
+        if not space.isinstance_w(w_other, space.w_dict):
+            return space.w_NotImplemented
+        copyself = self.copy()
+        update1(space, copyself, w_other)
+        return copyself
+
+    def descr_ior(self, space, w_other):
+        update1(space, self, w_other)
+        return self
+
 
 class W_DictObject(W_DictMultiObject):
     """ a regular dict object """
@@ -435,6 +446,12 @@ dict(**kwargs) -> new dictionary initialized with the name=value pairs
     __getitem__ = interp2app(W_DictMultiObject.descr_getitem),
     __setitem__ = interp2app(W_DictMultiObject.descr_setitem),
     __delitem__ = interp2app(W_DictMultiObject.descr_delitem),
+
+    __or__ = interp2app(W_DictMultiObject.descr_or),
+    __ior__ = interp2app(W_DictMultiObject.descr_ior),
+
+    __class_getitem__ = interp2app(
+        generic_alias_class_getitem, as_classmethod=True),
 
     copy = interp2app(W_DictMultiObject.descr_copy),
     items = interp2app(W_DictMultiObject.descr_items),
@@ -1680,7 +1697,7 @@ class W_DictViewItemsObject(W_DictViewObject, SetLikeDictView):
             w_found = self.w_dict.getitem(w_key)
         if w_found is None:
             return space.w_False
-        return space.newbool(space.eq_w(w_value, w_found))
+        return space.newbool(space.eq_w(w_found, w_value))
 
 
 def new_dict_keys(space, w_type, w_dict):

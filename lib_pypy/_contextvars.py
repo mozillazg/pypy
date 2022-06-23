@@ -1,5 +1,6 @@
 from __pypy__ import get_contextvar_context, set_contextvar_context
 from _immutables_map import Map
+from _pypy_generic_alias import GenericAlias
 # implementation taken from PEP-0567 https://www.python.org/dev/peps/pep-0567/
 
 _NO_DEFAULT = object()
@@ -161,9 +162,8 @@ class ContextVar(metaclass=Unsubclassable):
 
         token._used = True
 
-    @classmethod
-    def __class_getitem__(self, key):
-        return self
+    def __class_getitem__(self, item):
+        return GenericAlias(self, item)
 
     def __repr__(self):
         default = ''
@@ -191,3 +191,6 @@ class Token(metaclass=Unsubclassable):
 
     def __repr__(self):
         return f"<Token {'used ' if self._used else ''}var={self._var} at 0x{id(self):x}>"
+
+    def __class_getitem__(self, item):
+        return GenericAlias(self, item)

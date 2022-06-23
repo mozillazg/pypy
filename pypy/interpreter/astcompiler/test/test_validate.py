@@ -102,7 +102,7 @@ class TestASTValidator:
                                 body, decorator_list, *POS)
         self.stmt(cls(bases=[ast.Name("x", ast.Store, *POS)]),
                   "must have Load context")
-        self.stmt(cls(keywords=[ast.keyword("x", ast.Name("x", ast.Store, *POS))]),
+        self.stmt(cls(keywords=[ast.keyword("x", ast.Name("x", ast.Store, *POS), *POS)]),
                   "must have Load context")
         self.stmt(cls(body=[]), "empty body on ClassDef")
         self.stmt(cls(body=[None]), "None disallowed")
@@ -337,12 +337,12 @@ class TestASTValidator:
     def test_call(self):
         func = ast.Name("x", ast.Load, *POS)
         args = [ast.Name("y", ast.Load, *POS)]
-        keywords = [ast.keyword("w", ast.Name("z", ast.Load, *POS))]
+        keywords = [ast.keyword("w", ast.Name("z", ast.Load, *POS), *POS)]
         call = ast.Call(ast.Name("x", ast.Store, *POS), args, keywords, *POS)
         self.expr(call, "must have Load context")
         call = ast.Call(func, [None], keywords, *POS)
         self.expr(call, "None disallowed")
-        bad_keywords = [ast.keyword("w", ast.Name("z", ast.Store, *POS))]
+        bad_keywords = [ast.keyword("w", ast.Name("z", ast.Store, *POS), *POS)]
         call = ast.Call(func, args, bad_keywords, *POS)
         self.expr(call, "must have Load context")
 
@@ -351,22 +351,18 @@ class TestASTValidator:
         self.expr(attr, "must have Load context")
 
     def test_subscript(self):
-        sub = ast.Subscript(ast.Name("x", ast.Store, *POS), ast.Index(ast.Constant(self.space.wrap(3), self.space.w_None, *POS)),
+        sub = ast.Subscript(ast.Name("x", ast.Store, *POS), ast.Constant(self.space.wrap(3), self.space.w_None, *POS),
                             ast.Load, *POS)
         self.expr(sub, "must have Load context")
         x = ast.Name("x", ast.Load, *POS)
-        sub = ast.Subscript(x, ast.Index(ast.Name("y", ast.Store, *POS)),
+        sub = ast.Subscript(x, ast.Name("y", ast.Store, *POS),
                             ast.Load, *POS)
         self.expr(sub, "must have Load context")
         s = ast.Name("x", ast.Store, *POS)
         for args in (s, None, None), (None, s, None), (None, None, s):
-            sl = ast.Slice(*args)
+            sl = ast.Slice(*args + POS)
             self.expr(ast.Subscript(x, sl, ast.Load, *POS),
                       "must have Load context")
-        sl = ast.ExtSlice([])
-        self.expr(ast.Subscript(x, sl, ast.Load, *POS), "empty dims on ExtSlice")
-        sl = ast.ExtSlice([ast.Index(s)])
-        self.expr(ast.Subscript(x, sl, ast.Load, *POS), "must have Load context")
 
     def test_starred(self):
         left = ast.List([ast.Starred(ast.Name("x", ast.Load, *POS), ast.Store, *POS)],
@@ -404,6 +400,12 @@ class TestASTValidator:
         for w_obj in space.unpackiterable(w_objs):
             self.expr(ast.Constant(w_obj, self.space.w_None, *POS), "got an invalid type in Constant")
 
+    def test_subscript_tuple(self):
+        # check that this valid code validates
+        ec = self.space.getexecutioncontext()
+        ast_node = ec.compiler.compile_to_ast("x = nd[()]", "?", "exec", 0)
+        validate.validate_ast(self.space, ast_node)
+
     def test_stdlib_validates(self):
         stdlib = os.path.join(os.path.dirname(ast.__file__), '../../../lib-python/3')
         if 0:    # enable manually for a complete test
@@ -423,3 +425,4 @@ class TestASTValidator:
             ec = self.space.getexecutioncontext()
             ast_node = ec.compiler.compile_to_ast(source, fn, "exec", 0)
             ec.compiler.validate_ast(ast_node)
+            ast_node.to_object(self.space) # does not crash

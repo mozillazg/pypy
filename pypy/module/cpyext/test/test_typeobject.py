@@ -142,6 +142,12 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         print(MethodType.mro())
         assert not isinstance(classmeth, MethodType)
 
+    def test_class_getitem(self):
+        module = self.import_module(name='foo')
+        f = module.fooType.__class_getitem__
+        out = f(42)
+        assert str(out) == 'foo.foo[42]'
+
     def test_methoddescr(self):
         module = self.import_module(name='foo')
         descr = module.fooType.copy
@@ -1730,7 +1736,7 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                     PyErr_SetString(PyExc_TypeError, "kwnames must be None or a tuple");
                     return NULL;
                 }
-                return _PyObject_Vectorcall(func, stack, nargs, kwnames);
+                return PyObject_Vectorcall(func, stack, nargs, kwnames);
             '''),
             ("pyvectorcall_call", "METH_VARARGS",
              # taken from _testcapimodule.c
@@ -1798,7 +1804,7 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                     .tp_call = PyVectorcall_Call,
                     .tp_vectorcall_offset = offsetof(MethodDescriptorObject, vectorcall),
                     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-                                Py_TPFLAGS_METHOD_DESCRIPTOR | _Py_TPFLAGS_HAVE_VECTORCALL,
+                                Py_TPFLAGS_METHOD_DESCRIPTOR | Py_TPFLAGS_HAVE_VECTORCALL,
                     .tp_descr_get = func_descr_get,
                 };
 
@@ -1829,7 +1835,7 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                     .tp_new = MethodDescriptor2_new,
                     .tp_call = PyVectorcall_Call,
                     .tp_vectorcall_offset = offsetof(MethodDescriptor2Object, vectorcall),
-                    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | _Py_TPFLAGS_HAVE_VECTORCALL,
+                    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_VECTORCALL,
                 };
 
 
@@ -1989,7 +1995,7 @@ class AppTestSlots(AppTestCpythonExtensionBase):
                     PyErr_SetString(PyExc_TypeError, "kwnames must be None or a dict");
                     return NULL;
                 }
-                return _PyObject_FastCallDict(func, stack, nargs, kwargs);
+                return PyObject_VectorcallDict(func, stack, nargs, kwargs);
             ''')])
         def pyfunc(arg1, arg2):
             return [arg1, arg2]
@@ -2088,6 +2094,32 @@ class AppTestFlags(AppTestCpythonExtensionBase):
         class MyList(list):
             pass
         assert module.test_flags(MyList, Py_TPFLAGS_LIST_SUBCLASS) == 0
+
+    def test_has_pypy_subclass_flag(self):
+        module = self.import_extension('foo', [
+           ("test_pypy_flags", "METH_VARARGS",
+            '''
+                long long in_flag, my_flag;
+                PyObject * obj;
+                if (!PyArg_ParseTuple(args, "OL", &obj, &in_flag))
+                    return NULL;
+                if (!PyType_Check(obj))
+                {
+                    PyErr_SetString(PyExc_ValueError, "input must be type");
+                    return NULL;
+                }
+                my_flag = ((PyTypeObject*)obj)->tp_pypy_flags;
+                if ((my_flag & in_flag) != in_flag)
+                    return PyLong_FromLong(-1);
+                return PyLong_FromLong(0);
+            '''),])
+        # copied from object.h
+        Py_TPPYPYFLAGS_FLOAT_SUBCLASS = (1<<0)
+
+        class MyFloat(float):
+            pass
+        assert module.test_pypy_flags(float, Py_TPPYPYFLAGS_FLOAT_SUBCLASS) == 0
+        assert module.test_pypy_flags(MyFloat, Py_TPPYPYFLAGS_FLOAT_SUBCLASS) == 0
 
     def test_newgetset(self):
         # Taken from the yara-python project

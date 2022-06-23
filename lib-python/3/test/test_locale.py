@@ -334,8 +334,7 @@ class TestFrFRNumberFormatting(FrFRCookedTest, BaseFormattingTest):
         euro = '\u20ac'
         self._test_currency(50000, "50000,00 " + euro)
         self._test_currency(50000, "50 000,00 " + euro, grouping=True)
-        # XXX is the trailing space a bug?
-        self._test_currency(50000, "50 000,00 EUR ",
+        self._test_currency(50000, "50 000,00 EUR",
             grouping=True, international=True)
 
 
@@ -495,7 +494,7 @@ class NormalizeTest(unittest.TestCase):
 class TestMiscellaneous(unittest.TestCase):
     def test_defaults_UTF8(self):
         # Issue #18378: on (at least) macOS setting LC_CTYPE to "UTF-8" is
-        # valid. Futhermore LC_CTYPE=UTF is used by the UTF-8 locale coercing
+        # valid. Furthermore LC_CTYPE=UTF is used by the UTF-8 locale coercing
         # during interpreter startup (on macOS).
         import _locale
         import os

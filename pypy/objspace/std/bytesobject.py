@@ -407,6 +407,21 @@ class W_AbstractBytesObject(W_Root):
         Format bytes objects
         """
 
+    def descr_removeprefix(self, space, w_prefix):
+        """Return a str with the given prefix string removed if present.
+
+        If the string starts with the prefix string, return string[len(prefix):].
+        Otherwise, return a copy of the original string.
+        """
+
+    def descr_removesuffix(self, space, w_suffix):
+        """Return a str with the given suffix string removed if present.
+
+        If the string ends with the suffix string, return string[:len(suffix)].
+        Otherwise, return a copy of the original string.
+        """
+
+
 class W_BytesObject(W_AbstractBytesObject):
     import_from_mixin(StringMethods)
     _immutable_fields_ = ['_value']
@@ -655,10 +670,6 @@ class W_BytesObject(W_AbstractBytesObject):
 
         sub = self._op_val(space, w_old)
         by = self._op_val(space, w_new)
-        # the following two lines are for being bug-to-bug compatible
-        # with CPython: see issue #2448
-        if count >= 0 and len(input) == 0:
-            return self._empty()
         try:
             res = replace(input, sub, by, count)
         except OverflowError:
@@ -937,6 +948,9 @@ W_BytesObject.typedef = TypeDef(
     translate = interpindirect2app(W_AbstractBytesObject.descr_translate),
     upper = interpindirect2app(W_AbstractBytesObject.descr_upper),
     zfill = interpindirect2app(W_AbstractBytesObject.descr_zfill),
+
+    removeprefix = interpindirect2app(W_AbstractBytesObject.descr_removeprefix),
+    removesuffix = interpindirect2app(W_AbstractBytesObject.descr_removesuffix),
 
     __getnewargs__ = interpindirect2app(
         W_AbstractBytesObject.descr_getnewargs),

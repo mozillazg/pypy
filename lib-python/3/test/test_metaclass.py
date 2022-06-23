@@ -122,7 +122,7 @@ Use various combinations of explicit keywords and **kwds.
     True
     >>>
 
-Check for duplicate keywords (PyPy-specific change).
+Check for duplicate keywords.
 
     >>> class C(metaclass=type, metaclass=type): pass
     ...
