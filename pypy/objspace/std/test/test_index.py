@@ -36,6 +36,12 @@ class AppTest_IndexProtocol:
                     return self
             return TrapLong""")
 
+        w_ReprError = self.space.appexec([], """():
+            class ReprError():
+                def __repr__(self):
+                    raise RuntimeError("Oh no!")
+            return ReprError""")
+
         self.w_oldstyle = w_oldstyle
         self.w_o = self.space.call_function(w_oldstyle)
         self.w_o_no_index = self.space.call_function(w_oldstyle_no_index)
@@ -45,6 +51,7 @@ class AppTest_IndexProtocol:
 
         self.w_TrapInt = w_TrapInt
         self.w_TrapLong = w_TrapLong
+        self.w_ReprError = w_ReprError
 
     def test_basic(self):
         self.o.ind = -2
@@ -96,6 +103,11 @@ class AppTest_IndexProtocol:
         raises(TypeError, slice(self.o).indices, 0)
         raises(TypeError, slice(self.n).indices, 0)
 
+    def test_repr_error(self):
+        lst = []
+        c = self.ReprError()
+        with raises(ValueError):
+            lst.index(c)
 
 class SeqTestCase:
     # This test case isn't run directly. It just defines common tests

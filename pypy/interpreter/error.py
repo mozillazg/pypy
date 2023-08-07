@@ -378,14 +378,19 @@ def get_operrcls2(valuefmt):
                 for i, fmt, attr in entries:
                     lst[i + i] = self.xstrings[i]
                     value = getattr(self, attr)
-                    if fmt == 'R':
-                        result = space.text_w(space.repr(value))
-                    elif fmt == 'T':
-                        result = space.type(value).name
-                    elif fmt == 'N':
-                        result = value.getname(space)
-                    else:
-                        result = str(value)
+                    # ignore any errors raised here
+                    # issue 3978
+                    try:
+                        if fmt == 'R':
+                            result = space.text_w(space.repr(value))
+                        elif fmt == 'T':
+                            result = space.type(value).name
+                        elif fmt == 'N':
+                            result = value.getname(space)
+                        else:
+                            result = str(value)
+                    except Exception:
+                        return ''
                     lst[i + i + 1] = result
                 lst[-1] = self.xstrings[-1]
                 return ''.join(lst)
