@@ -924,6 +924,14 @@ def _cast_whatever(TGT, value):
     raise TypeError("don't know how to cast from %r to %r" % (ORIG, TGT))
 
 
+def erasedType(T):
+    while isinstance(T, Ptr) and isinstance(T.TO, Struct):
+        first, FIRSTTYPE = T.TO._first_struct()
+        if first is None:
+            break
+        T = Ptr(FIRSTTYPE)
+    return T
+
 class InvalidCast(TypeError):
     pass
 
@@ -995,8 +1003,6 @@ def cast_opaque_ptr(PTRTYPE, ptr):
         except AttributeError:
             raise InvalidCast("%r does not come from a container" % (ptr,))
         solid = getattr(ptr._obj, 'solid', False)
-        if isinstance(container, int): # tagged int
-            return _ptr(PTRTYPE, container, solid=True)
         p = _ptr(Ptr(typeOf(container)), container, solid)
         return cast_pointer(PTRTYPE, p)
     elif (not isinstance(CURTYPE.TO, OpaqueType)
