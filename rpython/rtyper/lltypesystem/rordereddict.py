@@ -202,7 +202,7 @@ class OrderedDictRepr(AbstractDictRepr):
             key_repr = self._key_repr_computer()
             self.external_key_repr, self.key_repr = self.pickkeyrepr(key_repr)
         if 'value_repr' not in self.__dict__:
-            self.external_value_repr, self.value_repr = rmodel.externalvsinternal(self.rtyper, self._value_repr_computer(), gcref=True)
+            self.external_value_repr, self.value_repr = self.pickrepr(self._value_repr_computer())
         if isinstance(self.DICT, lltype.GcForwardReference):
             DICTKEY = self.key_repr.lowleveltype
             DICTVALUE = self.value_repr.lowleveltype
@@ -315,16 +315,12 @@ class OrderedDictRepr(AbstractDictRepr):
         hop.exception_cannot_occur()
         hop.gendirectcall(ll_prepare_dict_update, v_dict, v_num)
 
-    def _rtype_method_kvi(self, hop, ll_func, extraarg=None):
+    def _rtype_method_kvi(self, hop, ll_func):
         v_dic, = hop.inputargs(self)
         r_list = hop.r_result
         cLIST = hop.inputconst(lltype.Void, r_list.lowleveltype.TO)
         hop.exception_cannot_occur()
-        if extraarg:
-            c_extraarg = hop.inputconst(lltype.Void, extraarg)
-        else:
-            c_extraarg = hop.inputconst(lltype.Void, None)
-        return hop.gendirectcall(ll_func, cLIST, v_dic, c_extraarg)
+        return hop.gendirectcall(ll_func, cLIST, v_dic)
 
     def rtype_method_keys(self, hop):
         return self._rtype_method_kvi(hop, ll_dict_keys)
@@ -333,8 +329,7 @@ class OrderedDictRepr(AbstractDictRepr):
         return self._rtype_method_kvi(hop, ll_dict_values)
 
     def rtype_method_items(self, hop):
-        EXTERNAL_ELEM = hop.r_result.external_item_repr.lowleveltype
-        return self._rtype_method_kvi(hop, ll_dict_items, EXTERNAL_ELEM)
+        return self._rtype_method_kvi(hop, ll_dict_items)
 
     def rtype_bltn_list(self, hop):
         return self._rtype_method_kvi(hop, ll_dict_keys)
@@ -1402,34 +1397,29 @@ def ll_prepare_dict_update(d, num_extra):
 # and very efficient functions are created.
 
 def recast(P, v):
-    # XXX this function is a terrible hack
-    if P is llmemory.GCREF:
-        return lltype.cast_opaque_ptr(llmemory.GCREF, v)
-    if lltype.typeOf(v) is llmemory.GCREF:
-        return lltype.cast_opaque_ptr(P, v)
     if isinstance(P, lltype.Ptr):
         return lltype.cast_pointer(P, v)
     else:
         return v
 
 def _make_ll_keys_values_items(kind):
-    def ll_kvi(LIST, dic, EXTERNAL_ELEM=None):
+    def ll_kvi(LIST, dic):
         res = LIST.ll_newlist(dic.num_live_items)
         entries = dic.entries
         dlen = dic.num_ever_used_items
         items = res.ll_items()
-        ELEM = lltype.typeOf(items).TO.OF
         i = 0
         p = 0
         while i < dlen:
             if entries.valid(i):
+                ELEM = lltype.typeOf(items).TO.OF
                 if ELEM is not lltype.Void:
                     entry = entries[i]
                     if kind == 'items':
-                        r = lltype.malloc(EXTERNAL_ELEM.TO)
-                        r.item0 = recast(EXTERNAL_ELEM.TO.item0, entry.key)
-                        r.item1 = recast(EXTERNAL_ELEM.TO.item1, entry.value)
-                        items[p] = recast(ELEM, r)
+                        r = lltype.malloc(ELEM.TO)
+                        r.item0 = recast(ELEM.TO.item0, entry.key)
+                        r.item1 = recast(ELEM.TO.item1, entry.value)
+                        items[p] = r
                     elif kind == 'keys':
                         items[p] = recast(ELEM, entry.key)
                     elif kind == 'values':
@@ -1438,8 +1428,7 @@ def _make_ll_keys_values_items(kind):
             i += 1
         assert p == res.ll_length()
         return res
-    if kind != "items":
-        ll_kvi.oopspec = 'odict.%s(dic)' % kind
+    ll_kvi.oopspec = 'odict.%s(dic)' % kind
     return ll_kvi
 
 ll_dict_keys   = _make_ll_keys_values_items('keys')
